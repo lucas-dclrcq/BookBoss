@@ -17,6 +17,7 @@ use tower_http::{
 use crate::{BookBossFrontend, FrontendConfig};
 
 pub(crate) mod covers;
+pub(crate) mod downloads;
 pub(crate) mod session_pool;
 
 pub(crate) use session_pool::{AuthSession, BackendSessionPool};
@@ -77,6 +78,10 @@ pub fn launch_server_frontend(config: &FrontendConfig, core_services: Arc<CoreSe
 
                 let router = dioxus::server::router(BookBossFrontend)
                     .route("/api/v1/covers/{book_token}", axum::routing::get(covers::serve_cover))
+                    .route(
+                        "/api/v1/books/{book_token}/download/{format}",
+                        axum::routing::get(downloads::serve_book_file),
+                    )
                     .layer(Extension(core_services))
                     .layer(middleware);
 
