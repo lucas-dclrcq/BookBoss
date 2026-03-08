@@ -8,10 +8,10 @@ use crate::{
 /// Horizontal pill-button row listing the user's shelves and a "New Shelf"
 /// button. Shown above the book grid in grid-view mode.
 #[component]
-pub(crate) fn ShelfBar(shelves: Vec<ShelfSummary>) -> Element {
+pub(crate) fn ShelfBar(shelves: Vec<ShelfSummary>, current_shelf_token: Option<String>) -> Element {
     let navigator = use_navigator();
     let mut show_modal = use_signal(|| false);
-    let mut shelf_name = use_signal(|| String::new());
+    let mut shelf_name = use_signal(String::new);
     let mut is_private = use_signal(|| true);
     let mut creating = use_signal(|| false);
     let mut error_msg: Signal<Option<String>> = use_signal(|| None);

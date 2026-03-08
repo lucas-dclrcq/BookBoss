@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::Route;
+use crate::{Route, routes::books_page::BookSummary};
 
 // ---------------------------------------------------------------------------
 // DTOs
@@ -27,18 +27,6 @@ pub(crate) struct ShelfDetail {
     pub visibility: String,
     /// `true` if the current user owns this shelf.
     pub is_own: bool,
-}
-
-/// Full book entry for a shelf, including hydrated author and series data.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub(crate) struct ShelfBookSummary {
-    pub token: String,
-    pub title: String,
-    pub cover_path: Option<String>,
-    pub author_names: Vec<String>,
-    pub series_name: Option<String>,
-    pub series_number: Option<String>,
-    pub added_at: String,
 }
 
 // ---------------------------------------------------------------------------
@@ -264,6 +252,31 @@ pub(crate) async fn remove_book_from_shelf(shelf_token: String, book_token: Stri
         .map_err(|e| ServerFnError::new(e.to_string()))
 }
 
+/// Updates the name and visibility of a shelf in one call. Only the owner may
+/// update.
+#[put(
+    "/api/v1/shelves/update",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+pub(crate) async fn update_shelf(token: String, name: String, visibility: String) -> Result<(), ServerFnError> {
+    let user = auth_session
+        .current_user
+        .as_ref()
+        .filter(|u| !u.username.is_empty())
+        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+    let user_id = user.id();
+
+    let shelf_token: ShelfToken = token.parse().map_err(|_| ServerFnError::new("Invalid shelf token"))?;
+    let vis = parse_visibility(&visibility)?;
+
+    core_services
+        .shelf_service
+        .update_shelf(&shelf_token, name, vis, user_id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))
+}
+
 /// Updates the visibility of a shelf. Only the owner may change visibility.
 #[put(
     "/api/v1/shelves/visibility",
@@ -349,7 +362,7 @@ pub(crate) async fn list_all_accessible_shelves() -> Result<Vec<ShelfSummary>, S
     auth_session: axum::Extension<AuthSession>,
     core_services: axum::Extension<Arc<CoreServices>>
 )]
-pub(crate) async fn books_for_shelf(token: String, cursor: Option<u64>, page_size: Option<u64>) -> Result<Vec<ShelfBookSummary>, ServerFnError> {
+pub(crate) async fn books_for_shelf(token: String, cursor: Option<u64>, page_size: Option<u64>) -> Result<Vec<BookSummary>, ServerFnError> {
     use std::collections::{HashMap, HashSet};
 
     let user = auth_session
@@ -377,7 +390,6 @@ pub(crate) async fn books_for_shelf(token: String, cursor: Option<u64>, page_siz
     // 2. Resolve each book_id → Book, preserving shelf order.
     let mut books = Vec::with_capacity(shelf_entries.len());
     let mut all_author_ids: HashSet<u64> = HashSet::new();
-    let mut added_ats: Vec<String> = Vec::with_capacity(shelf_entries.len());
 
     for entry in &shelf_entries {
         let book = book_service
@@ -392,7 +404,6 @@ pub(crate) async fn books_for_shelf(token: String, cursor: Option<u64>, page_siz
             all_author_ids.insert(ba.author_id);
         }
 
-        added_ats.push(entry.added_at.to_rfc3339());
         books.push((book, authors));
     }
 
@@ -424,20 +435,18 @@ pub(crate) async fn books_for_shelf(token: String, cursor: Option<u64>, page_siz
     // 5. Assemble summaries.
     let summaries = books
         .iter()
-        .zip(added_ats.iter())
-        .map(|((book, author_links), added_at)| {
+        .map(|(book, author_links)| {
             let mut sorted = author_links.clone();
             sorted.sort_by_key(|ba| ba.sort_order);
             let author_names = sorted.iter().filter_map(|ba| author_map.get(&ba.author_id).cloned()).collect();
 
-            ShelfBookSummary {
+            BookSummary {
                 token: book.token.to_string(),
                 title: book.title.clone(),
                 cover_path: book.cover_path.clone(),
                 author_names,
                 series_name: book.series_id.and_then(|sid| series_map.get(&sid).cloned()),
                 series_number: book.series_number.as_ref().map(|n| n.to_string()),
-                added_at: added_at.clone(),
             }
         })
         .collect();
@@ -452,7 +461,7 @@ pub(crate) async fn books_for_shelf(token: String, cursor: Option<u64>, page_siz
 /// Book card for the shelf detail page. Renders identically to `BookCard` but
 /// adds an "×" remove button (owner only) overlaid on the cover.
 #[component]
-fn ShelfBookCard(book: ShelfBookSummary, shelf_token: String, is_own: bool, on_removed: EventHandler<()>) -> Element {
+fn ShelfBookCard(book: BookSummary, shelf_token: String, is_own: bool, on_removed: EventHandler<()>) -> Element {
     let navigator = use_navigator();
     let book_token_nav = book.token.clone();
     let book_token_remove = book.token.clone();

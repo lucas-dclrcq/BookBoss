@@ -18,6 +18,12 @@ pub(crate) struct BookSummary {
     pub series_number: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct ListBooksResponse {
+    pub books: Vec<BookSummary>,
+    pub can_delete_books: bool,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct TreeCategory {
     pub name: String,
@@ -57,21 +63,32 @@ fn build_categories(shelves: &[ShelfSummary]) -> Vec<TreeCategory> {
 
 #[cfg(feature = "server")]
 use {
-    crate::server::AuthSession,
-    bb_core::CoreServices,
-    bb_core::book::{AuthorToken, BookFilter, BookStatus, SeriesToken},
+    crate::server::{AuthSession, AuthUser, BackendSessionPool},
+    axum::http::Method,
+    axum_session_auth::{Auth, Rights},
+    bb_core::{
+        CoreServices,
+        book::{AuthorToken, BookFilter, BookStatus, SeriesToken},
+        types::Capability,
+    },
     std::sync::Arc,
 };
 
 #[get("/api/v1/books", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
-async fn list_books() -> Result<Vec<BookSummary>, ServerFnError> {
+async fn list_books() -> Result<ListBooksResponse, ServerFnError> {
     use std::collections::{HashMap, HashSet};
 
-    auth_session
+    let current_user = auth_session
         .current_user
         .as_ref()
         .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+        .ok_or_else(|| ServerFnError::new("Not authenticated"))?
+        .clone();
+
+    let can_delete_books = Auth::<AuthUser, _, BackendSessionPool>::build([Method::POST], true)
+        .requires(Rights::any([Rights::permission(Capability::DeleteBook.as_str())]))
+        .validate(&current_user, &Method::POST, None)
+        .await;
 
     let book_service = &core_services.book_service;
 
@@ -140,19 +157,22 @@ async fn list_books() -> Result<Vec<BookSummary>, ServerFnError> {
         })
         .collect();
 
-    Ok(summaries)
+    Ok(ListBooksResponse {
+        books: summaries,
+        can_delete_books,
+    })
 }
 
 #[component]
 pub(crate) fn BooksPage() -> Element {
     let view: Signal<BookDisplayView> = use_context();
-    let books = use_server_future(list_books)?;
+    let page_data = use_server_future(list_books)?;
     let shelves_resource = use_server_future(list_all_accessible_shelves)?;
     let shelves: Vec<ShelfSummary> = shelves_resource().and_then(|r| r.ok()).unwrap_or_default();
     let categories = build_categories(&shelves);
 
     rsx! {
-        match books() {
+        match page_data() {
             None => rsx! {
                 div { class: "flex-1 flex items-center justify-center text-gray-400 text-sm",
                     "Loading…"
@@ -163,11 +183,11 @@ pub(crate) fn BooksPage() -> Element {
                     "Failed to load books: {e}"
                 }
             },
-            Some(Ok(books)) => rsx! {
+            Some(Ok(ListBooksResponse { books, can_delete_books })) => rsx! {
                 match *view.read() {
                     BookDisplayView::GridView => rsx! {
                         div { class: "flex-1 flex flex-col overflow-hidden",
-                            ShelfBar { shelves }
+                            ShelfBar { shelves, current_shelf_token: None }
                             BookGrid { books }
                         }
                     },

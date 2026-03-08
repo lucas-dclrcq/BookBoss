@@ -50,6 +50,12 @@ pub trait ShelfService: Send + Sync {
     /// shelves. Returns `NotFound` for missing shelves and a validation error
     /// for private shelves the requester does not own.
     async fn get_shelf(&self, token: &ShelfToken, user_id: UserId) -> Result<Shelf, Error>;
+
+    /// Updates the name and visibility of a shelf in a single transaction.
+    ///
+    /// Only the owner may update. Returns an error if the name is empty or
+    /// another shelf owned by the same user already has that name.
+    async fn update_shelf(&self, token: &ShelfToken, new_name: String, visibility: ShelfVisibility, user_id: UserId) -> Result<(), Error>;
 }
 
 pub(crate) struct ShelfServiceImpl {
@@ -248,6 +254,41 @@ impl ShelfService for ShelfServiceImpl {
             }
 
             Ok(shelf)
+        })
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    async fn update_shelf(&self, token: &ShelfToken, new_name: String, visibility: ShelfVisibility, user_id: UserId) -> Result<(), Error> {
+        if new_name.trim().is_empty() {
+            return Err(Error::Validation("shelf name must not be empty".to_string()));
+        }
+
+        let token = *token;
+        let new_name_lower = new_name.to_lowercase();
+
+        with_transaction!(self, shelf_repository, |tx| {
+            let shelf = shelf_repository
+                .find_by_token(tx, &token)
+                .await?
+                .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
+
+            if shelf.owner_id != user_id {
+                return Err(Error::Validation("only the owner may update a shelf".to_string()));
+            }
+
+            let existing = shelf_repository.list_for_user(tx, user_id).await?;
+            if existing.iter().any(|s| s.token != token && s.name.to_lowercase() == new_name_lower) {
+                return Err(Error::RepositoryError(RepositoryError::Conflict));
+            }
+
+            let updated = Shelf {
+                name: new_name,
+                visibility,
+                ..shelf
+            };
+            shelf_repository.update_shelf(tx, updated).await?;
+
+            Ok(())
         })
     }
 
@@ -1341,6 +1382,106 @@ mod tests {
         );
 
         let result = svc.get_shelf(&token, 2).await; // user 2
+
+        assert!(result.is_ok());
+    }
+
+    // ─── update_shelf ─────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_update_shelf_success() {
+        let shelf = fake_shelf(1, ShelfVisibility::Private);
+        let token = shelf.token;
+        let updated = Shelf {
+            name: "Renamed".to_string(),
+            visibility: ShelfVisibility::Public,
+            ..shelf.clone()
+        };
+        let svc = create_service(
+            MockShelfRepository::default()
+                .with_find_by_token(Ok(Some(shelf)))
+                .with_list_for_user(Ok(vec![]))
+                .with_update_shelf(Ok(updated)),
+            MockBookRepository::default(),
+        );
+
+        let result = svc.update_shelf(&token, "Renamed".to_string(), ShelfVisibility::Public, 1).await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_update_shelf_empty_name_returns_validation_error() {
+        let svc = create_service(MockShelfRepository::default(), MockBookRepository::default());
+        let token = ShelfToken::new(1);
+
+        let result = svc.update_shelf(&token, "  ".to_string(), ShelfVisibility::Private, 1).await;
+
+        assert!(matches!(result, Err(Error::Validation(_))));
+    }
+
+    #[tokio::test]
+    async fn test_update_shelf_not_found() {
+        let token = ShelfToken::new(99);
+        let svc = create_service(MockShelfRepository::default().with_find_by_token(Ok(None)), MockBookRepository::default());
+
+        let result = svc.update_shelf(&token, "New Name".to_string(), ShelfVisibility::Private, 1).await;
+
+        assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::NotFound))));
+    }
+
+    #[tokio::test]
+    async fn test_update_shelf_wrong_owner_returns_validation_error() {
+        let shelf = fake_shelf(1, ShelfVisibility::Private); // owned by user 1
+        let token = shelf.token;
+        let svc = create_service(
+            MockShelfRepository::default().with_find_by_token(Ok(Some(shelf))),
+            MockBookRepository::default(),
+        );
+
+        let result = svc.update_shelf(&token, "New Name".to_string(), ShelfVisibility::Private, 2).await; // user 2
+
+        assert!(matches!(result, Err(Error::Validation(_))));
+    }
+
+    #[tokio::test]
+    async fn test_update_shelf_duplicate_name_returns_conflict() {
+        let shelf = fake_shelf(1, ShelfVisibility::Private);
+        let token = shelf.token;
+        let mut other = fake_shelf(1, ShelfVisibility::Private);
+        other.id = 2;
+        other.token = ShelfToken::new(2);
+        other.name = "Other Shelf".to_string();
+        let svc = create_service(
+            MockShelfRepository::default()
+                .with_find_by_token(Ok(Some(shelf)))
+                .with_list_for_user(Ok(vec![other])),
+            MockBookRepository::default(),
+        );
+
+        let result = svc.update_shelf(&token, "Other Shelf".to_string(), ShelfVisibility::Public, 1).await;
+
+        assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::Conflict))));
+    }
+
+    #[tokio::test]
+    async fn test_update_shelf_same_name_as_self_succeeds() {
+        let shelf = fake_shelf(1, ShelfVisibility::Private);
+        let token = shelf.token;
+        let updated = Shelf {
+            visibility: ShelfVisibility::Public,
+            ..shelf.clone()
+        };
+        let svc = create_service(
+            MockShelfRepository::default()
+                .with_find_by_token(Ok(Some(shelf.clone())))
+                .with_list_for_user(Ok(vec![shelf]))
+                .with_update_shelf(Ok(updated)),
+            MockBookRepository::default(),
+        );
+
+        // Same name, different visibility — must not conflict with itself
+        let result = svc.update_shelf(&token, "My Shelf".to_string(), ShelfVisibility::Public, 1).await;
 
         assert!(result.is_ok());
     }
