@@ -58,10 +58,17 @@ impl MigrationTrait for Migration {
                     .col(Books::PublisherId)
                     .to_owned(),
             )
+            .await?;
+
+        manager
+            .create_index(Index::create().name("idx_books_status").table(Books::Table).col(Books::Status).to_owned())
             .await
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .drop_index(Index::drop().name("idx_books_status").table(Books::Table).to_owned())
+            .await?;
         manager.drop_index(Index::drop().name("idx_books_publisher_id").to_owned()).await?;
         manager.drop_index(Index::drop().name("idx_books_series_id").to_owned()).await?;
         manager.drop_table(Table::drop().table(Books::Table).to_owned()).await
