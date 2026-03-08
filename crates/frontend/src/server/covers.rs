@@ -9,16 +9,27 @@ use axum::{
 };
 use bb_core::{CoreServices, book::BookToken};
 
+use super::AuthSession;
+
 static BLANK_COVER: &[u8] = include_bytes!("../../assets/BlankCover.png");
 
 /// Serves a cover image for a given book token.
 ///
 /// Route: `GET /api/v1/covers/:book_token`
 ///
-/// Looks up the book's cover filename from the database, reads the file from
-/// the library store, and returns it with the appropriate `Content-Type`
-/// header. If the book has no cover, serves the built-in blank cover PNG.
-pub(crate) async fn serve_cover(Path(book_token_str): Path<String>, Extension(core_services): Extension<Arc<CoreServices>>) -> Response {
+/// Requires authentication. Looks up the book's cover filename from the
+/// database, reads the file from the library store, and returns it with the
+/// appropriate `Content-Type` header. If the book has no cover, serves the
+/// built-in blank cover PNG.
+pub(crate) async fn serve_cover(
+    Path(book_token_str): Path<String>,
+    auth_session: AuthSession,
+    Extension(core_services): Extension<Arc<CoreServices>>,
+) -> Response {
+    let authenticated = auth_session.current_user.as_ref().is_some_and(|u| !u.username.is_empty());
+    if !authenticated {
+        return Response::builder().status(StatusCode::UNAUTHORIZED).body(Body::empty()).unwrap();
+    }
     let token: BookToken = match book_token_str.parse() {
         Ok(t) => t,
         Err(_) => return Response::builder().status(StatusCode::BAD_REQUEST).body(Body::empty()).unwrap(),
@@ -34,7 +45,7 @@ pub(crate) async fn serve_cover(Path(book_token_str): Path<String>, Extension(co
         return Response::builder()
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, HeaderValue::from_static("image/png"))
-            .header(header::CACHE_CONTROL, HeaderValue::from_static("public, max-age=86400"))
+            .header(header::CACHE_CONTROL, HeaderValue::from_static("private, max-age=3600"))
             .body(Body::from(BLANK_COVER))
             .unwrap();
     };
@@ -47,7 +58,7 @@ pub(crate) async fn serve_cover(Path(book_token_str): Path<String>, Extension(co
             return Response::builder()
                 .status(StatusCode::OK)
                 .header(header::CONTENT_TYPE, HeaderValue::from_static("image/png"))
-                .header(header::CACHE_CONTROL, HeaderValue::from_static("public, max-age=86400"))
+                .header(header::CACHE_CONTROL, HeaderValue::from_static("private, max-age=3600"))
                 .body(Body::from(BLANK_COVER))
                 .unwrap();
         }
@@ -57,7 +68,7 @@ pub(crate) async fn serve_cover(Path(book_token_str): Path<String>, Extension(co
     Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, HeaderValue::from_static(content_type))
-        .header(header::CACHE_CONTROL, HeaderValue::from_static("public, max-age=86400"))
+        .header(header::CACHE_CONTROL, HeaderValue::from_static("private, max-age=3600"))
         .body(Body::from(data))
         .unwrap()
 }

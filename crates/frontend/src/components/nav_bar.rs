@@ -37,7 +37,11 @@ async fn logout() -> Result<(), ServerFnError> {
 
 #[put("/api/v1/book_display_view", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
 async fn save_book_display_view(view: BookDisplayView) -> Result<(), ServerFnError> {
-    let user = auth_session.current_user.as_ref().ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+    let user = auth_session
+        .current_user
+        .as_ref()
+        .filter(|u| !u.username.is_empty())
+        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
     user.set_book_display_view(view, &core_services)
         .await
         .map_err(|e: bb_core::Error| ServerFnError::new(e.to_string()))

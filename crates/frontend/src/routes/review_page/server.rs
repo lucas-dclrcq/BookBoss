@@ -640,7 +640,14 @@ pub(super) async fn save_library_book(book_token: String, fields: BookEditFields
 )]
 pub(crate) async fn get_picklist_data(_: ()) -> Result<PicklistData, ServerFnError> {
     let current_user = auth_session.current_user.clone().unwrap_or_default();
-    if current_user.username.is_empty() {
+    if !Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::POST], true)
+        .requires(Rights::any([
+            Rights::permission(Capability::ApproveImports.as_str()),
+            Rights::permission(Capability::EditBook.as_str()),
+        ]))
+        .validate(&current_user, &Method::POST, None)
+        .await
+    {
         return Err(ServerFnError::new("Forbidden"));
     }
     let book_service = &core_services.book_service;
