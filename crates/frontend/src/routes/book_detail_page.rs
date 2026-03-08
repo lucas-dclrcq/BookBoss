@@ -304,7 +304,7 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                                     Link {
                                         to: Route::EditMetadataPage { token: book.token.clone() },
                                         class: "px-3 py-1 text-xs font-medium rounded border border-gray-300 text-gray-600 hover:bg-gray-50",
-                                        "Edit Metadata"
+                                        "Edit"
                                     }
                                     if book.can_delete {
                                         button {

@@ -29,6 +29,7 @@ pub(crate) fn ShelfBar(
 
     let dragged_token = use_context::<DraggedBookToken>();
     let drag_active = dragged_token().is_some();
+    let mut success_shelf: Signal<Option<String>> = use_signal(|| None);
 
     let own_names: Vec<String> = shelves.iter().filter(|s| s.is_own).map(|s| s.name.to_lowercase()).collect();
 
@@ -86,6 +87,7 @@ pub(crate) fn ShelfBar(
                     let is_active = current_shelf_token.as_deref() == Some(shelf.token.as_str());
                     // The current shelf is never a drop target — the book is already there.
                     let is_drop_target = !is_active && drag_active;
+                    let is_success = success_shelf().as_deref() == Some(shelf.token.as_str());
                     let pill_class = if is_active {
                         "px-3 py-1 rounded-full text-sm bg-indigo-600 text-white font-medium whitespace-nowrap shrink-0 cursor-pointer"
                     } else if is_drop_target {
@@ -98,7 +100,11 @@ pub(crate) fn ShelfBar(
                     let stok = shelf.token.clone();
                     rsx! {
                         div {
-                            class: pill_class,
+                            class: if is_success {
+                                format!("{pill_class} shelf-drop-success")
+                            } else {
+                                pill_class.to_string()
+                            },
                             onclick: {
                                 let stok = stok.clone();
                                 move |_| { navigator.push(Route::ShelfPage { token: stok.clone() }); }
@@ -112,9 +118,14 @@ pub(crate) fn ShelfBar(
                                 e.prevent_default();
                                 if let Some(book_tok) = dragged_token() {
                                     let s = stok.clone();
-                                    spawn(async move { let _ = add_book_to_shelf(s, book_tok).await; });
+                                    spawn(async move {
+                                        if add_book_to_shelf(s.clone(), book_tok).await.is_ok() {
+                                            success_shelf.set(Some(s));
+                                        }
+                                    });
                                 }
                             },
+                            onanimationend: move |_| success_shelf.set(None),
                             "{shelf.name}"
                         }
                     }
