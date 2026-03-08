@@ -8,7 +8,7 @@ use {
     std::sync::Arc,
 };
 
-use crate::{Route, settings::BookDisplayView};
+use crate::Route;
 
 #[get("/api/v1/incoming/pending_count", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
 async fn get_pending_count() -> Result<u32, ServerFnError> {
@@ -35,31 +35,15 @@ async fn logout() -> Result<(), ServerFnError> {
     Ok(())
 }
 
-#[put("/api/v1/book_display_view", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
-async fn save_book_display_view(view: BookDisplayView) -> Result<(), ServerFnError> {
-    let user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
-    user.set_book_display_view(view, &core_services)
-        .await
-        .map_err(|e: bb_core::Error| ServerFnError::new(e.to_string()))
-}
-
 #[component]
 pub(crate) fn NavBar() -> Element {
     let navigator = use_navigator();
     let mut user_menu_open = use_signal(|| false);
-    let mut view: Signal<BookDisplayView> = use_context();
-    let route = use_route::<Route>();
     let incoming_refresh: Signal<u32> = use_context();
     let pending_count = use_server_future(move || {
         let _rev = incoming_refresh();
         get_pending_count()
     })?;
-
-    let is_library = matches!(route, Route::BooksPage {});
 
     let on_logout = move |_| {
         user_menu_open.set(false);
@@ -67,31 +51,6 @@ pub(crate) fn NavBar() -> Element {
             let _ = logout().await;
             navigator.push(Route::LandingPage {});
         });
-    };
-
-    let on_toggle_view = move |_| {
-        if !is_library {
-            return;
-        }
-        let next = match *view.read() {
-            BookDisplayView::GridView => BookDisplayView::TableView,
-            BookDisplayView::TableView => BookDisplayView::GridView,
-        };
-        view.set(next.clone());
-        spawn(async move {
-            let _ = save_book_display_view(next).await;
-        });
-    };
-
-    let toggle_title = match *view.read() {
-        BookDisplayView::GridView => "Switch to Table View",
-        BookDisplayView::TableView => "Switch to Grid View",
-    };
-
-    let toggle_class = if is_library {
-        "flex items-center hover:text-indigo-200 cursor-pointer"
-    } else {
-        "flex items-center opacity-30 cursor-default"
     };
 
     rsx! {
@@ -119,44 +78,6 @@ pub(crate) fn NavBar() -> Element {
                 }
             }
             div { class: "flex items-center gap-4",
-                // View toggle: shows the icon for the OTHER view (what you'll switch to)
-                button {
-                    class: toggle_class,
-                    title: toggle_title,
-                    onclick: on_toggle_view,
-                    match *view.read() {
-                        // In GridView → show table icon to switch to TableView
-                        BookDisplayView::GridView => rsx! {
-                            svg {
-                                class: "w-5 h-5",
-                                fill: "none",
-                                view_box: "0 0 24 24",
-                                stroke_width: "1.5",
-                                stroke: "currentColor",
-                                path {
-                                    stroke_linecap: "round",
-                                    stroke_linejoin: "round",
-                                    d: "M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0 1 12 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h1.5m-1.5 0c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m7.5-3.75h1.5m-1.5 0c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-7.5 0h7.5",
-                                }
-                            }
-                        },
-                        // In TableView → show grid icon to switch to GridView
-                        BookDisplayView::TableView => rsx! {
-                            svg {
-                                class: "w-5 h-5",
-                                fill: "none",
-                                view_box: "0 0 24 24",
-                                stroke_width: "1.5",
-                                stroke: "currentColor",
-                                path {
-                                    stroke_linecap: "round",
-                                    stroke_linejoin: "round",
-                                    d: "M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z",
-                                }
-                            }
-                        },
-                    }
-                }
                 button {
                     class: "flex items-center hover:text-indigo-200 ml-4 cursor-pointer",
                     title: "Settings",
