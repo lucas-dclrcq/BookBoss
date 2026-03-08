@@ -6,23 +6,23 @@ This project uses [jujutsu](https://github.com/jj-vcs/jj) (`jj`), not `git` dire
 
 Key commands:
 
-| Command       | Description                         |
-| ------------- | ----------------------------------- |
-| `jj commit`   | Commit current changes              |
-| `jj describe` | Update the working copy description |
-| `jj new`      | Start a new change                  |
-| `jj log`      | Show history                        |
-| `jj status`   | Show working copy status            |
+| Command               | Description                         |
+| --------------------- | ----------------------------------- |
+| `jj commit`           | Commit current changes              |
+| `jj describe -m "…"` | Update the working copy description |
+| `jj new`              | Start a new change                  |
+| `jj log`              | Show history                        |
+| `jj status`           | Show working copy status            |
 
 ## Commit Messages
 
-Follow [Conventional Commits](https://www.conventionalcommits.org/) with crate-based scopes, sorted alphabetically:
+Follow [Conventional Commits](https://www.conventionalcommits.org/) with crate-based scopes:
 
 ```
 type(scope): description
 ```
 
-Valid scopes: `api`, `cli`, `core`, `database`, `frontend` (match crate names).
+Valid scopes: `api`, `core`, `database`, `frontend`, `import` (match crate names).
 
 Examples:
 
@@ -68,10 +68,12 @@ Secrets are encrypted with `sops`. Never commit plaintext secrets.
 - Use regular assertions for simple value checks
 - Tests live alongside source code in `#[cfg(test)]` modules
 
-## After Completing Work
+## End-of-Task Routine
 
-1. Run component tests: `just component-tests`
-2. Run all tests: `just test`
-3. Run clippy: `just clippy`
-4. Format: `just fmt`
-5. Update the working copy description: `jj desc -m "type(scope): description"`
+Run these steps in order after completing each task:
+
+1. `just fmt` — format code
+2. `just clippy` — lint (run separately from fmt, not chained)
+3. `just component-tests` — verify tests pass
+4. `jj desc -m "type(scope): description\n\nbody"` — update working copy description
+5. Update `.scratchpad/implementation-plan.md` — mark completed tasks `✓` / `[x]`

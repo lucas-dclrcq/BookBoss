@@ -8,11 +8,24 @@ by a flexible database layer that supports PostgreSQL, MySQL, and SQLite.
 
 ## Features
 
-- Web UI built with [Dioxus](https://dioxus.dev) (fullstack, WASM)
-- Multi-database support: PostgreSQL, MySQL, SQLite
-- E-book file format support
-- User management with role-based access (including SuperAdmin)
-- Session-based authentication
+- **Web UI** built with [Dioxus](https://dioxus.dev) (fullstack, WASM + SSR)
+- **Multi-database support**: PostgreSQL, MySQL, SQLite
+- **Import pipeline** — drop a file into a watch directory, BookBoss picks it
+  up, extracts embedded metadata, enriches it from external providers, and queues
+  it for review
+- **Metadata providers**: Hardcover, Open Library, Google Books
+- **Review workflow** — an _Incoming_ queue lets you inspect and edit metadata
+  before committing a book to your library
+- **Shelves** — organise books into named collections; drag-and-drop books
+  directly onto shelf pills in the sidebar
+- **Book detail page** — view full metadata, download files in any available
+  format (EPUB, MOBI, AZW3, PDF, CBZ)
+- **Edit metadata** — update title, authors, series, description, genres, tags,
+  and cover after import
+- **User management** with role-based access control (SuperAdmin, Admin, User)
+  and fine-grained capabilities
+- **Session-based authentication**
+- **Duplicate detection** — SHA-256 hashing prevents re-importing the same file
 
 ## Requirements
 
@@ -41,13 +54,15 @@ just config
 
 Edit the encrypted `config.sops.env` file. Required variables:
 
-| Variable                             | Purpose                                              |
-| ------------------------------------ | ---------------------------------------------------- |
-| `BOOKBOSS__DATABASE__DATABASE_URL`   | SeaORM connection string (Postgres / MySQL / SQLite) |
-| `BOOKBOSS__FRONTEND__LISTEN_IP`      | Server listen address (default `0.0.0.0`)            |
-| `BOOKBOSS__FRONTEND__LISTEN_PORT`    | Server listen port (default `8080`)                  |
-| `PGUSER`, `PGPASSWORD`, `PGDATABASE` | Used by `just create-database` and `just database`   |
-| `PGADMINUSER`, `PGADMINPASSWORD`     | Admin credentials for database creation              |
+| Variable                                      | Purpose                                                |
+| --------------------------------------------- | ------------------------------------------------------ |
+| `BOOKBOSS__DATABASE__DATABASE_URL`            | SeaORM connection string (Postgres / MySQL / SQLite)   |
+| `BOOKBOSS__LIBRARY__LIBRARY_PATH`             | Where approved book files are stored                   |
+| `BOOKBOSS__IMPORT__WATCH_DIRECTORY`           | Drop e-book files here to trigger the import pipeline  |
+| `BOOKBOSS__FRONTEND__LISTEN_IP`               | Server listen address (default `0.0.0.0`)              |
+| `BOOKBOSS__FRONTEND__LISTEN_PORT`             | Server listen port (default `8080`)                    |
+| `PGUSER`, `PGPASSWORD`, `PGDATABASE`          | Used by `just create-database` and `just database`     |
+| `PGADMINUSER`, `PGADMINPASSWORD`              | Admin credentials for database creation                |
 
 Connection string formats:
 
@@ -72,7 +87,8 @@ just create-database
 just run
 ```
 
-The application will be available at `http://localhost:8080` by default.
+The application will be available at `http://localhost:8080` by default. On
+first launch you will be prompted to create an administrator account.
 
 ## Development
 
@@ -84,18 +100,21 @@ just build
 
 ### Common commands
 
-| Command                  | Description                                         |
-| ------------------------ | --------------------------------------------------- |
-| `just fmt`               | Format code (Rust + Prettier)                       |
-| `just clippy`            | Run Clippy lints                                    |
-| `just test`              | Run all tests                                       |
-| `just quick-test`        | Component tests + Postgres/SQLite integration tests |
-| `just component-tests`   | Unit/component tests only                           |
-| `just integration-tests` | All integration tests (requires Colima)             |
-| `just insta`             | Run snapshot tests with cargo-insta                 |
-| `just deps`              | Update Rust crate dependencies                      |
-| `just changelog`         | Regenerate CHANGELOG.md                             |
-| `just clean`             | Clean the workspace                                 |
+| Command                           | Description                                         |
+| --------------------------------- | --------------------------------------------------- |
+| `just fmt`                        | Format code (Rust + Prettier)                       |
+| `just clippy`                     | Run Clippy lints                                    |
+| `just test`                       | Run all tests                                       |
+| `just quick-test`                 | Component tests + Postgres/SQLite integration tests |
+| `just component-tests`            | Unit/component tests only                           |
+| `just integration-tests`          | All integration tests (requires Colima)             |
+| `just postgres-integration-tests` | Postgres integration tests                          |
+| `just sqlite-integration-tests`   | SQLite integration tests                            |
+| `just mysql-integration-tests`    | MySQL integration tests                             |
+| `just insta`                      | Run snapshot tests with cargo-insta                 |
+| `just deps`                       | Update Rust crate dependencies                      |
+| `just changelog`                  | Regenerate CHANGELOG.md                             |
+| `just clean`                      | Clean the workspace                                 |
 
 ### Integration tests
 
@@ -116,15 +135,20 @@ adapters.
 ```
 crates/
 ├── core/             # Domain: business logic, models, port traits
+├── api/              # Adapter: gRPC interface
 ├── database/         # Adapter: SeaORM persistence (Postgres / MySQL / SQLite)
-├── formats/          # Adapter: e-book file format support
-├── frontend/         # Adapter: Dioxus web UI
-├── metadata/         # Adapter: external metadata providers (Open Library, etc.)
+├── formats/          # Adapter: e-book file format support (EPUB, OPF)
+├── frontend/         # Adapter: Dioxus web UI (fullstack)
+├── import/           # Adapter: library scanner + import job handler
+├── metadata/         # Adapter: external metadata providers
 ├── storage/          # Adapter: local filesystem library store
 ├── utils/            # Shared utilities
 ├── bookboss/         # Binary: wires adapters to ports
 └── integration-tests/
 ```
+
+See the [full documentation](docs/src/) for architecture details and contributor
+guides.
 
 ## License
 

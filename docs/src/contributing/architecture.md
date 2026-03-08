@@ -10,15 +10,14 @@ crates/
 ├── core/           # Domain layer: business logic, models, port traits
 ├── database/       # Adapter: persistence (SeaORM — Postgres, MySQL, SQLite)
 ├── formats/        # Adapter: e-book file format support (EPUB, OPF)
-├── frontend/       # Adapter: Dioxus web UI, calls into core ports
-├── metadata/       # Adapter: external metadata providers (Open Library, etc.)
+├── frontend/       # Adapter: Dioxus web UI (fullstack SSR + WASM)
+├── import/         # Adapter: library scanner + import job handler
+├── metadata/       # Adapter: external metadata providers
 ├── storage/        # Adapter: local filesystem library store
 ├── utils/          # Shared utilities (token encoding, etc.)
 ├── bookboss/       # Entry point: wires adapters to ports
 └── integration-tests/
 ```
-
-Only `crates/bookboss` is a direct workspace member. All others are pulled in as path dependencies.
 
 ## Core Crate
 
@@ -36,7 +35,8 @@ crates/core/src/
 ├── device/             # Device sync: Device, DeviceBook, DeviceSyncLog
 ├── import/             # Acquisition pipeline: ImportJob, ImportJobService
 ├── jobs/               # Job queue: Job, JobRepository, JobWorker, JobRegistry, JobHandler
-├── pipeline/           # Port traits: MetadataExtractor, MetadataProvider
+├── library/            # LibraryService (delete_book, library_stats)
+├── pipeline/           # Port traits: MetadataExtractor, MetadataProvider; PipelineService
 ├── reading/            # Per-user reading state: UserBookMetadata, ReadStatus
 ├── shelf/              # Shelves (manual + smart): Shelf, ShelfFilter
 ├── storage/            # LibraryStore port trait + BookSidecar struct
@@ -50,9 +50,38 @@ Each domain module typically contains:
 - `repository.rs` (or `repository/`) — `FooRepository` trait (port)
 - `service.rs` — `FooService` trait + `FooServiceImpl`
 
+## Metadata Providers
+
+The `metadata` crate implements the `MetadataProvider` port from core. Providers are tried in order until one returns a result:
+
+1. **Hardcover** — primary provider; returns metadata, cover, ratings, genres
+2. **Open Library** — fallback for ISBN-based lookup; returns metadata and cover
+3. **Google Books** — additional fallback; returns metadata
+
+Each provider implements `MetadataProvider::enrich(extracted) -> Option<ProviderBook>`.
+
+## Import Pipeline
+
+The import subsystem (`crates/import/`) owns two background tasks:
+
+- **LibraryScanner** — polls `BOOKBOSS__IMPORT__WATCH_DIRECTORY` on a timer, hashes new files, and enqueues `ImportJob` records
+- **Import worker** (via `CoreSubsystem`/`JobWorker`) — processes `ImportJob` records through the `PipelineService`: extract metadata → enrich from providers → create book record → write sidecar → queue for review
+
+## Subsystem Pattern
+
+Each crate that owns background work exposes an `XxxSubsystem` struct and `create_xxx_subsystem()` factory. Subsystems are composed in `bookboss/main.rs` via `tokio-graceful-shutdown`:
+
+```rust
+Toplevel::new()
+    .start(SubsystemBuilder::new("api", api_subsystem.run()))
+    .start(SubsystemBuilder::new("import", import_subsystem.run()))
+    .start(SubsystemBuilder::new("core", core_subsystem.run()))
+    ...
+```
+
 ## Adding a New Domain
 
-1. Create a directory under `crates/core/src/` (e.g. `book/`)
+1. Create a directory under `crates/core/src/` (e.g. `order/`)
 2. Add `mod.rs`, `model.rs`, `repository.rs`, `service.rs`
 3. Re-export from `mod.rs`
 4. Register the module in `lib.rs`
@@ -69,4 +98,4 @@ use crate::repository::{Repository, Transaction};
 use crate::types::{Email, Age};
 ```
 
-Cross-domain references are allowed (e.g. `use crate::user::UserId` in an order model for foreign keys). Keep references one-directional where possible.
+Cross-domain references are allowed (e.g. `use crate::user::UserId` in a shelf model for foreign keys). Keep references one-directional where possible.
