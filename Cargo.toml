@@ -148,7 +148,7 @@ features = ["log"]
 
 [workspace.dependencies.testcontainers-modules]
 version = "0.15.0"
-features = ["postgres", "mysql"]
+features = ["postgres", "mariadb", "mysql"]
 
 [workspace.dependencies.tracing-subscriber]
 version = "0.3.22"

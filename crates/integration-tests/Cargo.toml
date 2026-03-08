@@ -19,6 +19,7 @@ path = "src/main.rs"
 default = ["postgres"]
 postgres = ["dep:testcontainers", "dep:testcontainers-modules"]
 sqlite = []
+mariadb = ["dep:testcontainers", "dep:testcontainers-modules"]
 mysql = ["dep:testcontainers", "dep:testcontainers-modules"]
 
 [dependencies]

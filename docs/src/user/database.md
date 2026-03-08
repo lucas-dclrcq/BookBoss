@@ -6,6 +6,7 @@ BookBoss supports three database backends. Choose the one that fits your deploym
 | ---------- | ------------------------------------------- |
 | SQLite     | Single-user, low maintenance, simple setups |
 | PostgreSQL | Multi-user, production deployments          |
+| MariaDB    | Existing MariaDB infrastructur e            |
 | MySQL      | Existing MySQL infrastructure               |
 
 ---
@@ -66,7 +67,7 @@ database_url = "postgres://bookboss:yourpassword@localhost:5432/bookboss"
 
 ---
 
-## MySQL
+## MySQL / MariaDB
 
 ### Prerequisites
 
@@ -84,6 +85,8 @@ docker run -d \
 ```
 
 ### Configuration
+
+Both MySQL and MariaDB use the same `database_url` configuration.
 
 ```toml
 [database]

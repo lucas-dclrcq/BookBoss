@@ -84,6 +84,7 @@ component-tests:
 integration-tests:
     just postgres-integration-tests
     just sqlite-integration-tests
+    just mariadb-integration-tests
     just mysql-integration-tests
 
 [doc('Run Postgres integration tests')]
@@ -93,6 +94,10 @@ postgres-integration-tests:
 [doc('Run SQLite integration tests')]
 sqlite-integration-tests:
     cargo nextest run --no-default-features --features sqlite --package integration-tests
+
+[doc('Run MariaDB integration tests')]
+mariadb-integration-tests:
+    cargo nextest run --no-default-features -j2 --features mariadb --package integration-tests
 
 [doc('Run MySQL integration tests')]
 mysql-integration-tests:
