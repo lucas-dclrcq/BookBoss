@@ -7,6 +7,7 @@ pub(crate) mod landing_page;
 pub(crate) mod review_page;
 pub(crate) mod series_detail_page;
 pub(crate) mod settings_page;
+pub(crate) mod shelf_page;
 
 pub(crate) use author_detail_page::AuthorDetailPage;
 pub(crate) use book_detail_page::BookDetailPage;
