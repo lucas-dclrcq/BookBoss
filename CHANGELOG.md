@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0](https://github.com/szinn/BookBoss/compare/v0.1.16..v0.2.0) - 2026-03-08
+
+### Features
+
+- _(core)_ Add ShelfService trait and ShelfServiceImpl - ([762c6ec](https://github.com/szinn/BookBoss/commit/762c6ec7f9f38808448e54bcbfdca651da6dca6d))
+- _(core,database,frontend)_ Add genre/tag fields and picklist data structures - ([e450235](https://github.com/szinn/BookBoss/commit/e4502359fb309ac7d249a7e5a0d102d003cc074c))
+- _(database)_ Implement ShelfRepository adapter (M4.1) - ([d5a3e8c](https://github.com/szinn/BookBoss/commit/d5a3e8c2c22cb764490930e88b339de257746261))
+- _(frontend)_ Add book file download endpoint and format download buttons - ([3df59c5](https://github.com/szinn/BookBoss/commit/3df59c5779ee3a94c0f7594c6de6cbad98abbeb0))
+- _(frontend)_ Remove grid/table toggle button from NavBar - ([db0f1b9](https://github.com/szinn/BookBoss/commit/db0f1b98e3085756c358e10527a931858d77251e))
+- _(frontend)_ Add DnD success flash, rename Edit buttons (M4.9) - ([3887d06](https://github.com/szinn/BookBoss/commit/3887d06432c1ef30d3c397c5b23f331d8389ebca))
+- _(frontend)_ Drag-and-drop books onto shelf pills (D.1–D.3) - ([b635ecd](https://github.com/szinn/BookBoss/commit/b635ecde691341c147e5259bcac75df599101e49))
+- _(frontend)_ Unified ShelfBar+BookGrid UX redesign (C.1–C.6) - ([36c179a](https://github.com/szinn/BookBoss/commit/36c179a15baed59c19a95f738762e13dd43a4e63))
+- _(frontend)_ Add new shelf modal with name validation - ([a9cfbfa](https://github.com/szinn/BookBoss/commit/a9cfbfa3df0045d2231cd36516b3da9ea8d20334))
+- _(frontend)_ Add shelves sidebar bar and ShelfPage route (M4.6) - ([d42c25a](https://github.com/szinn/BookBoss/commit/d42c25ad3e47a5402de99f7e11ef4294aa3676fa))
+- _(frontend)_ Add books_for_shelf server function (M4.5) - ([095104d](https://github.com/szinn/BookBoss/commit/095104d71276f9a7aa6438275ba9792377d0c635))
+- _(frontend)_ Add shelf CRUD server functions (M4.4) - ([0d8bb8c](https://github.com/szinn/BookBoss/commit/0d8bb8caea45e2345526ff7a7272a283b8dac5b0))
+- _(frontend)_ Add ChipInput/AutocompleteInput components for picklist support - ([4f175c0](https://github.com/szinn/BookBoss/commit/4f175c063cf78f7f9fc8d0fcfbb7777c3dfb5364))
+- _(frontend,core)_ UX redesign prep — update_shelf, BookSummary unification (A.1, A.2, B.1, B.3) - ([86adfd8](https://github.com/szinn/BookBoss/commit/86adfd8ec23b2b7776e24d9d0fef618d0f5bc7e6))
+- _(metadata)_ Add Google Books metadata provider - ([ba57ce3](https://github.com/szinn/BookBoss/commit/ba57ce3493503d6bcb52918d2b40bed86afe300d))
+
+### Bug Fixes
+
+- _(database)_ Create jobs_claim index via SeaORM DSL instead of raw SQL - ([61d17f6](https://github.com/szinn/BookBoss/commit/61d17f64bbd4fbb67860f58943c3e6ea156663c3))
+- _(database)_ Use regular index for jobs_claim on MySQL - ([c32c246](https://github.com/szinn/BookBoss/commit/c32c2468cf01779cbb5ce7ad22198e94d9cfaff0))
+- _(frontend)_ Add 'All Books' entry to Shelves section in table view explorer - ([9cbae86](https://github.com/szinn/BookBoss/commit/9cbae868183964a5148b01c667dbe93368c28fe6))
+- _(frontend)_ Change books_for_shelf server fn from GET to POST - ([d964ef0](https://github.com/szinn/BookBoss/commit/d964ef09977c47a901de87e259b14d40bd8d729c))
+- _(frontend)_ Fix auth gaps in server functions - ([2e17165](https://github.com/szinn/BookBoss/commit/2e17165235a4e4d2ef923855b6c38c92eae23631))
+
+### Refactor
+
+- _(frontend)_ Split review_page into module with types/server/editor submodules - ([a47feee](https://github.com/szinn/BookBoss/commit/a47feee5b2d166e20037d563cb6a53c87c35f78c))
+
+### Documentation
+
+- Update README and docs to reflect current feature set - ([2c1879c](https://github.com/szinn/BookBoss/commit/2c1879cdffdee6cc76b2e2bff094b91ac977baff))
+
+### Testing
+
+- _(core)_ Add component tests for ShelfService (M4.3) - ([0a41188](https://github.com/szinn/BookBoss/commit/0a41188e44a78753cf9ab273fcc2ff7d856b07ab))
+- _(integration)_ Add integration tests for book, import_job, and library services - ([a5e4584](https://github.com/szinn/BookBoss/commit/a5e4584e1ae28f068630eeee243ce0961a7405db))
+
+### Miscellaneous Tasks
+
+- _(database)_ Add missing indicies - ([fde9d54](https://github.com/szinn/BookBoss/commit/fde9d544792c1e29e47a435541c6339c866650ce))
+
 ## [0.1.15](https://github.com/szinn/BookBoss/compare/v0.1.14..v0.1.15) - 2026-03-07
 
 ### Features

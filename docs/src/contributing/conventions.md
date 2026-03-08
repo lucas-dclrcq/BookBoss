@@ -6,13 +6,13 @@ This project uses [jujutsu](https://github.com/jj-vcs/jj) (`jj`), not `git` dire
 
 Key commands:
 
-| Command               | Description                         |
-| --------------------- | ----------------------------------- |
-| `jj commit`           | Commit current changes              |
+| Command              | Description                         |
+| -------------------- | ----------------------------------- |
+| `jj commit`          | Commit current changes              |
 | `jj describe -m "…"` | Update the working copy description |
-| `jj new`              | Start a new change                  |
-| `jj log`              | Show history                        |
-| `jj status`           | Show working copy status            |
+| `jj new`             | Start a new change                  |
+| `jj log`             | Show history                        |
+| `jj status`          | Show working copy status            |
 
 ## Commit Messages
 

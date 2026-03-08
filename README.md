@@ -54,15 +54,15 @@ just config
 
 Edit the encrypted `config.sops.env` file. Required variables:
 
-| Variable                                      | Purpose                                                |
-| --------------------------------------------- | ------------------------------------------------------ |
-| `BOOKBOSS__DATABASE__DATABASE_URL`            | SeaORM connection string (Postgres / MySQL / SQLite)   |
-| `BOOKBOSS__LIBRARY__LIBRARY_PATH`             | Where approved book files are stored                   |
-| `BOOKBOSS__IMPORT__WATCH_DIRECTORY`           | Drop e-book files here to trigger the import pipeline  |
-| `BOOKBOSS__FRONTEND__LISTEN_IP`               | Server listen address (default `0.0.0.0`)              |
-| `BOOKBOSS__FRONTEND__LISTEN_PORT`             | Server listen port (default `8080`)                    |
-| `PGUSER`, `PGPASSWORD`, `PGDATABASE`          | Used by `just create-database` and `just database`     |
-| `PGADMINUSER`, `PGADMINPASSWORD`              | Admin credentials for database creation                |
+| Variable                             | Purpose                                               |
+| ------------------------------------ | ----------------------------------------------------- |
+| `BOOKBOSS__DATABASE__DATABASE_URL`   | SeaORM connection string (Postgres / MySQL / SQLite)  |
+| `BOOKBOSS__LIBRARY__LIBRARY_PATH`    | Where approved book files are stored                  |
+| `BOOKBOSS__IMPORT__WATCH_DIRECTORY`  | Drop e-book files here to trigger the import pipeline |
+| `BOOKBOSS__FRONTEND__LISTEN_IP`      | Server listen address (default `0.0.0.0`)             |
+| `BOOKBOSS__FRONTEND__LISTEN_PORT`    | Server listen port (default `8080`)                   |
+| `PGUSER`, `PGPASSWORD`, `PGDATABASE` | Used by `just create-database` and `just database`    |
+| `PGADMINUSER`, `PGADMINPASSWORD`     | Admin credentials for database creation               |
 
 Connection string formats:
 

@@ -60,7 +60,8 @@ pub(crate) async fn serve_book_file(
         return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap();
     }
 
-    // Compute slug: same logic as pipeline service — first author (by sort_order) + title.
+    // Compute slug: same logic as pipeline service — first author (by sort_order) +
+    // title.
     let mut authors = match core_services.book_service.authors_for_book(book.id).await {
         Ok(a) => a,
         Err(_) => return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap(),
@@ -108,7 +109,8 @@ pub(crate) async fn serve_book_file(
         .unwrap()
 }
 
-/// Mirrors the pipeline service slugify — filesystem-safe, lowercase, hyphenated.
+/// Mirrors the pipeline service slugify — filesystem-safe, lowercase,
+/// hyphenated.
 fn slugify(s: &str) -> String {
     let raw: String = s.chars().map(|c| if c.is_alphanumeric() { c.to_ascii_lowercase() } else { '-' }).collect();
     raw.split('-').filter(|p| !p.is_empty()).collect::<Vec<_>>().join("-")
