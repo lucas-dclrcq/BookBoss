@@ -26,6 +26,7 @@ use crate::{
     library::{LibraryService, LibraryServiceImpl},
     pipeline::PipelineService,
     repository::RepositoryService,
+    shelf::{ShelfService, service::ShelfServiceImpl},
     storage::LibraryStore,
     user::{UserService, UserServiceImpl, UserSettingService, UserSettingServiceImpl},
 };
@@ -42,6 +43,7 @@ pub struct CoreServices {
     pub library_store: Arc<dyn LibraryStore>,
     pub library_service: Arc<dyn LibraryService>,
     pub pipeline_service: Arc<dyn PipelineService>,
+    pub shelf_service: Arc<dyn ShelfService>,
 }
 
 impl CoreServices {
@@ -55,6 +57,7 @@ impl CoreServices {
             library_service: Arc::new(LibraryServiceImpl::new(repository_service.clone(), library_store.clone())),
             library_store,
             pipeline_service,
+            shelf_service: Arc::new(ShelfServiceImpl::new(repository_service.clone())),
         }
     }
 }
