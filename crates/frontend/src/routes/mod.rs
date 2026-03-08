@@ -18,3 +18,4 @@ pub(crate) use landing_page::LandingPage;
 pub(crate) use review_page::ReviewPage;
 pub(crate) use series_detail_page::SeriesDetailPage;
 pub(crate) use settings_page::SettingsPage;
+pub(crate) use shelf_page::ShelfPage;

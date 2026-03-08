@@ -46,10 +46,10 @@ pub use error::FrontendError;
 pub mod server;
 
 use components::AppLayout;
-use routes::{AuthorDetailPage, BookDetailPage, BooksPage, EditMetadataPage, IncomingPage, LandingPage, ReviewPage, SeriesDetailPage, SettingsPage};
+use routes::{AuthorDetailPage, BookDetailPage, BooksPage, EditMetadataPage, IncomingPage, LandingPage, ReviewPage, SeriesDetailPage, SettingsPage, ShelfPage};
 use serde::Deserialize;
 
-#[derive(Routable, Clone, PartialEq)]
+#[derive(Routable, Clone, Debug, PartialEq)]
 #[rustfmt::skip]
 enum Route {
     #[route("/")]
@@ -71,6 +71,8 @@ enum Route {
         ReviewPage { token: String },
         #[route("/settings")]
         SettingsPage {},
+        #[route("/shelves/:token")]
+        ShelfPage { token: String },
 }
 
 #[component]

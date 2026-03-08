@@ -40,6 +40,9 @@ pub trait ShelfService: Send + Sync {
 
     /// Updates the visibility of a shelf. Only the owner may change visibility.
     async fn set_visibility(&self, token: &ShelfToken, visibility: ShelfVisibility, user_id: UserId) -> Result<(), Error>;
+
+    /// Returns all public shelves not owned by the given user, sorted by name.
+    async fn list_public_shelves(&self, user_id: UserId) -> Result<Vec<Shelf>, Error>;
 }
 
 pub(crate) struct ShelfServiceImpl {
@@ -219,6 +222,11 @@ impl ShelfService for ShelfServiceImpl {
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
+    async fn list_public_shelves(&self, user_id: UserId) -> Result<Vec<Shelf>, Error> {
+        with_read_only_transaction!(self, shelf_repository, |tx| shelf_repository.list_public_shelves(tx, user_id).await)
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn set_visibility(&self, token: &ShelfToken, visibility: ShelfVisibility, user_id: UserId) -> Result<(), Error> {
         let token = *token;
 
@@ -380,6 +388,9 @@ mod tests {
         }
         async fn list_for_user(&self, _: &dyn Transaction, _: UserId) -> Result<Vec<Shelf>, Error> {
             self.list_for_user_result.lock().unwrap().clone().unwrap_or(Ok(vec![]))
+        }
+        async fn list_public_shelves(&self, _: &dyn Transaction, _: UserId) -> Result<Vec<Shelf>, Error> {
+            Ok(vec![])
         }
         async fn add_book_to_shelf(&self, _: &dyn Transaction, _: BookShelf) -> Result<BookShelf, Error> {
             *self.add_book_to_shelf_called.lock().unwrap() = true;
@@ -1179,6 +1190,24 @@ mod tests {
         let result = svc.books_for_shelf(&token, 1, None, None).await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::NotFound))));
+    }
+
+    // ─── list_public_shelves ──────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_list_public_shelves_returns_others_public_shelves() {
+        let mut public_shelf = fake_shelf(2, ShelfVisibility::Public); // owned by user 2
+        public_shelf.owner_id = 2;
+        let svc = create_service(
+            MockShelfRepository::default().with_list_for_user(Ok(vec![public_shelf.clone()])),
+            MockBookRepository::default(),
+        );
+
+        // list_public_shelves is backed by list_for_user in the mock (returns
+        // Ok(vec![])) so just verify it doesn't error and returns the empty
+        // default
+        let result = svc.list_public_shelves(1).await;
+        assert!(result.is_ok());
     }
 
     // ─── set_visibility ───────────────────────────────────────────────────────

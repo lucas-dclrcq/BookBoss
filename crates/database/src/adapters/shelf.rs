@@ -191,6 +191,20 @@ impl ShelfRepository for ShelfRepositoryAdapter {
         Ok(rows.into_iter().map(Into::into).collect())
     }
 
+    async fn list_public_shelves(&self, transaction: &dyn Transaction, exclude_owner_id: UserId) -> Result<Vec<Shelf>, Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        let rows = prelude::Shelves::find()
+            .filter(shelves::Column::Visibility.eq("public"))
+            .filter(shelves::Column::OwnerId.ne(exclude_owner_id as i64))
+            .order_by_asc(shelves::Column::Name)
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
     async fn add_book_to_shelf(&self, transaction: &dyn Transaction, book_shelf: BookShelf) -> Result<BookShelf, Error> {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 

@@ -2,7 +2,9 @@ use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    components::{BookGrid, BookTable, TreeExplorer},
+    Route,
+    components::{BookGrid, BookTable, ShelfBar, TreeExplorer},
+    routes::shelf_page::{ShelfSummary, list_all_accessible_shelves},
     settings::BookDisplayView,
 };
 
@@ -19,14 +21,16 @@ pub(crate) struct BookSummary {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct TreeCategory {
     pub name: String,
-    pub items: Vec<String>,
+    /// Each item is `(label, optional_route)`. Items without a route are
+    /// rendered as plain text.
+    pub items: Vec<(String, Option<Route>)>,
 }
 
-fn sample_categories() -> Vec<TreeCategory> {
-    vec![
+fn build_categories(shelves: &[ShelfSummary]) -> Vec<TreeCategory> {
+    let mut cats = vec![
         TreeCategory {
             name: "Genres".into(),
-            items: vec!["Fantasy".into(), "Science Fiction".into(), "Non-fiction".into()],
+            items: vec![("Fantasy".into(), None), ("Science Fiction".into(), None), ("Non-fiction".into(), None)],
         },
         TreeCategory {
             name: "Authors".into(),
@@ -36,7 +40,19 @@ fn sample_categories() -> Vec<TreeCategory> {
             name: "Series".into(),
             items: vec![],
         },
-    ]
+    ];
+
+    if !shelves.is_empty() {
+        cats.push(TreeCategory {
+            name: "Shelves".into(),
+            items: shelves
+                .iter()
+                .map(|s| (s.name.clone(), Some(Route::ShelfPage { token: s.token.clone() })))
+                .collect(),
+        });
+    }
+
+    cats
 }
 
 #[cfg(feature = "server")]
@@ -131,7 +147,9 @@ async fn list_books() -> Result<Vec<BookSummary>, ServerFnError> {
 pub(crate) fn BooksPage() -> Element {
     let view: Signal<BookDisplayView> = use_context();
     let books = use_server_future(list_books)?;
-    let categories = sample_categories();
+    let shelves_resource = use_server_future(list_all_accessible_shelves)?;
+    let shelves: Vec<ShelfSummary> = shelves_resource().and_then(|r| r.ok()).unwrap_or_default();
+    let categories = build_categories(&shelves);
 
     rsx! {
         match books() {
@@ -148,7 +166,10 @@ pub(crate) fn BooksPage() -> Element {
             Some(Ok(books)) => rsx! {
                 match *view.read() {
                     BookDisplayView::GridView => rsx! {
-                        BookGrid { books }
+                        div { class: "flex-1 flex flex-col overflow-hidden",
+                            ShelfBar { shelves }
+                            BookGrid { books }
+                        }
                     },
                     BookDisplayView::TableView => rsx! {
                         TreeExplorer { categories }

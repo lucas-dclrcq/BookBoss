@@ -32,9 +32,20 @@ fn TreeCategoryNode(category: TreeCategory) -> Element {
             }
             if expanded() {
                 ul { class: "ml-4 mt-1 space-y-0.5",
-                    for item in &category.items {
-                        li { class: "text-sm text-gray-600 hover:text-indigo-600 cursor-pointer py-0.5 px-1 rounded hover:bg-indigo-50",
-                            "{item}"
+                    for (label, route) in &category.items {
+                        li { class: "text-sm text-gray-600 py-0.5 px-1 rounded hover:bg-indigo-50",
+                            match route {
+                                Some(r) => rsx! {
+                                    Link {
+                                        to: r.clone(),
+                                        class: "hover:text-indigo-600 block",
+                                        "{label}"
+                                    }
+                                },
+                                None => rsx! {
+                                    span { class: "cursor-default", "{label}" }
+                                },
+                            }
                         }
                     }
                 }

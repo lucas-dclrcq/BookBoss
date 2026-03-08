@@ -1,6 +1,16 @@
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
+/// Shelf detail page — renders the books on a single shelf.
+#[component]
+pub(crate) fn ShelfPage(token: String) -> Element {
+    rsx! {
+        div { class: "flex-1 flex items-center justify-center text-gray-400 text-sm",
+            "Shelf {token} — coming soon"
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // DTOs
 // ---------------------------------------------------------------------------
@@ -12,6 +22,8 @@ pub(crate) struct ShelfSummary {
     pub name: String,
     /// `"Private"` or `"Public"`
     pub visibility: String,
+    /// `true` if the current user owns this shelf.
+    pub is_own: bool,
 }
 
 /// Full book entry for a shelf, including hydrated author and series data.
@@ -95,6 +107,7 @@ pub(crate) async fn list_my_shelves() -> Result<Vec<ShelfSummary>, ServerFnError
             token: s.token.to_string(),
             name: s.name.clone(),
             visibility: visibility_str(&s.visibility).to_string(),
+            is_own: true,
         })
         .collect())
 }
@@ -240,6 +253,56 @@ pub(crate) async fn set_shelf_visibility(token: String, visibility: String) -> R
         .set_visibility(&shelf_token, vis, user_id)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))
+}
+
+/// Returns the current user's own shelves plus all public shelves from other
+/// users.
+///
+/// Own shelves come first (in creation order), then others' public shelves
+/// sorted by name. Each entry carries `is_own` so the UI can split them into
+/// two groups.
+#[get(
+    "/api/v1/shelves/all",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+pub(crate) async fn list_all_accessible_shelves() -> Result<Vec<ShelfSummary>, ServerFnError> {
+    let user = auth_session
+        .current_user
+        .as_ref()
+        .filter(|u| !u.username.is_empty())
+        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+    let user_id = user.id();
+
+    let shelf_service = &core_services.shelf_service;
+
+    let mut own = shelf_service
+        .list_shelves_for_user(user_id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .into_iter()
+        .map(|s| ShelfSummary {
+            token: s.token.to_string(),
+            name: s.name.clone(),
+            visibility: visibility_str(&s.visibility).to_string(),
+            is_own: true,
+        })
+        .collect::<Vec<_>>();
+
+    let others = shelf_service
+        .list_public_shelves(user_id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .into_iter()
+        .map(|s| ShelfSummary {
+            token: s.token.to_string(),
+            name: s.name.clone(),
+            visibility: visibility_str(&s.visibility).to_string(),
+            is_own: false,
+        });
+
+    own.extend(others);
+    Ok(own)
 }
 
 /// Returns a paginated list of books on a shelf, with author and series data
