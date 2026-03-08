@@ -43,6 +43,13 @@ pub trait ShelfService: Send + Sync {
 
     /// Returns all public shelves not owned by the given user, sorted by name.
     async fn list_public_shelves(&self, user_id: UserId) -> Result<Vec<Shelf>, Error>;
+
+    /// Returns metadata for a single shelf.
+    ///
+    /// Owners can access private shelves; other users may only access public
+    /// shelves. Returns `NotFound` for missing shelves and a validation error
+    /// for private shelves the requester does not own.
+    async fn get_shelf(&self, token: &ShelfToken, user_id: UserId) -> Result<Shelf, Error>;
 }
 
 pub(crate) struct ShelfServiceImpl {
@@ -224,6 +231,24 @@ impl ShelfService for ShelfServiceImpl {
     #[tracing::instrument(level = "trace", skip(self))]
     async fn list_public_shelves(&self, user_id: UserId) -> Result<Vec<Shelf>, Error> {
         with_read_only_transaction!(self, shelf_repository, |tx| shelf_repository.list_public_shelves(tx, user_id).await)
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    async fn get_shelf(&self, token: &ShelfToken, user_id: UserId) -> Result<Shelf, Error> {
+        let token = *token;
+
+        with_read_only_transaction!(self, shelf_repository, |tx| {
+            let shelf = shelf_repository
+                .find_by_token(tx, &token)
+                .await?
+                .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
+
+            if shelf.visibility == ShelfVisibility::Private && shelf.owner_id != user_id {
+                return Err(Error::Validation("this shelf is private".to_string()));
+            }
+
+            Ok(shelf)
+        })
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
@@ -1273,5 +1298,50 @@ mod tests {
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap().len(), 2);
+    }
+
+    // ─── get_shelf ────────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_get_shelf_owner_can_access_private() {
+        let shelf = fake_shelf(1, ShelfVisibility::Private);
+        let token = shelf.token;
+        let svc = create_service(
+            MockShelfRepository::default().with_find_by_token(Ok(Some(shelf))),
+            MockBookRepository::default(),
+        );
+
+        let result = svc.get_shelf(&token, 1).await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().visibility, ShelfVisibility::Private);
+    }
+
+    #[tokio::test]
+    async fn test_get_shelf_non_owner_denied_private() {
+        let shelf = fake_shelf(1, ShelfVisibility::Private); // owned by user 1
+        let token = shelf.token;
+        let svc = create_service(
+            MockShelfRepository::default().with_find_by_token(Ok(Some(shelf))),
+            MockBookRepository::default(),
+        );
+
+        let result = svc.get_shelf(&token, 2).await; // user 2
+
+        assert!(matches!(result, Err(Error::Validation(_))));
+    }
+
+    #[tokio::test]
+    async fn test_get_shelf_non_owner_can_access_public() {
+        let shelf = fake_shelf(1, ShelfVisibility::Public); // owned by user 1
+        let token = shelf.token;
+        let svc = create_service(
+            MockShelfRepository::default().with_find_by_token(Ok(Some(shelf))),
+            MockBookRepository::default(),
+        );
+
+        let result = svc.get_shelf(&token, 2).await; // user 2
+
+        assert!(result.is_ok());
     }
 }
