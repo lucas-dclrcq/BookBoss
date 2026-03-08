@@ -14,6 +14,18 @@ pub(crate) struct ShelfSummary {
     pub visibility: String,
 }
 
+/// Full book entry for a shelf, including hydrated author and series data.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct ShelfBookSummary {
+    pub token: String,
+    pub title: String,
+    pub cover_path: Option<String>,
+    pub author_names: Vec<String>,
+    pub series_name: Option<String>,
+    pub series_number: Option<String>,
+    pub added_at: String,
+}
+
 // ---------------------------------------------------------------------------
 // Server-only imports
 // ---------------------------------------------------------------------------
@@ -25,7 +37,7 @@ use {
     axum_session_auth::{Auth, Rights},
     bb_core::{
         CoreServices,
-        book::BookToken,
+        book::{AuthorToken, BookToken, SeriesToken},
         shelf::{ShelfToken, ShelfVisibility},
         user::UserId,
     },
@@ -228,4 +240,111 @@ pub(crate) async fn set_shelf_visibility(token: String, visibility: String) -> R
         .set_visibility(&shelf_token, vis, user_id)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))
+}
+
+/// Returns a paginated list of books on a shelf, with author and series data
+/// hydrated.
+///
+/// `cursor` is the last `book_id` seen (exclusive lower bound for the next
+/// page). `page_size` defaults to the server's configured page size when
+/// `None`.
+#[get(
+    "/api/v1/shelves/books/list",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+pub(crate) async fn books_for_shelf(token: String, cursor: Option<u64>, page_size: Option<u64>) -> Result<Vec<ShelfBookSummary>, ServerFnError> {
+    use std::collections::{HashMap, HashSet};
+
+    let user = auth_session
+        .current_user
+        .as_ref()
+        .filter(|u| !u.username.is_empty())
+        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+    let user_id = user.id();
+
+    let shelf_token: ShelfToken = token.parse().map_err(|_| ServerFnError::new("Invalid shelf token"))?;
+
+    let shelf_service = &core_services.shelf_service;
+    let book_service = &core_services.book_service;
+
+    // 1. Load BookShelf entries (cursor-paginated, ordered by book_id).
+    let shelf_entries = shelf_service
+        .books_for_shelf(&shelf_token, user_id, cursor, page_size)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    if shelf_entries.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // 2. Resolve each book_id → Book, preserving shelf order.
+    let mut books = Vec::with_capacity(shelf_entries.len());
+    let mut all_author_ids: HashSet<u64> = HashSet::new();
+    let mut added_ats: Vec<String> = Vec::with_capacity(shelf_entries.len());
+
+    for entry in &shelf_entries {
+        let book = book_service
+            .find_book_by_token(&BookToken::new(entry.book_id))
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?
+            .ok_or_else(|| ServerFnError::new("Book not found"))?;
+
+        let authors = book_service.authors_for_book(book.id).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        for ba in &authors {
+            all_author_ids.insert(ba.author_id);
+        }
+
+        added_ats.push(entry.added_at.to_rfc3339());
+        books.push((book, authors));
+    }
+
+    // 3. Batch-load unique authors.
+    let mut author_map: HashMap<u64, String> = HashMap::new();
+    for author_id in all_author_ids {
+        if let Some(author) = book_service
+            .find_author_by_token(&AuthorToken::new(author_id))
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?
+        {
+            author_map.insert(author_id, author.name);
+        }
+    }
+
+    // 4. Batch-load unique series.
+    let unique_series: HashSet<u64> = books.iter().filter_map(|(b, _)| b.series_id).collect();
+    let mut series_map: HashMap<u64, String> = HashMap::new();
+    for series_id in unique_series {
+        if let Some(series) = book_service
+            .find_series_by_token(&SeriesToken::new(series_id))
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?
+        {
+            series_map.insert(series_id, series.name);
+        }
+    }
+
+    // 5. Assemble summaries.
+    let summaries = books
+        .iter()
+        .zip(added_ats.iter())
+        .map(|((book, author_links), added_at)| {
+            let mut sorted = author_links.clone();
+            sorted.sort_by_key(|ba| ba.sort_order);
+            let author_names = sorted.iter().filter_map(|ba| author_map.get(&ba.author_id).cloned()).collect();
+
+            ShelfBookSummary {
+                token: book.token.to_string(),
+                title: book.title.clone(),
+                cover_path: book.cover_path.clone(),
+                author_names,
+                series_name: book.series_id.and_then(|sid| series_map.get(&sid).cloned()),
+                series_number: book.series_number.as_ref().map(|n| n.to_string()),
+                added_at: added_at.clone(),
+            }
+        })
+        .collect();
+
+    Ok(summaries)
 }
