@@ -48,14 +48,10 @@ fn build_categories(shelves: &[ShelfSummary]) -> Vec<TreeCategory> {
         },
     ];
 
-    if !shelves.is_empty() {
-        cats.push(TreeCategory {
-            name: "Shelves".into(),
-            items: shelves
-                .iter()
-                .map(|s| (s.name.clone(), Some(Route::ShelfPage { token: s.token.clone() })))
-                .collect(),
-        });
+    {
+        let mut items = vec![("All Books".into(), Some(Route::BooksPage {}))];
+        items.extend(shelves.iter().map(|s| (s.name.clone(), Some(Route::ShelfPage { token: s.token.clone() }))));
+        cats.push(TreeCategory { name: "Shelves".into(), items });
     }
 
     cats
