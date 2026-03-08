@@ -119,6 +119,7 @@ async fn get_author(token: String) -> Result<AuthorPageData, ServerFnError> {
 
 #[component]
 pub(crate) fn AuthorDetailPage(token: String) -> Element {
+    use_context_provider(|| Signal::new(None::<String>)); // DraggedBookToken
     let author = use_server_future(move || get_author(token.clone()))?;
 
     rsx! {

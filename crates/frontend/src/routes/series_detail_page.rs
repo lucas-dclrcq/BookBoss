@@ -114,6 +114,7 @@ async fn get_series(token: String) -> Result<SeriesPageData, ServerFnError> {
 
 #[component]
 pub(crate) fn SeriesDetailPage(token: String) -> Element {
+    use_context_provider(|| Signal::new(None::<String>)); // DraggedBookToken
     let series = use_server_future(move || get_series(token.clone()))?;
 
     rsx! {

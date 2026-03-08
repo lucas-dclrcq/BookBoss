@@ -161,6 +161,7 @@ async fn list_books() -> Result<ListBooksResponse, ServerFnError> {
 
 #[component]
 pub(crate) fn BooksPage() -> Element {
+    use_context_provider(|| Signal::new(None::<String>)); // DraggedBookToken
     let view: Signal<BookDisplayView> = use_context();
     let mut page_data = use_server_future(list_books)?;
     let shelves_resource = use_server_future(list_all_accessible_shelves)?;

@@ -2,7 +2,8 @@ use dioxus::prelude::*;
 
 use crate::{
     Route,
-    routes::shelf_page::{ShelfSummary, create_shelf},
+    components::DraggedBookToken,
+    routes::shelf_page::{ShelfSummary, add_book_to_shelf, create_shelf},
 };
 
 /// Horizontal pill-button row listing the user's shelves and a "+" new-shelf
@@ -25,6 +26,9 @@ pub(crate) fn ShelfBar(
     let mut is_private = use_signal(|| true);
     let mut creating = use_signal(|| false);
     let mut error_msg: Signal<Option<String>> = use_signal(|| None);
+
+    let dragged_token = use_context::<DraggedBookToken>();
+    let drag_active = dragged_token().is_some();
 
     let own_names: Vec<String> = shelves.iter().filter(|s| s.is_own).map(|s| s.name.to_lowercase()).collect();
 
@@ -80,17 +84,37 @@ pub(crate) fn ShelfBar(
             for shelf in shelves.iter().filter(|s| s.is_own) {
                 {
                     let is_active = current_shelf_token.as_deref() == Some(shelf.token.as_str());
+                    // The current shelf is never a drop target — the book is already there.
+                    let is_drop_target = !is_active && drag_active;
                     let pill_class = if is_active {
-                        "px-3 py-1 rounded-full text-sm bg-indigo-600 text-white font-medium whitespace-nowrap shrink-0"
+                        "px-3 py-1 rounded-full text-sm bg-indigo-600 text-white font-medium whitespace-nowrap shrink-0 cursor-pointer"
+                    } else if is_drop_target {
+                        "px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-700 whitespace-nowrap shrink-0 cursor-pointer ring-2 ring-inset ring-indigo-300 hover:ring-indigo-500"
                     } else if shelf.visibility == "Private" {
-                        "px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 whitespace-nowrap shrink-0"
+                        "px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 whitespace-nowrap shrink-0 cursor-pointer"
                     } else {
-                        "px-3 py-1 rounded-full text-sm bg-blue-50 text-blue-700 hover:bg-indigo-50 hover:text-indigo-600 whitespace-nowrap shrink-0"
+                        "px-3 py-1 rounded-full text-sm bg-blue-50 text-blue-700 hover:bg-indigo-50 hover:text-indigo-600 whitespace-nowrap shrink-0 cursor-pointer"
                     };
+                    let stok = shelf.token.clone();
                     rsx! {
-                        Link {
-                            to: Route::ShelfPage { token: shelf.token.clone() },
+                        div {
                             class: pill_class,
+                            onclick: {
+                                let stok = stok.clone();
+                                move |_| { navigator.push(Route::ShelfPage { token: stok.clone() }); }
+                            },
+                            ondragover: move |e| {
+                                if !is_active {
+                                    e.prevent_default();
+                                }
+                            },
+                            ondrop: move |e| {
+                                e.prevent_default();
+                                if let Some(book_tok) = dragged_token() {
+                                    let s = stok.clone();
+                                    spawn(async move { let _ = add_book_to_shelf(s, book_tok).await; });
+                                }
+                            },
                             "{shelf.name}"
                         }
                     }

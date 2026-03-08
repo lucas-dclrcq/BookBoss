@@ -23,6 +23,12 @@ pub(crate) enum BookGridContext {
     ReadOnly,
 }
 
+/// Page-level signal tracking the token of the book currently being dragged,
+/// or `None` when no drag is in progress. Provided by pages, read by both
+/// `BookCard` (writes on drag) and `ShelfBar` (reads for drop-target
+/// highlight).
+pub(crate) type DraggedBookToken = Signal<Option<String>>;
+
 // ---------------------------------------------------------------------------
 // Components
 // ---------------------------------------------------------------------------
@@ -55,6 +61,7 @@ fn BookCard(book: BookSummary) -> Element {
     let token = book.token.clone();
     let ctx = use_context::<BookGridContext>();
     let on_action = use_context::<EventHandler<()>>();
+    let mut dragged_token = use_context::<DraggedBookToken>();
 
     let author_str = book.author_names.join(", ");
     let series_line = match (&book.series_name, &book.series_number) {
@@ -62,6 +69,8 @@ fn BookCard(book: BookSummary) -> Element {
         (Some(name), None) => Some(name.clone()),
         _ => None,
     };
+
+    let is_dragging = dragged_token().as_deref() == Some(book.token.as_str());
 
     // Build the × button action (if any) based on context.
     let remove_action: Option<Box<dyn Fn() + 'static>> = match ctx {
@@ -93,7 +102,15 @@ fn BookCard(book: BookSummary) -> Element {
     };
 
     rsx! {
-        div { class: "flex flex-col",
+        div {
+            class: if is_dragging { "flex flex-col opacity-50" } else { "flex flex-col" },
+            draggable: true,
+            ondragstart: {
+                let tok = book.token.clone();
+                move |_| *dragged_token.write() = Some(tok.clone())
+            },
+            ondragend: move |_| *dragged_token.write() = None,
+
             div { class: "relative cursor-pointer",
                 onclick: move |_| { navigator.push(Route::BookDetailPage { token: token.clone() }); },
                 img {

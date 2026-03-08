@@ -377,6 +377,8 @@ pub(crate) async fn books_for_shelf(token: String, cursor: Option<u64>, page_siz
 pub(crate) fn ShelfPage(token: String) -> Element {
     let nav = use_navigator();
 
+    use_context_provider(|| Signal::new(None::<String>)); // DraggedBookToken
+
     // Edit shelf modal state
     let mut show_edit = use_signal(|| false);
     let mut edit_name = use_signal(String::new);
