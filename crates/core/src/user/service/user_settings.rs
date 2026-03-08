@@ -74,6 +74,7 @@ mod tests {
         import::{ImportJob, ImportJobId, ImportJobRepository, ImportJobToken, ImportStatus, NewImportJob},
         jobs::{Job, JobRepository},
         repository::{Repository, RepositoryServiceBuilder, Transaction},
+        shelf::{BookShelf, NewShelf, Shelf, ShelfFilter, ShelfId, ShelfRepository, ShelfToken},
         user::{
             NewUser, NewUserSetting, User, UserId, UserSetting,
             repository::{UserRepository, UserSettingRepository},
@@ -467,6 +468,44 @@ mod tests {
         }
     }
 
+    struct MockShelfRepository;
+    #[async_trait::async_trait]
+    impl ShelfRepository for MockShelfRepository {
+        async fn add_shelf(&self, _: &dyn Transaction, _: NewShelf) -> Result<Shelf, Error> {
+            unimplemented!()
+        }
+        async fn update_shelf(&self, _: &dyn Transaction, _: Shelf) -> Result<Shelf, Error> {
+            unimplemented!()
+        }
+        async fn delete_shelf(&self, _: &dyn Transaction, _: Shelf) -> Result<(), Error> {
+            unimplemented!()
+        }
+        async fn find_by_id(&self, _: &dyn Transaction, _: ShelfId) -> Result<Option<Shelf>, Error> {
+            unimplemented!()
+        }
+        async fn find_by_token(&self, _: &dyn Transaction, _: &ShelfToken) -> Result<Option<Shelf>, Error> {
+            unimplemented!()
+        }
+        async fn list_for_user(&self, _: &dyn Transaction, _: UserId) -> Result<Vec<Shelf>, Error> {
+            unimplemented!()
+        }
+        async fn add_book_to_shelf(&self, _: &dyn Transaction, _: BookShelf) -> Result<BookShelf, Error> {
+            unimplemented!()
+        }
+        async fn remove_book_from_shelf(&self, _: &dyn Transaction, _: ShelfId, _: BookId) -> Result<(), Error> {
+            unimplemented!()
+        }
+        async fn books_for_shelf(&self, _: &dyn Transaction, _: ShelfId, _: Option<BookId>, _: Option<u64>) -> Result<Vec<BookShelf>, Error> {
+            unimplemented!()
+        }
+        async fn books_for_filter(&self, _: &dyn Transaction, _: &ShelfFilter, _: UserId, _: Option<BookId>, _: Option<u64>) -> Result<Vec<Book>, Error> {
+            unimplemented!()
+        }
+        async fn count_for_filter(&self, _: &dyn Transaction, _: &ShelfFilter, _: UserId) -> Result<u64, Error> {
+            unimplemented!()
+        }
+    }
+
     struct MockImportJobRepository;
     #[async_trait::async_trait]
     impl ImportJobRepository for MockImportJobRepository {
@@ -527,6 +566,7 @@ mod tests {
                 .book_repository(Arc::new(MockBookRepository) as Arc<dyn BookRepository>)
                 .import_job_repository(Arc::new(MockImportJobRepository) as Arc<dyn ImportJobRepository>)
                 .job_repository(Arc::new(MockJobRepository) as Arc<dyn JobRepository>)
+                .shelf_repository(Arc::new(MockShelfRepository) as Arc<dyn ShelfRepository>)
                 .build()
                 .expect("all fields provided"),
         );
