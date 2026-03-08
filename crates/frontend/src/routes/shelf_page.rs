@@ -1,7 +1,11 @@
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{Route, routes::books_page::BookSummary};
+use crate::{
+    Route,
+    components::{BookGrid, BookGridContext, ShelfBar},
+    routes::books_page::BookSummary,
+};
 
 // ---------------------------------------------------------------------------
 // DTOs
@@ -10,17 +14,6 @@ use crate::{Route, routes::books_page::BookSummary};
 /// Lightweight shelf descriptor returned by list and create operations.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct ShelfSummary {
-    pub token: String,
-    pub name: String,
-    /// `"Private"` or `"Public"`
-    pub visibility: String,
-    /// `true` if the current user owns this shelf.
-    pub is_own: bool,
-}
-
-/// Full shelf metadata returned by the detail endpoint.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub(crate) struct ShelfDetail {
     pub token: String,
     pub name: String,
     /// `"Private"` or `"Public"`
@@ -68,39 +61,6 @@ fn visibility_str(v: &ShelfVisibility) -> &'static str {
 // ---------------------------------------------------------------------------
 // Server functions
 // ---------------------------------------------------------------------------
-
-/// Returns metadata for a single shelf.
-///
-/// Owners can access private shelves; non-owners can only access public
-/// shelves.
-#[post(
-    "/api/v1/shelves/detail",
-    auth_session: axum::Extension<AuthSession>,
-    core_services: axum::Extension<Arc<CoreServices>>
-)]
-pub(crate) async fn get_shelf(token: String) -> Result<ShelfDetail, ServerFnError> {
-    let user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
-    let user_id = user.id();
-
-    let shelf_token: ShelfToken = token.parse().map_err(|_| ServerFnError::new("Invalid shelf token"))?;
-
-    let shelf = core_services
-        .shelf_service
-        .get_shelf(&shelf_token, user_id)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
-
-    Ok(ShelfDetail {
-        token: shelf.token.to_string(),
-        name: shelf.name.clone(),
-        visibility: visibility_str(&shelf.visibility).to_string(),
-        is_own: shelf.owner_id == user_id,
-    })
-}
 
 /// Returns all shelves belonging to the authenticated user.
 #[get(
@@ -156,29 +116,6 @@ pub(crate) async fn create_shelf(name: String, visibility: String) -> Result<Str
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(token.to_string())
-}
-
-/// Renames a shelf. Only the owner may rename.
-#[put(
-    "/api/v1/shelves/rename",
-    auth_session: axum::Extension<AuthSession>,
-    core_services: axum::Extension<Arc<CoreServices>>
-)]
-pub(crate) async fn rename_shelf(token: String, new_name: String) -> Result<(), ServerFnError> {
-    let user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
-    let user_id = user.id();
-
-    let shelf_token: ShelfToken = token.parse().map_err(|_| ServerFnError::new("Invalid shelf token"))?;
-
-    core_services
-        .shelf_service
-        .rename_shelf(&shelf_token, new_name, user_id)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
 }
 
 /// Deletes a shelf. Only the owner may delete.
@@ -273,30 +210,6 @@ pub(crate) async fn update_shelf(token: String, name: String, visibility: String
     core_services
         .shelf_service
         .update_shelf(&shelf_token, name, vis, user_id)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
-}
-
-/// Updates the visibility of a shelf. Only the owner may change visibility.
-#[put(
-    "/api/v1/shelves/visibility",
-    auth_session: axum::Extension<AuthSession>,
-    core_services: axum::Extension<Arc<CoreServices>>
-)]
-pub(crate) async fn set_shelf_visibility(token: String, visibility: String) -> Result<(), ServerFnError> {
-    let user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
-    let user_id = user.id();
-
-    let shelf_token: ShelfToken = token.parse().map_err(|_| ServerFnError::new("Invalid shelf token"))?;
-    let vis = parse_visibility(&visibility)?;
-
-    core_services
-        .shelf_service
-        .set_visibility(&shelf_token, vis, user_id)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))
 }
@@ -458,287 +371,233 @@ pub(crate) async fn books_for_shelf(token: String, cursor: Option<u64>, page_siz
 // Components
 // ---------------------------------------------------------------------------
 
-/// Book card for the shelf detail page. Renders identically to `BookCard` but
-/// adds an "×" remove button (owner only) overlaid on the cover.
-#[component]
-fn ShelfBookCard(book: BookSummary, shelf_token: String, is_own: bool, on_removed: EventHandler<()>) -> Element {
-    let navigator = use_navigator();
-    let book_token_nav = book.token.clone();
-    let book_token_remove = book.token.clone();
-    let shelf_tok = shelf_token.clone();
-    let author_str = book.author_names.join(", ");
-    let series_line = match (&book.series_name, &book.series_number) {
-        (Some(name), Some(num)) => Some(format!("{name} #{num}")),
-        (Some(name), None) => Some(name.clone()),
-        _ => None,
-    };
-
-    rsx! {
-        div { class: "flex flex-col",
-            // Cover with optional remove overlay
-            div {
-                class: "relative cursor-pointer",
-                onclick: move |_| { navigator.push(Route::BookDetailPage { token: book_token_nav.clone() }); },
-                img {
-                    src: "/api/v1/covers/{book.token}",
-                    alt: "{book.title}",
-                    class: "w-full object-cover rounded shadow-sm",
-                    style: "aspect-ratio: 2/3",
-                }
-                if is_own {
-                    button {
-                        class: "absolute top-1 right-1 w-5 h-5 flex items-center justify-center rounded-full bg-black/50 text-white text-xs hover:bg-red-600/80 leading-none",
-                        title: "Remove from shelf",
-                        // Stop click propagating to the cover (which navigates to book detail)
-                        onclick: move |e| {
-                            e.stop_propagation();
-                            let s = shelf_tok.clone();
-                            let b = book_token_remove.clone();
-                            spawn(async move {
-                                let _ = remove_book_from_shelf(s, b).await;
-                                on_removed.call(());
-                            });
-                        },
-                        "×"
-                    }
-                }
-            }
-            div { class: "mt-1 px-0.5",
-                p { class: "text-xs font-semibold text-gray-900 leading-tight line-clamp-2",
-                    "{book.title}"
-                }
-                p { class: "text-xs text-gray-500 leading-tight truncate mt-0.5",
-                    "{author_str}"
-                }
-                if let Some(series) = series_line {
-                    p { class: "text-xs text-gray-400 leading-tight truncate mt-0.5",
-                        "{series}"
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// Shelf detail page — shows shelf metadata and its books.
+/// Shelf detail page — shows the ShelfBar and book grid, matching BooksPage
+/// layout.
 #[component]
 pub(crate) fn ShelfPage(token: String) -> Element {
     let nav = use_navigator();
 
-    // --- State ---
-    let mut editing_name = use_signal(|| false);
-    let mut draft_name = use_signal(String::new);
-    let mut show_delete_confirm = use_signal(|| false);
+    // Edit shelf modal state
+    let mut show_edit = use_signal(|| false);
+    let mut edit_name = use_signal(String::new);
+    let mut edit_private = use_signal(|| true);
+    let mut saving = use_signal(|| false);
+    let mut edit_error: Signal<Option<String>> = use_signal(|| None);
+
+    // Delete shelf modal state
+    let mut show_delete = use_signal(|| false);
     let mut deleting = use_signal(|| false);
 
-    // --- Data loading ---
-    let token_for_shelf = token.clone();
-    let mut shelf_resource = use_server_future(move || get_shelf(token_for_shelf.clone()))?;
+    // Data loading
+    let mut shelves_resource = use_server_future(list_all_accessible_shelves)?;
 
     let token_for_books = token.clone();
     let mut books_resource = use_server_future(move || books_for_shelf(token_for_books.clone(), None, None))?;
 
+    // Derive current shelf info from the shelves list (avoids a separate get_shelf
+    // call).
+    let shelves: Vec<ShelfSummary> = shelves_resource().and_then(|r| r.ok()).unwrap_or_default();
+    let current_shelf = shelves.iter().find(|s| s.token == token).cloned();
+    let is_own = current_shelf.as_ref().map(|s| s.is_own).unwrap_or(false);
+    let current_name = current_shelf.as_ref().map(|s| s.name.clone()).unwrap_or_default();
+    let current_vis = current_shelf.as_ref().map(|s| s.visibility.clone()).unwrap_or_default();
+
+    let context = if is_own {
+        BookGridContext::OwnShelf { shelf_token: token.clone() }
+    } else {
+        BookGridContext::ReadOnly
+    };
+
     rsx! {
-        div { class: "flex-1 overflow-auto p-6",
-            match shelf_resource() {
+        div { class: "flex-1 flex flex-col overflow-hidden",
+            ShelfBar {
+                shelves: shelves.clone(),
+                current_shelf_token: Some(token.clone()),
+                on_edit_shelf: {
+                    let name_for_edit = current_name.clone();
+                    let vis_for_edit = current_vis.clone();
+                    move |_| {
+                        edit_name.set(name_for_edit.clone());
+                        edit_private.set(vis_for_edit == "Private");
+                        edit_error.set(None);
+                        show_edit.set(true);
+                    }
+                },
+                on_delete_shelf: move |_| show_delete.set(true),
+            }
+
+            match books_resource() {
                 None => rsx! {
-                    div { class: "flex items-center justify-center h-full text-gray-400 text-sm",
+                    div { class: "flex-1 flex items-center justify-center text-gray-400 text-sm",
                         "Loading…"
                     }
                 },
                 Some(Err(e)) => rsx! {
-                    div { class: "text-red-600 text-sm", "Failed to load shelf: {e}" }
+                    div { class: "flex-1 flex items-center justify-center text-red-600 text-sm",
+                        "Failed to load books: {e}"
+                    }
                 },
-                Some(Ok(shelf)) => rsx! {
-                    // Delete confirmation modal
-                    if show_delete_confirm() {
-                        div { class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
-                            div { class: "bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4",
-                                h2 { class: "text-lg font-semibold text-gray-900 mb-2", "Delete Shelf?" }
-                                p { class: "text-sm text-gray-600 mb-6",
-                                    "This will permanently delete \"{shelf.name}\". Books will not be affected."
-                                }
-                                div { class: "flex gap-3 justify-end",
-                                    button {
-                                        class: "px-4 py-2 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50",
-                                        autofocus: true,
-                                        onclick: move |_| show_delete_confirm.set(false),
-                                        "Cancel"
-                                    }
-                                    button {
-                                        class: "px-4 py-2 text-sm font-medium rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50",
-                                        disabled: deleting(),
-                                        onclick: {
-                                            let tok = shelf.token.clone();
-                                            move |_| {
-                                                let tok = tok.clone();
-                                                deleting.set(true);
-                                                spawn(async move {
-                                                    match delete_shelf(tok).await {
-                                                        Ok(()) => {
-                                                            let _ = nav.push(Route::BooksPage {});
-                                                        }
-                                                        Err(_) => {
-                                                            deleting.set(false);
-                                                            show_delete_confirm.set(false);
-                                                        }
-                                                    }
-                                                });
-                                            }
-                                        },
-                                        if deleting() { "Deleting…" } else { "Yes, Delete" }
+                Some(Ok(books)) => {
+                    if books.is_empty() {
+                        rsx! {
+                            div { class: "flex-1 flex flex-col items-center justify-center py-20 text-center",
+                                p { class: "text-gray-400 text-sm", "No books on this shelf yet." }
+                                if is_own {
+                                    p { class: "text-gray-300 text-xs mt-1",
+                                        "Drag a book here or open any book and use \"Add to Shelf\"."
                                     }
                                 }
                             }
                         }
+                    } else {
+                        rsx! {
+                            BookGrid {
+                                books,
+                                context: context.clone(),
+                                on_action: move |_| books_resource.restart(),
+                            }
+                        }
                     }
+                }
+            }
+        }
 
-                    // Back link
-                    Link {
-                        to: Route::BooksPage {},
-                        class: "inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 mb-6",
-                        "← Library"
-                    }
+        // Edit shelf modal
+        if show_edit() {
+            div { class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+                div { class: "bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4",
+                    h2 { class: "text-lg font-semibold text-gray-900 mb-4", "Edit Shelf" }
+                    form {
+                        onsubmit: {
+                            let tok = token.clone();
+                            move |e: FormEvent| {
+                                e.prevent_default();
+                                let name = edit_name().trim().to_string();
+                                if name.is_empty() {
+                                    edit_error.set(Some("Shelf name is required.".into()));
+                                    return;
+                                }
+                                let vis = if edit_private() { "Private" } else { "Public" }.to_string();
+                                let tok = tok.clone();
+                                saving.set(true);
+                                edit_error.set(None);
+                                spawn(async move {
+                                    match update_shelf(tok, name, vis).await {
+                                        Ok(()) => {
+                                            show_edit.set(false);
+                                            saving.set(false);
+                                            shelves_resource.restart();
+                                        }
+                                        Err(e) => {
+                                            saving.set(false);
+                                            edit_error.set(Some(e.to_string()));
+                                        }
+                                    }
+                                });
+                            }
+                        },
 
-                    // Shelf header
-                    div { class: "flex items-center gap-3 mb-6 flex-wrap",
-                        // Inline-editable title (owner only)
-                        if shelf.is_own && editing_name() {
+                        div { class: "mb-4",
+                            label { class: "block text-sm font-medium text-gray-700 mb-1",
+                                r#for: "edit-shelf-name",
+                                "Shelf name"
+                            }
                             input {
-                                class: "text-2xl font-bold text-gray-900 border-b-2 border-indigo-500 outline-none bg-transparent",
-                                value: draft_name(),
-                                autofocus: true,
-                                oninput: move |e| draft_name.set(e.value()),
-                                onblur: {
-                                    let tok = shelf.token.clone();
-                                    move |_| {
-                                        let tok = tok.clone();
-                                        let name = draft_name();
-                                        editing_name.set(false);
-                                        spawn(async move {
-                                            let _ = rename_shelf(tok, name).await;
-                                            shelf_resource.restart();
-                                        });
-                                    }
-                                },
-                                onkeydown: {
-                                    let tok = shelf.token.clone();
-                                    move |e: KeyboardEvent| {
-                                        match e.key() {
-                                            Key::Enter => {
-                                                let tok = tok.clone();
-                                                let name = draft_name();
-                                                editing_name.set(false);
-                                                spawn(async move {
-                                                    let _ = rename_shelf(tok, name).await;
-                                                    shelf_resource.restart();
-                                                });
-                                            }
-                                            Key::Escape => {
-                                                editing_name.set(false);
-                                            }
-                                            _ => {}
-                                        }
-                                    }
-                                },
-                            }
-                        } else {
-                            h1 { class: "text-2xl font-bold text-gray-900",
-                                "{shelf.name}"
-                            }
-                            if shelf.is_own {
-                                button {
-                                    class: "text-gray-400 hover:text-indigo-600 text-sm",
-                                    title: "Rename shelf",
-                                    onclick: {
-                                        let name = shelf.name.clone();
-                                        move |_| {
-                                            draft_name.set(name.clone());
-                                            editing_name.set(true);
-                                        }
-                                    },
-                                    "✎"
-                                }
-                            }
-                        }
-
-                        // Visibility badge / toggle
-                        if shelf.is_own {
-                            button {
-                                class: "px-2 py-0.5 rounded text-xs font-medium border hover:opacity-80 transition-opacity",
-                                class: if shelf.visibility == "Public" {
-                                    "border-green-300 bg-green-50 text-green-700"
+                                id: "edit-shelf-name",
+                                class: "w-full px-3 py-2 border rounded text-sm outline-none focus:ring-1",
+                                class: if edit_error().is_some() {
+                                    "border-red-400 focus:border-red-500 focus:ring-red-500"
                                 } else {
-                                    "border-gray-300 bg-gray-50 text-gray-600"
+                                    "border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
                                 },
-                                title: if shelf.visibility == "Public" { "Click to make Private" } else { "Click to make Public" },
-                                onclick: {
-                                    let tok = shelf.token.clone();
-                                    let new_vis = if shelf.visibility == "Public" { "Private" } else { "Public" };
-                                    move |_| {
-                                        let tok = tok.clone();
-                                        let vis = new_vis.to_string();
-                                        spawn(async move {
-                                            let _ = set_shelf_visibility(tok, vis).await;
-                                            shelf_resource.restart();
-                                        });
+                                r#type: "text",
+                                autofocus: true,
+                                value: edit_name(),
+                                oninput: move |e| {
+                                    edit_name.set(e.value());
+                                    edit_error.set(None);
+                                },
+                                onkeydown: move |e: KeyboardEvent| {
+                                    if e.key() == Key::Escape {
+                                        show_edit.set(false);
                                     }
                                 },
-                                "{shelf.visibility}"
                             }
-                        } else {
-                            span {
-                                class: "px-2 py-0.5 rounded text-xs font-medium border border-green-300 bg-green-50 text-green-700",
-                                "Public"
+                            if let Some(msg) = edit_error() {
+                                p { class: "mt-1 text-xs text-red-600", "{msg}" }
                             }
                         }
 
-                        // Delete button (owner only) — pushed to the right
-                        if shelf.is_own {
-                            div { class: "ml-auto",
-                                button {
-                                    class: "text-sm text-red-500 hover:text-red-700",
-                                    onclick: move |_| show_delete_confirm.set(true),
-                                    "Delete Shelf"
-                                }
+                        div { class: "mb-6 flex items-center gap-2",
+                            input {
+                                id: "edit-shelf-private",
+                                class: "h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500",
+                                r#type: "checkbox",
+                                checked: edit_private(),
+                                onchange: move |e| edit_private.set(e.checked()),
+                            }
+                            label { class: "text-sm text-gray-700 cursor-pointer", r#for: "edit-shelf-private",
+                                "Private"
+                            }
+                        }
+
+                        div { class: "flex gap-3 justify-end",
+                            button {
+                                r#type: "button",
+                                class: "px-4 py-2 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50",
+                                onclick: move |_| show_edit.set(false),
+                                "Cancel"
+                            }
+                            button {
+                                r#type: "submit",
+                                class: "px-4 py-2 text-sm font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50",
+                                disabled: saving(),
+                                if saving() { "Saving…" } else { "Save" }
                             }
                         }
                     }
+                }
+            }
+        }
 
-                    // Book list
-                    match books_resource() {
-                        None => rsx! {
-                            div { class: "text-gray-400 text-sm", "Loading books…" }
-                        },
-                        Some(Err(e)) => rsx! {
-                            div { class: "text-red-600 text-sm", "Failed to load books: {e}" }
-                        },
-                        Some(Ok(books)) => rsx! {
-                            if books.is_empty() {
-                                div { class: "flex flex-col items-center justify-center py-20 text-center",
-                                    p { class: "text-gray-400 text-sm", "No books on this shelf yet." }
-                                    if shelf.is_own {
-                                        p { class: "text-gray-300 text-xs mt-1",
-                                            "Open any book and use \"Add to Shelf\" to populate this shelf."
-                                        }
-                                    }
-                                }
-                            } else {
-                                div { class: "grid gap-x-8 gap-y-4",
-                                    style: "grid-template-columns: repeat(auto-fill, minmax(120px, 1fr))",
-                                    for book in &books {
-                                        ShelfBookCard {
-                                            book: book.clone(),
-                                            shelf_token: shelf.token.clone(),
-                                            is_own: shelf.is_own,
-                                            on_removed: move |_| books_resource.restart(),
-                                        }
-                                    }
-                                }
-                            }
-                        },
+        // Delete shelf modal
+        if show_delete() {
+            div { class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+                div { class: "bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4",
+                    h2 { class: "text-lg font-semibold text-gray-900 mb-2", "Delete Shelf?" }
+                    p { class: "text-sm text-gray-600 mb-6",
+                        "This will permanently delete \"{current_name}\". Books will not be affected."
                     }
-                },
+                    div { class: "flex gap-3 justify-end",
+                        button {
+                            class: "px-4 py-2 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50",
+                            autofocus: true,
+                            onclick: move |_| show_delete.set(false),
+                            "Cancel"
+                        }
+                        button {
+                            class: "px-4 py-2 text-sm font-medium rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50",
+                            disabled: deleting(),
+                            onclick: {
+                                let tok = token.clone();
+                                move |_| {
+                                    let tok = tok.clone();
+                                    deleting.set(true);
+                                    spawn(async move {
+                                        match delete_shelf(tok).await {
+                                            Ok(()) => { nav.push(Route::BooksPage {}); }
+                                            Err(_) => {
+                                                deleting.set(false);
+                                                show_delete.set(false);
+                                            }
+                                        }
+                                    });
+                                }
+                            },
+                            if deleting() { "Deleting…" } else { "Yes, Delete" }
+                        }
+                    }
+                }
             }
         }
     }

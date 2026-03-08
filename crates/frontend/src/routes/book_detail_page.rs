@@ -184,7 +184,7 @@ async fn get_book(token: String) -> Result<BookDetail, ServerFnError> {
     auth_session: axum::Extension<AuthSession>,
     core_services: axum::Extension<Arc<CoreServices>>
 )]
-async fn delete_library_book(token: String) -> Result<(), ServerFnError> {
+pub(crate) async fn delete_library_book(token: String) -> Result<(), ServerFnError> {
     let current_user = auth_session.current_user.clone().unwrap_or_default();
 
     if !Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::POST], true)

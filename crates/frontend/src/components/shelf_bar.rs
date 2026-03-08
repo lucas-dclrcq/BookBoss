@@ -5,10 +5,20 @@ use crate::{
     routes::shelf_page::{ShelfSummary, create_shelf},
 };
 
-/// Horizontal pill-button row listing the user's shelves and a "New Shelf"
-/// button. Shown above the book grid in grid-view mode.
+/// Horizontal pill-button row listing the user's shelves and a "+" new-shelf
+/// button. Shown above the book grid on both BooksPage and ShelfPage.
+///
+/// When `current_shelf_token` matches an own shelf, edit (✎) and delete
+/// buttons appear at the right edge, calling the optional handlers.
 #[component]
-pub(crate) fn ShelfBar(shelves: Vec<ShelfSummary>, current_shelf_token: Option<String>) -> Element {
+pub(crate) fn ShelfBar(
+    shelves: Vec<ShelfSummary>,
+    current_shelf_token: Option<String>,
+    /// Called when the user clicks ✎ on the current own shelf.
+    on_edit_shelf: EventHandler<()>,
+    /// Called when the user clicks "Delete" on the current own shelf.
+    on_delete_shelf: EventHandler<()>,
+) -> Element {
     let navigator = use_navigator();
     let mut show_modal = use_signal(|| false);
     let mut shelf_name = use_signal(String::new);
@@ -16,10 +26,14 @@ pub(crate) fn ShelfBar(shelves: Vec<ShelfSummary>, current_shelf_token: Option<S
     let mut creating = use_signal(|| false);
     let mut error_msg: Signal<Option<String>> = use_signal(|| None);
 
-    // Clone own shelf names for uniqueness check inside the closure.
     let own_names: Vec<String> = shelves.iter().filter(|s| s.is_own).map(|s| s.name.to_lowercase()).collect();
 
-    // Validate name and submit.
+    let current_is_own = current_shelf_token
+        .as_ref()
+        .and_then(|tok| shelves.iter().find(|s| &s.token == tok))
+        .map(|s| s.is_own)
+        .unwrap_or(false);
+
     let mut do_create = move || {
         let name = shelf_name().trim().to_string();
         if name.is_empty() {
@@ -50,44 +64,82 @@ pub(crate) fn ShelfBar(shelves: Vec<ShelfSummary>, current_shelf_token: Option<S
 
     rsx! {
         div { class: "flex items-center gap-2 px-4 py-2 bg-white border-b border-gray-200 overflow-x-auto shrink-0",
-            // "All Books" pill — always active on this page
+
+            // "All Books" pill
             Link {
                 to: Route::BooksPage {},
-                class: "px-3 py-1 rounded-full text-sm bg-indigo-600 text-white font-medium whitespace-nowrap shrink-0",
+                class: if current_shelf_token.is_none() {
+                    "px-3 py-1 rounded-full text-sm bg-indigo-600 text-white font-medium whitespace-nowrap shrink-0"
+                } else {
+                    "px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 whitespace-nowrap shrink-0"
+                },
                 "All Books"
             }
 
-            // Own shelves
+            // Own shelves + "+" button after the last one
             for shelf in shelves.iter().filter(|s| s.is_own) {
-                Link {
-                    to: Route::ShelfPage { token: shelf.token.clone() },
-                    class: "px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 whitespace-nowrap shrink-0",
-                    "{shelf.name}"
-                }
-            }
-
-            // Divider + public shelves from others
-            if shelves.iter().any(|s| !s.is_own) {
-                span { class: "text-gray-300 select-none shrink-0", "|" }
-                for shelf in shelves.iter().filter(|s| !s.is_own) {
-                    Link {
-                        to: Route::ShelfPage { token: shelf.token.clone() },
-                        class: "px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-500 hover:bg-indigo-50 hover:text-indigo-600 whitespace-nowrap shrink-0 italic",
-                        "{shelf.name}"
+                {
+                    let is_active = current_shelf_token.as_deref() == Some(shelf.token.as_str());
+                    let pill_class = if is_active {
+                        "px-3 py-1 rounded-full text-sm bg-indigo-600 text-white font-medium whitespace-nowrap shrink-0"
+                    } else if shelf.visibility == "Private" {
+                        "px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 whitespace-nowrap shrink-0"
+                    } else {
+                        "px-3 py-1 rounded-full text-sm bg-blue-50 text-blue-700 hover:bg-indigo-50 hover:text-indigo-600 whitespace-nowrap shrink-0"
+                    };
+                    rsx! {
+                        Link {
+                            to: Route::ShelfPage { token: shelf.token.clone() },
+                            class: pill_class,
+                            "{shelf.name}"
+                        }
                     }
                 }
             }
 
-            // New Shelf button
+            // "+" new shelf — right after own shelves
             button {
-                class: "ml-auto px-3 py-1 rounded-full text-sm border border-dashed border-gray-300 text-gray-500 hover:border-indigo-400 hover:text-indigo-600 whitespace-nowrap shrink-0",
+                class: "px-2 py-1 rounded-full text-sm border border-dashed border-gray-300 text-gray-500 hover:border-indigo-400 hover:text-indigo-600 whitespace-nowrap shrink-0",
                 onclick: move |_| {
                     shelf_name.set(String::new());
                     is_private.set(true);
                     error_msg.set(None);
                     show_modal.set(true);
                 },
-                "+ New Shelf"
+                "+"
+            }
+
+            // Divider + others' public shelves
+            if shelves.iter().any(|s| !s.is_own) {
+                span { class: "text-gray-300 select-none shrink-0", "|" }
+                for shelf in shelves.iter().filter(|s| !s.is_own) {
+                    Link {
+                        to: Route::ShelfPage { token: shelf.token.clone() },
+                        class: if current_shelf_token.as_deref() == Some(shelf.token.as_str()) {
+                            "px-3 py-1 rounded-full text-sm bg-indigo-600 text-white font-medium whitespace-nowrap shrink-0 italic"
+                        } else {
+                            "px-3 py-1 rounded-full text-sm bg-gray-50 text-gray-500 hover:bg-indigo-50 hover:text-indigo-600 whitespace-nowrap shrink-0 italic"
+                        },
+                        "{shelf.name}"
+                    }
+                }
+            }
+
+            // Edit / Delete for the current own shelf — pushed to the right
+            if current_is_own {
+                div { class: "ml-auto flex items-center gap-2 shrink-0",
+                    button {
+                        class: "text-sm text-gray-500 hover:text-indigo-600",
+                        onclick: move |_| on_edit_shelf.call(()),
+                        "Edit"
+                    }
+                    button {
+                        class: "text-sm text-red-400 hover:text-red-600",
+                        title: "Delete shelf",
+                        onclick: move |_| on_delete_shelf.call(()),
+                        "Delete"
+                    }
+                }
             }
         }
 

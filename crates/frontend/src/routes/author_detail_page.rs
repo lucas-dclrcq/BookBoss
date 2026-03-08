@@ -1,7 +1,11 @@
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{Route, components::BookGrid, routes::books_page::BookSummary};
+use crate::{
+    Route,
+    components::{BookGrid, BookGridContext},
+    routes::books_page::BookSummary,
+};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct AuthorPageData {
@@ -145,7 +149,11 @@ pub(crate) fn AuthorDetailPage(token: String) -> Element {
                         h2 { class: "text-xs font-semibold uppercase tracking-wider text-gray-500 mb-4",
                             "Books"
                         }
-                        BookGrid { books: author.books }
+                        BookGrid {
+                            books: author.books,
+                            context: BookGridContext::ReadOnly,
+                            on_action: |_| {},
+                        }
                     }
                 },
             }

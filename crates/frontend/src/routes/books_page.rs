@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     Route,
-    components::{BookGrid, BookTable, ShelfBar, TreeExplorer},
+    components::{BookGrid, BookGridContext, BookTable, ShelfBar, TreeExplorer},
     routes::shelf_page::{ShelfSummary, list_all_accessible_shelves},
     settings::BookDisplayView,
 };
@@ -166,7 +166,7 @@ async fn list_books() -> Result<ListBooksResponse, ServerFnError> {
 #[component]
 pub(crate) fn BooksPage() -> Element {
     let view: Signal<BookDisplayView> = use_context();
-    let page_data = use_server_future(list_books)?;
+    let mut page_data = use_server_future(list_books)?;
     let shelves_resource = use_server_future(list_all_accessible_shelves)?;
     let shelves: Vec<ShelfSummary> = shelves_resource().and_then(|r| r.ok()).unwrap_or_default();
     let categories = build_categories(&shelves);
@@ -187,8 +187,17 @@ pub(crate) fn BooksPage() -> Element {
                 match *view.read() {
                     BookDisplayView::GridView => rsx! {
                         div { class: "flex-1 flex flex-col overflow-hidden",
-                            ShelfBar { shelves, current_shelf_token: None }
-                            BookGrid { books }
+                            ShelfBar {
+                                shelves,
+                                current_shelf_token: None,
+                                on_edit_shelf: |_| {},
+                                on_delete_shelf: |_| {},
+                            }
+                            BookGrid {
+                                books,
+                                context: BookGridContext::AllBooks { can_delete: can_delete_books },
+                                on_action: move |_| page_data.restart(),
+                            }
                         }
                     },
                     BookDisplayView::TableView => rsx! {

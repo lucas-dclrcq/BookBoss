@@ -11,7 +11,7 @@ mod tree_explorer;
 
 pub(crate) use app_layout::AppLayout;
 pub(crate) use autocomplete_input::AutocompleteInput;
-pub(crate) use book_grid::BookGrid;
+pub(crate) use book_grid::{BookGrid, BookGridContext};
 pub(crate) use book_table::BookTable;
 pub(crate) use chip_input::ChipInput;
 pub(crate) use login_form::LoginForm;
