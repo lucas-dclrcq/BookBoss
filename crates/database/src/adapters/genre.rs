@@ -116,6 +116,18 @@ impl GenreRepository for GenreRepositoryAdapter {
             .map(Into::into))
     }
 
+    async fn list_all_genres(&self, transaction: &dyn Transaction) -> Result<Vec<Genre>, Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        let rows = prelude::Genres::find()
+            .order_by_asc(genres::Column::Name)
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
     async fn list_genres(&self, transaction: &dyn Transaction, start_id: Option<GenreId>, page_size: Option<u64>) -> Result<Vec<Genre>, Error> {
         const DEFAULT_PAGE_SIZE: u64 = 50;
         const MAX_PAGE_SIZE: u64 = 50;

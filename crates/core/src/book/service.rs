@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use crate::{
     Error,
-    book::{Author, AuthorId, AuthorToken, Book, BookAuthor, BookFile, BookFilter, BookId, BookIdentifier, BookToken, Series, SeriesId, SeriesToken},
+    book::{
+        Author, AuthorId, AuthorToken, Book, BookAuthor, BookFile, BookFilter, BookId, BookIdentifier, BookToken, Genre, Series, SeriesId, SeriesToken, Tag,
+    },
     repository::RepositoryService,
     with_read_only_transaction,
 };
@@ -19,6 +21,13 @@ pub trait BookService: Send + Sync {
     async fn list_series(&self, start_id: Option<SeriesId>, page_size: Option<u64>) -> Result<Vec<Series>, Error>;
     async fn find_series_by_token(&self, token: &SeriesToken) -> Result<Option<Series>, Error>;
     async fn find_publisher_by_token(&self, token: &crate::book::PublisherToken) -> Result<Option<crate::book::Publisher>, Error>;
+    async fn genres_for_book(&self, book_id: BookId) -> Result<Vec<Genre>, Error>;
+    async fn tags_for_book(&self, book_id: BookId) -> Result<Vec<Tag>, Error>;
+    async fn list_all_genres(&self) -> Result<Vec<Genre>, Error>;
+    async fn list_all_tags(&self) -> Result<Vec<Tag>, Error>;
+    async fn list_all_series(&self) -> Result<Vec<Series>, Error>;
+    async fn list_all_authors(&self) -> Result<Vec<Author>, Error>;
+    async fn series_next_number(&self, series_name: &str) -> Result<u32, Error>;
 }
 
 pub(crate) struct BookServiceImpl {
@@ -85,6 +94,58 @@ impl BookService for BookServiceImpl {
     async fn find_publisher_by_token(&self, token: &crate::book::PublisherToken) -> Result<Option<crate::book::Publisher>, Error> {
         let token = *token;
         with_read_only_transaction!(self, publisher_repository, |tx| publisher_repository.find_by_token(tx, &token).await)
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    async fn genres_for_book(&self, book_id: BookId) -> Result<Vec<Genre>, Error> {
+        with_read_only_transaction!(self, book_repository, |tx| book_repository.genres_for_book(tx, book_id).await)
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    async fn tags_for_book(&self, book_id: BookId) -> Result<Vec<Tag>, Error> {
+        with_read_only_transaction!(self, book_repository, |tx| book_repository.tags_for_book(tx, book_id).await)
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    async fn list_all_genres(&self) -> Result<Vec<Genre>, Error> {
+        with_read_only_transaction!(self, genre_repository, |tx| genre_repository.list_all_genres(tx).await)
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    async fn list_all_tags(&self) -> Result<Vec<Tag>, Error> {
+        with_read_only_transaction!(self, tag_repository, |tx| tag_repository.list_all_tags(tx).await)
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    async fn list_all_series(&self) -> Result<Vec<Series>, Error> {
+        with_read_only_transaction!(self, series_repository, |tx| series_repository.list_all_series(tx).await)
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    async fn list_all_authors(&self) -> Result<Vec<Author>, Error> {
+        with_read_only_transaction!(self, author_repository, |tx| author_repository.list_all_authors(tx).await)
+    }
+
+    #[tracing::instrument(level = "trace", skip(self, series_name))]
+    async fn series_next_number(&self, series_name: &str) -> Result<u32, Error> {
+        let name = series_name.to_string();
+        let series = with_read_only_transaction!(self, series_repository, |tx| series_repository.find_by_name(tx, &name).await)?;
+        let Some(series) = series else {
+            return Ok(1);
+        };
+        let series_id = series.id;
+        let max = with_read_only_transaction!(self, series_repository, |tx| series_repository
+            .max_series_number_for_series(tx, series_id)
+            .await)?;
+        let next = match max {
+            Some(d) => {
+                use rust_decimal::prelude::ToPrimitive;
+                let floor = d.floor().to_u32().unwrap_or(0);
+                floor + 1
+            }
+            None => 1,
+        };
+        Ok(next)
     }
 }
 
@@ -247,6 +308,9 @@ mod tests {
         async fn list_genres(&self, _: &dyn Transaction, _: Option<GenreId>, _: Option<u64>) -> Result<Vec<Genre>, Error> {
             unimplemented!()
         }
+        async fn list_all_genres(&self, _: &dyn Transaction) -> Result<Vec<Genre>, Error> {
+            unimplemented!()
+        }
     }
 
     // ─── Mock PublisherRepository ────────────────────────────────────────────
@@ -297,6 +361,9 @@ mod tests {
             unimplemented!()
         }
         async fn list_tags(&self, _: &dyn Transaction, _: Option<TagId>, _: Option<u64>) -> Result<Vec<Tag>, Error> {
+            unimplemented!()
+        }
+        async fn list_all_tags(&self, _: &dyn Transaction) -> Result<Vec<Tag>, Error> {
             unimplemented!()
         }
     }
@@ -353,6 +420,9 @@ mod tests {
         async fn delete_author(&self, _: &dyn Transaction, _: AuthorId) -> Result<(), Error> {
             unimplemented!()
         }
+        async fn list_all_authors(&self, _: &dyn Transaction) -> Result<Vec<Author>, Error> {
+            unimplemented!()
+        }
     }
 
     // ─── Mock SeriesRepository ───────────────────────────────────────────────
@@ -397,6 +467,12 @@ mod tests {
             self.list_series_result.clone().unwrap_or_else(|| Err(Error::MockNotConfigured("list_series")))
         }
         async fn find_by_name(&self, _: &dyn Transaction, _: &str) -> Result<Option<Series>, Error> {
+            unimplemented!()
+        }
+        async fn list_all_series(&self, _: &dyn Transaction) -> Result<Vec<Series>, Error> {
+            unimplemented!()
+        }
+        async fn max_series_number_for_series(&self, _: &dyn Transaction, _: SeriesId) -> Result<Option<rust_decimal::Decimal>, Error> {
             unimplemented!()
         }
     }
@@ -502,6 +578,24 @@ mod tests {
             unimplemented!()
         }
         async fn count_books_for_author(&self, _: &dyn Transaction, _: AuthorId) -> Result<u64, Error> {
+            unimplemented!()
+        }
+        async fn genres_for_book(&self, _: &dyn Transaction, _: BookId) -> Result<Vec<Genre>, Error> {
+            unimplemented!()
+        }
+        async fn tags_for_book(&self, _: &dyn Transaction, _: BookId) -> Result<Vec<Tag>, Error> {
+            unimplemented!()
+        }
+        async fn add_book_genre(&self, _: &dyn Transaction, _: BookId, _: GenreId) -> Result<(), Error> {
+            unimplemented!()
+        }
+        async fn add_book_tag(&self, _: &dyn Transaction, _: BookId, _: TagId) -> Result<(), Error> {
+            unimplemented!()
+        }
+        async fn delete_book_genres(&self, _: &dyn Transaction, _: BookId) -> Result<(), Error> {
+            unimplemented!()
+        }
+        async fn delete_book_tags(&self, _: &dyn Transaction, _: BookId) -> Result<(), Error> {
             unimplemented!()
         }
     }

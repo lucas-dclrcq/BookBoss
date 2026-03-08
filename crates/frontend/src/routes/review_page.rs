@@ -23,8 +23,10 @@ pub(crate) struct BookReviewData {
     pub series_number: String,
     pub publisher_name: String,
     pub page_count: String,
-    /// Comma-separated author names in sort order.
-    pub authors_csv: String,
+    /// Author names in sort order.
+    pub authors: Vec<String>,
+    pub genres: Vec<String>,
+    pub tags: Vec<String>,
     pub identifiers: IdentifierMap,
     /// Provider names in priority order (for rendering provider buttons).
     pub provider_names: Vec<String>,
@@ -43,7 +45,7 @@ pub(crate) struct ProviderResult {
     pub series_number: String,
     pub publisher_name: String,
     pub page_count: String,
-    pub authors_csv: String,
+    pub authors: Vec<String>,
     pub identifiers: IdentifierMap,
     /// Base64 encoded cover from the provider, if any.
     pub cover_thumbnail: Option<String>,
@@ -63,7 +65,9 @@ pub(crate) struct BookEditFields {
     pub series_number: String,
     pub publisher_name: String,
     pub page_count: String,
-    pub authors_csv: String,
+    pub authors: Vec<String>,
+    pub genres: Vec<String>,
+    pub tags: Vec<String>,
     pub identifiers: IdentifierMap,
     pub use_fetched_cover: bool,
 }
@@ -194,14 +198,7 @@ fn provider_book_to_result(pb: ProviderBook) -> ProviderResult {
     let series_name = meta.series_name.clone().unwrap_or_default();
     let series_number = meta.series_number.as_ref().map(|n| n.to_string()).unwrap_or_default();
     let publisher_name = meta.publisher.clone().unwrap_or_default();
-    let authors_csv = meta
-        .authors
-        .as_deref()
-        .unwrap_or(&[])
-        .iter()
-        .map(|a| a.name.clone())
-        .collect::<Vec<_>>()
-        .join(", ");
+    let authors = meta.authors.as_deref().unwrap_or(&[]).iter().map(|a| a.name.clone()).collect::<Vec<_>>();
     let identifiers = meta
         .identifiers
         .as_deref()
@@ -222,7 +219,7 @@ fn provider_book_to_result(pb: ProviderBook) -> ProviderResult {
         series_number,
         publisher_name,
         page_count: String::new(),
-        authors_csv,
+        authors,
         identifiers,
         cover_thumbnail,
         cover_dimensions,
@@ -326,6 +323,21 @@ async fn get_review_data(job_token: String) -> Result<BookReviewData, ServerFnEr
         None
     };
 
+    let genres = book_service
+        .genres_for_book(book.id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .into_iter()
+        .map(|g| g.name)
+        .collect();
+    let tags = book_service
+        .tags_for_book(book.id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .into_iter()
+        .map(|t| t.name)
+        .collect();
+
     Ok(BookReviewData {
         job_token: job.token.to_string(),
         book_token: book.token.to_string(),
@@ -337,7 +349,9 @@ async fn get_review_data(job_token: String) -> Result<BookReviewData, ServerFnEr
         series_number: book.series_number.as_ref().map(|n| n.to_string()).unwrap_or_default(),
         publisher_name,
         page_count: book.page_count.map(|p| p.to_string()).unwrap_or_default(),
-        authors_csv: author_names.join(", "),
+        authors: author_names,
+        genres,
+        tags,
         identifiers,
         provider_names,
         cover_dimensions,
@@ -400,7 +414,7 @@ async fn approve_book(fields: BookEditFields) -> Result<(), ServerFnError> {
 
     let token: ImportJobToken = fields.job_token.parse().map_err(|_| ServerFnError::new("Invalid token"))?;
 
-    let authors: Vec<String> = fields.authors_csv.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+    let authors = fields.authors;
 
     let identifiers: Vec<(IdentifierType, String)> = fields
         .identifiers
@@ -425,6 +439,8 @@ async fn approve_book(fields: BookEditFields) -> Result<(), ServerFnError> {
         authors,
         identifiers,
         use_fetched_cover: fields.use_fetched_cover,
+        genres: fields.genres,
+        tags: fields.tags,
     };
 
     let temp_dir = std::env::temp_dir();
@@ -557,6 +573,21 @@ pub(crate) async fn get_book_for_edit(book_token: String) -> Result<BookReviewDa
         None
     };
 
+    let genres = book_service
+        .genres_for_book(book.id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .into_iter()
+        .map(|g| g.name)
+        .collect();
+    let tags = book_service
+        .tags_for_book(book.id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .into_iter()
+        .map(|t| t.name)
+        .collect();
+
     Ok(BookReviewData {
         job_token: String::new(),
         book_token: book.token.to_string(),
@@ -568,7 +599,9 @@ pub(crate) async fn get_book_for_edit(book_token: String) -> Result<BookReviewDa
         series_number: book.series_number.as_ref().map(|n| n.to_string()).unwrap_or_default(),
         publisher_name,
         page_count: book.page_count.map(|p| p.to_string()).unwrap_or_default(),
-        authors_csv: author_names.join(", "),
+        authors: author_names,
+        genres,
+        tags,
         identifiers,
         provider_names,
         cover_dimensions,
@@ -630,7 +663,7 @@ async fn save_library_book(book_token: String, fields: BookEditFields) -> Result
 
     let token = BookToken::from_str(&book_token).map_err(|_| ServerFnError::new("Invalid book token"))?;
 
-    let authors: Vec<String> = fields.authors_csv.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+    let authors = fields.authors;
 
     let identifiers: Vec<(IdentifierType, String)> = fields
         .identifiers
@@ -655,6 +688,8 @@ async fn save_library_book(book_token: String, fields: BookEditFields) -> Result
         authors,
         identifiers,
         use_fetched_cover: fields.use_fetched_cover,
+        genres: fields.genres,
+        tags: fields.tags,
     };
 
     let temp_dir = std::env::temp_dir();
@@ -665,6 +700,80 @@ async fn save_library_book(book_token: String, fields: BookEditFields) -> Result
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(())
+}
+
+// ── Picklist data structures (client + server)
+// ────────────────────────────────────────────
+
+/// Picklist option for a series (name + suggested next book number).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct SeriesOption {
+    pub name: String,
+    pub next_number: u32,
+}
+
+/// All data needed to populate pick lists on the metadata edit page.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct PicklistData {
+    pub authors: Vec<String>,
+    pub genres: Vec<String>,
+    pub tags: Vec<String>,
+    pub series: Vec<SeriesOption>,
+}
+
+#[post(
+    "/api/v1/books/picklist",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+pub(crate) async fn get_picklist_data(_: ()) -> Result<PicklistData, ServerFnError> {
+    let current_user = auth_session.current_user.clone().unwrap_or_default();
+    if current_user.username.is_empty() {
+        return Err(ServerFnError::new("Forbidden"));
+    }
+    let book_service = &core_services.book_service;
+
+    let authors = book_service
+        .list_all_authors()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .into_iter()
+        .map(|a| a.name)
+        .collect();
+
+    let genres = book_service
+        .list_all_genres()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .into_iter()
+        .map(|g| g.name)
+        .collect();
+
+    let tags = book_service
+        .list_all_tags()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .into_iter()
+        .map(|t| t.name)
+        .collect();
+
+    let all_series = book_service.list_all_series().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let mut series_options = Vec::with_capacity(all_series.len());
+    for s in all_series {
+        let next = book_service.series_next_number(&s.name).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        series_options.push(SeriesOption {
+            name: s.name,
+            next_number: next,
+        });
+    }
+
+    Ok(PicklistData {
+        authors,
+        genres,
+        tags,
+        series: series_options,
+    })
 }
 
 // ── Identifier definitions (client + server)
@@ -728,7 +837,9 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
     let mut series_number = use_signal(|| data.series_number.clone());
     let mut publisher_name = use_signal(|| data.publisher_name.clone());
     let mut page_count = use_signal(|| data.page_count.clone());
-    let mut authors_csv = use_signal(|| data.authors_csv.clone());
+    let mut authors = use_signal(|| data.authors.clone());
+    let mut genres = use_signal(|| data.genres.clone());
+    let mut tags = use_signal(|| data.tags.clone());
     let mut identifiers: Signal<IdentifierMap> = use_signal(|| data.identifiers.clone());
     let mut use_fetched_cover = use_signal(|| false);
     let cover_url = format!("/api/v1/covers/{}", data.book_token);
@@ -835,7 +946,9 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                         series_number: series_number.read().clone(),
                                         publisher_name: publisher_name.read().clone(),
                                         page_count: page_count.read().clone(),
-                                        authors_csv: authors_csv.read().clone(),
+                                        authors: authors.read().clone(),
+                                        genres: genres.read().clone(),
+                                        tags: tags.read().clone(),
                                         identifiers: identifiers.read().clone(),
                                         use_fetched_cover: *use_fetched_cover.read(),
                                     };
@@ -995,20 +1108,23 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                             td { class: "py-2 pr-4",
                                 input {
                                     class: "w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400",
-                                    value: "{authors_csv}",
+                                    value: "{authors().join(\", \")}",
                                     placeholder: "Comma-separated names",
-                                    oninput: move |e| authors_csv.set(e.value()),
+                                    oninput: move |e: Event<FormData>| {
+                                        let names: Vec<String> = e.value().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                                        authors.set(names);
+                                    },
                                 }
                             }
                             td { class: "py-2 pr-4 text-center",
                                 if provider_result.read().is_some() {
                                     {
-                                        let pv = provider_result.read().as_ref().map(|r| r.authors_csv.clone()).unwrap_or_default();
+                                        let pv = provider_result.read().as_ref().map(|r| r.authors.clone()).unwrap_or_default();
                                         rsx! {
                                             button {
                                                 class: "text-indigo-500 hover:text-indigo-700 cursor-pointer text-xs font-bold",
                                                 title: "Copy from provider",
-                                                onclick: move |_| authors_csv.set(pv.clone()),
+                                                onclick: move |_| authors.set(pv.clone()),
                                                 "←"
                                             }
                                         }
@@ -1017,7 +1133,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                             }
                             td { class: "py-2 text-gray-600",
                                 if let Some(pr) = provider_result.read().as_ref() {
-                                    "{pr.authors_csv}"
+                                    "{pr.authors.join(\", \")}"
                                 }
                             }
                         }

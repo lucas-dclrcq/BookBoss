@@ -29,6 +29,10 @@ pub struct BookEdit {
     /// by the cover key passed to `fetch_from_provider`; no bytes are
     /// round-tripped through this struct.
     pub use_fetched_cover: bool,
+    /// Genre names to assign to this book (find-or-create on save).
+    pub genres: Vec<String>,
+    /// Tag names to assign to this book (find-or-create on save).
+    pub tags: Vec<String>,
 }
 
 #[derive(Debug, Clone)]

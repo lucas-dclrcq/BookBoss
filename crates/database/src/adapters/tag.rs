@@ -116,6 +116,18 @@ impl TagRepository for TagRepositoryAdapter {
             .map(Into::into))
     }
 
+    async fn list_all_tags(&self, transaction: &dyn Transaction) -> Result<Vec<Tag>, Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        let rows = prelude::Tags::find()
+            .order_by_asc(tags::Column::Name)
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
     async fn list_tags(&self, transaction: &dyn Transaction, start_id: Option<TagId>, page_size: Option<u64>) -> Result<Vec<Tag>, Error> {
         const DEFAULT_PAGE_SIZE: u64 = 50;
         const MAX_PAGE_SIZE: u64 = 50;

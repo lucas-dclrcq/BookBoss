@@ -258,7 +258,8 @@ mod tests {
     async fn enrich_maps_book_fields() {
         let server = MockServer::start().await;
         let isbn = "9780765326355";
-        // Thumbnail URL points at mock server; zoom=1 so fetch_cover replaces it with zoom=0.
+        // Thumbnail URL points at mock server; zoom=1 so fetch_cover replaces it with
+        // zoom=0.
         let cover_url = format!("{}/cover?id=abc123&zoom=1", server.uri());
 
         Mock::given(method("GET"))

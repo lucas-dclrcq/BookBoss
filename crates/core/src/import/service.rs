@@ -341,6 +341,9 @@ mod tests {
         async fn delete_author(&self, _: &dyn Transaction, _: AuthorId) -> Result<(), Error> {
             unimplemented!()
         }
+        async fn list_all_authors(&self, _: &dyn Transaction) -> Result<Vec<Author>, Error> {
+            unimplemented!()
+        }
     }
 
     struct MockSeriesRepository;
@@ -362,6 +365,12 @@ mod tests {
             unimplemented!()
         }
         async fn find_by_name(&self, _: &dyn Transaction, _: &str) -> Result<Option<Series>, Error> {
+            unimplemented!()
+        }
+        async fn list_all_series(&self, _: &dyn Transaction) -> Result<Vec<Series>, Error> {
+            unimplemented!()
+        }
+        async fn max_series_number_for_series(&self, _: &dyn Transaction, _: SeriesId) -> Result<Option<rust_decimal::Decimal>, Error> {
             unimplemented!()
         }
     }
@@ -410,6 +419,9 @@ mod tests {
         async fn list_genres(&self, _: &dyn Transaction, _: Option<GenreId>, _: Option<u64>) -> Result<Vec<Genre>, Error> {
             unimplemented!()
         }
+        async fn list_all_genres(&self, _: &dyn Transaction) -> Result<Vec<Genre>, Error> {
+            unimplemented!()
+        }
     }
 
     struct MockTagRepository;
@@ -431,6 +443,9 @@ mod tests {
             unimplemented!()
         }
         async fn list_tags(&self, _: &dyn Transaction, _: Option<TagId>, _: Option<u64>) -> Result<Vec<Tag>, Error> {
+            unimplemented!()
+        }
+        async fn list_all_tags(&self, _: &dyn Transaction) -> Result<Vec<Tag>, Error> {
             unimplemented!()
         }
     }
@@ -487,6 +502,24 @@ mod tests {
             unimplemented!()
         }
         async fn count_books_for_author(&self, _: &dyn Transaction, _: AuthorId) -> Result<u64, Error> {
+            unimplemented!()
+        }
+        async fn genres_for_book(&self, _: &dyn Transaction, _: BookId) -> Result<Vec<Genre>, Error> {
+            unimplemented!()
+        }
+        async fn tags_for_book(&self, _: &dyn Transaction, _: BookId) -> Result<Vec<Tag>, Error> {
+            unimplemented!()
+        }
+        async fn add_book_genre(&self, _: &dyn Transaction, _: BookId, _: GenreId) -> Result<(), Error> {
+            unimplemented!()
+        }
+        async fn add_book_tag(&self, _: &dyn Transaction, _: BookId, _: TagId) -> Result<(), Error> {
+            unimplemented!()
+        }
+        async fn delete_book_genres(&self, _: &dyn Transaction, _: BookId) -> Result<(), Error> {
+            unimplemented!()
+        }
+        async fn delete_book_tags(&self, _: &dyn Transaction, _: BookId) -> Result<(), Error> {
             unimplemented!()
         }
     }

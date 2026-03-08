@@ -12,7 +12,7 @@ use sea_orm::{
 };
 
 use crate::{
-    entities::{prelude, series},
+    entities::{books, prelude, series},
     error::handle_dberr,
     transaction::TransactionImpl,
 };
@@ -119,6 +119,34 @@ impl SeriesRepository for SeriesRepositoryAdapter {
             .await
             .map_err(handle_dberr)?
             .map(Into::into))
+    }
+
+    async fn list_all_series(&self, transaction: &dyn Transaction) -> Result<Vec<Series>, Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        let rows = prelude::Series::find()
+            .order_by_asc(series::Column::Name)
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn max_series_number_for_series(&self, transaction: &dyn Transaction, series_id: SeriesId) -> Result<Option<rust_decimal::Decimal>, Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        let result = prelude::Books::find()
+            .filter(books::Column::SeriesId.eq(series_id as i64))
+            .select_only()
+            .column(books::Column::SeriesNumber)
+            .into_tuple::<Option<rust_decimal::Decimal>>()
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        let max = result.into_iter().flatten().max();
+        Ok(max)
     }
 
     async fn list_series(&self, transaction: &dyn Transaction, start_id: Option<SeriesId>, page_size: Option<u64>) -> Result<Vec<Series>, Error> {

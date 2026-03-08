@@ -2,7 +2,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use crate::{
     Error, RepositoryError,
-    book::{AuthorRole, BookStatus, BookToken, IdentifierType, MetadataSource, NewAuthor, NewBook, NewPublisher, NewSeries},
+    book::{AuthorRole, BookStatus, BookToken, IdentifierType, MetadataSource, NewAuthor, NewBook, NewGenre, NewPublisher, NewSeries, NewTag},
     import::{ImportJob, ImportJobToken, ImportSource, ImportStatus},
     pipeline::{
         MetadataExtractor, MetadataProvider,
@@ -624,6 +624,8 @@ impl PipelineService for PipelineServiceImpl {
         let author_repo = self.repository_service.author_repository().clone();
         let series_repo = self.repository_service.series_repository().clone();
         let publisher_repo = self.repository_service.publisher_repository().clone();
+        let genre_repo = self.repository_service.genre_repository().clone();
+        let tag_repo = self.repository_service.tag_repository().clone();
         let import_job_repo2 = self.repository_service.import_job_repository().clone();
         let job_id = job.id;
         let cover_filename = cover_data.as_ref().map(|(_, f)| f.clone());
@@ -705,6 +707,34 @@ impl PipelineService for PipelineServiceImpl {
                     if seen_types.insert(id_type.clone()) {
                         book_repo2.add_book_identifier(tx, book_id, id_type.clone(), value.clone()).await?;
                     }
+                }
+
+                // Replace genres
+                book_repo2.delete_book_genres(tx, book_id).await?;
+                for name in &edit_c.genres {
+                    let name = name.trim();
+                    if name.is_empty() {
+                        continue;
+                    }
+                    let genre = match genre_repo.find_by_name(tx, name).await? {
+                        Some(g) => g,
+                        None => genre_repo.add_genre(tx, NewGenre { name: name.to_string() }).await?,
+                    };
+                    book_repo2.add_book_genre(tx, book_id, genre.id).await?;
+                }
+
+                // Replace tags
+                book_repo2.delete_book_tags(tx, book_id).await?;
+                for name in &edit_c.tags {
+                    let name = name.trim();
+                    if name.is_empty() {
+                        continue;
+                    }
+                    let tag = match tag_repo.find_by_name(tx, name).await? {
+                        Some(t) => t,
+                        None => tag_repo.add_tag(tx, NewTag { name: name.to_string() }).await?,
+                    };
+                    book_repo2.add_book_tag(tx, book_id, tag.id).await?;
                 }
 
                 // Mark import job approved
@@ -860,6 +890,8 @@ impl PipelineService for PipelineServiceImpl {
         let author_repo = self.repository_service.author_repository().clone();
         let series_repo = self.repository_service.series_repository().clone();
         let publisher_repo = self.repository_service.publisher_repository().clone();
+        let genre_repo = self.repository_service.genre_repository().clone();
+        let tag_repo = self.repository_service.tag_repository().clone();
         let cover_filename = cover_data.as_ref().map(|(_, f)| f.clone());
         let edit_c = edit.clone();
         let book_version = book.version;
@@ -938,6 +970,34 @@ impl PipelineService for PipelineServiceImpl {
                     if seen_types.insert(id_type.clone()) {
                         book_repo2.add_book_identifier(tx, book_id, id_type.clone(), value.clone()).await?;
                     }
+                }
+
+                // Replace genres
+                book_repo2.delete_book_genres(tx, book_id).await?;
+                for name in &edit_c.genres {
+                    let name = name.trim();
+                    if name.is_empty() {
+                        continue;
+                    }
+                    let genre = match genre_repo.find_by_name(tx, name).await? {
+                        Some(g) => g,
+                        None => genre_repo.add_genre(tx, NewGenre { name: name.to_string() }).await?,
+                    };
+                    book_repo2.add_book_genre(tx, book_id, genre.id).await?;
+                }
+
+                // Replace tags
+                book_repo2.delete_book_tags(tx, book_id).await?;
+                for name in &edit_c.tags {
+                    let name = name.trim();
+                    if name.is_empty() {
+                        continue;
+                    }
+                    let tag = match tag_repo.find_by_name(tx, name).await? {
+                        Some(t) => t,
+                        None => tag_repo.add_tag(tx, NewTag { name: name.to_string() }).await?,
+                    };
+                    book_repo2.add_book_tag(tx, book_id, tag.id).await?;
                 }
 
                 Ok(())

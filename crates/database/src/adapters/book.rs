@@ -1,8 +1,8 @@
 use bb_core::{
     Error, RepositoryError,
     book::{
-        AuthorId, AuthorRole, Book, BookAuthor, BookFile, BookFilter, BookId, BookIdentifier, BookRepository, BookStatus, BookToken, FileFormat,
-        IdentifierType, MetadataSource, NewBook,
+        AuthorId, AuthorRole, Book, BookAuthor, BookFile, BookFilter, BookId, BookIdentifier, BookRepository, BookStatus, BookToken, FileFormat, Genre,
+        GenreId, IdentifierType, MetadataSource, NewBook, Tag, TagId,
     },
     repository::Transaction,
 };
@@ -12,7 +12,7 @@ use sea_orm::{
 };
 
 use crate::{
-    entities::{book_authors, book_files, book_genres, book_identifiers, book_tags, books, prelude},
+    entities::{book_authors, book_files, book_genres, book_identifiers, book_tags, books, genres, prelude, tags},
     error::handle_dberr,
     transaction::TransactionImpl,
 };
@@ -517,6 +517,102 @@ impl BookRepository for BookRepositoryAdapter {
             .map_err(handle_dberr)?;
 
         Ok(count)
+    }
+
+    async fn genres_for_book(&self, transaction: &dyn Transaction, book_id: BookId) -> Result<Vec<Genre>, Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        let junction_rows = prelude::BookGenres::find()
+            .filter(book_genres::Column::BookId.eq(book_id as i64))
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        let genre_ids: Vec<i64> = junction_rows.iter().map(|r| r.genre_id).collect();
+        if genre_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let rows = prelude::Genres::find()
+            .filter(genres::Column::Id.is_in(genre_ids))
+            .order_by_asc(genres::Column::Name)
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn tags_for_book(&self, transaction: &dyn Transaction, book_id: BookId) -> Result<Vec<Tag>, Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        let junction_rows = prelude::BookTags::find()
+            .filter(book_tags::Column::BookId.eq(book_id as i64))
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        let tag_ids: Vec<i64> = junction_rows.iter().map(|r| r.tag_id).collect();
+        if tag_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let rows = prelude::Tags::find()
+            .filter(tags::Column::Id.is_in(tag_ids))
+            .order_by_asc(tags::Column::Name)
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn add_book_genre(&self, transaction: &dyn Transaction, book_id: BookId, genre_id: GenreId) -> Result<(), Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        let model = book_genres::ActiveModel {
+            book_id: Set(book_id as i64),
+            genre_id: Set(genre_id as i64),
+        };
+        model.insert(transaction).await.map_err(handle_dberr)?;
+
+        Ok(())
+    }
+
+    async fn add_book_tag(&self, transaction: &dyn Transaction, book_id: BookId, tag_id: TagId) -> Result<(), Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        let model = book_tags::ActiveModel {
+            book_id: Set(book_id as i64),
+            tag_id: Set(tag_id as i64),
+        };
+        model.insert(transaction).await.map_err(handle_dberr)?;
+
+        Ok(())
+    }
+
+    async fn delete_book_genres(&self, transaction: &dyn Transaction, book_id: BookId) -> Result<(), Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        prelude::BookGenres::delete_many()
+            .filter(book_genres::Column::BookId.eq(book_id as i64))
+            .exec(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(())
+    }
+
+    async fn delete_book_tags(&self, transaction: &dyn Transaction, book_id: BookId) -> Result<(), Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        prelude::BookTags::delete_many()
+            .filter(book_tags::Column::BookId.eq(book_id as i64))
+            .exec(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(())
     }
 }
 

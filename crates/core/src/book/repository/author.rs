@@ -14,4 +14,5 @@ pub trait AuthorRepository: Send + Sync {
     async fn find_by_name(&self, transaction: &dyn Transaction, name: &str) -> Result<Option<Author>, Error>;
     async fn count_authors(&self, transaction: &dyn Transaction) -> Result<u64, Error>;
     async fn delete_author(&self, transaction: &dyn Transaction, author_id: AuthorId) -> Result<(), Error>;
+    async fn list_all_authors(&self, transaction: &dyn Transaction) -> Result<Vec<Author>, Error>;
 }

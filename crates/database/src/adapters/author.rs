@@ -139,6 +139,18 @@ impl AuthorRepository for AuthorRepositoryAdapter {
         Ok(())
     }
 
+    async fn list_all_authors(&self, transaction: &dyn Transaction) -> Result<Vec<Author>, Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        let rows = prelude::Authors::find()
+            .order_by_asc(authors::Column::Name)
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
     async fn list_authors(&self, transaction: &dyn Transaction, start_id: Option<AuthorId>, page_size: Option<u64>) -> Result<Vec<Author>, Error> {
         const DEFAULT_PAGE_SIZE: u64 = 50;
         const MAX_PAGE_SIZE: u64 = 50;
