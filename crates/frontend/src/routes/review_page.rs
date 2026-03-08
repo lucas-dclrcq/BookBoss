@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use crate::components::{AutocompleteInput, ChipInput};
+
 // ── Shared data structures
 // ────────────────────────────────────────────────────
 
@@ -838,8 +840,11 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
     let mut publisher_name = use_signal(|| data.publisher_name.clone());
     let mut page_count = use_signal(|| data.page_count.clone());
     let mut authors = use_signal(|| data.authors.clone());
-    let mut genres = use_signal(|| data.genres.clone());
-    let mut tags = use_signal(|| data.tags.clone());
+    let genres = use_signal(|| data.genres.clone());
+    let tags = use_signal(|| data.tags.clone());
+
+    // ── Pick-list data (loads client-side after hydration) ────────────────────
+    let picklist = use_resource(move || get_picklist_data(()));
     let mut identifiers: Signal<IdentifierMap> = use_signal(|| data.identifiers.clone());
     let mut use_fetched_cover = use_signal(|| false);
     let cover_url = format!("/api/v1/covers/{}", data.book_token);
@@ -1104,19 +1109,25 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
 
                         // Authors
                         tr {
-                            td { class: "py-2 pr-4 text-gray-500 font-medium whitespace-nowrap", "Authors" }
+                            td { class: "py-2 pr-4 text-gray-500 font-medium whitespace-nowrap align-top pt-2", "Authors" }
                             td { class: "py-2 pr-4",
-                                input {
-                                    class: "w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400",
-                                    value: "{authors().join(\", \")}",
-                                    placeholder: "Comma-separated names",
-                                    oninput: move |e: Event<FormData>| {
-                                        let names: Vec<String> = e.value().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
-                                        authors.set(names);
-                                    },
+                                {
+                                    let picklist_ref = picklist.read();
+                                    let author_options = picklist_ref
+                                        .as_ref()
+                                        .and_then(|r| r.as_ref().ok())
+                                        .map(|p| p.authors.clone())
+                                        .unwrap_or_default();
+                                    rsx! {
+                                        ChipInput {
+                                            values: authors,
+                                            options: author_options,
+                                            placeholder: "Add author…".to_string(),
+                                        }
+                                    }
                                 }
                             }
-                            td { class: "py-2 pr-4 text-center",
+                            td { class: "py-2 pr-4 text-center align-top pt-2",
                                 if provider_result.read().is_some() {
                                     {
                                         let pv = provider_result.read().as_ref().map(|r| r.authors.clone()).unwrap_or_default();
@@ -1275,11 +1286,29 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                             td { class: "py-2 pr-4 text-gray-500 font-medium whitespace-nowrap", "Series" }
                             td { class: "py-2 pr-4",
                                 div { class: "flex items-center gap-2",
-                                    input {
-                                        class: "flex-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400",
-                                        value: "{series_name}",
-                                        placeholder: "Series name",
-                                        oninput: move |e| series_name.set(e.value()),
+                                    {
+                                        let picklist_ref = picklist.read();
+                                        let series_options = picklist_ref
+                                            .as_ref()
+                                            .and_then(|r| r.as_ref().ok())
+                                            .map(|p| p.series.iter().map(|s| (s.name.clone(), s.next_number)).collect::<Vec<_>>())
+                                            .unwrap_or_default();
+                                        rsx! {
+                                            AutocompleteInput {
+                                                value: series_name,
+                                                options: series_options,
+                                                on_series_selected: move |(_, next_num): (String, u32)| {
+                                                    if series_number.read().trim().is_empty() {
+                                                        series_number.set(next_num.to_string());
+                                                    }
+                                                },
+                                                on_blur: move |name: String| {
+                                                    if !name.is_empty() && series_number.read().trim().is_empty() {
+                                                        series_number.set("1".to_string());
+                                                    }
+                                                },
+                                            }
+                                        }
                                     }
                                     span { class: "text-gray-400 text-xs whitespace-nowrap", "Book" }
                                     input {
@@ -1355,6 +1384,54 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                     "{pr.page_count}"
                                 }
                             }
+                        }
+
+                        // Genres
+                        tr {
+                            td { class: "py-2 pr-4 text-gray-500 font-medium whitespace-nowrap align-top pt-2", "Genres" }
+                            td { class: "py-2 pr-4",
+                                {
+                                    let picklist_ref = picklist.read();
+                                    let genre_options = picklist_ref
+                                        .as_ref()
+                                        .and_then(|r| r.as_ref().ok())
+                                        .map(|p| p.genres.clone())
+                                        .unwrap_or_default();
+                                    rsx! {
+                                        ChipInput {
+                                            values: genres,
+                                            options: genre_options,
+                                            placeholder: "Add genre…".to_string(),
+                                        }
+                                    }
+                                }
+                            }
+                            td { class: "py-2 pr-4 text-center" }
+                            td { class: "py-2 text-gray-600" }
+                        }
+
+                        // Tags
+                        tr {
+                            td { class: "py-2 pr-4 text-gray-500 font-medium whitespace-nowrap align-top pt-2", "Tags" }
+                            td { class: "py-2 pr-4",
+                                {
+                                    let picklist_ref = picklist.read();
+                                    let tag_options = picklist_ref
+                                        .as_ref()
+                                        .and_then(|r| r.as_ref().ok())
+                                        .map(|p| p.tags.clone())
+                                        .unwrap_or_default();
+                                    rsx! {
+                                        ChipInput {
+                                            values: tags,
+                                            options: tag_options,
+                                            placeholder: "Add tag…".to_string(),
+                                        }
+                                    }
+                                }
+                            }
+                            td { class: "py-2 pr-4 text-center" }
+                            td { class: "py-2 text-gray-600" }
                         }
 
                         // One row per identifier type
