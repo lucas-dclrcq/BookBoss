@@ -29,17 +29,25 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-        // Partial index for the claim query — not expressible via SeaORM DSL
-        manager
-            .get_connection()
-            .execute_unprepared("CREATE INDEX jobs_claim ON jobs (priority DESC, scheduled_at ASC) WHERE status = 'pending'")
-            .await?;
+        // Partial index for the claim query — not expressible via SeaORM DSL.
+        // MySQL does not support partial indexes, so we create a regular covering index there.
+        let create_index = match manager.get_database_backend() {
+            sea_orm::DatabaseBackend::MySql => {
+                "CREATE INDEX jobs_claim ON jobs (status, priority DESC, scheduled_at ASC)"
+            }
+            _ => "CREATE INDEX jobs_claim ON jobs (priority DESC, scheduled_at ASC) WHERE status = 'pending'",
+        };
+        manager.get_connection().execute_unprepared(create_index).await?;
 
         Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        manager.get_connection().execute_unprepared("DROP INDEX IF EXISTS jobs_claim").await?;
+        let drop_index = match manager.get_database_backend() {
+            sea_orm::DatabaseBackend::MySql => "DROP INDEX IF EXISTS jobs_claim ON jobs",
+            _ => "DROP INDEX IF EXISTS jobs_claim",
+        };
+        manager.get_connection().execute_unprepared(drop_index).await?;
 
         manager.drop_table(Table::drop().table(Jobs::Table).to_owned()).await
     }
