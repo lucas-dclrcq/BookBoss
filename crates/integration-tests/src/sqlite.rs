@@ -7,11 +7,11 @@ pub async fn setup() -> TestContext {
     let db = Database::connect("sqlite::memory:").await.unwrap();
     let repository_service = create_repository_service(db).await.unwrap();
     let core_services = bb_core::create_services(
-        repository_service,
+        repository_service.clone(),
         bb_core::test_support::nop_library_store(),
         bb_core::test_support::nop_pipeline_service(),
     )
     .unwrap();
 
-    TestContext::new(core_services, ())
+    TestContext::new(core_services, repository_service, ())
 }

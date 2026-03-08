@@ -96,7 +96,7 @@ sqlite-integration-tests:
 
 [doc('Run MySQL integration tests')]
 mysql-integration-tests:
-    cargo nextest run --no-default-features --features mysql --package integration-tests
+    cargo nextest run --no-default-features -j1 --features mysql --package integration-tests
 
 [doc('Serve documentation locally with live reload')]
 docs-serve:

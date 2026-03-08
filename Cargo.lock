@@ -3387,8 +3387,10 @@ dependencies = [
 name = "integration-tests"
 version = "0.1.16"
 dependencies = [
+ "async-trait",
  "bb-core",
  "bb-database",
+ "chrono",
  "sea-orm",
  "testcontainers",
  "testcontainers-modules",

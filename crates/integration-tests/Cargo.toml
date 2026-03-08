@@ -25,6 +25,8 @@ mysql = ["dep:testcontainers", "dep:testcontainers-modules"]
 bb-core = { workspace = true, features = ["test-support"] }
 bb-database.workspace = true
 
+async-trait.workspace = true
+chrono.workspace = true
 sea-orm.workspace = true
 tokio.workspace = true
 

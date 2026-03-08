@@ -1,4 +1,8 @@
+mod book;
 mod context;
+mod fixtures;
+mod import_job;
+mod library;
 
 #[cfg(feature = "postgres")]
 mod postgres;
@@ -13,11 +17,11 @@ mod mysql;
 
 // Priority: postgres > mysql > sqlite when multiple features are enabled.
 #[cfg(all(feature = "mysql", not(feature = "postgres")))]
-use mysql::setup;
+pub(crate) use mysql::setup;
 #[cfg(feature = "postgres")]
-use postgres::setup;
+pub(crate) use postgres::setup;
 #[cfg(all(feature = "sqlite", not(feature = "postgres"), not(feature = "mysql")))]
-use sqlite::setup;
+pub(crate) use sqlite::setup;
 
 #[cfg(not(any(feature = "postgres", feature = "sqlite", feature = "mysql")))]
 compile_error!("At least one database backend feature must be enabled: postgres, sqlite, or mysql");
