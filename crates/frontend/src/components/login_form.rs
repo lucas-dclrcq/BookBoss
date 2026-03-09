@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 use crate::{Route, routes::landing_page::perform_login};
 
 #[component]
-pub(crate) fn LoginForm() -> Element {
+pub(crate) fn LoginForm(on_must_change: EventHandler<String>) -> Element {
     let navigator = use_navigator();
     let mut username = use_signal(String::new);
     let mut password = use_signal(String::new);
@@ -36,8 +36,12 @@ pub(crate) fn LoginForm() -> Element {
                     loading.set(true);
                     spawn(async move {
                         match perform_login(un, pw).await {
-                            Ok(()) => {
+                            Ok(None) => {
                                 navigator.push(Route::BooksPage {});
+                            }
+                            Ok(Some(token)) => {
+                                on_must_change.call(token);
+                                loading.set(false);
                             }
                             Err(ServerFnError::ServerError { message, .. }) => {
                                 error_msg.set(Some(message));

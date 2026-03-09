@@ -544,6 +544,7 @@ fn UserModal(editing: Option<UserAdminRow>, is_super_admin: bool, on_close: Even
     let is_edit = editing.is_some();
 
     let initial_role = editing.as_ref().map(|r| RoleChoice::from_caps(&r.capabilities)).unwrap_or(RoleChoice::User);
+    let editing_is_super = initial_role == RoleChoice::SuperAdmin;
     let initial_user_caps: Vec<String> = editing
         .as_ref()
         .map(|r| {
@@ -688,8 +689,12 @@ fn UserModal(editing: Option<UserAdminRow>, is_super_admin: bool, on_close: Even
                     div { class: "mb-4",
                         label { class: "block text-sm font-medium text-gray-700 mb-1", "Role" }
                         select {
-                            class: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm bg-white",
-                            disabled: saving,
+                            class: if editing_is_super {
+                                "w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-500 cursor-not-allowed"
+                            } else {
+                                "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm bg-white"
+                            },
+                            disabled: saving() || editing_is_super,
                             onchange: move |e| {
                                 let new_role = match e.value().as_str() {
                                     "SuperAdmin" => RoleChoice::SuperAdmin,
