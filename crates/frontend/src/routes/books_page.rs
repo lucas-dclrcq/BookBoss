@@ -26,6 +26,8 @@ pub(crate) struct BookSummary {
 pub(crate) struct ListBooksResponse {
     pub books: Vec<BookSummary>,
     pub can_delete_books: bool,
+    /// Books with `Reading` status, sorted by `last_progress_at` desc.
+    pub currently_reading: Vec<BookSummary>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -169,7 +171,7 @@ async fn list_books() -> Result<ListBooksResponse, ServerFnError> {
         .collect();
 
     // Assemble view models
-    let summaries = books
+    let summaries: Vec<BookSummary> = books
         .iter()
         .zip(book_authors.iter())
         .map(|(book, author_pairs)| {
@@ -188,9 +190,20 @@ async fn list_books() -> Result<ListBooksResponse, ServerFnError> {
         })
         .collect();
 
+    // Build the "Currently Reading" list: Reading books sorted by last_progress_at
+    // desc.
+    let book_id_to_idx: HashMap<u64, usize> = books.iter().enumerate().map(|(i, b)| (b.id, i)).collect();
+    let mut reading_now: Vec<_> = reading_metas.iter().filter(|m| m.read_status == ReadStatus::Reading).collect();
+    reading_now.sort_by(|a, b| b.last_progress_at.cmp(&a.last_progress_at));
+    let currently_reading: Vec<BookSummary> = reading_now
+        .iter()
+        .filter_map(|m| book_id_to_idx.get(&m.book_id).map(|&idx| summaries[idx].clone()))
+        .collect();
+
     Ok(ListBooksResponse {
         books: summaries,
         can_delete_books,
+        currently_reading,
     })
 }
 
@@ -215,7 +228,7 @@ pub(crate) fn BooksPage() -> Element {
                     "Failed to load books: {e}"
                 }
             },
-            Some(Ok(ListBooksResponse { books, can_delete_books })) => rsx! {
+            Some(Ok(ListBooksResponse { books, can_delete_books, currently_reading })) => rsx! {
                 match *view.read() {
                     BookDisplayView::GridView => rsx! {
                         div { class: "flex-1 flex flex-col overflow-hidden",
@@ -225,6 +238,7 @@ pub(crate) fn BooksPage() -> Element {
                                 on_edit_shelf: |_| {},
                                 on_delete_shelf: |_| {},
                             }
+                            CurrentlyReadingSection { books: currently_reading }
                             BookGrid {
                                 books,
                                 context: BookGridContext::AllBooks { can_delete: can_delete_books },
@@ -238,6 +252,65 @@ pub(crate) fn BooksPage() -> Element {
                     },
                 }
             },
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// CurrentlyReadingSection
+// ---------------------------------------------------------------------------
+
+#[component]
+fn CurrentlyReadingSection(books: Vec<BookSummary>) -> Element {
+    if books.is_empty() {
+        return rsx! {};
+    }
+
+    let navigator = use_navigator();
+
+    rsx! {
+        div { class: "shrink-0 border-b border-gray-100 bg-white px-4 pt-3 pb-2",
+            h2 { class: "text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2",
+                "Currently Reading"
+            }
+            div { class: "flex gap-3 overflow-x-auto pb-1",
+                for book in &books {
+                    {
+                        let tok = book.token.clone();
+                        let pct = book.reading_state.as_ref().and_then(|s| s.progress_pct).unwrap_or(0);
+                        let author_str = book.author_names.join(", ");
+                        rsx! {
+                            div {
+                                class: "flex-none w-20 cursor-pointer",
+                                onclick: move |_| {
+                                    navigator.push(Route::BookDetailPage { token: tok.clone() });
+                                },
+                                div { class: "relative",
+                                    img {
+                                        src: "/api/v1/covers/{book.token}",
+                                        alt: "{book.title}",
+                                        class: "w-full object-cover rounded shadow-sm",
+                                        style: "aspect-ratio: 2/3",
+                                    }
+                                    if pct > 0 {
+                                        div {
+                                            class: "absolute bottom-0 left-0 right-0 h-1 bg-black/20 rounded-b overflow-hidden",
+                                            div { class: "h-full bg-indigo-400", style: "width: {pct}%" }
+                                        }
+                                    }
+                                }
+                                p { class: "text-xs font-semibold text-gray-900 leading-tight line-clamp-2 mt-1",
+                                    "{book.title}"
+                                }
+                                p { class: "text-xs text-gray-500 leading-tight truncate mt-0.5",
+                                    "{author_str}"
+                                }
+                                p { class: "text-xs text-indigo-600 font-medium mt-0.5", "{pct}%" }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
