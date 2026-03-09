@@ -25,6 +25,7 @@ use crate::{
     jobs::{JobRegistry, JobWorker},
     library::{LibraryService, LibraryServiceImpl},
     pipeline::PipelineService,
+    reading::{ReadingService, ReadingServiceImpl},
     repository::RepositoryService,
     shelf::{ShelfService, service::ShelfServiceImpl},
     storage::LibraryStore,
@@ -44,6 +45,7 @@ pub struct CoreServices {
     pub library_service: Arc<dyn LibraryService>,
     pub pipeline_service: Arc<dyn PipelineService>,
     pub shelf_service: Arc<dyn ShelfService>,
+    pub reading_service: Arc<dyn ReadingService>,
 }
 
 impl CoreServices {
@@ -58,6 +60,7 @@ impl CoreServices {
             library_store,
             pipeline_service,
             shelf_service: Arc::new(ShelfServiceImpl::new(repository_service.clone())),
+            reading_service: Arc::new(ReadingServiceImpl::new(repository_service.clone())),
         }
     }
 }
