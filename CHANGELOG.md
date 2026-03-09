@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1](https://github.com/szinn/BookBoss/compare/v0.2.0..v0.2.1) - 2026-03-09
+
+### Features
+
+- _(core)_ Add ReadingService with state machine - ([7c4ac3d](https://github.com/szinn/BookBoss/commit/7c4ac3ddf30bf4f2128567952daca8d66cab68ee))
+- _(database)_ Add UserBookMetadataRepository adapter - ([4fa283f](https://github.com/szinn/BookBoss/commit/4fa283f682b6a7d7fcced9dc768a5270a1035f25))
+- _(frontend)_ Add Currently Reading section to books page - ([565a677](https://github.com/szinn/BookBoss/commit/565a677492ba989eb2d7262de256256f97f8f643))
+- _(frontend)_ Add reading status badges to book cards - ([03270a8](https://github.com/szinn/BookBoss/commit/03270a831aa581be0c858f83ce2929f04e62ac85))
+- _(frontend)_ Add reading controls to book detail page - ([41edaf6](https://github.com/szinn/BookBoss/commit/41edaf6523e9febe4927e02b1a5c487da852daee))
+- _(frontend)_ Add auto-read threshold setting - ([aa3d1c0](https://github.com/szinn/BookBoss/commit/aa3d1c0ceee41447e22ba3e804ed857b0c086563))
+
+### Refactor
+
+- _(core)_ Sort capabilities - ([e31ae14](https://github.com/szinn/BookBoss/commit/e31ae149ff2cb4c18b94b64cb8794c67ef0bcabb))
+- _(frontend)_ Match shelf bar and Currently Reading backgrounds to book grid - ([c570a5b](https://github.com/szinn/BookBoss/commit/c570a5b575707ff7813bdeb87329e9140454839d))
+
+### Testing
+
+- _(integration)_ Added MariaDB integration tests - ([a2c87eb](https://github.com/szinn/BookBoss/commit/a2c87ebf14f4af388444e0238150abb3ab2691f6))
+
 ## [0.2.0](https://github.com/szinn/BookBoss/compare/v0.1.16..v0.2.0) - 2026-03-08
 
 ### Features
