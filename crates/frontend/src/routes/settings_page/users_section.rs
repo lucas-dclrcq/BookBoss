@@ -1,0 +1,828 @@
+#[cfg(feature = "server")]
+use bb_core::{CoreServices, types::Capability, user::NewUser};
+use dioxus::prelude::*;
+#[cfg(feature = "server")]
+use {crate::server::AuthSession, std::sync::Arc};
+
+// ---------------------------------------------------------------------------
+// DTOs
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct UserAdminRow {
+    pub token: String,
+    pub username: String,
+    pub full_name: String,
+    pub email: String,
+    pub capabilities: Vec<String>,
+}
+
+impl UserAdminRow {
+    pub fn role_label(&self) -> &'static str {
+        if self.capabilities.iter().any(|c| c == "SuperAdmin") {
+            "Super Admin"
+        } else if self.capabilities.iter().any(|c| c == "Admin") {
+            "Admin"
+        } else {
+            "User"
+        }
+    }
+
+    pub fn role_sort_key(&self) -> u8 {
+        if self.capabilities.iter().any(|c| c == "SuperAdmin") {
+            0
+        } else if self.capabilities.iter().any(|c| c == "Admin") {
+            1
+        } else {
+            2
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Server functions
+// ---------------------------------------------------------------------------
+
+#[post(
+    "/api/v1/admin/users/list",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+pub(crate) async fn list_users_admin() -> Result<Vec<UserAdminRow>, ServerFnError> {
+    let user = auth_session
+        .current_user
+        .as_ref()
+        .filter(|u| !u.username.is_empty())
+        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+
+    if !user.permissions.contains("SuperAdmin") && !user.permissions.contains("Admin") {
+        return Err(ServerFnError::new("Insufficient permissions"));
+    }
+
+    let mut users = core_services
+        .user_service
+        .list_users(None, None)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    users.sort_by(|a, b| {
+        let a_key = role_sort_key_caps(&a.capabilities);
+        let b_key = role_sort_key_caps(&b.capabilities);
+        a_key.cmp(&b_key).then(a.username.cmp(&b.username))
+    });
+
+    Ok(users
+        .into_iter()
+        .map(|u| {
+            let caps: Vec<String> = u.capabilities.iter().map(|c| c.as_str().to_string()).collect();
+            UserAdminRow {
+                token: u.token.to_string(),
+                username: u.username,
+                full_name: u.full_name,
+                email: u.email_address.as_str().to_string(),
+                capabilities: caps,
+            }
+        })
+        .collect())
+}
+
+#[cfg(feature = "server")]
+fn role_sort_key_caps(caps: &bb_core::types::Capabilities) -> u8 {
+    if caps.contains(&Capability::SuperAdmin) {
+        0
+    } else if caps.contains(&Capability::Admin) {
+        1
+    } else {
+        2
+    }
+}
+
+#[put(
+    "/api/v1/admin/users/create",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+pub(crate) async fn admin_create_user(
+    username: String,
+    full_name: String,
+    email: String,
+    password: String,
+    capabilities: Vec<String>,
+) -> Result<(), ServerFnError> {
+    use std::collections::HashSet;
+
+    let actor = auth_session
+        .current_user
+        .as_ref()
+        .filter(|u| !u.username.is_empty())
+        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+
+    if !actor.permissions.contains("SuperAdmin") && !actor.permissions.contains("Admin") {
+        return Err(ServerFnError::new("Insufficient permissions"));
+    }
+
+    let caps: HashSet<Capability> = parse_capabilities(&capabilities)?;
+
+    if caps.contains(&Capability::SuperAdmin) {
+        return Err(ServerFnError::new("Cannot assign Super Admin role"));
+    }
+    if caps.contains(&Capability::Admin) && !actor.permissions.contains("SuperAdmin") {
+        return Err(ServerFnError::new("Only Super Admin can create Admin users"));
+    }
+
+    let new_user = NewUser::new(username, password, email, caps, full_name, true).map_err(|e| {
+        let msg = e.to_string();
+        if msg.contains("Constraint") || msg.contains("unique") || msg.contains("duplicate") {
+            ServerFnError::new("Username or email address is already in use")
+        } else {
+            ServerFnError::new(msg)
+        }
+    })?;
+
+    core_services.user_service.add_user(new_user).await.map_err(|e| {
+        let msg = e.to_string();
+        if msg.contains("Constraint") || msg.contains("unique") || msg.contains("duplicate") {
+            ServerFnError::new("Username or email address is already in use")
+        } else {
+            ServerFnError::new(msg)
+        }
+    })?;
+
+    Ok(())
+}
+
+#[post(
+    "/api/v1/admin/users/update",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+pub(crate) async fn admin_update_user(
+    token: String,
+    full_name: String,
+    email: String,
+    password: Option<String>,
+    capabilities: Vec<String>,
+) -> Result<(), ServerFnError> {
+    use std::collections::HashSet;
+
+    use bb_core::user::UserToken;
+
+    let actor = auth_session
+        .current_user
+        .as_ref()
+        .filter(|u| !u.username.is_empty())
+        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+
+    if !actor.permissions.contains("SuperAdmin") && !actor.permissions.contains("Admin") {
+        return Err(ServerFnError::new("Insufficient permissions"));
+    }
+
+    let user_token: UserToken = token.parse().map_err(|_| ServerFnError::new("Invalid user token"))?;
+
+    let mut user = core_services
+        .user_service
+        .find_by_token(user_token)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .ok_or_else(|| ServerFnError::new("User not found"))?;
+
+    if user.capabilities.contains(&Capability::SuperAdmin) && !actor.permissions.contains("SuperAdmin") {
+        return Err(ServerFnError::new("Only Super Admin can edit a Super Admin user"));
+    }
+
+    let new_caps: HashSet<Capability> = parse_capabilities(&capabilities)?;
+
+    if new_caps.contains(&Capability::SuperAdmin) {
+        return Err(ServerFnError::new("Cannot assign Super Admin role"));
+    }
+    if user.capabilities.contains(&Capability::SuperAdmin) && !new_caps.contains(&Capability::SuperAdmin) {
+        return Err(ServerFnError::new("Cannot remove Super Admin role"));
+    }
+    if new_caps.contains(&Capability::Admin) && !actor.permissions.contains("SuperAdmin") {
+        return Err(ServerFnError::new("Only Super Admin can assign Admin role"));
+    }
+
+    let full_name = full_name.trim().to_string();
+    if full_name.is_empty() {
+        return Err(ServerFnError::new("Full name is required"));
+    }
+
+    user.full_name = full_name;
+    user.email_address = bb_core::types::EmailAddress::new(email).map_err(|e| ServerFnError::new(e.to_string()))?;
+    user.capabilities = new_caps;
+
+    if let Some(pw) = password.filter(|p| !p.is_empty()) {
+        user.password_hash = bb_core::user::User::encrypt_password(pw).map_err(|e| ServerFnError::new(e.to_string()))?;
+        user.change_password_on_login = true;
+    }
+
+    core_services
+        .user_service
+        .update_user(user)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(())
+}
+
+#[post(
+    "/api/v1/admin/users/delete",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+pub(crate) async fn admin_delete_user(token: String) -> Result<(), ServerFnError> {
+    use bb_core::user::UserToken;
+
+    let actor = auth_session
+        .current_user
+        .as_ref()
+        .filter(|u| !u.username.is_empty())
+        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+
+    if !actor.permissions.contains("SuperAdmin") && !actor.permissions.contains("Admin") {
+        return Err(ServerFnError::new("Insufficient permissions"));
+    }
+
+    if bb_core::user::UserToken::new(actor.id()).to_string() == token {
+        return Err(ServerFnError::new("You cannot delete your own account"));
+    }
+
+    let user_token: UserToken = token.parse().map_err(|_| ServerFnError::new("Invalid user token"))?;
+
+    let user = core_services
+        .user_service
+        .find_by_token(user_token)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .ok_or_else(|| ServerFnError::new("User not found"))?;
+
+    if user.capabilities.contains(&Capability::SuperAdmin) {
+        return Err(ServerFnError::new("Cannot delete the Super Admin user"));
+    }
+
+    core_services
+        .user_service
+        .delete_user(user.id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(())
+}
+
+#[post(
+    "/api/v1/admin/generate-password",
+    auth_session: axum::Extension<AuthSession>
+)]
+pub(crate) async fn generate_password() -> Result<String, ServerFnError> {
+    auth_session
+        .current_user
+        .as_ref()
+        .filter(|u| !u.username.is_empty())
+        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+
+    Ok(make_password())
+}
+
+#[cfg(feature = "server")]
+fn make_password() -> String {
+    use rand::{Rng, RngExt as _};
+
+    const UPPER: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const LOWER: &[u8] = b"abcdefghijklmnopqrstuvwxyz";
+    const DIGITS: &[u8] = b"0123456789";
+    const SPECIAL: &[u8] = b"!@#$%^&*()_+-=[]{}|;:,.<>?";
+    const ALL: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;:,.<>?";
+
+    let mut rng = rand::rng();
+    // Guarantee one of each required character class
+    let mut pw: Vec<u8> = vec![
+        UPPER[rng.random_range(0..UPPER.len())],
+        LOWER[rng.random_range(0..LOWER.len())],
+        DIGITS[rng.random_range(0..DIGITS.len())],
+        SPECIAL[rng.random_range(0..SPECIAL.len())],
+    ];
+    for _ in 4..16 {
+        pw.push(ALL[rng.random_range(0..ALL.len())]);
+    }
+    // Fisher-Yates shuffle
+    for i in (1..pw.len()).rev() {
+        let j = rng.random_range(0..=i);
+        pw.swap(i, j);
+    }
+    String::from_utf8(pw).expect("all bytes are valid ASCII")
+}
+
+#[cfg(feature = "server")]
+fn parse_capabilities(capabilities: &[String]) -> Result<bb_core::types::Capabilities, ServerFnError> {
+    use std::collections::HashSet;
+    let mut caps = HashSet::new();
+    for s in capabilities {
+        let cap = match s.as_str() {
+            "Admin" => Capability::Admin,
+            "ApproveImports" => Capability::ApproveImports,
+            "ConvertBook" => Capability::ConvertBook,
+            "DeleteBook" => Capability::DeleteBook,
+            "EditBook" => Capability::EditBook,
+            other => return Err(ServerFnError::new(format!("Unknown capability: {other}"))),
+        };
+        caps.insert(cap);
+    }
+    Ok(caps)
+}
+
+// ---------------------------------------------------------------------------
+// UsersSection component
+// ---------------------------------------------------------------------------
+
+#[component]
+pub(crate) fn UsersSection(is_super_admin: bool, current_user_token: String) -> Element {
+    // Increment to trigger a reload of the user list.
+    let mut refresh = use_signal(|| 0u32);
+
+    let users_resource = use_resource(move || async move {
+        let _ = refresh(); // subscribe
+        list_users_admin().await
+    });
+
+    let mut modal_target: Signal<Option<Option<UserAdminRow>>> = use_signal(|| None);
+    let mut delete_target: Signal<Option<UserAdminRow>> = use_signal(|| None);
+    let mut delete_error: Signal<Option<String>> = use_signal(|| None);
+    let mut deleting = use_signal(|| false);
+
+    rsx! {
+        div { class: "w-full max-w-3xl",
+            // Header
+            div { class: "flex items-center justify-between mb-6",
+                h2 { class: "text-lg font-semibold text-gray-900", "Users" }
+                button {
+                    class: "px-3 py-1.5 text-sm font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700",
+                    onclick: move |_| modal_target.set(Some(None)),
+                    "+ Add User"
+                }
+            }
+
+            // Error from delete
+            if let Some(msg) = delete_error() {
+                div { class: "mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm",
+                    "{msg}"
+                }
+            }
+
+            // User table
+            match users_resource() {
+                None => rsx! {
+                    div { class: "text-gray-400 text-sm", "Loading…" }
+                },
+                Some(Err(e)) => rsx! {
+                    div { class: "p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm",
+                        "{e}"
+                    }
+                },
+                Some(Ok(rows)) => rsx! {
+                    div { class: "rounded-lg border border-gray-200 bg-white overflow-hidden",
+                        table { class: "w-full text-sm",
+                            thead {
+                                tr { class: "bg-gray-50 border-b border-gray-200",
+                                    th { class: "px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide", "Username" }
+                                    th { class: "px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide", "Full Name" }
+                                    th { class: "px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide", "Role" }
+                                    th { class: "px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wide", "Actions" }
+                                }
+                            }
+                            tbody { class: "divide-y divide-gray-100",
+                                for row in rows {
+                                    {
+                                        let is_self = row.token == current_user_token;
+                                        let is_super = row.role_sort_key() == 0;
+                                        let can_edit = is_super_admin || !is_super;
+                                        let row_edit = row.clone();
+                                        let row_del = row.clone();
+                                        rsx! {
+                                            tr { class: "hover:bg-gray-50",
+                                                td { class: "px-4 py-3 font-medium text-gray-900", "{row.username}" }
+                                                td { class: "px-4 py-3 text-gray-600", "{row.full_name}" }
+                                                td { class: "px-4 py-3",
+                                                    span {
+                                                        class: match row.role_sort_key() {
+                                                            0 => "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800",
+                                                            1 => "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800",
+                                                            _ => "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700",
+                                                        },
+                                                        { row.role_label() }
+                                                    }
+                                                }
+                                                td { class: "px-4 py-3",
+                                                    div { class: "flex items-center justify-end gap-2",
+                                                        button {
+                                                            class: if can_edit {
+                                                                "p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded"
+                                                            } else {
+                                                                "p-1.5 text-gray-300 cursor-not-allowed rounded"
+                                                            },
+                                                            disabled: !can_edit,
+                                                            title: "Edit user",
+                                                            onclick: move |_| {
+                                                                if can_edit {
+                                                                    modal_target.set(Some(Some(row_edit.clone())));
+                                                                }
+                                                            },
+                                                            "✎"
+                                                        }
+                                                        if !is_super && !is_self {
+                                                            button {
+                                                                class: "p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded",
+                                                                title: "Delete user",
+                                                                onclick: move |_| {
+                                                                    delete_error.set(None);
+                                                                    delete_target.set(Some(row_del.clone()));
+                                                                },
+                                                                "✕"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if let Some(Ok(ref rows)) = users_resource() {
+                            if rows.is_empty() {
+                                div { class: "px-4 py-8 text-center text-gray-400 text-sm", "No users found." }
+                            }
+                        }
+                    }
+                },
+            }
+        }
+
+        // ── User create/edit modal ──────────────────────────────────────────
+        if let Some(target) = modal_target() {
+            UserModal {
+                editing: target,
+                is_super_admin,
+                on_close: move || modal_target.set(None),
+                on_saved: move || {
+                    modal_target.set(None);
+                    *refresh.write() += 1;
+                },
+            }
+        }
+
+        // ── Delete confirmation dialog ──────────────────────────────────────
+        if let Some(target) = delete_target() {
+            div { class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+                div { class: "bg-white rounded-2xl shadow-xl w-full max-w-sm p-6",
+                    h3 { class: "text-base font-semibold text-gray-900 mb-2", "Delete User" }
+                    p { class: "text-sm text-gray-600 mb-6",
+                        "Are you sure you want to delete "
+                        span { class: "font-medium text-gray-900", "{target.username}" }
+                        "? This cannot be undone."
+                    }
+                    div { class: "flex justify-end gap-3",
+                        button {
+                            class: "px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50",
+                            disabled: deleting(),
+                            onclick: move |_| delete_target.set(None),
+                            "Cancel"
+                        }
+                        button {
+                            class: "px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50",
+                            disabled: deleting(),
+                            onclick: move |_| {
+                                let tok = target.token.clone();
+                                deleting.set(true);
+                                spawn(async move {
+                                    match admin_delete_user(tok).await {
+                                        Ok(()) => {
+                                            delete_target.set(None);
+                                            *refresh.write() += 1;
+                                        }
+                                        Err(e) => {
+                                            delete_error.set(Some(e.to_string()));
+                                            delete_target.set(None);
+                                        }
+                                    }
+                                    deleting.set(false);
+                                });
+                            },
+                            if deleting() { "Deleting…" } else { "Delete" }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// UserModal component
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, PartialEq)]
+enum RoleChoice {
+    SuperAdmin,
+    Admin,
+    User,
+}
+
+impl RoleChoice {
+    fn from_caps(caps: &[String]) -> Self {
+        if caps.iter().any(|c| c == "SuperAdmin") {
+            RoleChoice::SuperAdmin
+        } else if caps.iter().any(|c| c == "Admin") {
+            RoleChoice::Admin
+        } else {
+            RoleChoice::User
+        }
+    }
+}
+
+#[component]
+fn UserModal(editing: Option<UserAdminRow>, is_super_admin: bool, on_close: EventHandler<()>, on_saved: EventHandler<()>) -> Element {
+    let is_edit = editing.is_some();
+
+    let initial_role = editing.as_ref().map(|r| RoleChoice::from_caps(&r.capabilities)).unwrap_or(RoleChoice::User);
+    let initial_user_caps: Vec<String> = editing
+        .as_ref()
+        .map(|r| {
+            r.capabilities
+                .iter()
+                .filter(|c| c.as_str() != "Admin" && c.as_str() != "SuperAdmin")
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let mut username = use_signal(|| editing.as_ref().map(|r| r.username.clone()).unwrap_or_default());
+    let mut full_name = use_signal(|| editing.as_ref().map(|r| r.full_name.clone()).unwrap_or_default());
+    let mut email = use_signal(|| editing.as_ref().map(|r| r.email.clone()).unwrap_or_default());
+    let mut password = use_signal(String::new);
+    let mut role = use_signal(|| initial_role);
+    let mut user_caps: Signal<Vec<String>> = use_signal(|| initial_user_caps);
+    let mut error_msg: Signal<Option<String>> = use_signal(|| None);
+    let mut saving = use_signal(|| false);
+    let mut generating = use_signal(|| false);
+
+    const GRANTABLE: [(&str, &str); 4] = [
+        ("ApproveImports", "Approve Imports"),
+        ("ConvertBook", "Convert Books"),
+        ("DeleteBook", "Delete Books"),
+        ("EditBook", "Edit Books"),
+    ];
+
+    rsx! {
+        div { class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+            div { class: "bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto",
+                div { class: "p-6",
+                    h3 { class: "text-base font-semibold text-gray-900 mb-5",
+                        if is_edit { "Edit User" } else { "Add User" }
+                    }
+
+                    if let Some(msg) = error_msg() {
+                        div { class: "mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm",
+                            "{msg}"
+                        }
+                    }
+
+                    // Username
+                    div { class: "mb-4",
+                        label { class: "block text-sm font-medium text-gray-700 mb-1", "Username" }
+                        input {
+                            r#type: "text",
+                            class: if is_edit {
+                                "w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed text-sm"
+                            } else {
+                                "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm"
+                            },
+                            placeholder: "username",
+                            value: username,
+                            readonly: is_edit,
+                            oninput: move |e| {
+                                if !is_edit { username.set(e.value()); }
+                            },
+                            disabled: saving,
+                        }
+                    }
+
+                    // Full Name
+                    div { class: "mb-4",
+                        label { class: "block text-sm font-medium text-gray-700 mb-1", "Full Name" }
+                        input {
+                            r#type: "text",
+                            class: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm",
+                            placeholder: "Full name",
+                            value: full_name,
+                            oninput: move |e| full_name.set(e.value()),
+                            disabled: saving,
+                        }
+                    }
+
+                    // Email
+                    div { class: "mb-4",
+                        label { class: "block text-sm font-medium text-gray-700 mb-1", "Email Address" }
+                        input {
+                            r#type: "email",
+                            class: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm",
+                            placeholder: "user@example.com",
+                            value: email,
+                            oninput: move |e| email.set(e.value()),
+                            disabled: saving,
+                        }
+                    }
+
+                    // Password
+                    div { class: "mb-4",
+                        label { class: "block text-sm font-medium text-gray-700 mb-1", "Password" }
+                        if is_edit {
+                            p { class: "text-xs text-gray-400 mb-1",
+                                "Leave blank to keep current password. Setting a new password will require the user to change it on next login."
+                            }
+                        }
+                        div { class: "flex gap-2",
+                            input {
+                                r#type: "text",
+                                class: "flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm font-mono",
+                                placeholder: if is_edit { "New password (optional)" } else { "Password" },
+                                value: password,
+                                oninput: move |e| password.set(e.value()),
+                                disabled: saving,
+                            }
+                            button {
+                                class: "px-3 py-2 text-xs font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 whitespace-nowrap",
+                                disabled: saving() || generating(),
+                                title: "Generate password",
+                                onclick: move |_| {
+                                    generating.set(true);
+                                    spawn(async move {
+                                        match generate_password().await {
+                                            Ok(pw) => password.set(pw),
+                                            Err(e) => error_msg.set(Some(e.to_string())),
+                                        }
+                                        generating.set(false);
+                                    });
+                                },
+                                if generating() { "…" } else { "Generate" }
+                            }
+                            button {
+                                class: "px-3 py-2 text-xs font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50",
+                                disabled: password().is_empty(),
+                                title: "Copy to clipboard",
+                                onclick: move |_| {
+                                    let pw = password();
+                                    if !pw.is_empty() {
+                                        // Escape backticks for JS template literal safety.
+                                        let escaped = pw.replace('`', "\\`").replace('$', "\\$");
+                                        spawn(async move {
+                                            let _ = document::eval(&format!("navigator.clipboard.writeText(`{escaped}`)")).await;
+                                        });
+                                    }
+                                },
+                                "Copy"
+                            }
+                        }
+                    }
+
+                    // Role
+                    div { class: "mb-4",
+                        label { class: "block text-sm font-medium text-gray-700 mb-1", "Role" }
+                        select {
+                            class: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm bg-white",
+                            disabled: saving,
+                            onchange: move |e| {
+                                let new_role = match e.value().as_str() {
+                                    "SuperAdmin" => RoleChoice::SuperAdmin,
+                                    "Admin" => RoleChoice::Admin,
+                                    _ => RoleChoice::User,
+                                };
+                                if new_role == RoleChoice::User {
+                                    user_caps.set(Vec::new());
+                                }
+                                role.set(new_role);
+                            },
+                            option { value: "User", selected: role() == RoleChoice::User, "User" }
+                            option {
+                                value: "Admin",
+                                selected: role() == RoleChoice::Admin,
+                                disabled: !is_super_admin,
+                                "Admin"
+                            }
+                            option {
+                                value: "SuperAdmin",
+                                selected: role() == RoleChoice::SuperAdmin,
+                                disabled: true,
+                                "Super Admin"
+                            }
+                        }
+                    }
+
+                    // Capability toggles (User role only)
+                    if role() == RoleChoice::User {
+                        div { class: "mb-4",
+                            label { class: "block text-sm font-medium text-gray-700 mb-2", "Capabilities" }
+                            div { class: "space-y-2 rounded-lg border border-gray-200 p-3",
+                                for (cap_key, cap_label) in GRANTABLE {
+                                    {
+                                        let key = cap_key.to_string();
+                                        let key_remove = key.clone();
+                                        let is_checked = user_caps().contains(&key);
+                                        rsx! {
+                                            label { class: "flex items-center gap-2 cursor-pointer select-none",
+                                                input {
+                                                    r#type: "checkbox",
+                                                    class: "rounded border-gray-300 text-indigo-600 focus:ring-indigo-500",
+                                                    checked: is_checked,
+                                                    disabled: saving,
+                                                    onchange: move |e| {
+                                                        if e.checked() {
+                                                            user_caps.write().push(key.clone());
+                                                        } else {
+                                                            user_caps.write().retain(|c| c != &key_remove);
+                                                        }
+                                                    },
+                                                }
+                                                span { class: "text-sm text-gray-700", "{cap_label}" }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Actions
+                    div { class: "flex justify-end gap-3 pt-2",
+                        button {
+                            class: "px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50",
+                            disabled: saving(),
+                            onclick: move |_| on_close.call(()),
+                            "Cancel"
+                        }
+                        button {
+                            class: "px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50",
+                            disabled: saving(),
+                            onclick: move |_| {
+                                let un = username().trim().to_string();
+                                let fn_ = full_name().trim().to_string();
+                                let em = email().trim().to_string();
+                                let pw = password();
+                                let chosen_role = role();
+                                let caps = user_caps();
+
+                                if !is_edit && un.is_empty() {
+                                    error_msg.set(Some("Username is required.".to_string()));
+                                    return;
+                                }
+                                if fn_.is_empty() {
+                                    error_msg.set(Some("Full name is required.".to_string()));
+                                    return;
+                                }
+                                if em.is_empty() {
+                                    error_msg.set(Some("Email address is required.".to_string()));
+                                    return;
+                                }
+                                if !is_edit && pw.is_empty() {
+                                    error_msg.set(Some("Password is required for new users.".to_string()));
+                                    return;
+                                }
+
+                                let capabilities: Vec<String> = match chosen_role {
+                                    RoleChoice::SuperAdmin => vec!["SuperAdmin".to_string()],
+                                    RoleChoice::Admin => vec!["Admin".to_string()],
+                                    RoleChoice::User => caps,
+                                };
+
+                                let edit_token = editing.as_ref().map(|r| r.token.clone());
+                                error_msg.set(None);
+                                saving.set(true);
+
+                                spawn(async move {
+                                    let result = if let Some(tok) = edit_token {
+                                        let pw_opt = if pw.is_empty() { None } else { Some(pw) };
+                                        admin_update_user(tok, fn_, em, pw_opt, capabilities).await
+                                    } else {
+                                        admin_create_user(un, fn_, em, pw, capabilities).await
+                                    };
+
+                                    match result {
+                                        Ok(()) => on_saved.call(()),
+                                        Err(ServerFnError::ServerError { message, .. }) => {
+                                            error_msg.set(Some(message));
+                                            saving.set(false);
+                                        }
+                                        Err(e) => {
+                                            error_msg.set(Some(e.to_string()));
+                                            saving.set(false);
+                                        }
+                                    }
+                                });
+                            },
+                            if saving() { "Saving…" } else { "Save" }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

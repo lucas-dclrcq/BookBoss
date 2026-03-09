@@ -1,13 +1,49 @@
+mod users_section;
+
 #[cfg(feature = "server")]
 use bb_core::{
     CoreServices,
     reading::{AUTO_READ_THRESHOLD_KEY, DEFAULT_AUTO_READ_THRESHOLD},
 };
 use dioxus::prelude::*;
+use users_section::UsersSection;
 #[cfg(feature = "server")]
 use {crate::server::AuthSession, std::sync::Arc};
 
 use crate::Route;
+
+// ---------------------------------------------------------------------------
+// Settings context (admin status + current user identity)
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct SettingsContext {
+    pub is_admin: bool,
+    pub is_super_admin: bool,
+    pub current_user_token: String,
+}
+
+#[get(
+    "/api/v1/settings/context",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+async fn get_settings_context() -> Result<SettingsContext, ServerFnError> {
+    let user = auth_session
+        .current_user
+        .as_ref()
+        .filter(|u| !u.username.is_empty())
+        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+
+    let is_super_admin = user.permissions.contains("SuperAdmin");
+    let is_admin = is_super_admin || user.permissions.contains("Admin");
+
+    Ok(SettingsContext {
+        is_admin,
+        is_super_admin,
+        current_user_token: bb_core::user::UserToken::new(user.id()).to_string(),
+    })
+}
 
 // ---------------------------------------------------------------------------
 // Library statistics
@@ -19,7 +55,6 @@ pub(crate) struct LibraryStats {
     pub authors: u64,
 }
 
-/// Returns library statistics for the About section.
 #[get(
     "/api/v1/library/stats",
     auth_session: axum::Extension<AuthSession>,
@@ -50,11 +85,9 @@ async fn get_library_stats() -> Result<LibraryStats, ServerFnError> {
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ReadingSettings {
-    /// Auto-read threshold as a percentage (0–100).
     pub auto_read_threshold_pct: u8,
 }
 
-/// Returns the current reading settings for the authenticated user.
 #[get(
     "/api/v1/settings/reading",
     auth_session: axum::Extension<AuthSession>,
@@ -81,7 +114,6 @@ async fn get_reading_settings() -> Result<ReadingSettings, ServerFnError> {
     })
 }
 
-/// Saves the auto-read threshold for the authenticated user.
 #[post(
     "/api/v1/settings/reading/auto-read-threshold",
     auth_session: axum::Extension<AuthSession>,
@@ -115,25 +147,28 @@ async fn save_auto_read_threshold(threshold_pct: u8) -> Result<(), ServerFnError
 
 #[derive(Clone, PartialEq)]
 enum SettingSection {
+    Users,
     Reading,
     About,
 }
 
 impl SettingSection {
     fn all() -> &'static [SettingSection] {
-        &[SettingSection::Reading, SettingSection::About]
+        &[SettingSection::Users, SettingSection::Reading, SettingSection::About]
     }
 
     fn label(&self) -> &'static str {
         match self {
+            SettingSection::Users => "Users",
             SettingSection::Reading => "Reading",
             SettingSection::About => "About",
         }
     }
 
-    fn required_capability(&self) -> Option<&'static str> {
+    fn is_visible(&self, ctx: &SettingsContext) -> bool {
         match self {
-            SettingSection::Reading | SettingSection::About => None,
+            SettingSection::Users => ctx.is_admin || ctx.is_super_admin,
+            SettingSection::Reading | SettingSection::About => true,
         }
     }
 }
@@ -147,16 +182,21 @@ pub(crate) fn SettingsPage() -> Element {
     let navigator = use_navigator();
     let mut active_section = use_signal(|| SettingSection::Reading);
     let stats = use_server_future(get_library_stats)?;
+    let ctx = use_server_future(get_settings_context)?;
 
-    // Auth guard: AppLayout already handles this, but we redirect defensively
-    // in case this component is ever rendered outside that layout.
     use_effect(move || {
         if let Some(Err(_)) = stats() {
             navigator.replace(Route::LandingPage {});
         }
     });
 
-    let visible_sections: Vec<&SettingSection> = SettingSection::all().iter().filter(|s| s.required_capability().is_none()).collect();
+    let context = ctx().and_then(|r| r.ok()).unwrap_or(SettingsContext {
+        is_admin: false,
+        is_super_admin: false,
+        current_user_token: String::new(),
+    });
+
+    let visible_sections: Vec<&SettingSection> = SettingSection::all().iter().filter(|s| s.is_visible(&context)).collect();
 
     rsx! {
         div { class: "flex h-full flex-1",
@@ -193,6 +233,12 @@ pub(crate) fn SettingsPage() -> Element {
             // ----------------------------------------------------------------
             div { class: "flex-1 overflow-auto p-8 flex flex-col items-center",
                 match *active_section.read() {
+                    SettingSection::Users => rsx! {
+                        UsersSection {
+                            is_super_admin: context.is_super_admin,
+                            current_user_token: context.current_user_token.clone(),
+                        }
+                    },
                     SettingSection::Reading => rsx! { ReadingSection {} },
                     SettingSection::About => rsx! {
                         AboutSection { stats: stats().and_then(|r| r.ok()) }
@@ -214,7 +260,6 @@ fn ReadingSection() -> Element {
     let mut saving = use_signal(|| false);
     let mut saved = use_signal(|| false);
 
-    // Seed local signal from loaded settings.
     use_effect(move || {
         if let Some(Ok(s)) = settings() {
             threshold.set(s.auto_read_threshold_pct);
@@ -226,7 +271,6 @@ fn ReadingSection() -> Element {
             h2 { class: "text-lg font-semibold text-gray-900 mb-6", "Reading" }
 
             div { class: "rounded-lg border border-gray-200 bg-white divide-y divide-gray-100",
-                // ── Auto-read threshold ──────────────────────────────────────
                 div { class: "px-4 py-4",
                     label { class: "block text-sm font-medium text-gray-900 mb-1",
                         "Auto-read threshold"

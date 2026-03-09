@@ -744,6 +744,7 @@ dependencies = [
  "chrono",
  "clap",
  "dioxus",
+ "rand 0.10.0",
  "rust_decimal",
  "serde",
  "thiserror 2.0.18",

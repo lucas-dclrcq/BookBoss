@@ -14,6 +14,7 @@ bb-core = { workspace = true, optional = true }
 
 anyhow = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
+rand = { workspace = true, optional = true }
 rust_decimal = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
@@ -36,6 +37,7 @@ web = ["dioxus/web"]
 server = [
     "dep:anyhow",
     "dep:base64",
+    "dep:rand",
     "dep:rust_decimal",
     "dep:tokio",
     "dep:async-trait",
