@@ -23,6 +23,15 @@ pub(crate) struct IdentifierDetail {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct ReadingStateDto {
+    pub status: String,
+    pub progress_pct: Option<u8>,
+    pub personal_rating: Option<u8>,
+    pub times_read: u32,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct BookDetail {
     pub token: String,
     pub title: String,
@@ -37,6 +46,7 @@ pub(crate) struct BookDetail {
     pub files: Vec<FileDetail>,
     pub identifiers: Vec<IdentifierDetail>,
     pub can_delete: bool,
+    pub reading_state: Option<ReadingStateDto>,
 }
 
 #[cfg(feature = "server")]
@@ -45,19 +55,54 @@ use {
     axum::http::Method,
     axum_session_auth::{Auth, Rights},
     bb_core::book::{AuthorRole, AuthorToken, BookToken, FileFormat, IdentifierType, SeriesToken},
+    bb_core::reading::{AUTO_READ_THRESHOLD_KEY, DEFAULT_AUTO_READ_THRESHOLD, ReadStatus, UserBookMetadata},
     bb_core::{CoreServices, types::Capability, user::UserId},
     std::str::FromStr,
     std::sync::Arc,
 };
 
+#[cfg(feature = "server")]
+fn to_reading_state_dto(meta: &UserBookMetadata) -> ReadingStateDto {
+    ReadingStateDto {
+        status: match meta.read_status {
+            ReadStatus::Unread => "Unread",
+            ReadStatus::Reading => "Reading",
+            ReadStatus::Read => "Read",
+            ReadStatus::Dnf => "Dnf",
+        }
+        .to_string(),
+        progress_pct: meta.progress_percentage.map(|bps| (bps / 100) as u8),
+        personal_rating: meta.personal_rating,
+        times_read: meta.times_read,
+        notes: meta.notes.clone(),
+    }
+}
+
+#[cfg(feature = "server")]
+async fn load_threshold(user_id: UserId, core_services: &CoreServices) -> Option<u16> {
+    core_services
+        .user_setting_service
+        .get(user_id, AUTO_READ_THRESHOLD_KEY)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|s| s.value.parse::<u16>().ok())
+        .or(Some(DEFAULT_AUTO_READ_THRESHOLD))
+}
+
+// ---------------------------------------------------------------------------
+// Server functions
+// ---------------------------------------------------------------------------
+
 #[post("/api/v1/book", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
 async fn get_book(token: String) -> Result<BookDetail, ServerFnError> {
-    auth_session
+    let user = auth_session
         .current_user
         .as_ref()
         .filter(|u| !u.username.is_empty())
         .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
 
+    let user_id = user.id();
     let book_service = &core_services.book_service;
 
     let book_token = BookToken::from_str(&token).map_err(|_| ServerFnError::new("Invalid book token"))?;
@@ -162,6 +207,14 @@ async fn get_book(token: String) -> Result<BookDetail, ServerFnError> {
         .validate(&current_user, &Method::POST, None)
         .await;
 
+    let reading_state = core_services
+        .reading_service
+        .get_reading_state(user_id, book.id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .as_ref()
+        .map(to_reading_state_dto);
+
     Ok(BookDetail {
         token: book.token.to_string(),
         title: book.title.clone(),
@@ -176,6 +229,7 @@ async fn get_book(token: String) -> Result<BookDetail, ServerFnError> {
         files,
         identifiers,
         can_delete,
+        reading_state,
     })
 }
 
@@ -204,6 +258,145 @@ pub(crate) async fn delete_library_book(token: String) -> Result<(), ServerFnErr
         .map_err(|e| ServerFnError::new(e.to_string()))
 }
 
+#[post(
+    "/api/v1/book/reading/status",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+async fn set_reading_status(token: String, status: String) -> Result<ReadingStateDto, ServerFnError> {
+    let user = auth_session
+        .current_user
+        .as_ref()
+        .filter(|u| !u.username.is_empty())
+        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+
+    let user_id = user.id();
+    let book_token = BookToken::from_str(&token).map_err(|_| ServerFnError::new("Invalid book token"))?;
+    let book = core_services
+        .book_service
+        .find_book_by_token(&book_token)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .ok_or_else(|| ServerFnError::new("Book not found"))?;
+
+    let new_status = match status.as_str() {
+        "Unread" => ReadStatus::Unread,
+        "Reading" => ReadStatus::Reading,
+        "Read" => ReadStatus::Read,
+        "Dnf" => ReadStatus::Dnf,
+        _ => return Err(ServerFnError::new("Invalid status")),
+    };
+
+    let threshold = load_threshold(user_id, &core_services).await;
+    let meta = core_services
+        .reading_service
+        .set_status(user_id, book.id, new_status, threshold)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(to_reading_state_dto(&meta))
+}
+
+#[post(
+    "/api/v1/book/reading/progress",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+async fn update_reading_progress(token: String, progress_pct: u8) -> Result<ReadingStateDto, ServerFnError> {
+    let user = auth_session
+        .current_user
+        .as_ref()
+        .filter(|u| !u.username.is_empty())
+        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+
+    if progress_pct > 100 {
+        return Err(ServerFnError::new("Progress must be between 0 and 100"));
+    }
+
+    let user_id = user.id();
+    let book_token = BookToken::from_str(&token).map_err(|_| ServerFnError::new("Invalid book token"))?;
+    let book = core_services
+        .book_service
+        .find_book_by_token(&book_token)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .ok_or_else(|| ServerFnError::new("Book not found"))?;
+
+    let progress_bps = progress_pct as u16 * 100;
+    let threshold = load_threshold(user_id, &core_services).await;
+    let meta = core_services
+        .reading_service
+        .update_progress(user_id, book.id, progress_bps, None, threshold)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(to_reading_state_dto(&meta))
+}
+
+#[post(
+    "/api/v1/book/reading/rating",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+async fn set_personal_rating(token: String, rating: u8) -> Result<ReadingStateDto, ServerFnError> {
+    let user = auth_session
+        .current_user
+        .as_ref()
+        .filter(|u| !u.username.is_empty())
+        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+
+    let user_id = user.id();
+    let book_token = BookToken::from_str(&token).map_err(|_| ServerFnError::new("Invalid book token"))?;
+    let book = core_services
+        .book_service
+        .find_book_by_token(&book_token)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .ok_or_else(|| ServerFnError::new("Book not found"))?;
+
+    let meta = core_services
+        .reading_service
+        .set_rating(user_id, book.id, rating)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(to_reading_state_dto(&meta))
+}
+
+#[post(
+    "/api/v1/book/reading/notes",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+async fn save_reading_notes(token: String, notes: String) -> Result<ReadingStateDto, ServerFnError> {
+    let user = auth_session
+        .current_user
+        .as_ref()
+        .filter(|u| !u.username.is_empty())
+        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+
+    let user_id = user.id();
+    let book_token = BookToken::from_str(&token).map_err(|_| ServerFnError::new("Invalid book token"))?;
+    let book = core_services
+        .book_service
+        .find_book_by_token(&book_token)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .ok_or_else(|| ServerFnError::new("Book not found"))?;
+
+    let meta = core_services
+        .reading_service
+        .set_notes(user_id, book.id, notes)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(to_reading_state_dto(&meta))
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 fn format_file_size(bytes: i64) -> String {
     const KB: i64 = 1024;
     const MB: i64 = 1024 * 1024;
@@ -215,6 +408,10 @@ fn format_file_size(bytes: i64) -> String {
         format!("{:.1} MB", bytes as f64 / MB as f64)
     }
 }
+
+// ---------------------------------------------------------------------------
+// BookDetailPage
+// ---------------------------------------------------------------------------
 
 #[component]
 pub(crate) fn BookDetailPage(token: String) -> Element {
@@ -361,6 +558,15 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                                 }
                             }
 
+                            // Reading panel
+                            h2 { class: "text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2",
+                                "Reading"
+                            }
+                            ReadingPanel {
+                                token: book.token.clone(),
+                                initial_state: book.reading_state.clone(),
+                            }
+
                             // Description
                             if let Some(ref desc) = book.description {
                                 p { class: "text-sm text-gray-700 leading-relaxed mb-6", "{desc}" }
@@ -411,6 +617,255 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                         }
                     }
                 },
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ReadingPanel
+// ---------------------------------------------------------------------------
+
+#[component]
+fn ReadingPanel(token: String, initial_state: Option<ReadingStateDto>) -> Element {
+    let initial_progress = initial_state.as_ref().and_then(|s| s.progress_pct).unwrap_or(0u8);
+    let initial_notes = initial_state.as_ref().and_then(|s| s.notes.clone()).unwrap_or_default();
+
+    let mut state = use_signal(move || initial_state);
+    let mut progress = use_signal(move || initial_progress);
+    let mut notes = use_signal(move || initial_notes);
+    let mut busy = use_signal(|| false);
+    let mut notes_saved = use_signal(|| false);
+
+    let status = move || state().as_ref().map(|s| s.status.clone()).unwrap_or_else(|| "Unread".to_string());
+
+    let pill_class = move || match status().as_str() {
+        "Reading" => "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700",
+        "Read" => "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700",
+        "Dnf" => "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700",
+        _ => "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600",
+    };
+
+    rsx! {
+        div { class: "rounded-lg border border-gray-200 bg-white divide-y divide-gray-100 mb-6",
+            // ── Status row ──────────────────────────────────────────────────
+            div { class: "px-4 py-3 flex items-center gap-2 flex-wrap",
+                span { class: pill_class(), { status() } }
+
+                if status() == "Unread" || status() == "Dnf" {
+                    {
+                        let tok = token.clone();
+                        rsx! {
+                            button {
+                                class: "px-3 py-1 text-xs font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50",
+                                disabled: busy(),
+                                onclick: move |_| {
+                                    let tok = tok.clone();
+                                    busy.set(true);
+                                    spawn(async move {
+                                        if let Ok(s) = set_reading_status(tok, "Reading".to_string()).await {
+                                            progress.set(s.progress_pct.unwrap_or(0));
+                                            state.set(Some(s));
+                                        }
+                                        busy.set(false);
+                                    });
+                                },
+                                "Start Reading"
+                            }
+                        }
+                    }
+                }
+
+                if status() == "Reading" {
+                    {
+                        let tok_read = token.clone();
+                        let tok_dnf = token.clone();
+                        rsx! {
+                            button {
+                                class: "px-3 py-1 text-xs font-medium rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50",
+                                disabled: busy(),
+                                onclick: move |_| {
+                                    let tok = tok_read.clone();
+                                    busy.set(true);
+                                    spawn(async move {
+                                        if let Ok(s) = set_reading_status(tok, "Read".to_string()).await {
+                                            progress.set(s.progress_pct.unwrap_or(0));
+                                            state.set(Some(s));
+                                        }
+                                        busy.set(false);
+                                    });
+                                },
+                                "Mark Read"
+                            }
+                            button {
+                                class: "px-3 py-1 text-xs font-medium rounded border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50",
+                                disabled: busy(),
+                                onclick: move |_| {
+                                    let tok = tok_dnf.clone();
+                                    busy.set(true);
+                                    spawn(async move {
+                                        if let Ok(s) = set_reading_status(tok, "Dnf".to_string()).await {
+                                            progress.set(s.progress_pct.unwrap_or(0));
+                                            state.set(Some(s));
+                                        }
+                                        busy.set(false);
+                                    });
+                                },
+                                "Mark DNF"
+                            }
+                        }
+                    }
+                }
+
+                if status() == "Read" {
+                    {
+                        let tok = token.clone();
+                        rsx! {
+                            button {
+                                class: "px-3 py-1 text-xs font-medium rounded border border-indigo-300 text-indigo-600 hover:bg-indigo-50 disabled:opacity-50",
+                                disabled: busy(),
+                                onclick: move |_| {
+                                    let tok = tok.clone();
+                                    busy.set(true);
+                                    spawn(async move {
+                                        if let Ok(s) = set_reading_status(tok, "Reading".to_string()).await {
+                                            progress.set(s.progress_pct.unwrap_or(0));
+                                            state.set(Some(s));
+                                        }
+                                        busy.set(false);
+                                    });
+                                },
+                                "Re-read"
+                            }
+                        }
+                    }
+                }
+
+                if let Some(ref s) = state() {
+                    if s.times_read > 0 {
+                        span { class: "ml-auto text-xs text-gray-400",
+                            "Read {s.times_read}×"
+                        }
+                    }
+                }
+            }
+
+            // ── Progress (only when Reading) ─────────────────────────────
+            if status() == "Reading" {
+                {
+                    let tok = token.clone();
+                    rsx! {
+                        div { class: "px-4 py-3",
+                            label { class: "block text-xs font-medium text-gray-700 mb-2", "Progress" }
+                            div { class: "flex items-center gap-3",
+                                input {
+                                    r#type: "range",
+                                    min: "0",
+                                    max: "100",
+                                    value: progress,
+                                    class: "flex-1 accent-indigo-600",
+                                    oninput: move |e| {
+                                        if let Ok(v) = e.value().parse::<u8>() {
+                                            progress.set(v);
+                                        }
+                                    },
+                                    onchange: move |_| {
+                                        let tok = tok.clone();
+                                        let pct = progress();
+                                        busy.set(true);
+                                        spawn(async move {
+                                            if let Ok(s) = update_reading_progress(tok, pct).await {
+                                                state.set(Some(s));
+                                            }
+                                            busy.set(false);
+                                        });
+                                    },
+                                }
+                                span { class: "text-sm font-medium text-gray-900 w-10 text-right",
+                                    "{progress}%"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── Rating ───────────────────────────────────────────────────
+            div { class: "px-4 py-3",
+                label { class: "block text-xs font-medium text-gray-700 mb-2", "Rating" }
+                div { class: "flex items-center gap-0.5",
+                    for star in 1u8..=5u8 {
+                        {
+                            let current_rating = state().as_ref().and_then(|s| s.personal_rating).unwrap_or(0);
+                            let filled = star <= current_rating;
+                            let tok = token.clone();
+                            rsx! {
+                                button {
+                                    class: if filled {
+                                        "text-yellow-400 text-2xl leading-none hover:scale-110 transition-transform disabled:cursor-default"
+                                    } else {
+                                        "text-gray-300 text-2xl leading-none hover:text-yellow-400 transition-colors disabled:cursor-default"
+                                    },
+                                    disabled: busy(),
+                                    onclick: move |_| {
+                                        let tok = tok.clone();
+                                        busy.set(true);
+                                        spawn(async move {
+                                            if let Ok(s) = set_personal_rating(tok, star).await {
+                                                state.set(Some(s));
+                                            }
+                                            busy.set(false);
+                                        });
+                                    },
+                                    if filled { "★" } else { "☆" }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── Notes ────────────────────────────────────────────────────
+            div { class: "px-4 py-3",
+                label { class: "block text-xs font-medium text-gray-700 mb-2", "Notes" }
+                textarea {
+                    class: "w-full rounded border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-400 resize-none",
+                    rows: "3",
+                    placeholder: "Your notes…",
+                    value: "{notes}",
+                    oninput: move |e| {
+                        notes_saved.set(false);
+                        notes.set(e.value());
+                    },
+                }
+                div { class: "flex items-center justify-end gap-3 mt-2",
+                    if notes_saved() {
+                        span { class: "text-xs text-green-600", "Saved!" }
+                    }
+                    {
+                        let tok = token.clone();
+                        rsx! {
+                            button {
+                                class: "px-3 py-1 text-xs font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50",
+                                disabled: busy(),
+                                onclick: move |_| {
+                                    let tok = tok.clone();
+                                    let n = notes();
+                                    notes_saved.set(false);
+                                    busy.set(true);
+                                    spawn(async move {
+                                        if let Ok(s) = save_reading_notes(tok, n).await {
+                                            state.set(Some(s));
+                                            notes_saved.set(true);
+                                        }
+                                        busy.set(false);
+                                    });
+                                },
+                                "Save Notes"
+                            }
+                        }
+                    }
+                }
             }
         }
     }
