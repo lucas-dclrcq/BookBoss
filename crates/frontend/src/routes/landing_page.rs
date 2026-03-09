@@ -50,10 +50,15 @@ pub(crate) async fn perform_login(username: String, password: String) -> Result<
 }
 
 #[put("/api/v1/register_admin", core_services: axum::Extension<std::sync::Arc<CoreServices>>, auth_session: axum::Extension<AuthSession>)]
-pub(crate) async fn register_admin(username: String, password: String, email: String) -> Result<(), ServerFnError> {
+pub(crate) async fn register_admin(username: String, full_name: String, password: String, email: String) -> Result<(), ServerFnError> {
     use std::collections::HashSet;
 
     use bb_core::{types::Capability, user::NewUser};
+
+    // Server-side full name validation
+    if full_name.trim().is_empty() {
+        return Err(ServerFnError::new("Full name is required"));
+    }
 
     // Server-side password strength validation
     if password.len() < MIN_PASSWORD_LEN {
@@ -83,7 +88,8 @@ pub(crate) async fn register_admin(username: String, password: String, email: St
         return Err(ServerFnError::new("An admin user already exists"));
     }
 
-    let new_user = NewUser::new(username, password, email, HashSet::from([Capability::SuperAdmin])).map_err(|e| ServerFnError::new(e.to_string()))?;
+    let new_user =
+        NewUser::new(username, password, email, HashSet::from([Capability::SuperAdmin]), full_name, false).map_err(|e| ServerFnError::new(e.to_string()))?;
 
     let user = core_services
         .user_service

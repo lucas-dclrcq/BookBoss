@@ -115,7 +115,10 @@ mod tests {
         let tx = svc.repository().begin().await.unwrap();
         let user = svc
             .user_repository()
-            .add_user(&*tx, NewUser::new("alice", "hash", "alice@example.com", HashSet::new()).unwrap())
+            .add_user(
+                &*tx,
+                NewUser::new("alice", "hash", "alice@example.com", HashSet::new(), "Alice", false).unwrap(),
+            )
             .await
             .unwrap();
         tx.commit().await.unwrap();
@@ -127,7 +130,7 @@ mod tests {
         let tx = svc.repository().begin().await.unwrap();
         let user = svc
             .user_repository()
-            .add_user(&*tx, NewUser::new("bob", "hash", "bob@example.com", HashSet::new()).unwrap())
+            .add_user(&*tx, NewUser::new("bob", "hash", "bob@example.com", HashSet::new(), "Bob", false).unwrap())
             .await
             .unwrap();
         tx.commit().await.unwrap();

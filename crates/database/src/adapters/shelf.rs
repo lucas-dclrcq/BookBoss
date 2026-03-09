@@ -447,7 +447,15 @@ mod tests {
             .user_repository()
             .add_user(
                 &*tx,
-                NewUser::new(username, "password", format!("{username}@example.com"), Capabilities::default()).unwrap(),
+                NewUser::new(
+                    username,
+                    "password",
+                    format!("{username}@example.com"),
+                    Capabilities::default(),
+                    "Test User",
+                    false,
+                )
+                .unwrap(),
             )
             .await
             .unwrap();

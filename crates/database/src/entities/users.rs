@@ -13,10 +13,12 @@ pub struct Model {
     pub token: String,
     #[sea_orm(unique)]
     pub username: String,
+    pub full_name: String,
     pub password_hash: String,
     #[sea_orm(unique)]
     pub email_address: String,
     pub capabilities: String,
+    pub change_password_on_login: bool,
     pub version: i64,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,

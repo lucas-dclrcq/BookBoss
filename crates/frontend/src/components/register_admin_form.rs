@@ -25,6 +25,7 @@ fn password_is_valid(pw: &str) -> bool {
 pub(crate) fn RegisterAdminForm() -> Element {
     let navigator = use_navigator();
     let mut username = use_signal(String::new);
+    let mut full_name = use_signal(String::new);
     let mut password = use_signal(String::new);
     let mut confirm_password = use_signal(String::new);
     let mut email = use_signal(String::new);
@@ -50,12 +51,17 @@ pub(crate) fn RegisterAdminForm() -> Element {
                 onsubmit: move |e| {
                     e.prevent_default();
                     let un = username();
+                    let fn_ = full_name();
                     let pw = password();
                     let cpw = confirm_password();
                     let em = email();
 
                     if un.trim().is_empty() {
                         error_msg.set(Some("Username is required.".to_string()));
+                        return;
+                    }
+                    if fn_.trim().is_empty() {
+                        error_msg.set(Some("Full name is required.".to_string()));
                         return;
                     }
                     if !password_is_valid(&pw) {
@@ -78,7 +84,7 @@ pub(crate) fn RegisterAdminForm() -> Element {
                     loading.set(true);
 
                     spawn(async move {
-                        match register_admin(un, pw, em).await {
+                        match register_admin(un, fn_, pw, em).await {
                             Ok(()) => {
                                 navigator.push(Route::BooksPage {});
                             }
@@ -122,6 +128,23 @@ pub(crate) fn RegisterAdminForm() -> Element {
                         oninput: move |e| username.set(e.value()),
                         disabled: loading,
                         autofocus: true,
+                    }
+                }
+
+                div { class: "mb-4",
+                    label {
+                        class: "block text-sm font-medium text-gray-700 mb-1",
+                        r#for: "reg-full-name",
+                        "Full Name"
+                    }
+                    input {
+                        id: "reg-full-name",
+                        r#type: "text",
+                        class: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500",
+                        placeholder: "Your full name",
+                        value: full_name,
+                        oninput: move |e| full_name.set(e.value()),
+                        disabled: loading,
                     }
                 }
 

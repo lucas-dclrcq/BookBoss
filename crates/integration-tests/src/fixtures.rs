@@ -90,7 +90,15 @@ pub async fn insert_book(repos: &RepositoryService, title: &str, status: BookSta
 
 pub async fn insert_user(repos: &RepositoryService, username: &str) -> User {
     let user_repo = repos.user_repository().clone();
-    let new_user = NewUser::new(username, "password123!", format!("{username}@example.com"), Default::default()).expect("valid new user");
+    let new_user = NewUser::new(
+        username,
+        "password123!",
+        format!("{username}@example.com"),
+        Default::default(),
+        "Test User",
+        false,
+    )
+    .expect("valid new user");
     transaction(&**repos.repository(), |tx| {
         let user_repo = user_repo.clone();
         Box::pin(async move { user_repo.add_user(tx, new_user).await })

@@ -24,9 +24,11 @@ impl From<users::Model> for User {
             version: model.version as u64,
             token,
             username: model.username,
+            full_name: model.full_name,
             password_hash: model.password_hash,
             email_address,
             capabilities,
+            change_password_on_login: model.change_password_on_login,
             created_at: model.created_at.with_timezone(&Utc),
             updated_at: model.updated_at.with_timezone(&Utc),
         }
@@ -54,9 +56,11 @@ impl UserRepository for UserRepositoryAdapter {
             id: Set(token.id() as i64),
             token: Set(token.to_string()),
             username: Set(user.username),
+            full_name: Set(user.full_name),
             password_hash: Set(user.password_hash),
             email_address: Set(user.email_address.into_inner()),
             capabilities: Set(capabilities),
+            change_password_on_login: Set(user.change_password_on_login),
             version: Set(0),
             created_at: Set(now.into()),
             updated_at: Set(now.into()),
@@ -88,6 +92,9 @@ impl UserRepository for UserRepositoryAdapter {
         if existing.username != user.username {
             updater.username = Set(user.username);
         }
+        if existing.full_name != user.full_name {
+            updater.full_name = Set(user.full_name);
+        }
         if existing.password_hash != user.password_hash {
             updater.password_hash = Set(user.password_hash);
         }
@@ -97,6 +104,9 @@ impl UserRepository for UserRepositoryAdapter {
         let new_caps = serde_json::to_string(&user.capabilities).map_err(|e| Error::Infrastructure(e.to_string()))?;
         if existing.capabilities != new_caps {
             updater.capabilities = Set(new_caps);
+        }
+        if existing.change_password_on_login != user.change_password_on_login {
+            updater.change_password_on_login = Set(user.change_password_on_login);
         }
 
         let updated = updater.update(transaction).await.map_err(handle_dberr)?;
@@ -204,7 +214,7 @@ mod tests {
         let svc = setup().await;
         let tx = svc.repository().begin().await.unwrap();
 
-        let new_user = NewUser::new("alice", "hash", "alice@example.com", HashSet::new()).unwrap();
+        let new_user = NewUser::new("alice", "hash", "alice@example.com", HashSet::new(), "Alice", false).unwrap();
         let result = svc.user_repository().add_user(&*tx, new_user).await;
 
         assert!(result.is_ok());
@@ -221,13 +231,19 @@ mod tests {
         let tx = svc.repository().begin().await.unwrap();
 
         svc.user_repository()
-            .add_user(&*tx, NewUser::new("alice", "hash", "alice@example.com", HashSet::new()).unwrap())
+            .add_user(
+                &*tx,
+                NewUser::new("alice", "hash", "alice@example.com", HashSet::new(), "Alice", false).unwrap(),
+            )
             .await
             .unwrap();
 
         let result = svc
             .user_repository()
-            .add_user(&*tx, NewUser::new("alice", "hash2", "alice2@example.com", HashSet::new()).unwrap())
+            .add_user(
+                &*tx,
+                NewUser::new("alice", "hash2", "alice2@example.com", HashSet::new(), "Alice", false).unwrap(),
+            )
             .await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::Constraint(_)))));
@@ -239,13 +255,16 @@ mod tests {
         let tx = svc.repository().begin().await.unwrap();
 
         svc.user_repository()
-            .add_user(&*tx, NewUser::new("alice", "hash", "shared@example.com", HashSet::new()).unwrap())
+            .add_user(
+                &*tx,
+                NewUser::new("alice", "hash", "shared@example.com", HashSet::new(), "Alice", false).unwrap(),
+            )
             .await
             .unwrap();
 
         let result = svc
             .user_repository()
-            .add_user(&*tx, NewUser::new("bob", "hash2", "shared@example.com", HashSet::new()).unwrap())
+            .add_user(&*tx, NewUser::new("bob", "hash2", "shared@example.com", HashSet::new(), "Bob", false).unwrap())
             .await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::Constraint(_)))));
@@ -259,7 +278,7 @@ mod tests {
         let caps = HashSet::from([Capability::Admin, Capability::EditBook]);
         let user = svc
             .user_repository()
-            .add_user(&*tx, NewUser::new("alice", "hash", "alice@example.com", caps.clone()).unwrap())
+            .add_user(&*tx, NewUser::new("alice", "hash", "alice@example.com", caps.clone(), "Alice", false).unwrap())
             .await
             .unwrap();
 
@@ -274,7 +293,10 @@ mod tests {
 
         let user = svc
             .user_repository()
-            .add_user(&*tx, NewUser::new("alice", "hash", "alice@example.com", HashSet::new()).unwrap())
+            .add_user(
+                &*tx,
+                NewUser::new("alice", "hash", "alice@example.com", HashSet::new(), "Alice", false).unwrap(),
+            )
             .await
             .unwrap();
 
@@ -290,7 +312,10 @@ mod tests {
 
         let inserted = svc
             .user_repository()
-            .add_user(&*tx, NewUser::new("alice", "hash", "alice@example.com", HashSet::new()).unwrap())
+            .add_user(
+                &*tx,
+                NewUser::new("alice", "hash", "alice@example.com", HashSet::new(), "Alice", false).unwrap(),
+            )
             .await
             .unwrap();
 
@@ -331,7 +356,10 @@ mod tests {
         let tx = svc.repository().begin().await.unwrap();
 
         svc.user_repository()
-            .add_user(&*tx, NewUser::new("alice", "hash", "alice@example.com", HashSet::new()).unwrap())
+            .add_user(
+                &*tx,
+                NewUser::new("alice", "hash", "alice@example.com", HashSet::new(), "Alice", false).unwrap(),
+            )
             .await
             .unwrap();
 
@@ -362,11 +390,11 @@ mod tests {
         let tx = svc.repository().begin().await.unwrap();
 
         svc.user_repository()
-            .add_user(&*tx, NewUser::new("alice", "h1", "alice@example.com", HashSet::new()).unwrap())
+            .add_user(&*tx, NewUser::new("alice", "h1", "alice@example.com", HashSet::new(), "Alice", false).unwrap())
             .await
             .unwrap();
         svc.user_repository()
-            .add_user(&*tx, NewUser::new("bob", "h2", "bob@example.com", HashSet::new()).unwrap())
+            .add_user(&*tx, NewUser::new("bob", "h2", "bob@example.com", HashSet::new(), "Bob", false).unwrap())
             .await
             .unwrap();
 
@@ -403,11 +431,11 @@ mod tests {
         let tx = svc.repository().begin().await.unwrap();
 
         svc.user_repository()
-            .add_user(&*tx, NewUser::new("alice", "h1", "alice@example.com", HashSet::new()).unwrap())
+            .add_user(&*tx, NewUser::new("alice", "h1", "alice@example.com", HashSet::new(), "Alice", false).unwrap())
             .await
             .unwrap();
         svc.user_repository()
-            .add_user(&*tx, NewUser::new("bob", "h2", "bob@example.com", HashSet::new()).unwrap())
+            .add_user(&*tx, NewUser::new("bob", "h2", "bob@example.com", HashSet::new(), "Bob", false).unwrap())
             .await
             .unwrap();
 
@@ -431,7 +459,10 @@ mod tests {
 
         let mut user = svc
             .user_repository()
-            .add_user(&*tx, NewUser::new("alice", "hash", "alice@example.com", HashSet::new()).unwrap())
+            .add_user(
+                &*tx,
+                NewUser::new("alice", "hash", "alice@example.com", HashSet::new(), "Alice", false).unwrap(),
+            )
             .await
             .unwrap();
 
@@ -449,7 +480,10 @@ mod tests {
 
         let mut user = svc
             .user_repository()
-            .add_user(&*tx, NewUser::new("alice", "hash", "alice@example.com", HashSet::new()).unwrap())
+            .add_user(
+                &*tx,
+                NewUser::new("alice", "hash", "alice@example.com", HashSet::new(), "Alice", false).unwrap(),
+            )
             .await
             .unwrap();
 
@@ -478,7 +512,10 @@ mod tests {
 
         let mut user = svc
             .user_repository()
-            .add_user(&*tx, NewUser::new("alice", "hash", "alice@example.com", HashSet::new()).unwrap())
+            .add_user(
+                &*tx,
+                NewUser::new("alice", "hash", "alice@example.com", HashSet::new(), "Alice", false).unwrap(),
+            )
             .await
             .unwrap();
 
@@ -509,7 +546,10 @@ mod tests {
 
         let user = svc
             .user_repository()
-            .add_user(&*tx, NewUser::new("alice", "hash", "alice@example.com", HashSet::new()).unwrap())
+            .add_user(
+                &*tx,
+                NewUser::new("alice", "hash", "alice@example.com", HashSet::new(), "Alice", false).unwrap(),
+            )
             .await
             .unwrap();
         let id = user.id;
@@ -539,7 +579,10 @@ mod tests {
 
         let mut user = svc
             .user_repository()
-            .add_user(&*tx, NewUser::new("alice", "hash", "alice@example.com", HashSet::new()).unwrap())
+            .add_user(
+                &*tx,
+                NewUser::new("alice", "hash", "alice@example.com", HashSet::new(), "Alice", false).unwrap(),
+            )
             .await
             .unwrap();
 

@@ -23,9 +23,13 @@ pub struct User {
     pub version: u64,
     pub token: UserToken,
     pub username: String,
+    #[builder(default = "String::new()")]
+    pub full_name: String,
     pub password_hash: String,
     pub email_address: EmailAddress,
     pub capabilities: Capabilities,
+    #[builder(default = "false")]
+    pub change_password_on_login: bool,
     #[builder(default = "Utc::now()")]
     pub created_at: DateTime<Utc>,
     #[builder(default = "Utc::now()")]
@@ -41,9 +45,11 @@ impl Default for User {
             version: 0,
             token,
             username: String::new(),
+            full_name: String::new(),
             password_hash: String::new(),
             email_address: EmailAddress::new("default@example.com").expect("default email is valid"),
             capabilities: HashSet::new(),
+            change_password_on_login: false,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         }
@@ -100,9 +106,11 @@ impl User {
 #[derive(Debug, Clone)]
 pub struct NewUser {
     pub username: String,
+    pub full_name: String,
     pub password_hash: String,
     pub email_address: EmailAddress,
     pub capabilities: Capabilities,
+    pub change_password_on_login: bool,
 }
 
 impl NewUser {
@@ -110,15 +118,28 @@ impl NewUser {
     ///
     /// # Errors
     ///
-    /// Returns `Error::Validation` if email is invalid.
-    pub fn new(username: impl Into<String>, password: impl Into<String>, email_address: impl Into<String>, capabilities: Capabilities) -> Result<Self, Error> {
+    /// Returns `Error::Validation` if full_name is empty or email is invalid.
+    pub fn new(
+        username: impl Into<String>,
+        password: impl Into<String>,
+        email_address: impl Into<String>,
+        capabilities: Capabilities,
+        full_name: impl Into<String>,
+        change_password_on_login: bool,
+    ) -> Result<Self, Error> {
+        let full_name = full_name.into();
+        if full_name.trim().is_empty() {
+            return Err(Error::Validation("Full name is required".to_string()));
+        }
         let password_hash = User::encrypt_password(password)?;
 
         Ok(Self {
             username: username.into(),
+            full_name,
             password_hash,
             email_address: EmailAddress::new(email_address)?,
             capabilities,
+            change_password_on_login,
         })
     }
 }
@@ -127,9 +148,11 @@ impl Default for NewUser {
     fn default() -> Self {
         Self {
             username: String::new(),
+            full_name: String::new(),
             password_hash: String::new(),
             email_address: EmailAddress::new("default@example.com").expect("default email is valid"),
             capabilities: HashSet::new(),
+            change_password_on_login: false,
         }
     }
 }
@@ -143,6 +166,8 @@ pub struct PartialUserUpdate {
     pub password_hash: Option<String>,
     pub email_address: Option<EmailAddress>,
     pub capabilities: Option<Capabilities>,
+    pub full_name: Option<String>,
+    pub change_password_on_login: Option<bool>,
 }
 
 impl PartialUserUpdate {
@@ -156,6 +181,8 @@ impl PartialUserUpdate {
             password_hash: password_hash.map(Into::into),
             email_address: email_address.map(EmailAddress::new).transpose()?,
             capabilities,
+            full_name: None,
+            change_password_on_login: None,
         })
     }
 
@@ -172,11 +199,21 @@ impl PartialUserUpdate {
         if let Some(capabilities) = self.capabilities {
             user.capabilities = capabilities;
         }
+        if let Some(full_name) = self.full_name {
+            user.full_name = full_name;
+        }
+        if let Some(change_password_on_login) = self.change_password_on_login {
+            user.change_password_on_login = change_password_on_login;
+        }
     }
 
     /// Returns true if all fields are None.
     pub fn is_empty(&self) -> bool {
-        self.password_hash.is_none() && self.email_address.is_none() && self.capabilities.is_none()
+        self.password_hash.is_none()
+            && self.email_address.is_none()
+            && self.capabilities.is_none()
+            && self.full_name.is_none()
+            && self.change_password_on_login.is_none()
     }
 }
 
@@ -240,22 +277,30 @@ mod tests {
 
     #[test]
     fn test_new_user_invalid_email_returns_error() {
-        let result = NewUser::new("alice", "password", "not-an-email", HashSet::new());
+        let result = NewUser::new("alice", "password", "not-an-email", HashSet::new(), "Alice", false);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_new_user_empty_full_name_returns_error() {
+        let result = NewUser::new("alice", "password", "alice@example.com", HashSet::new(), "", false);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_new_user_valid_fields_succeed() {
-        let result = NewUser::new("alice", "password", "alice@example.com", HashSet::new());
+        let result = NewUser::new("alice", "password", "alice@example.com", HashSet::new(), "Alice Smith", false);
         assert!(result.is_ok());
         let user = result.unwrap();
         assert_eq!(user.username, "alice");
+        assert_eq!(user.full_name, "Alice Smith");
         assert_eq!(user.email_address.as_str(), "alice@example.com");
+        assert!(!user.change_password_on_login);
     }
 
     #[test]
     fn test_new_user_password_is_hashed() {
-        let result = NewUser::new("alice", "plaintext", "alice@example.com", HashSet::new());
+        let result = NewUser::new("alice", "plaintext", "alice@example.com", HashSet::new(), "Alice", false);
         assert!(result.is_ok());
         assert_ne!(result.unwrap().password_hash, "plaintext");
     }
@@ -374,6 +419,7 @@ mod tests {
             password_hash: Some("newhash".into()),
             email_address: Some(EmailAddress::new("new@example.com").unwrap()),
             capabilities: Some(new_caps.clone()),
+            ..Default::default()
         };
         update.apply_to(&mut user);
         assert_eq!(user.password_hash, "newhash");

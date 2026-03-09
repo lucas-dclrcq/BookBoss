@@ -651,7 +651,9 @@ mod tests {
         let expected = User::fake(1, "alice", "hash", "alice@example.com", HashSet::new());
         let svc = create_service(MockUserRepository::default().with_add_user_result(Ok(expected)));
 
-        let result = svc.add_user(NewUser::new("alice", "hash", "alice@example.com", HashSet::new()).unwrap()).await;
+        let result = svc
+            .add_user(NewUser::new("alice", "hash", "alice@example.com", HashSet::new(), "Alice", false).unwrap())
+            .await;
 
         assert!(result.is_ok());
         let user = result.unwrap();
@@ -666,7 +668,9 @@ mod tests {
             MockUserRepository::default().with_add_user_result(Err(Error::RepositoryError(RepositoryError::Constraint("duplicate email".into())))),
         );
 
-        let result = svc.add_user(NewUser::new("alice", "hash", "alice@example.com", HashSet::new()).unwrap()).await;
+        let result = svc
+            .add_user(NewUser::new("alice", "hash", "alice@example.com", HashSet::new(), "Alice", false).unwrap())
+            .await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::Constraint(_)))));
     }
