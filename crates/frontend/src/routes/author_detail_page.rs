@@ -105,6 +105,7 @@ async fn get_author(token: String) -> Result<AuthorPageData, ServerFnError> {
                 author_names,
                 series_name: book.series_id.and_then(|sid| series_map.get(&sid).cloned()),
                 series_number: book.series_number.as_ref().map(|n| n.to_string()),
+                reading_state: None,
             }
         })
         .collect();

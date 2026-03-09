@@ -360,6 +360,7 @@ pub(crate) async fn books_for_shelf(token: String, cursor: Option<u64>, page_siz
                 author_names,
                 series_name: book.series_id.and_then(|sid| series_map.get(&sid).cloned()),
                 series_number: book.series_number.as_ref().map(|n| n.to_string()),
+                reading_state: None,
             }
         })
         .collect();

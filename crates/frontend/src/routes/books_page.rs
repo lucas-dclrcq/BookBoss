@@ -4,7 +4,10 @@ use serde::{Deserialize, Serialize};
 use crate::{
     Route,
     components::{BookGrid, BookGridContext, BookTable, ShelfBar, TreeExplorer},
-    routes::shelf_page::{ShelfSummary, list_all_accessible_shelves},
+    routes::{
+        book_detail_page::ReadingStateDto,
+        shelf_page::{ShelfSummary, list_all_accessible_shelves},
+    },
     settings::BookDisplayView,
 };
 
@@ -16,6 +19,7 @@ pub(crate) struct BookSummary {
     pub author_names: Vec<String>,
     pub series_name: Option<String>,
     pub series_number: Option<String>,
+    pub reading_state: Option<ReadingStateDto>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -65,6 +69,7 @@ use {
     bb_core::{
         CoreServices,
         book::{AuthorToken, BookFilter, BookStatus, SeriesToken},
+        reading::ReadStatus,
         types::Capability,
     },
     std::sync::Arc,
@@ -80,6 +85,8 @@ async fn list_books() -> Result<ListBooksResponse, ServerFnError> {
         .filter(|u| !u.username.is_empty())
         .ok_or_else(|| ServerFnError::new("Not authenticated"))?
         .clone();
+
+    let user_id = current_user.id();
 
     let can_delete_books = Auth::<AuthUser, _, BackendSessionPool>::build([Method::POST], true)
         .requires(Rights::any([Rights::permission(Capability::DeleteBook.as_str())]))
@@ -134,6 +141,33 @@ async fn list_books() -> Result<ListBooksResponse, ServerFnError> {
         }
     }
 
+    // Load per-user reading state for all books in one query
+    let reading_metas = core_services
+        .reading_service
+        .list_for_user(user_id, None)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let reading_map: std::collections::HashMap<u64, ReadingStateDto> = reading_metas
+        .iter()
+        .filter(|m| m.read_status != ReadStatus::Unread)
+        .map(|m| {
+            let dto = ReadingStateDto {
+                status: match m.read_status {
+                    ReadStatus::Unread => "Unread",
+                    ReadStatus::Reading => "Reading",
+                    ReadStatus::Read => "Read",
+                    ReadStatus::Dnf => "Dnf",
+                }
+                .to_string(),
+                progress_pct: m.progress_percentage.map(|bps| (bps / 100) as u8),
+                personal_rating: m.personal_rating,
+                times_read: m.times_read,
+                notes: m.notes.clone(),
+            };
+            (m.book_id, dto)
+        })
+        .collect();
+
     // Assemble view models
     let summaries = books
         .iter()
@@ -149,6 +183,7 @@ async fn list_books() -> Result<ListBooksResponse, ServerFnError> {
                 author_names,
                 series_name: book.series_id.and_then(|sid| series_map.get(&sid).cloned()),
                 series_number: book.series_number.as_ref().map(|n| n.to_string()),
+                reading_state: reading_map.get(&book.id).cloned(),
             }
         })
         .collect();

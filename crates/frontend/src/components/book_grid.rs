@@ -119,6 +119,42 @@ fn BookCard(book: BookSummary) -> Element {
                     class: "w-full object-cover rounded shadow-sm",
                     style: "aspect-ratio: 2/3",
                 }
+                // Reading status badge
+                if let Some(ref rs) = book.reading_state {
+                    {
+                        let (badge_class, badge_label) = match rs.status.as_str() {
+                            "Reading" => (
+                                "absolute top-1 left-1 px-1 py-0.5 text-xs font-semibold rounded bg-indigo-600/85 text-white leading-none",
+                                "Reading",
+                            ),
+                            "Read" => (
+                                "absolute top-1 left-1 px-1 py-0.5 text-xs font-semibold rounded bg-green-600/85 text-white leading-none",
+                                "✓ Read",
+                            ),
+                            "Dnf" => (
+                                "absolute top-1 left-1 px-1 py-0.5 text-xs font-semibold rounded bg-red-600/85 text-white leading-none",
+                                "DNF",
+                            ),
+                            _ => ("", ""),
+                        };
+                        rsx! {
+                            if !badge_label.is_empty() {
+                                span { class: badge_class, { badge_label } }
+                            }
+                        }
+                    }
+                    // Progress bar at bottom when Reading
+                    if rs.status == "Reading" {
+                        if let Some(pct) = rs.progress_pct {
+                            if pct > 0 {
+                                div {
+                                    class: "absolute bottom-0 left-0 right-0 h-1 bg-black/20 rounded-b overflow-hidden",
+                                    div { class: "h-full bg-indigo-400", style: "width: {pct}%" }
+                                }
+                            }
+                        }
+                    }
+                }
                 if let Some(action) = remove_action {
                     button {
                         class: "absolute top-1 right-1 w-5 h-5 flex items-center justify-center rounded-full bg-black/50 text-white text-xs hover:bg-red-600/80 leading-none",
