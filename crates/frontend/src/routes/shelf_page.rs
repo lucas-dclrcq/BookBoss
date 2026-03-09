@@ -394,8 +394,17 @@ pub(crate) fn ShelfPage(token: String) -> Element {
     // Data loading
     let mut shelves_resource = use_server_future(list_all_accessible_shelves)?;
 
-    let token_for_books = token.clone();
-    let mut books_resource = use_server_future(move || books_for_shelf(token_for_books.clone(), None, None))?;
+    // Sync `token` prop into a signal so `use_server_future` restarts reactively
+    // when navigating between shelves (Dioxus re-renders in-place; plain captured
+    // values won't trigger the future to re-run).
+    let mut token_sig = use_signal(|| token.clone());
+    if *token_sig.peek() != token {
+        token_sig.set(token.clone());
+    }
+    let mut books_resource = use_server_future(move || {
+        let tok = token_sig();
+        books_for_shelf(tok, None, None)
+    })?;
 
     // Derive current shelf info from the shelves list (avoids a separate get_shelf
     // call).
