@@ -367,6 +367,36 @@ async fn set_personal_rating(token: String, rating: u8) -> Result<ReadingStateDt
 }
 
 #[post(
+    "/api/v1/book/reading/rating/clear",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+async fn clear_personal_rating(token: String) -> Result<ReadingStateDto, ServerFnError> {
+    let user = auth_session
+        .current_user
+        .as_ref()
+        .filter(|u| !u.username.is_empty())
+        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+
+    let user_id = user.id();
+    let book_token = BookToken::from_str(&token).map_err(|_| ServerFnError::new("Invalid book token"))?;
+    let book = core_services
+        .book_service
+        .find_book_by_token(&book_token)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .ok_or_else(|| ServerFnError::new("Book not found"))?;
+
+    let meta = core_services
+        .reading_service
+        .clear_rating(user_id, book.id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(to_reading_state_dto(&meta))
+}
+
+#[post(
     "/api/v1/book/reading/notes",
     auth_session: axum::Extension<AuthSession>,
     core_services: axum::Extension<Arc<CoreServices>>
@@ -748,6 +778,29 @@ fn InlineStarRating(token: String, initial_rating: Option<u8>) -> Element {
                                 });
                             },
                             if filled { "★" } else { "☆" }
+                        }
+                    }
+                }
+            }
+            if rating() > 0 {
+                {
+                    let tok = token.clone();
+                    rsx! {
+                        button {
+                            class: "ml-1 text-gray-400 hover:text-gray-600 text-sm leading-none transition-colors disabled:cursor-default",
+                            title: "Clear rating",
+                            disabled: busy(),
+                            onclick: move |_| {
+                                let tok = tok.clone();
+                                busy.set(true);
+                                spawn(async move {
+                                    if let Ok(s) = clear_personal_rating(tok).await {
+                                        rating.set(s.personal_rating.unwrap_or(0));
+                                    }
+                                    busy.set(false);
+                                });
+                            },
+                            "✕"
                         }
                     }
                 }

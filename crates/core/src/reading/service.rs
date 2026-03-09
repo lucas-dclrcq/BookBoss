@@ -56,6 +56,9 @@ pub trait ReadingService: Send + Sync {
     /// outside that range.
     async fn set_rating(&self, user_id: UserId, book_id: BookId, rating: u8) -> Result<UserBookMetadata, Error>;
 
+    /// Clears the personal star rating, setting it to `None`.
+    async fn clear_rating(&self, user_id: UserId, book_id: BookId) -> Result<UserBookMetadata, Error>;
+
     /// Stores free-form reading notes for the user/book pair.
     async fn set_notes(&self, user_id: UserId, book_id: BookId, notes: String) -> Result<UserBookMetadata, Error>;
 
@@ -219,6 +222,19 @@ impl ReadingService for ReadingServiceImpl {
                 .unwrap_or_else(|| default_state(user_id, book_id));
 
             current.personal_rating = Some(rating);
+            user_book_metadata_repository.upsert(tx, current).await
+        })
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    async fn clear_rating(&self, user_id: UserId, book_id: BookId) -> Result<UserBookMetadata, Error> {
+        with_transaction!(self, user_book_metadata_repository, |tx| {
+            let mut current = user_book_metadata_repository
+                .find_by_user_and_book(tx, user_id, book_id)
+                .await?
+                .unwrap_or_else(|| default_state(user_id, book_id));
+
+            current.personal_rating = None;
             user_book_metadata_repository.upsert(tx, current).await
         })
     }
