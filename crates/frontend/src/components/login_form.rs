@@ -10,6 +10,12 @@ pub(crate) fn LoginForm(on_must_change: EventHandler<String>) -> Element {
     let mut error_msg: Signal<Option<String>> = use_signal(|| None);
     let mut loading = use_signal(|| false);
 
+    use_effect(move || {
+        spawn(async move {
+            let _ = document::eval("document.getElementById('login-username')?.focus()").await;
+        });
+    });
+
     rsx! {
         div { class: "bg-white rounded-2xl shadow-lg w-full max-w-md",
             div { class: "flex justify-center pt-8 pb-2",
