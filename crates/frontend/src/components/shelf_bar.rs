@@ -68,7 +68,7 @@ pub(crate) fn ShelfBar(
     };
 
     rsx! {
-        div { class: "flex items-center gap-2 px-4 py-2 bg-white border-b border-gray-200 overflow-x-auto shrink-0",
+        div { class: "flex items-center gap-2 px-4 py-2 bg-gray-50 border-b border-gray-200 overflow-x-auto shrink-0",
 
             // "All Books" pill
             Link {
@@ -153,7 +153,7 @@ pub(crate) fn ShelfBar(
                         class: if current_shelf_token.as_deref() == Some(shelf.token.as_str()) {
                             "px-3 py-1 rounded-full text-sm bg-indigo-600 text-white font-medium whitespace-nowrap shrink-0 italic"
                         } else {
-                            "px-3 py-1 rounded-full text-sm bg-gray-50 text-gray-500 hover:bg-indigo-50 hover:text-indigo-600 whitespace-nowrap shrink-0 italic"
+                            "px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-500 hover:bg-indigo-50 hover:text-indigo-600 whitespace-nowrap shrink-0 italic"
                         },
                         "{shelf.name}"
                     }

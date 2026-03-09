@@ -269,7 +269,7 @@ fn CurrentlyReadingSection(books: Vec<BookSummary>) -> Element {
     let navigator = use_navigator();
 
     rsx! {
-        div { class: "shrink-0 border-b border-gray-100 bg-white px-4 pt-3 pb-2",
+        div { class: "shrink-0 border-b border-gray-100 bg-gray-50 px-4 pt-3 pb-2",
             h2 { class: "text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2",
                 "Currently Reading"
             }
@@ -278,34 +278,24 @@ fn CurrentlyReadingSection(books: Vec<BookSummary>) -> Element {
                     {
                         let tok = book.token.clone();
                         let pct = book.reading_state.as_ref().and_then(|s| s.progress_pct).unwrap_or(0);
-                        let author_str = book.author_names.join(", ");
                         rsx! {
                             div {
-                                class: "flex-none w-20 cursor-pointer",
+                                class: "relative flex-none w-20 cursor-pointer",
                                 onclick: move |_| {
                                     navigator.push(Route::BookDetailPage { token: tok.clone() });
                                 },
-                                div { class: "relative",
-                                    img {
-                                        src: "/api/v1/covers/{book.token}",
-                                        alt: "{book.title}",
-                                        class: "w-full object-cover rounded shadow-sm",
-                                        style: "aspect-ratio: 2/3",
-                                    }
-                                    if pct > 0 {
-                                        div {
-                                            class: "absolute bottom-0 left-0 right-0 h-1 bg-black/20 rounded-b overflow-hidden",
-                                            div { class: "h-full bg-indigo-400", style: "width: {pct}%" }
-                                        }
+                                img {
+                                    src: "/api/v1/covers/{book.token}",
+                                    alt: "{book.title}",
+                                    class: "w-full object-cover rounded shadow-sm",
+                                    style: "aspect-ratio: 2/3",
+                                }
+                                if pct > 0 {
+                                    div {
+                                        class: "absolute bottom-0 left-0 right-0 h-1 bg-black/20 rounded-b overflow-hidden",
+                                        div { class: "h-full bg-indigo-400", style: "width: {pct}%" }
                                     }
                                 }
-                                p { class: "text-xs font-semibold text-gray-900 leading-tight line-clamp-2 mt-1",
-                                    "{book.title}"
-                                }
-                                p { class: "text-xs text-gray-500 leading-tight truncate mt-0.5",
-                                    "{author_str}"
-                                }
-                                p { class: "text-xs text-indigo-600 font-medium mt-0.5", "{pct}%" }
                             }
                         }
                     }
