@@ -496,7 +496,13 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                         // Main info
                         div { class: "flex-1 min-w-0",
                             div { class: "flex items-start justify-between gap-4 mb-2",
-                                h1 { class: "text-2xl font-bold text-gray-900", "{book.title}" }
+                                div { class: "flex flex-wrap items-baseline gap-x-2 gap-y-1 min-w-0",
+                                    h1 { class: "text-2xl font-bold text-gray-900", "{book.title}" }
+                                    InlineStarRating {
+                                        token: book.token.clone(),
+                                        initial_rating: book.reading_state.as_ref().and_then(|s| s.personal_rating),
+                                    }
+                                }
                                 div { class: "flex items-center gap-2 shrink-0",
                                     Link {
                                         to: Route::EditMetadataPage { token: book.token.clone() },
@@ -546,7 +552,7 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                             }
 
                             // Metadata row
-                            div { class: "flex flex-wrap gap-4 text-sm text-gray-500 mb-4 pb-4 border-b border-gray-200",
+                            div { class: "flex flex-wrap gap-4 text-sm text-gray-500 mb-4",
                                 if let Some(year) = book.published_date {
                                     span { "Published: {year}" }
                                 }
@@ -555,6 +561,27 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                                 }
                                 if let Some(ref lang) = book.language {
                                     span { "Language: {lang}" }
+                                }
+                            }
+
+                            // Files
+                            if !book.files.is_empty() {
+                                div { class: "flex flex-wrap gap-2 mb-4",
+                                    for file in &book.files {
+                                        {
+                                            let size_str = format_file_size(file.file_size);
+                                            let fmt_lower = file.format.to_lowercase();
+                                            let href = format!("/api/v1/books/{}/download/{fmt_lower}", book.token);
+                                            rsx! {
+                                                a {
+                                                    href,
+                                                    class: "inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-gray-100 text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors",
+                                                    span { class: "font-medium", "{file.format}" }
+                                                    span { class: "text-gray-400", "↓ {size_str}" }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
 
@@ -570,32 +597,6 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                             // Description
                             if let Some(ref desc) = book.description {
                                 p { class: "text-sm text-gray-700 leading-relaxed mb-6", "{desc}" }
-                            }
-
-                            // Files
-                            if !book.files.is_empty() {
-                                div { class: "mb-4",
-                                    h2 { class: "text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2",
-                                        "Formats"
-                                    }
-                                    div { class: "flex flex-wrap gap-2",
-                                        for file in &book.files {
-                                            {
-                                                let size_str = format_file_size(file.file_size);
-                                                let fmt_lower = file.format.to_lowercase();
-                                                let href = format!("/api/v1/books/{}/download/{fmt_lower}", book.token);
-                                                rsx! {
-                                                    a {
-                                                        href,
-                                                        class: "inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-gray-100 text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors",
-                                                        span { class: "font-medium", "{file.format}" }
-                                                        span { class: "text-gray-400", "↓ {size_str}" }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
                             }
 
                             // Identifiers
@@ -629,13 +630,10 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
 #[component]
 fn ReadingPanel(token: String, initial_state: Option<ReadingStateDto>) -> Element {
     let initial_progress = initial_state.as_ref().and_then(|s| s.progress_pct).unwrap_or(0u8);
-    let initial_notes = initial_state.as_ref().and_then(|s| s.notes.clone()).unwrap_or_default();
 
     let mut state = use_signal(move || initial_state);
     let mut progress = use_signal(move || initial_progress);
-    let mut notes = use_signal(move || initial_notes);
     let mut busy = use_signal(|| false);
-    let mut notes_saved = use_signal(|| false);
 
     let status = move || state().as_ref().map(|s| s.status.clone()).unwrap_or_else(|| "Unread".to_string());
 
@@ -790,79 +788,44 @@ fn ReadingPanel(token: String, initial_state: Option<ReadingStateDto>) -> Elemen
                 }
             }
 
-            // ── Rating ───────────────────────────────────────────────────
-            div { class: "px-4 py-3",
-                label { class: "block text-xs font-medium text-gray-700 mb-2", "Rating" }
-                div { class: "flex items-center gap-0.5",
-                    for star in 1u8..=5u8 {
-                        {
-                            let current_rating = state().as_ref().and_then(|s| s.personal_rating).unwrap_or(0);
-                            let filled = star <= current_rating;
-                            let tok = token.clone();
-                            rsx! {
-                                button {
-                                    class: if filled {
-                                        "text-yellow-400 text-2xl leading-none hover:scale-110 transition-transform disabled:cursor-default"
-                                    } else {
-                                        "text-gray-300 text-2xl leading-none hover:text-yellow-400 transition-colors disabled:cursor-default"
-                                    },
-                                    disabled: busy(),
-                                    onclick: move |_| {
-                                        let tok = tok.clone();
-                                        busy.set(true);
-                                        spawn(async move {
-                                            if let Ok(s) = set_personal_rating(tok, star).await {
-                                                state.set(Some(s));
-                                            }
-                                            busy.set(false);
-                                        });
-                                    },
-                                    if filled { "★" } else { "☆" }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+        }
+    }
+}
 
-            // ── Notes ────────────────────────────────────────────────────
-            div { class: "px-4 py-3",
-                label { class: "block text-xs font-medium text-gray-700 mb-2", "Notes" }
-                textarea {
-                    class: "w-full rounded border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-400 resize-none",
-                    rows: "3",
-                    placeholder: "Your notes…",
-                    value: "{notes}",
-                    oninput: move |e| {
-                        notes_saved.set(false);
-                        notes.set(e.value());
-                    },
-                }
-                div { class: "flex items-center justify-end gap-3 mt-2",
-                    if notes_saved() {
-                        span { class: "text-xs text-green-600", "Saved!" }
-                    }
-                    {
-                        let tok = token.clone();
-                        rsx! {
-                            button {
-                                class: "px-3 py-1 text-xs font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50",
-                                disabled: busy(),
-                                onclick: move |_| {
-                                    let tok = tok.clone();
-                                    let n = notes();
-                                    notes_saved.set(false);
-                                    busy.set(true);
-                                    spawn(async move {
-                                        if let Ok(s) = save_reading_notes(tok, n).await {
-                                            state.set(Some(s));
-                                            notes_saved.set(true);
-                                        }
-                                        busy.set(false);
-                                    });
-                                },
-                                "Save Notes"
-                            }
+// ---------------------------------------------------------------------------
+// InlineStarRating
+// ---------------------------------------------------------------------------
+
+#[component]
+fn InlineStarRating(token: String, initial_rating: Option<u8>) -> Element {
+    let mut rating = use_signal(move || initial_rating.unwrap_or(0));
+    let mut busy = use_signal(|| false);
+
+    rsx! {
+        div { class: "flex items-center gap-0.5",
+            for star in 1u8..=5u8 {
+                {
+                    let filled = star <= rating();
+                    let tok = token.clone();
+                    rsx! {
+                        button {
+                            class: if filled {
+                                "text-yellow-400 text-lg leading-none hover:scale-110 transition-transform disabled:cursor-default"
+                            } else {
+                                "text-gray-300 text-lg leading-none hover:text-yellow-400 transition-colors disabled:cursor-default"
+                            },
+                            disabled: busy(),
+                            onclick: move |_| {
+                                let tok = tok.clone();
+                                busy.set(true);
+                                spawn(async move {
+                                    if let Ok(s) = set_personal_rating(tok, star).await {
+                                        rating.set(s.personal_rating.unwrap_or(0));
+                                    }
+                                    busy.set(false);
+                                });
+                            },
+                            if filled { "★" } else { "☆" }
                         }
                     }
                 }
