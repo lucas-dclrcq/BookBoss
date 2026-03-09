@@ -9,4 +9,5 @@ pub(crate) mod session;
 pub(crate) mod shelf;
 pub(crate) mod tag;
 pub(crate) mod user;
+pub(crate) mod user_book_metadata;
 pub(crate) mod user_settings;

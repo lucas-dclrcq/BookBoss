@@ -334,6 +334,7 @@ mod tests {
         },
         import::{ImportJob, ImportJobId, ImportJobRepository, ImportJobToken, ImportStatus, NewImportJob},
         jobs::{Job, JobRepository},
+        reading::{ReadStatus, UserBookMetadata, UserBookMetadataRepository},
         repository::{Repository, RepositoryServiceBuilder, Transaction},
         shelf::{BookShelf, NewShelf, Shelf, ShelfFilter, ShelfId, ShelfRepository, ShelfToken, ShelfType, ShelfVisibility},
         user::{
@@ -830,6 +831,30 @@ mod tests {
         }
     }
 
+    // ─── Mock UserBookMetadataRepository ────────────────────────────────────
+
+    struct MockUserBookMetadataRepository;
+
+    #[async_trait::async_trait]
+    impl UserBookMetadataRepository for MockUserBookMetadataRepository {
+        async fn upsert(&self, _: &dyn Transaction, _: UserBookMetadata) -> Result<UserBookMetadata, Error> {
+            unimplemented!()
+        }
+        async fn find_by_user_and_book(&self, _: &dyn Transaction, _: UserId, _: BookId) -> Result<Option<UserBookMetadata>, Error> {
+            unimplemented!()
+        }
+        async fn list_for_user(
+            &self,
+            _: &dyn Transaction,
+            _: UserId,
+            _: Option<ReadStatus>,
+            _: Option<BookId>,
+            _: Option<u64>,
+        ) -> Result<Vec<UserBookMetadata>, Error> {
+            unimplemented!()
+        }
+    }
+
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
     fn create_service(shelf_repo: MockShelfRepository, book_repo: MockBookRepository) -> ShelfServiceImpl {
@@ -848,6 +873,7 @@ mod tests {
                 .import_job_repository(Arc::new(MockImportJobRepository) as Arc<dyn ImportJobRepository>)
                 .job_repository(Arc::new(MockJobRepository) as Arc<dyn JobRepository>)
                 .shelf_repository(Arc::new(shelf_repo) as Arc<dyn ShelfRepository>)
+                .user_book_metadata_repository(Arc::new(MockUserBookMetadataRepository) as Arc<dyn UserBookMetadataRepository>)
                 .build()
                 .expect("all fields provided"),
         );
@@ -1055,6 +1081,7 @@ mod tests {
                 .import_job_repository(Arc::new(MockImportJobRepository) as Arc<dyn ImportJobRepository>)
                 .job_repository(Arc::new(MockJobRepository) as Arc<dyn JobRepository>)
                 .shelf_repository(shelf_repo.clone() as Arc<dyn ShelfRepository>)
+                .user_book_metadata_repository(Arc::new(MockUserBookMetadataRepository) as Arc<dyn UserBookMetadataRepository>)
                 .build()
                 .expect("all fields provided"),
         );
@@ -1111,6 +1138,7 @@ mod tests {
                 .import_job_repository(Arc::new(MockImportJobRepository) as Arc<dyn ImportJobRepository>)
                 .job_repository(Arc::new(MockJobRepository) as Arc<dyn JobRepository>)
                 .shelf_repository(shelf_repo.clone() as Arc<dyn ShelfRepository>)
+                .user_book_metadata_repository(Arc::new(MockUserBookMetadataRepository) as Arc<dyn UserBookMetadataRepository>)
                 .build()
                 .expect("all fields provided"),
         );
@@ -1175,6 +1203,7 @@ mod tests {
                 .import_job_repository(Arc::new(MockImportJobRepository) as Arc<dyn ImportJobRepository>)
                 .job_repository(Arc::new(MockJobRepository) as Arc<dyn JobRepository>)
                 .shelf_repository(shelf_repo.clone() as Arc<dyn ShelfRepository>)
+                .user_book_metadata_repository(Arc::new(MockUserBookMetadataRepository) as Arc<dyn UserBookMetadataRepository>)
                 .build()
                 .expect("all fields provided"),
         );

@@ -165,6 +165,7 @@ mod tests {
         },
         import::{ImportJob, ImportJobId, ImportJobRepository, ImportJobToken, ImportStatus, NewImportJob},
         jobs::{Job, JobRepository},
+        reading::{ReadStatus, UserBookMetadata, UserBookMetadataRepository},
         repository::{Repository, RepositoryServiceBuilder, Transaction},
         shelf::{BookShelf, NewShelf, Shelf, ShelfFilter, ShelfId, ShelfRepository, ShelfToken},
         user::{
@@ -697,6 +698,30 @@ mod tests {
         }
     }
 
+    // ─── Mock UserBookMetadataRepository ────────────────────────────────────
+
+    struct MockUserBookMetadataRepository;
+
+    #[async_trait::async_trait]
+    impl UserBookMetadataRepository for MockUserBookMetadataRepository {
+        async fn upsert(&self, _: &dyn Transaction, _: UserBookMetadata) -> Result<UserBookMetadata, Error> {
+            unimplemented!()
+        }
+        async fn find_by_user_and_book(&self, _: &dyn Transaction, _: UserId, _: BookId) -> Result<Option<UserBookMetadata>, Error> {
+            unimplemented!()
+        }
+        async fn list_for_user(
+            &self,
+            _: &dyn Transaction,
+            _: UserId,
+            _: Option<ReadStatus>,
+            _: Option<BookId>,
+            _: Option<u64>,
+        ) -> Result<Vec<UserBookMetadata>, Error> {
+            unimplemented!()
+        }
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     fn fake_book(id: BookId, title: &str) -> Book {
@@ -727,6 +752,7 @@ mod tests {
                 .import_job_repository(Arc::new(MockImportJobRepository) as Arc<dyn ImportJobRepository>)
                 .job_repository(Arc::new(MockJobRepository) as Arc<dyn JobRepository>)
                 .shelf_repository(Arc::new(MockShelfRepository) as Arc<dyn ShelfRepository>)
+                .user_book_metadata_repository(Arc::new(MockUserBookMetadataRepository) as Arc<dyn UserBookMetadataRepository>)
                 .build()
                 .expect("all fields provided"),
         );

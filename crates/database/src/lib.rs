@@ -6,6 +6,7 @@ use bb_core::{
     book::{AuthorRepository, BookRepository, GenreRepository, PublisherRepository, SeriesRepository, TagRepository},
     import::ImportJobRepository,
     jobs::JobRepository,
+    reading::UserBookMetadataRepository,
     repository::{Repository, RepositoryService, RepositoryServiceBuilder},
     shelf::ShelfRepository,
     user::{UserRepository, UserSettingRepository},
@@ -28,7 +29,8 @@ use crate::{
     adapters::{
         author::AuthorRepositoryAdapter, book::BookRepositoryAdapter, genre::GenreRepositoryAdapter, import_job::ImportJobRepositoryAdapter,
         job::JobRepositoryAdapter, publisher::PublisherRepositoryAdapter, series::SeriesRepositoryAdapter, session::SessionRepositoryAdapter,
-        shelf::ShelfRepositoryAdapter, tag::TagRepositoryAdapter, user::UserRepositoryAdapter, user_settings::UserSettingRepositoryAdapter,
+        shelf::ShelfRepositoryAdapter, tag::TagRepositoryAdapter, user::UserRepositoryAdapter, user_book_metadata::UserBookMetadataRepositoryAdapter,
+        user_settings::UserSettingRepositoryAdapter,
     },
     migrations::Migrator,
     repository::RepositoryImpl,
@@ -73,6 +75,7 @@ pub async fn create_repository_service(database: DatabaseConnection) -> Result<A
         .import_job_repository(Arc::new(ImportJobRepositoryAdapter::new()) as Arc<dyn ImportJobRepository>)
         .job_repository(Arc::new(JobRepositoryAdapter::new()) as Arc<dyn JobRepository>)
         .shelf_repository(Arc::new(ShelfRepositoryAdapter::new()) as Arc<dyn ShelfRepository>)
+        .user_book_metadata_repository(Arc::new(UserBookMetadataRepositoryAdapter::new()) as Arc<dyn UserBookMetadataRepository>)
         .build()
         .map_err(|e| Error::Infrastructure(e.to_string()))?;
 
