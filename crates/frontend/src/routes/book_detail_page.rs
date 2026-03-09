@@ -45,6 +45,8 @@ pub(crate) struct BookDetail {
     pub authors: Vec<AuthorDetail>,
     pub files: Vec<FileDetail>,
     pub identifiers: Vec<IdentifierDetail>,
+    pub genres: Vec<String>,
+    pub tags: Vec<String>,
     pub can_delete: bool,
     pub reading_state: Option<ReadingStateDto>,
 }
@@ -203,6 +205,22 @@ async fn get_book(token: String) -> Result<BookDetail, ServerFnError> {
         })
         .collect();
 
+    let genres: Vec<String> = book_service
+        .genres_for_book(book.id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .into_iter()
+        .map(|g| g.name)
+        .collect();
+
+    let tags: Vec<String> = book_service
+        .tags_for_book(book.id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .into_iter()
+        .map(|t| t.name)
+        .collect();
+
     let current_user = auth_session.current_user.clone().unwrap_or_default();
     let can_delete = Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::POST], true)
         .requires(Rights::any([Rights::permission(Capability::DeleteBook.as_str())]))
@@ -230,6 +248,8 @@ async fn get_book(token: String) -> Result<BookDetail, ServerFnError> {
         authors,
         files,
         identifiers,
+        genres,
+        tags,
         can_delete,
         reading_state,
     })
@@ -592,6 +612,59 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                                 }
                                 if let Some(ref lang) = book.language {
                                     span { "Language: {lang}" }
+                                }
+                            }
+
+                            // Genres
+                            if !book.genres.is_empty() {
+                                div { class: "flex flex-wrap items-center gap-1 mb-3",
+                                    svg {
+                                        class: "w-3.5 h-3.5 text-gray-400 shrink-0 mr-0.5",
+                                        xmlns: "http://www.w3.org/2000/svg",
+                                        fill: "none",
+                                        view_box: "0 0 24 24",
+                                        stroke_width: "1.5",
+                                        stroke: "currentColor",
+                                        path {
+                                            stroke_linecap: "round",
+                                            stroke_linejoin: "round",
+                                            d: "M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z",
+                                        }
+                                    }
+                                    for genre in &book.genres {
+                                        span { class: "inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700 border border-gray-200",
+                                            "{genre}"
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Tags
+                            if !book.tags.is_empty() {
+                                div { class: "flex flex-wrap items-center gap-1 mb-3",
+                                    svg {
+                                        class: "w-3.5 h-3.5 text-gray-400 shrink-0 mr-0.5",
+                                        xmlns: "http://www.w3.org/2000/svg",
+                                        fill: "none",
+                                        view_box: "0 0 24 24",
+                                        stroke_width: "1.5",
+                                        stroke: "currentColor",
+                                        path {
+                                            stroke_linecap: "round",
+                                            stroke_linejoin: "round",
+                                            d: "M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z",
+                                        }
+                                        path {
+                                            stroke_linecap: "round",
+                                            stroke_linejoin: "round",
+                                            d: "M6 6h.008v.008H6V6Z",
+                                        }
+                                    }
+                                    for tag in &book.tags {
+                                        span { class: "inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-indigo-50 text-indigo-700 border border-indigo-200",
+                                            "{tag}"
+                                        }
+                                    }
                                 }
                             }
 
