@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3](https://github.com/szinn/BookBoss/compare/v0.2.2..v0.2.3) - 2026-03-09
+
+### Features
+
+- _(core,database,frontend)_ Add full_name and change_password_on_login to user model - ([a7f1bdf](https://github.com/szinn/BookBoss/commit/a7f1bdfa0cbc8d975a2362dda453467601abc0d1))
+- _(core,frontend)_ Add user management settings tab - ([27e2112](https://github.com/szinn/BookBoss/commit/27e2112c52184456454b8432504a4cd94919f352))
+- _(core,frontend)_ Add clear rating button on book detail page - ([1d687a2](https://github.com/szinn/BookBoss/commit/1d687a277b8bdc44acd68a821337a75c344d4b85))
+- _(frontend)_ User management, force password change, and polish - ([6782866](https://github.com/szinn/BookBoss/commit/67828667cf862cbedea502b0f15ba0171467dd58))
+
+### Bug Fixes
+
+- _(frontend)_ Restart shelf book resource when navigating between shelves - ([bb146e5](https://github.com/szinn/BookBoss/commit/bb146e57de80d12ba7d2f0bcc0cb753aac829cc3))
+
 ## [0.2.2](https://github.com/szinn/BookBoss/compare/v0.2.1..v0.2.2) - 2026-03-09
 
 ### Features
