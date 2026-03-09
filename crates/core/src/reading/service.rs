@@ -11,6 +11,12 @@ use crate::{
     with_read_only_transaction, with_transaction,
 };
 
+/// User setting key for the auto-read threshold.
+///
+/// Stored as a basis-point string (e.g. `"9500"` = 95%). Use
+/// `DEFAULT_AUTO_READ_THRESHOLD` when the key is absent.
+pub const AUTO_READ_THRESHOLD_KEY: &str = "reading.auto_read_threshold";
+
 /// Default auto-read threshold in basis points (9500 = 95%).
 ///
 /// When progress reaches or exceeds this value the service automatically
