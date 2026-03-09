@@ -67,8 +67,10 @@ fn to_reading_state_dto(meta: &UserBookMetadata) -> ReadingStateDto {
         status: match meta.read_status {
             ReadStatus::Unread => "Unread",
             ReadStatus::Reading => "Reading",
+            ReadStatus::Paused => "Paused",
+            ReadStatus::Rereading => "Rereading",
             ReadStatus::Read => "Read",
-            ReadStatus::Dnf => "Dnf",
+            ReadStatus::Abandoned => "Abandoned",
         }
         .to_string(),
         progress_pct: meta.progress_percentage.map(|bps| (bps / 100) as u8),
@@ -282,15 +284,16 @@ async fn set_reading_status(token: String, status: String) -> Result<ReadingStat
     let new_status = match status.as_str() {
         "Unread" => ReadStatus::Unread,
         "Reading" => ReadStatus::Reading,
+        "Paused" => ReadStatus::Paused,
+        "Rereading" => ReadStatus::Rereading,
         "Read" => ReadStatus::Read,
-        "Dnf" => ReadStatus::Dnf,
+        "Abandoned" => ReadStatus::Abandoned,
         _ => return Err(ServerFnError::new("Invalid status")),
     };
 
-    let threshold = load_threshold(user_id, &core_services).await;
     let meta = core_services
         .reading_service
-        .set_status(user_id, book.id, new_status, threshold)
+        .set_status(user_id, book.id, new_status)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
@@ -484,13 +487,11 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
 
                     div { class: "flex gap-8",
                         // Cover
-                        div { class: "shrink-0",
-                            img {
-                                src: "/api/v1/covers/{book.token}",
-                                alt: "{book.title}",
-                                class: "w-36 rounded shadow-md",
-                                style: "aspect-ratio: 2/3; object-fit: cover",
-                            }
+                        BookCover {
+                            token: book.token.clone(),
+                            progress_pct: book.reading_state.as_ref()
+                                .filter(|rs| matches!(rs.status.as_str(), "Reading" | "Rereading" | "Paused"))
+                                .and_then(|rs| rs.progress_pct),
                         }
 
                         // Main info
@@ -564,34 +565,27 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                                 }
                             }
 
-                            // Files
-                            if !book.files.is_empty() {
-                                div { class: "flex flex-wrap gap-2 mb-4",
-                                    for file in &book.files {
-                                        {
-                                            let size_str = format_file_size(file.file_size);
-                                            let fmt_lower = file.format.to_lowercase();
-                                            let href = format!("/api/v1/books/{}/download/{fmt_lower}", book.token);
-                                            rsx! {
-                                                a {
-                                                    href,
-                                                    class: "inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-gray-100 text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors",
-                                                    span { class: "font-medium", "{file.format}" }
-                                                    span { class: "text-gray-400", "↓ {size_str}" }
-                                                }
+                            // Files + reading status on one row
+                            div { class: "flex flex-wrap items-center gap-2 mb-4",
+                                for file in &book.files {
+                                    {
+                                        let size_str = format_file_size(file.file_size);
+                                        let fmt_lower = file.format.to_lowercase();
+                                        let href = format!("/api/v1/books/{}/download/{fmt_lower}", book.token);
+                                        rsx! {
+                                            a {
+                                                href,
+                                                class: "inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-gray-100 text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors",
+                                                span { class: "font-medium", "{file.format}" }
+                                                span { class: "text-gray-400", "↓ {size_str}" }
                                             }
                                         }
                                     }
                                 }
-                            }
-
-                            // Reading panel
-                            h2 { class: "text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2",
-                                "Reading"
-                            }
-                            ReadingPanel {
-                                token: book.token.clone(),
-                                initial_state: book.reading_state.clone(),
+                                StatusPill {
+                                    token: book.token.clone(),
+                                    initial_state: book.reading_state.clone(),
+                                }
                             }
 
                             // Description
@@ -624,170 +618,98 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
 }
 
 // ---------------------------------------------------------------------------
-// ReadingPanel
+// BookCover
 // ---------------------------------------------------------------------------
 
 #[component]
-fn ReadingPanel(token: String, initial_state: Option<ReadingStateDto>) -> Element {
-    let initial_progress = initial_state.as_ref().and_then(|s| s.progress_pct).unwrap_or(0u8);
+fn BookCover(token: String, progress_pct: Option<u8>) -> Element {
+    let pct = progress_pct.unwrap_or(0);
+    rsx! {
+        div { class: "shrink-0 relative w-36 self-start",
+            img {
+                src: "/api/v1/covers/{token}",
+                class: "w-full block rounded shadow-md",
+                style: "aspect-ratio: 2/3; object-fit: cover",
+            }
+            if pct > 0 {
+                div {
+                    class: "absolute bottom-0 left-0 right-0 h-1 bg-black/20 rounded-b overflow-hidden",
+                    div { class: "h-full bg-indigo-400", style: "width: {pct}%" }
+                }
+            }
+        }
+    }
+}
 
-    let mut state = use_signal(move || initial_state);
-    let mut progress = use_signal(move || initial_progress);
+// ---------------------------------------------------------------------------
+// StatusPill
+// ---------------------------------------------------------------------------
+
+#[component]
+fn StatusPill(token: String, initial_state: Option<ReadingStateDto>) -> Element {
+    let mut status = use_signal(move || initial_state.map(|s| s.status).unwrap_or_else(|| "Unread".to_string()));
+    let mut show_dropdown = use_signal(|| false);
     let mut busy = use_signal(|| false);
 
-    let status = move || state().as_ref().map(|s| s.status.clone()).unwrap_or_else(|| "Unread".to_string());
-
     let pill_class = move || match status().as_str() {
-        "Reading" => "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700",
-        "Read" => "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700",
-        "Dnf" => "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700",
-        _ => "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600",
+        "Reading" | "Rereading" => "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700",
+        "Paused" => "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700",
+        "Read" => "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700",
+        "Abandoned" => "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700",
+        _ => "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600",
     };
 
     rsx! {
-        div { class: "rounded-lg border border-gray-200 bg-white divide-y divide-gray-100 mb-6",
-            // ── Status row ──────────────────────────────────────────────────
-            div { class: "px-4 py-3 flex items-center gap-2 flex-wrap",
-                span { class: pill_class(), { status() } }
-
-                if status() == "Unread" || status() == "Dnf" {
-                    {
-                        let tok = token.clone();
-                        rsx! {
-                            button {
-                                class: "px-3 py-1 text-xs font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50",
-                                disabled: busy(),
-                                onclick: move |_| {
-                                    let tok = tok.clone();
-                                    busy.set(true);
-                                    spawn(async move {
-                                        if let Ok(s) = set_reading_status(tok, "Reading".to_string()).await {
-                                            progress.set(s.progress_pct.unwrap_or(0));
-                                            state.set(Some(s));
-                                        }
-                                        busy.set(false);
-                                    });
-                                },
-                                "Start Reading"
-                            }
-                        }
-                    }
-                }
-
-                if status() == "Reading" {
-                    {
-                        let tok_read = token.clone();
-                        let tok_dnf = token.clone();
-                        rsx! {
-                            button {
-                                class: "px-3 py-1 text-xs font-medium rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50",
-                                disabled: busy(),
-                                onclick: move |_| {
-                                    let tok = tok_read.clone();
-                                    busy.set(true);
-                                    spawn(async move {
-                                        if let Ok(s) = set_reading_status(tok, "Read".to_string()).await {
-                                            progress.set(s.progress_pct.unwrap_or(0));
-                                            state.set(Some(s));
-                                        }
-                                        busy.set(false);
-                                    });
-                                },
-                                "Mark Read"
-                            }
-                            button {
-                                class: "px-3 py-1 text-xs font-medium rounded border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50",
-                                disabled: busy(),
-                                onclick: move |_| {
-                                    let tok = tok_dnf.clone();
-                                    busy.set(true);
-                                    spawn(async move {
-                                        if let Ok(s) = set_reading_status(tok, "Dnf".to_string()).await {
-                                            progress.set(s.progress_pct.unwrap_or(0));
-                                            state.set(Some(s));
-                                        }
-                                        busy.set(false);
-                                    });
-                                },
-                                "Mark DNF"
-                            }
-                        }
-                    }
-                }
-
-                if status() == "Read" {
-                    {
-                        let tok = token.clone();
-                        rsx! {
-                            button {
-                                class: "px-3 py-1 text-xs font-medium rounded border border-indigo-300 text-indigo-600 hover:bg-indigo-50 disabled:opacity-50",
-                                disabled: busy(),
-                                onclick: move |_| {
-                                    let tok = tok.clone();
-                                    busy.set(true);
-                                    spawn(async move {
-                                        if let Ok(s) = set_reading_status(tok, "Reading".to_string()).await {
-                                            progress.set(s.progress_pct.unwrap_or(0));
-                                            state.set(Some(s));
-                                        }
-                                        busy.set(false);
-                                    });
-                                },
-                                "Re-read"
-                            }
-                        }
-                    }
-                }
-
-                if let Some(ref s) = state() {
-                    if s.times_read > 0 {
-                        span { class: "ml-auto text-xs text-gray-400",
-                            "Read {s.times_read}×"
-                        }
+        div { class: "relative inline-flex items-center gap-1",
+            span { class: pill_class(), "{status()}" }
+            button {
+                class: "text-gray-400 hover:text-gray-600 disabled:opacity-40",
+                title: "Change reading status",
+                disabled: busy(),
+                onclick: move |_| show_dropdown.set(!show_dropdown()),
+                svg {
+                    class: "w-3.5 h-3.5",
+                    xmlns: "http://www.w3.org/2000/svg",
+                    fill: "none",
+                    view_box: "0 0 24 24",
+                    stroke_width: "2",
+                    stroke: "currentColor",
+                    path {
+                        stroke_linecap: "round",
+                        stroke_linejoin: "round",
+                        d: "M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125",
                     }
                 }
             }
-
-            // ── Progress (only when Reading) ─────────────────────────────
-            if status() == "Reading" {
-                {
-                    let tok = token.clone();
-                    rsx! {
-                        div { class: "px-4 py-3",
-                            label { class: "block text-xs font-medium text-gray-700 mb-2", "Progress" }
-                            div { class: "flex items-center gap-3",
-                                input {
-                                    r#type: "range",
-                                    min: "0",
-                                    max: "100",
-                                    value: progress,
-                                    class: "flex-1 accent-indigo-600",
-                                    oninput: move |e| {
-                                        if let Ok(v) = e.value().parse::<u8>() {
-                                            progress.set(v);
-                                        }
-                                    },
-                                    onchange: move |_| {
+            if show_dropdown() {
+                div { class: "absolute top-full left-0 mt-1 z-10 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-max",
+                    for s in ["Unread", "Reading", "Paused", "Rereading", "Read", "Abandoned"] {
+                        {
+                            let tok = token.clone();
+                            let s_owned = s.to_string();
+                            rsx! {
+                                button {
+                                    class: "block w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 disabled:opacity-40",
+                                    disabled: busy(),
+                                    onclick: move |_| {
                                         let tok = tok.clone();
-                                        let pct = progress();
+                                        let s = s_owned.clone();
+                                        show_dropdown.set(false);
                                         busy.set(true);
                                         spawn(async move {
-                                            if let Ok(s) = update_reading_progress(tok, pct).await {
-                                                state.set(Some(s));
+                                            if let Ok(new_state) = set_reading_status(tok, s).await {
+                                                status.set(new_state.status);
                                             }
                                             busy.set(false);
                                         });
                                     },
-                                }
-                                span { class: "text-sm font-medium text-gray-900 w-10 text-right",
-                                    "{progress}%"
+                                    "{s}"
                                 }
                             }
                         }
                     }
                 }
             }
-
         }
     }
 }

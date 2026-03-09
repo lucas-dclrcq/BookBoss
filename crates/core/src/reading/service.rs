@@ -33,12 +33,10 @@ pub trait ReadingService: Send + Sync {
     /// row exists (semantically equivalent to `Unread`).
     async fn get_reading_state(&self, user_id: UserId, book_id: BookId) -> Result<Option<UserBookMetadata>, Error>;
 
-    /// Applies a manual status transition and returns the updated record.
-    ///
-    /// `auto_read_threshold` is in basis points (0–10000). When `Some(t)` and
-    /// the current progress meets or exceeds `t`, a `Reading` target is
-    /// silently promoted to `Read`.
-    async fn set_status(&self, user_id: UserId, book_id: BookId, new_status: ReadStatus, auto_read_threshold: Option<u16>) -> Result<UserBookMetadata, Error>;
+    /// Directly sets the reading status and returns the updated record.
+    /// Timestamps (`date_started`, `date_finished`) and `times_read` are
+    /// updated as appropriate for the target status.
+    async fn set_status(&self, user_id: UserId, book_id: BookId, new_status: ReadStatus) -> Result<UserBookMetadata, Error>;
 
     /// Records reading progress and automatically manages status transitions.
     ///
@@ -100,20 +98,10 @@ fn default_state(user_id: UserId, book_id: BookId) -> UserBookMetadata {
     }
 }
 
-/// Applies the requested status transition to `current`, returning the mutated
-/// record.
-///
-/// If `auto_read_threshold` is `Some(t)` and the target is `Reading` but
-/// current progress already meets the threshold, the target is promoted to
-/// `Read`.
-fn apply_transition(mut current: UserBookMetadata, target: ReadStatus, auto_read_threshold: Option<u16>) -> UserBookMetadata {
+/// Applies the requested status to `current`, updating timestamps and
+/// `times_read` as appropriate.
+fn apply_transition(mut current: UserBookMetadata, target: ReadStatus) -> UserBookMetadata {
     let now = Utc::now();
-
-    // Auto-advance: Reading with progress >= threshold → Read
-    let target = match (&target, auto_read_threshold) {
-        (ReadStatus::Reading, Some(threshold)) if current.progress_percentage.unwrap_or(0) >= threshold => ReadStatus::Read,
-        _ => target,
-    };
 
     match &target {
         ReadStatus::Unread => {
@@ -125,27 +113,31 @@ fn apply_transition(mut current: UserBookMetadata, target: ReadStatus, auto_read
             current.last_progress_at = None;
         }
         ReadStatus::Reading => {
-            // Re-read: coming from Read resets the read-through.
-            if current.read_status == ReadStatus::Read {
-                current.date_started = Some(now);
-                current.date_finished = None;
-                current.progress_percentage = None;
-                current.position_token = None;
-            } else if current.date_started.is_none() {
+            if current.date_started.is_none() {
                 current.date_started = Some(now);
             }
             current.read_status = ReadStatus::Reading;
         }
+        ReadStatus::Paused => {
+            current.read_status = ReadStatus::Paused;
+        }
+        ReadStatus::Rereading => {
+            current.date_started = Some(now);
+            current.date_finished = None;
+            current.progress_percentage = None;
+            current.position_token = None;
+            current.read_status = ReadStatus::Rereading;
+        }
         ReadStatus::Read => {
-            let was_reading = current.read_status == ReadStatus::Reading;
+            let was_in_progress = matches!(current.read_status, ReadStatus::Reading | ReadStatus::Rereading | ReadStatus::Paused);
             current.read_status = ReadStatus::Read;
             current.date_finished = Some(now);
-            if was_reading {
+            if was_in_progress {
                 current.times_read += 1;
             }
         }
-        ReadStatus::Dnf => {
-            current.read_status = ReadStatus::Dnf;
+        ReadStatus::Abandoned => {
+            current.read_status = ReadStatus::Abandoned;
             current.date_finished = Some(now);
         }
     }
@@ -163,14 +155,14 @@ impl ReadingService for ReadingServiceImpl {
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    async fn set_status(&self, user_id: UserId, book_id: BookId, new_status: ReadStatus, auto_read_threshold: Option<u16>) -> Result<UserBookMetadata, Error> {
+    async fn set_status(&self, user_id: UserId, book_id: BookId, new_status: ReadStatus) -> Result<UserBookMetadata, Error> {
         with_transaction!(self, user_book_metadata_repository, |tx| {
             let current = user_book_metadata_repository
                 .find_by_user_and_book(tx, user_id, book_id)
                 .await?
                 .unwrap_or_else(|| default_state(user_id, book_id));
 
-            let next = apply_transition(current, new_status, auto_read_threshold);
+            let next = apply_transition(current, new_status);
             user_book_metadata_repository.upsert(tx, next).await
         })
     }
@@ -194,7 +186,7 @@ impl ReadingService for ReadingServiceImpl {
 
             // Unread → Reading on first progress update.
             if current.read_status == ReadStatus::Unread {
-                current = apply_transition(current, ReadStatus::Reading, None);
+                current = apply_transition(current, ReadStatus::Reading);
             }
 
             current.progress_percentage = Some(progress_bps);
@@ -202,10 +194,10 @@ impl ReadingService for ReadingServiceImpl {
             current.last_progress_at = Some(now);
 
             // Auto-advance to Read if threshold is met.
-            if current.read_status == ReadStatus::Reading {
+            if matches!(current.read_status, ReadStatus::Reading | ReadStatus::Rereading) {
                 if let Some(threshold) = auto_read_threshold {
                     if progress_bps >= threshold {
-                        current = apply_transition(current, ReadStatus::Read, None);
+                        current = apply_transition(current, ReadStatus::Read);
                     }
                 }
             }
@@ -802,7 +794,7 @@ mod tests {
     #[tokio::test]
     async fn test_set_status_unread_to_reading_sets_date_started() {
         let svc = create_service(MockUserBookMetadataRepository::default());
-        let result = svc.set_status(1, 1, ReadStatus::Reading, None).await.unwrap();
+        let result = svc.set_status(1, 1, ReadStatus::Reading).await.unwrap();
         assert_eq!(result.read_status, ReadStatus::Reading);
         assert!(result.date_started.is_some());
     }
@@ -811,7 +803,7 @@ mod tests {
     async fn test_set_status_reading_to_read_increments_times_read_and_sets_date_finished() {
         let existing = state(1, 1, ReadStatus::Reading);
         let svc = create_service(MockUserBookMetadataRepository::default().with_find(Ok(Some(existing))));
-        let result = svc.set_status(1, 1, ReadStatus::Read, None).await.unwrap();
+        let result = svc.set_status(1, 1, ReadStatus::Read).await.unwrap();
         assert_eq!(result.read_status, ReadStatus::Read);
         assert_eq!(result.times_read, 1);
         assert!(result.date_finished.is_some());
@@ -822,28 +814,28 @@ mod tests {
         let mut existing = state(1, 1, ReadStatus::Read);
         existing.times_read = 1;
         let svc = create_service(MockUserBookMetadataRepository::default().with_find(Ok(Some(existing))));
-        let result = svc.set_status(1, 1, ReadStatus::Read, None).await.unwrap();
-        // Not coming from Reading, so times_read should not increment
+        let result = svc.set_status(1, 1, ReadStatus::Read).await.unwrap();
+        // Not coming from Reading/Rereading/Paused, so times_read should not increment
         assert_eq!(result.times_read, 1);
     }
 
     #[tokio::test]
-    async fn test_set_status_reading_to_dnf_sets_date_finished() {
+    async fn test_set_status_reading_to_abandoned_sets_date_finished() {
         let existing = state(1, 1, ReadStatus::Reading);
         let svc = create_service(MockUserBookMetadataRepository::default().with_find(Ok(Some(existing))));
-        let result = svc.set_status(1, 1, ReadStatus::Dnf, None).await.unwrap();
-        assert_eq!(result.read_status, ReadStatus::Dnf);
+        let result = svc.set_status(1, 1, ReadStatus::Abandoned).await.unwrap();
+        assert_eq!(result.read_status, ReadStatus::Abandoned);
         assert!(result.date_finished.is_some());
     }
 
     #[tokio::test]
-    async fn test_set_status_read_to_reading_is_reread_resets_progress() {
+    async fn test_set_status_rereading_resets_progress_and_sets_date_started() {
         let mut existing = state(1, 1, ReadStatus::Read);
         existing.times_read = 1;
         existing.progress_percentage = Some(10000);
         let svc = create_service(MockUserBookMetadataRepository::default().with_find(Ok(Some(existing))));
-        let result = svc.set_status(1, 1, ReadStatus::Reading, None).await.unwrap();
-        assert_eq!(result.read_status, ReadStatus::Reading);
+        let result = svc.set_status(1, 1, ReadStatus::Rereading).await.unwrap();
+        assert_eq!(result.read_status, ReadStatus::Rereading);
         assert_eq!(result.times_read, 1); // unchanged until next Read transition
         assert!(result.date_started.is_some());
         assert!(result.date_finished.is_none());
@@ -856,31 +848,12 @@ mod tests {
         existing.progress_percentage = Some(5000);
         existing.date_started = Some(chrono::Utc::now());
         let svc = create_service(MockUserBookMetadataRepository::default().with_find(Ok(Some(existing))));
-        let result = svc.set_status(1, 1, ReadStatus::Unread, None).await.unwrap();
+        let result = svc.set_status(1, 1, ReadStatus::Unread).await.unwrap();
         assert_eq!(result.read_status, ReadStatus::Unread);
         assert!(result.progress_percentage.is_none());
         assert!(result.date_started.is_none());
         assert!(result.date_finished.is_none());
         assert!(result.last_progress_at.is_none());
-    }
-
-    #[tokio::test]
-    async fn test_set_status_reading_with_threshold_met_auto_advances_to_read() {
-        let mut existing = state(1, 1, ReadStatus::Reading);
-        existing.progress_percentage = Some(9500);
-        let svc = create_service(MockUserBookMetadataRepository::default().with_find(Ok(Some(existing))));
-        let result = svc.set_status(1, 1, ReadStatus::Reading, Some(9500)).await.unwrap();
-        assert_eq!(result.read_status, ReadStatus::Read);
-        assert_eq!(result.times_read, 1);
-    }
-
-    #[tokio::test]
-    async fn test_set_status_reading_with_threshold_not_met_stays_reading() {
-        let mut existing = state(1, 1, ReadStatus::Reading);
-        existing.progress_percentage = Some(9000);
-        let svc = create_service(MockUserBookMetadataRepository::default().with_find(Ok(Some(existing))));
-        let result = svc.set_status(1, 1, ReadStatus::Reading, Some(9500)).await.unwrap();
-        assert_eq!(result.read_status, ReadStatus::Reading);
     }
 
     // ─── update_progress ─────────────────────────────────────────────────────

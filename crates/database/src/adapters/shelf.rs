@@ -54,8 +54,10 @@ fn read_status_to_str(s: &ReadStatus) -> &'static str {
     match s {
         ReadStatus::Unread => "unread",
         ReadStatus::Reading => "reading",
+        ReadStatus::Paused => "paused",
+        ReadStatus::Rereading => "rereading",
         ReadStatus::Read => "read",
-        ReadStatus::Dnf => "dnf",
+        ReadStatus::Abandoned => "abandoned",
     }
 }
 

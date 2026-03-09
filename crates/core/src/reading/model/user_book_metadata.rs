@@ -7,8 +7,10 @@ use crate::{book::BookId, user::UserId};
 pub enum ReadStatus {
     Unread,
     Reading,
+    Paused,
+    Rereading,
     Read,
-    Dnf,
+    Abandoned,
 }
 
 /// Per-user reading state for a single book.
@@ -41,7 +43,14 @@ mod tests {
 
     #[test]
     fn read_status_serde_round_trip() {
-        for status in [ReadStatus::Unread, ReadStatus::Reading, ReadStatus::Read, ReadStatus::Dnf] {
+        for status in [
+            ReadStatus::Unread,
+            ReadStatus::Reading,
+            ReadStatus::Paused,
+            ReadStatus::Rereading,
+            ReadStatus::Read,
+            ReadStatus::Abandoned,
+        ] {
             let json = serde_json::to_string(&status).expect("serialise");
             let back: ReadStatus = serde_json::from_str(&json).expect("deserialise");
             assert_eq!(status, back);
@@ -52,7 +61,9 @@ mod tests {
     fn read_status_serialises_to_expected_strings() {
         assert_eq!(serde_json::to_string(&ReadStatus::Unread).unwrap(), r#""Unread""#);
         assert_eq!(serde_json::to_string(&ReadStatus::Reading).unwrap(), r#""Reading""#);
+        assert_eq!(serde_json::to_string(&ReadStatus::Paused).unwrap(), r#""Paused""#);
+        assert_eq!(serde_json::to_string(&ReadStatus::Rereading).unwrap(), r#""Rereading""#);
         assert_eq!(serde_json::to_string(&ReadStatus::Read).unwrap(), r#""Read""#);
-        assert_eq!(serde_json::to_string(&ReadStatus::Dnf).unwrap(), r#""Dnf""#);
+        assert_eq!(serde_json::to_string(&ReadStatus::Abandoned).unwrap(), r#""Abandoned""#);
     }
 }

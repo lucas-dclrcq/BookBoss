@@ -123,17 +123,21 @@ fn BookCard(book: BookSummary) -> Element {
                 if let Some(ref rs) = book.reading_state {
                     {
                         let (badge_class, badge_label) = match rs.status.as_str() {
-                            "Reading" => (
+                            "Reading" | "Rereading" => (
                                 "absolute top-1 left-1 px-1 py-0.5 text-xs font-semibold rounded bg-indigo-600/85 text-white leading-none",
-                                "Reading",
+                                rs.status.as_str(),
+                            ),
+                            "Paused" => (
+                                "absolute top-1 left-1 px-1 py-0.5 text-xs font-semibold rounded bg-yellow-500/85 text-white leading-none",
+                                "Paused",
                             ),
                             "Read" => (
                                 "absolute top-1 left-1 px-1 py-0.5 text-xs font-semibold rounded bg-green-600/85 text-white leading-none",
                                 "✓ Read",
                             ),
-                            "Dnf" => (
+                            "Abandoned" => (
                                 "absolute top-1 left-1 px-1 py-0.5 text-xs font-semibold rounded bg-red-600/85 text-white leading-none",
-                                "DNF",
+                                "Abandoned",
                             ),
                             _ => ("", ""),
                         };
@@ -143,8 +147,8 @@ fn BookCard(book: BookSummary) -> Element {
                             }
                         }
                     }
-                    // Progress bar at bottom when Reading
-                    if rs.status == "Reading" {
+                    // Progress bar at bottom when actively reading
+                    if matches!(rs.status.as_str(), "Reading" | "Rereading" | "Paused") {
                         if let Some(pct) = rs.progress_pct {
                             if pct > 0 {
                                 div {

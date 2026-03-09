@@ -21,16 +21,20 @@ fn read_status_to_str(s: &ReadStatus) -> &'static str {
     match s {
         ReadStatus::Unread => "unread",
         ReadStatus::Reading => "reading",
+        ReadStatus::Paused => "paused",
+        ReadStatus::Rereading => "rereading",
         ReadStatus::Read => "read",
-        ReadStatus::Dnf => "dnf",
+        ReadStatus::Abandoned => "abandoned",
     }
 }
 
 fn str_to_read_status(s: &str) -> ReadStatus {
     match s {
         "reading" => ReadStatus::Reading,
+        "paused" => ReadStatus::Paused,
+        "rereading" => ReadStatus::Rereading,
         "read" => ReadStatus::Read,
-        "dnf" => ReadStatus::Dnf,
+        "abandoned" => ReadStatus::Abandoned,
         _ => ReadStatus::Unread,
     }
 }

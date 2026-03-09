@@ -157,8 +157,10 @@ async fn list_books() -> Result<ListBooksResponse, ServerFnError> {
                 status: match m.read_status {
                     ReadStatus::Unread => "Unread",
                     ReadStatus::Reading => "Reading",
+                    ReadStatus::Paused => "Paused",
+                    ReadStatus::Rereading => "Rereading",
                     ReadStatus::Read => "Read",
-                    ReadStatus::Dnf => "Dnf",
+                    ReadStatus::Abandoned => "Abandoned",
                 }
                 .to_string(),
                 progress_pct: m.progress_percentage.map(|bps| (bps / 100) as u8),
@@ -193,7 +195,10 @@ async fn list_books() -> Result<ListBooksResponse, ServerFnError> {
     // Build the "Currently Reading" list: Reading books sorted by last_progress_at
     // desc.
     let book_id_to_idx: HashMap<u64, usize> = books.iter().enumerate().map(|(i, b)| (b.id, i)).collect();
-    let mut reading_now: Vec<_> = reading_metas.iter().filter(|m| m.read_status == ReadStatus::Reading).collect();
+    let mut reading_now: Vec<_> = reading_metas
+        .iter()
+        .filter(|m| matches!(m.read_status, ReadStatus::Reading | ReadStatus::Rereading | ReadStatus::Paused))
+        .collect();
     reading_now.sort_by(|a, b| b.last_progress_at.cmp(&a.last_progress_at));
     let currently_reading: Vec<BookSummary> = reading_now
         .iter()
