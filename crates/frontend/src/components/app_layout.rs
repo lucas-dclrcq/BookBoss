@@ -2,36 +2,23 @@ use dioxus::prelude::*;
 #[cfg(feature = "server")]
 use {crate::server::AuthSession, bb_core::CoreServices, std::sync::Arc};
 
-use crate::{Route, components::NavBar, settings::BookDisplayView};
+use crate::{Route, components::NavBar};
 
 #[get("/api/v1/check_auth", auth_session: axum::Extension<AuthSession>)]
 async fn check_auth() -> Result<bool, ServerFnError> {
     Ok(auth_session.current_user.as_ref().map(|u| !u.username.is_empty()).unwrap_or(false))
 }
 
-#[get("/api/v1/book_display_view", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
-async fn get_book_display_view() -> Result<BookDisplayView, ServerFnError> {
-    let user = auth_session.current_user.as_ref().ok_or_else(|| ServerFnError::new("Not authenticated"))?;
-    Ok(user.get_book_display_view(&core_services).await)
-}
-
 #[component]
 pub(crate) fn AppLayout() -> Element {
     let navigator = use_navigator();
     let auth = use_server_future(check_auth)?;
-    let initial_view = use_server_future(get_book_display_view)?;
 
     use_effect(move || {
         if let Some(Ok(false)) = auth() {
             navigator.replace(Route::LandingPage {});
         }
     });
-
-    let view = use_context_provider(|| {
-        let v = initial_view().and_then(|r| r.ok()).unwrap_or_default();
-        Signal::new(v)
-    });
-    let _ = view;
 
     // Shared counter bumped after approve/reject so NavBar re-fetches the pending
     // count.

@@ -47,6 +47,7 @@ pub(crate) struct BookDetail {
     pub identifiers: Vec<IdentifierDetail>,
     pub genres: Vec<String>,
     pub tags: Vec<String>,
+    pub can_edit: bool,
     pub can_delete: bool,
     pub reading_state: Option<ReadingStateDto>,
 }
@@ -222,6 +223,10 @@ async fn get_book(token: String) -> Result<BookDetail, ServerFnError> {
         .collect();
 
     let current_user = auth_session.current_user.clone().unwrap_or_default();
+    let can_edit = Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::POST], true)
+        .requires(Rights::any([Rights::permission(Capability::EditBook.as_str())]))
+        .validate(&current_user, &Method::POST, None)
+        .await;
     let can_delete = Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::POST], true)
         .requires(Rights::any([Rights::permission(Capability::DeleteBook.as_str())]))
         .validate(&current_user, &Method::POST, None)
@@ -250,6 +255,7 @@ async fn get_book(token: String) -> Result<BookDetail, ServerFnError> {
         identifiers,
         genres,
         tags,
+        can_edit,
         can_delete,
         reading_state,
     })
@@ -555,10 +561,12 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                                     }
                                 }
                                 div { class: "flex items-center gap-2 shrink-0",
-                                    Link {
-                                        to: Route::EditMetadataPage { token: book.token.clone() },
-                                        class: "px-3 py-1 text-xs font-medium rounded border border-gray-300 text-gray-600 hover:bg-gray-50",
-                                        "Edit"
+                                    if book.can_edit {
+                                        Link {
+                                            to: Route::EditMetadataPage { token: book.token.clone() },
+                                            class: "px-3 py-1 text-xs font-medium rounded border border-gray-300 text-gray-600 hover:bg-gray-50",
+                                            "Edit"
+                                        }
                                     }
                                     if book.can_delete {
                                         button {

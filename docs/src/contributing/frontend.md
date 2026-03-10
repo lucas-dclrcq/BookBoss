@@ -112,7 +112,7 @@ crates/frontend/src/
 │
 ├── routes/
 │   ├── landing_page.rs              # Login, register admin — server fns
-│   ├── books_page.rs                # Library grid/table with ShelfBar + TreeExplorer
+│   ├── books_page.rs                # Library grid with ShelfBar
 │   ├── book_detail_page.rs          # Book detail view + download + delete
 │   ├── edit_metadata_page.rs        # Metadata editor (title, authors, cover, etc.)
 │   ├── author_detail_page.rs        # Author detail + books list
@@ -130,9 +130,7 @@ crates/frontend/src/
 │   ├── app_layout.rs                # AppLayout wrapper (NavBar + outlet)
 │   ├── nav_bar.rs                   # Top navigation bar
 │   ├── book_grid.rs                 # Cover thumbnail grid (with DnD drag source)
-│   ├── book_table.rs                # Tabular book listing (with DnD drag source)
 │   ├── shelf_bar.rs                 # Horizontal shelf pills (DnD drop targets)
-│   ├── tree_explorer.rs             # Sidebar tree (Authors, Series, Shelves, etc.)
 │   ├── autocomplete_input.rs        # Typeahead input for authors, series, etc.
 │   ├── chip_input.rs                # Tag/genre chip input
 │   ├── login_form.rs                # Login form

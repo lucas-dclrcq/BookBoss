@@ -2,11 +2,11 @@
 
 ## Adding Books
 
-BookBoss acquires books through a watched directory. The pipeline runs automatically in the background.
+BookBoss acquires books through a bookdrop directory. The pipeline runs automatically in the background.
 
 ### Workflow
 
-1. **Drop a file** into the directory configured as `BOOKBOSS__IMPORT__WATCH_DIRECTORY`
+1. **Drop a file** into the directory configured as `BOOKBOSS__IMPORT__BOOKDROP_PATH`
 2. **BookBoss picks it up** — the scanner runs on a configurable interval (default: 60 seconds) and hashes each new file to avoid duplicates
 3. **Metadata is extracted** — for EPUB files, embedded metadata is read from the OPF inside the archive; other formats fall through to provider lookup
 4. **Provider enrichment** — if the file contains an ISBN, BookBoss queries external metadata providers (Hardcover, Open Library, Google Books) for additional metadata and a cover image
@@ -43,11 +43,11 @@ Files are SHA-256 hashed before ingestion. If a file with the same hash already 
 
 ## Browsing Your Library
 
-### Book Grid and Table
+### Book Grid
 
-The main **Library** view shows your approved books. Books display as a grid of cover thumbnails by default.
+The main **Library** view shows your approved books as a grid of cover thumbnails.
 
-Use the **search / filter** controls in the sidebar to narrow by title, author, series, or shelf.
+Use the shelf pills in the sidebar to filter by shelf.
 
 ### Book Detail Page
 
@@ -55,7 +55,7 @@ Click any book to open its detail page. From there you can:
 
 - View full metadata — title, authors, series, description, published year, page count, language, and identifiers (ISBN, ASIN, Hardcover, etc.)
 - **Download** the book file — format badges (e.g. `EPUB ↓ 2.3 MB`) are download links; click to save the file to your device
-- **Edit** metadata — opens the edit page
+- **Edit** metadata — opens the edit page (requires the _Edit Book_ capability)
 - **Delete** the book (requires the _Delete Book_ capability)
 
 ---
@@ -85,7 +85,7 @@ Open **Settings → Shelves** (or use the sidebar) to create a new shelf. Give i
 
 ### Adding Books to a Shelf
 
-There way to add a book to a shelf:
+The way to add a book to a shelf:
 
 1. **Drag and drop** — in the book grid, drag a book's cover onto a shelf pill
 

@@ -18,7 +18,7 @@ use tokio_graceful_shutdown::{IntoSubsystem, SubsystemHandle};
 use crate::handler::ProcessImportPayload;
 
 pub struct LibraryScanner {
-    watch_directory: PathBuf,
+    bookdrop_path: PathBuf,
     poll_interval: Duration,
     repository: Arc<dyn Repository>,
     import_job_repo: Arc<dyn ImportJobRepository>,
@@ -27,14 +27,14 @@ pub struct LibraryScanner {
 
 impl LibraryScanner {
     pub fn new(
-        watch_directory: PathBuf,
+        bookdrop_path: PathBuf,
         poll_interval: Duration,
         repository: Arc<dyn Repository>,
         import_job_repo: Arc<dyn ImportJobRepository>,
         job_repo: Arc<dyn JobRepository>,
     ) -> Self {
         Self {
-            watch_directory,
+            bookdrop_path,
             poll_interval,
             repository,
             import_job_repo,
@@ -43,10 +43,10 @@ impl LibraryScanner {
     }
 
     async fn scan_once(&self) {
-        let mut entries = match tokio::fs::read_dir(&self.watch_directory).await {
+        let mut entries = match tokio::fs::read_dir(&self.bookdrop_path).await {
             Ok(e) => e,
             Err(e) => {
-                tracing::warn!(directory = %self.watch_directory.display(), error = %e, "cannot read watch directory");
+                tracing::warn!(path = %self.bookdrop_path.display(), error = %e, "cannot read bookdrop directory");
                 return;
             }
         };
@@ -138,7 +138,7 @@ impl LibraryScanner {
 
 impl IntoSubsystem<Error> for LibraryScanner {
     async fn run(self, subsys: &mut SubsystemHandle) -> Result<(), Error> {
-        tracing::info!(directory = %self.watch_directory.display(), "library scanner started");
+        tracing::info!(directory = %self.bookdrop_path.display(), "library scanner started");
 
         loop {
             tokio::select! {

@@ -64,7 +64,7 @@ Each provider implements `MetadataProvider::enrich(extracted) -> Option<Provider
 
 The import subsystem (`crates/import/`) owns two background tasks:
 
-- **LibraryScanner** — polls `BOOKBOSS__IMPORT__WATCH_DIRECTORY` on a timer, hashes new files, and enqueues `ImportJob` records
+- **LibraryScanner** — polls `BOOKBOSS__IMPORT__BOOKDROP_PATH` on a timer, hashes new files, and enqueues `ImportJob` records
 - **Import worker** (via `CoreSubsystem`/`JobWorker`) — processes `ImportJob` records through the `PipelineService`: extract metadata → enrich from providers → create book record → write sidecar → queue for review
 
 ## Subsystem Pattern

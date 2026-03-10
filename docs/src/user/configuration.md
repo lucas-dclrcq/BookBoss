@@ -30,8 +30,8 @@ See [Database Configuration](database.md) for connection string format and examp
 
 | Variable                                      | Description                                            | Default |
 | --------------------------------------------- | ------------------------------------------------------ | ------- |
-| `BOOKBOSS__IMPORT__WATCH_DIRECTORY`           | Directory to watch for new e-book files (**required**) | —       |
-| `BOOKBOSS__IMPORT__SCAN_INTERVAL_SECS`        | How often (seconds) to scan the watch directory        | `60`    |
+| `BOOKBOSS__IMPORT__BOOKDROP_PATH`             | Directory to watch for new e-book files (**required**) | —       |
+| `BOOKBOSS__IMPORT__SCAN_INTERVAL_SECS`        | How often (seconds) to scan the bookdrop directory     | `60`    |
 | `BOOKBOSS__IMPORT__WORKER_POLL_INTERVAL_SECS` | How often (seconds) the import worker polls for jobs   | `5`     |
 
 ## API (gRPC)

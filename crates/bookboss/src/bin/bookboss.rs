@@ -163,7 +163,7 @@ async fn main() -> anyhow::Result<()> {
 
                 let api_subsystem = create_api_subsystem(&config.api, services.clone());
                 let core_subsystem = create_core_subsystem(registry, repository_service.clone(), worker_poll_interval);
-                let import_subsystem = create_import_subsystem(config.import.watch_directory.clone(), scan_interval, repository_service.clone());
+                let import_subsystem = create_import_subsystem(config.import.bookdrop_path.clone(), scan_interval, repository_service.clone());
 
                 Toplevel::new(async |s: &mut SubsystemHandle| {
                     s.start(SubsystemBuilder::new("Api", api_subsystem.into_subsystem()));

@@ -4,10 +4,7 @@ use axum_session_auth::Authentication;
 use bb_core::{CoreServices, user::UserId};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    server::BackendSessionPool,
-    settings::{BookDisplayView, FrontendSettings},
-};
+use crate::{server::BackendSessionPool, settings::FrontendSettings};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct AuthUser {
@@ -62,27 +59,6 @@ impl Authentication<Self, UserId, BackendSessionPool> for AuthUser {
 impl AuthUser {
     pub(crate) fn id(&self) -> UserId {
         self.id
-    }
-
-    pub(crate) async fn get_book_display_view(&self, core: &CoreServices) -> BookDisplayView {
-        if self.anonymous {
-            return BookDisplayView::default();
-        }
-        core.user_setting_service
-            .get(self.id, FrontendSettings::BookDisplayView.key())
-            .await
-            .inspect_err(|e| tracing::warn!("Failed to load book_display_view for user {}: {e}", self.id))
-            .ok()
-            .flatten()
-            .and_then(|s| s.value.parse().ok())
-            .unwrap_or_default()
-    }
-
-    pub(crate) async fn set_book_display_view(&self, view: BookDisplayView, core: &CoreServices) -> Result<(), bb_core::Error> {
-        core.user_setting_service
-            .set(self.id, FrontendSettings::BookDisplayView.key(), &view.to_string())
-            .await
-            .map(|_| ())
     }
 
     pub(crate) async fn get_api_key(&self, core: &CoreServices) -> String {

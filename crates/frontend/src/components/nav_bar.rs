@@ -11,21 +11,21 @@ use {
 use crate::Route;
 
 #[get("/api/v1/incoming/pending_count", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
-async fn get_pending_count() -> Result<u32, ServerFnError> {
+async fn get_pending_count() -> Result<Option<u32>, ServerFnError> {
     let current_user = auth_session.current_user.clone().unwrap_or_default();
     let has_permission = Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::GET], true)
         .requires(Rights::any([Rights::permission(Capability::ApproveImports.as_str())]))
         .validate(&current_user, &Method::GET, None)
         .await;
     if !has_permission {
-        return Ok(0);
+        return Ok(None);
     }
     let jobs = core_services
         .import_job_service
         .list_needs_review(None, None)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
-    Ok(jobs.len() as u32)
+    Ok(Some(jobs.len() as u32))
 }
 
 #[put("/api/v1/logout", auth_session: axum::Extension<AuthSession>)]
@@ -64,17 +64,19 @@ pub(crate) fn NavBar() -> Element {
                 Link { to: Route::BooksPage {}, class: "text-sm hover:text-indigo-200",
                     "Library"
                 }
-                Link { to: Route::IncomingPage {}, class: "relative text-sm hover:text-indigo-200 flex items-center gap-1.5",
-                    "Incoming"
-                    {
-                        let count = pending_count().and_then(|r| r.ok()).unwrap_or(0);
-                        (count > 0).then(|| rsx! {
-                            span {
-                                class: "inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[0.6rem] font-bold leading-none",
-                                "{count}"
+                {
+                    let count_opt = pending_count().and_then(|r| r.ok()).flatten();
+                    count_opt.map(|count| rsx! {
+                        Link { to: Route::IncomingPage {}, class: "relative text-sm hover:text-indigo-200 flex items-center gap-1.5",
+                            "Incoming"
+                            if count > 0 {
+                                span {
+                                    class: "inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[0.6rem] font-bold leading-none",
+                                    "{count}"
+                                }
                             }
-                        })
-                    }
+                        }
+                    })
                 }
             }
             div { class: "flex items-center gap-4",

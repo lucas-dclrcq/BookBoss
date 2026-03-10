@@ -3,12 +3,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     Route,
-    components::{BookGrid, BookGridContext, BookTable, ShelfBar, TreeExplorer},
+    components::{BookGrid, BookGridContext, ShelfBar},
     routes::{
         book_detail_page::ReadingStateDto,
         shelf_page::{ShelfSummary, list_all_accessible_shelves},
     },
-    settings::BookDisplayView,
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -28,39 +27,6 @@ pub(crate) struct ListBooksResponse {
     pub can_delete_books: bool,
     /// Books with `Reading` status, sorted by `last_progress_at` desc.
     pub currently_reading: Vec<BookSummary>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct TreeCategory {
-    pub name: String,
-    /// Each item is `(label, optional_route)`. Items without a route are
-    /// rendered as plain text.
-    pub items: Vec<(String, Option<Route>)>,
-}
-
-fn build_categories(shelves: &[ShelfSummary]) -> Vec<TreeCategory> {
-    let mut cats = vec![
-        TreeCategory {
-            name: "Genres".into(),
-            items: vec![("Fantasy".into(), None), ("Science Fiction".into(), None), ("Non-fiction".into(), None)],
-        },
-        TreeCategory {
-            name: "Authors".into(),
-            items: vec![],
-        },
-        TreeCategory {
-            name: "Series".into(),
-            items: vec![],
-        },
-    ];
-
-    {
-        let mut items = vec![("All Books".into(), Some(Route::BooksPage {}))];
-        items.extend(shelves.iter().map(|s| (s.name.clone(), Some(Route::ShelfPage { token: s.token.clone() }))));
-        cats.push(TreeCategory { name: "Shelves".into(), items });
-    }
-
-    cats
 }
 
 #[cfg(feature = "server")]
@@ -215,11 +181,9 @@ async fn list_books() -> Result<ListBooksResponse, ServerFnError> {
 #[component]
 pub(crate) fn BooksPage() -> Element {
     use_context_provider(|| Signal::new(None::<String>)); // DraggedBookToken
-    let view: Signal<BookDisplayView> = use_context();
     let mut page_data = use_server_future(list_books)?;
     let shelves_resource = use_server_future(list_all_accessible_shelves)?;
     let shelves: Vec<ShelfSummary> = shelves_resource().and_then(|r| r.ok()).unwrap_or_default();
-    let categories = build_categories(&shelves);
 
     rsx! {
         match page_data() {
@@ -234,27 +198,19 @@ pub(crate) fn BooksPage() -> Element {
                 }
             },
             Some(Ok(ListBooksResponse { books, can_delete_books, currently_reading })) => rsx! {
-                match *view.read() {
-                    BookDisplayView::GridView => rsx! {
-                        div { class: "flex-1 flex flex-col overflow-hidden",
-                            ShelfBar {
-                                shelves,
-                                current_shelf_token: None,
-                                on_edit_shelf: |_| {},
-                                on_delete_shelf: |_| {},
-                            }
-                            CurrentlyReadingSection { books: currently_reading }
-                            BookGrid {
-                                books,
-                                context: BookGridContext::AllBooks { can_delete: can_delete_books },
-                                on_action: move |_| page_data.restart(),
-                            }
-                        }
-                    },
-                    BookDisplayView::TableView => rsx! {
-                        TreeExplorer { categories }
-                        BookTable { books }
-                    },
+                div { class: "flex-1 flex flex-col overflow-hidden",
+                    ShelfBar {
+                        shelves,
+                        current_shelf_token: None,
+                        on_edit_shelf: |_| {},
+                        on_delete_shelf: |_| {},
+                    }
+                    CurrentlyReadingSection { books: currently_reading }
+                    BookGrid {
+                        books,
+                        context: BookGridContext::AllBooks { can_delete: can_delete_books },
+                        on_action: move |_| page_data.restart(),
+                    }
                 }
             },
         }

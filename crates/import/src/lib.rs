@@ -14,7 +14,7 @@ pub use scanner::LibraryScanner;
 use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, SubsystemHandle};
 
 pub struct ImportSubsystem {
-    watch_directory: PathBuf,
+    bookdrop_path: PathBuf,
     poll_interval: Duration,
     repository_service: Arc<RepositoryService>,
 }
@@ -83,7 +83,7 @@ impl IntoSubsystem<Error> for ImportSubsystem {
         }
 
         let scanner = LibraryScanner::new(
-            self.watch_directory,
+            self.bookdrop_path,
             self.poll_interval,
             self.repository_service.repository().clone(),
             self.repository_service.import_job_repository().clone(),
@@ -99,9 +99,9 @@ impl IntoSubsystem<Error> for ImportSubsystem {
     }
 }
 
-pub fn create_import_subsystem(watch_directory: PathBuf, poll_interval: Duration, repository_service: Arc<RepositoryService>) -> ImportSubsystem {
+pub fn create_import_subsystem(bookdrop_path: PathBuf, poll_interval: Duration, repository_service: Arc<RepositoryService>) -> ImportSubsystem {
     ImportSubsystem {
-        watch_directory,
+        bookdrop_path,
         poll_interval,
         repository_service,
     }

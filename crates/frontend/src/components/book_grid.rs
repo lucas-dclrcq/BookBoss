@@ -62,6 +62,8 @@ fn BookCard(book: BookSummary) -> Element {
     let ctx = use_context::<BookGridContext>();
     let on_action = use_context::<EventHandler<()>>();
     let mut dragged_token = use_context::<DraggedBookToken>();
+    let mut show_confirm = use_signal(|| false);
+    let mut deleting = use_signal(|| false);
 
     let author_str = book.author_names.join(", ");
     let series_line = match (&book.series_name, &book.series_number) {
@@ -72,19 +74,11 @@ fn BookCard(book: BookSummary) -> Element {
 
     let is_dragging = dragged_token().as_deref() == Some(book.token.as_str());
 
-    // Build the × button action (if any) based on context.
+    // Whether the × button triggers a delete-with-confirm or a plain remove.
+    let is_library_delete = matches!(ctx, BookGridContext::AllBooks { can_delete: true });
+
+    // Plain remove action (shelf only).
     let remove_action: Option<Box<dyn Fn() + 'static>> = match ctx {
-        BookGridContext::AllBooks { can_delete: true } => {
-            let tok = book.token.clone();
-            Some(Box::new(move || {
-                let tok = tok.clone();
-                spawn(async move {
-                    if delete_library_book(tok).await.is_ok() {
-                        on_action.call(());
-                    }
-                });
-            }))
-        }
         BookGridContext::OwnShelf { shelf_token } => {
             let stok = shelf_token.clone();
             let btok = book.token.clone();
@@ -101,7 +95,49 @@ fn BookCard(book: BookSummary) -> Element {
         _ => None,
     };
 
+    let show_x = is_library_delete || remove_action.is_some();
+
     rsx! {
+        // Delete confirmation modal (library delete only)
+        if show_confirm() {
+            div { class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+                div { class: "bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4",
+                    h2 { class: "text-lg font-semibold text-gray-900 mb-2", "Delete Book?" }
+                    p { class: "text-sm text-gray-600 mb-6",
+                        "This will permanently delete \"{book.title}\" and all its files. This cannot be undone."
+                    }
+                    div { class: "flex gap-3 justify-end",
+                        button {
+                            class: "px-4 py-2 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50",
+                            autofocus: true,
+                            onclick: move |_| show_confirm.set(false),
+                            "No, Keep It"
+                        }
+                        button {
+                            class: "px-4 py-2 text-sm font-medium rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50",
+                            disabled: deleting(),
+                            onclick: {
+                                let tok = book.token.clone();
+                                move |_| {
+                                    let tok = tok.clone();
+                                    deleting.set(true);
+                                    spawn(async move {
+                                        if delete_library_book(tok).await.is_ok() {
+                                            on_action.call(());
+                                        } else {
+                                            deleting.set(false);
+                                            show_confirm.set(false);
+                                        }
+                                    });
+                                }
+                            },
+                            if deleting() { "Deleting…" } else { "Yes, Delete" }
+                        }
+                    }
+                }
+            }
+        }
+
         div {
             class: if is_dragging { "flex flex-col opacity-50" } else { "flex flex-col" },
             draggable: true,
@@ -159,13 +195,17 @@ fn BookCard(book: BookSummary) -> Element {
                         }
                     }
                 }
-                if let Some(action) = remove_action {
+                if show_x {
                     button {
                         class: "absolute top-1 right-1 w-5 h-5 flex items-center justify-center rounded-full bg-black/50 text-white text-xs hover:bg-red-600/80 leading-none",
-                        title: "Remove",
+                        title: if is_library_delete { "Delete" } else { "Remove" },
                         onclick: move |e| {
                             e.stop_propagation();
-                            action();
+                            if is_library_delete {
+                                show_confirm.set(true);
+                            } else if let Some(ref action) = remove_action {
+                                action();
+                            }
                         },
                         "×"
                     }

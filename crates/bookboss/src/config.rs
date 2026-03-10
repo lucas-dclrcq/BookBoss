@@ -10,7 +10,7 @@ use crate::error::Error;
 
 #[derive(Debug, Deserialize)]
 pub struct ImportConfig {
-    pub watch_directory: PathBuf,
+    pub bookdrop_path: PathBuf,
     #[serde(default = "ImportConfig::default_scan_interval")]
     pub scan_interval_secs: u64,
     #[serde(default = "ImportConfig::default_worker_poll_interval")]
