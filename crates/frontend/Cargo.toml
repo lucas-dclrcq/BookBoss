@@ -17,6 +17,7 @@ base64 = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
 rust_decimal = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
+tokio-graceful-shutdown = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 axum_session = { workspace = true, optional = true }
@@ -24,6 +25,7 @@ axum_session_auth = { workspace = true, optional = true }
 chrono = { workspace = true }
 clap.workspace = true
 dioxus.workspace = true
+dioxus-server = { workspace = true, optional = true }
 serde = { workspace = true }
 thiserror = { workspace = true, optional = true }
 tower = { workspace = true, optional = true }
@@ -37,6 +39,7 @@ web = ["dioxus/web"]
 server = [
     "dep:anyhow",
     "dep:base64",
+    "dep:dioxus-server",
     "dep:rand",
     "dep:rust_decimal",
     "dep:tokio",
@@ -49,5 +52,6 @@ server = [
     "dep:tower",
     "dep:tower-http",
     "dep:tracing",
+    "dep:tokio-graceful-shutdown",
     "dioxus/server",
 ]

@@ -49,7 +49,7 @@ impl IntoSubsystem<Error> for ApiSubsystem {
         tracing::info!("ApiSubsystem started");
 
         subsys.on_shutdown_requested().await;
-        tracing::info!("ApiSubsystem shutting down");
+        tracing::info!("ApiSubsystem shutting down...");
 
         Ok(())
     }

@@ -92,7 +92,7 @@ impl IntoSubsystem<Error> for CoreSubsystem {
         tracing::info!("CoreSubsystem started");
 
         subsys.on_shutdown_requested().await;
-        tracing::info!("CoreSubsystem shutting down");
+        tracing::info!("CoreSubsystem shutting down...");
 
         Ok(())
     }

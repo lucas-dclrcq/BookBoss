@@ -44,70 +44,81 @@ impl IntoSubsystem<Error> for JobWorker {
             tracing::warn!("reset {} running jobs to pending after startup", reset);
         }
 
+        let mut counter: u32 = 0;
         loop {
             tokio::select! {
                 _ = subsys.on_shutdown_requested() => {
-                    tracing::info!("JobWorker shutting down");
+                    tracing::info!("JobWorker shutting down...");
                     break;
                 }
                 _ = async {} => {
-                    // Claim the next pending job.
-                    let job = {
-                        let job_repo = job_repo.clone();
-                        transaction(&*repository, |tx| {
-                            Box::pin(async move { job_repo.claim_next(tx).await })
-                        })
-                        .await?
-                    };
+                    let mut job_processed = false;
+                    if counter == 0 {
+                        // Claim the next pending job.
+                        let job = {
+                            let job_repo = job_repo.clone();
+                            transaction(&*repository, |tx| {
+                                Box::pin(async move { job_repo.claim_next(tx).await })
+                            })
+                            .await?
+                        };
 
-                    match job {
-                        None => {
-                            tokio::time::sleep(poll_interval).await;
-                        }
-                        Some(job) => {
-                            let job_type = job.job_type.clone();
-                            let payload = job.payload.clone();
+                        match job {
+                            None => {}
+                            Some(job) => {
+                                job_processed = true;
+                                let job_type = job.job_type.clone();
+                                let payload = job.payload.clone();
 
-                            match registry.get(&job_type) {
-                                None => {
-                                    tracing::warn!(job_type, "no handler registered for job type");
-                                    let job_repo = job_repo.clone();
-                                    transaction(&*repository, |tx| {
-                                        let job = job.clone();
-                                        Box::pin(async move {
-                                            job_repo
-                                                .fail(tx, job, format!("no handler for job type '{job_type}'"))
-                                                .await
+                                match registry.get(&job_type) {
+                                    None => {
+                                        tracing::warn!(job_type, "no handler registered for job type");
+                                        let job_repo = job_repo.clone();
+                                        transaction(&*repository, |tx| {
+                                            let job = job.clone();
+                                            Box::pin(async move {
+                                                job_repo
+                                                    .fail(tx, job, format!("no handler for job type '{job_type}'"))
+                                                    .await
+                                            })
                                         })
-                                    })
-                                    .await?;
-                                }
-                                Some(handler) => {
-                                    match handler.handle(payload).await {
-                                        Ok(()) => {
-                                            let job_repo = job_repo.clone();
-                                            transaction(&*repository, |tx| {
-                                                let job = job.clone();
-                                                Box::pin(async move { job_repo.complete(tx, job).await })
-                                            })
-                                            .await?;
-                                        }
-                                        Err(e) => {
-                                            tracing::error!(job_type, error = %e, "job handler failed");
-                                            let job_repo = job_repo.clone();
-                                            transaction(&*repository, |tx| {
-                                                let job = job.clone();
-                                                Box::pin(async move {
-                                                    job_repo.fail(tx, job, e.to_string()).await
+                                        .await?;
+                                    }
+                                    Some(handler) => {
+                                        match handler.handle(payload).await {
+                                            Ok(()) => {
+                                                let job_repo = job_repo.clone();
+                                                transaction(&*repository, |tx| {
+                                                    let job = job.clone();
+                                                    Box::pin(async move { job_repo.complete(tx, job).await })
                                                 })
-                                            })
-                                            .await?;
+                                                .await?;
+                                            }
+                                            Err(e) => {
+                                                tracing::error!(job_type, error = %e, "job handler failed");
+                                                let job_repo = job_repo.clone();
+                                                transaction(&*repository, |tx| {
+                                                    let job = job.clone();
+                                                    Box::pin(async move {
+                                                        job_repo.fail(tx, job, e.to_string()).await
+                                                    })
+                                                })
+                                                .await?;
+                                            }
                                         }
                                     }
                                 }
                             }
+                        } // end match job
+                    } // end if counter == 0
+
+                    if !job_processed {
+                        counter += 1;
+                        if counter >= poll_interval.as_secs() as u32 {
+                            counter = 0;
                         }
                     }
+                    tokio::time::sleep(Duration::from_secs(1)).await;
                 }
             }
         }

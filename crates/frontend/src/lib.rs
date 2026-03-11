@@ -4,7 +4,7 @@ mod components;
 pub(crate) mod routes;
 pub(crate) mod settings;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct FrontendConfig {
     /// IP address where the server should listen.

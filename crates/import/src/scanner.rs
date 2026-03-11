@@ -140,15 +140,23 @@ impl IntoSubsystem<Error> for LibraryScanner {
     async fn run(self, subsys: &mut SubsystemHandle) -> Result<(), Error> {
         tracing::info!(directory = %self.bookdrop_path.display(), "library scanner started");
 
+        let mut counter: u32 = 0;
+
         loop {
             tokio::select! {
                 _ = subsys.on_shutdown_requested() => {
-                    tracing::info!("LibraryScanner shutting down");
+                    tracing::info!("LibraryScanner shutting down...");
                     break;
                 }
                 _ = async {} => {
-                    self.scan_once().await;
-                    tokio::time::sleep(self.poll_interval).await;
+                    if counter == 0 {
+                        self.scan_once().await;
+                    }
+                    counter += 1;
+                    if counter >= self.poll_interval.as_secs() as u32 {
+                        counter = 0;
+                    }
+                    tokio::time::sleep(Duration::from_secs(1)).await;
                 }
             }
         }

@@ -10,7 +10,6 @@ async fn main() -> anyhow::Result<()> {
     use bb_api::create_api_subsystem;
     use bb_core::{create_core_subsystem, create_services};
     use bb_database::{create_repository_service, open_database};
-    use bb_frontend::server::launch_server_frontend;
     use bb_import::{ProcessImportHandler, create_import_subsystem};
     use bookboss::{
         commands::{CommandLine, Commands},
@@ -131,7 +130,7 @@ async fn main() -> anyhow::Result<()> {
 
             tracing::info!("BookBoss {}", crate_version);
 
-            let span = tracing::span!(tracing::Level::TRACE, "CreateServer").entered();
+            let span = tracing::span!(tracing::Level::TRACE, "BookBoss Startup").entered();
 
             let database = open_database(&config.database).await.context("Couldn't create database connection")?;
             let repository_service = create_repository_service(database).await.context("Couldn't create database connection")?;
@@ -147,38 +146,38 @@ async fn main() -> anyhow::Result<()> {
                     create_metadata_providers(&config.metadata),
                 )) as std::sync::Arc<dyn bb_core::pipeline::PipelineService>
             };
-            let services = create_services(repository_service.clone(), library_store, pipeline_service).context("Couldn't create core services")?;
-            let frontend = launch_server_frontend(&config.frontend, services.clone());
+            let core_services = create_services(repository_service.clone(), library_store, pipeline_service).context("Couldn't create core services")?;
 
             let server = {
                 use std::time::Duration;
 
                 use bb_core::jobs::JobRegistry;
+                use bb_frontend::server::create_frontend_subsystem;
 
                 let scan_interval = Duration::from_secs(config.import.scan_interval_secs);
                 let worker_poll_interval = Duration::from_secs(config.import.worker_poll_interval_secs);
 
                 let mut registry = JobRegistry::new();
-                registry.register(ProcessImportHandler::new(repository_service.clone(), services.pipeline_service.clone()));
+                registry.register(ProcessImportHandler::new(repository_service.clone(), core_services.pipeline_service.clone()));
 
-                let api_subsystem = create_api_subsystem(&config.api, services.clone());
+                let api_subsystem = create_api_subsystem(&config.api, core_services.clone());
                 let core_subsystem = create_core_subsystem(registry, repository_service.clone(), worker_poll_interval);
                 let import_subsystem = create_import_subsystem(config.import.bookdrop_path.clone(), scan_interval, repository_service.clone());
+                let frontend_subsystem = create_frontend_subsystem(&config.frontend, core_services.clone());
 
                 Toplevel::new(async |s: &mut SubsystemHandle| {
                     s.start(SubsystemBuilder::new("Api", api_subsystem.into_subsystem()));
                     s.start(SubsystemBuilder::new("Core", core_subsystem.into_subsystem()));
                     s.start(SubsystemBuilder::new("Import", import_subsystem.into_subsystem()));
+                    s.start(SubsystemBuilder::new("Frontend", frontend_subsystem.into_subsystem()));
                 })
                 .catch_signals()
-                .handle_shutdown_requests(Duration::from_millis(1000))
+                .handle_shutdown_requests(Duration::from_millis(3000))
             };
 
             span.exit();
 
-            // Wait for shutdown request
             server.await?;
-            let _ = frontend.join();
 
             repository_service.repository().close().await.context("Couldn't close database")?;
         }

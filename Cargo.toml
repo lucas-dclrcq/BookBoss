@@ -67,6 +67,10 @@ features = ["serde"]
 version = "4.5.60"
 features = ["cargo", "derive", "env"]
 
+[workspace.dependencies.dioxus-server]
+version = "0.7.3"
+features = ["router"]
+
 [workspace.dependencies.dioxus]
 version = "0.7.3"
 features = ["fullstack", "router"]
