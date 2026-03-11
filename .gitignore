@@ -31,5 +31,8 @@ docs/book/
 # Scratchpad
 .scratchpad/
 
+# Workspaces
+.workspaces/
+
 # Local library
 Library/
