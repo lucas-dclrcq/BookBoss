@@ -18,7 +18,7 @@ pub(crate) fn LoginForm(on_must_change: EventHandler<String>) -> Element {
 
     rsx! {
         div { class: "bg-white rounded-2xl shadow-lg w-full max-w-md",
-            div { class: "flex justify-center pt-8 pb-2",
+            div { class: "pt-8 pb-2",
                 img {
                     src: asset!("/assets/BookBoss-Banner.png"),
                     alt: "BookBoss",

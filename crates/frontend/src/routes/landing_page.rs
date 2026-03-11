@@ -261,11 +261,11 @@ fn ForceChangePasswordForm(user_token: String, on_changed: EventHandler<()>, on_
 
     rsx! {
         div { class: "bg-white rounded-2xl shadow-lg w-full max-w-md",
-            div { class: "flex justify-center pt-8 pb-2",
+            div { class: "pt-8 pb-2",
                 img {
                     src: asset!("/assets/BookBoss-Banner.png"),
                     alt: "BookBoss",
-                    class: "w-[33vw] max-w-full h-auto",
+                    class: "w-full h-auto",
                 }
             }
             form {
