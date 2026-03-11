@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.5](https://github.com/szinn/BookBoss/compare/v0.2.4..v0.2.5) - 2026-03-11
+
+### Features
+
+- _(frontend)_ Keep NavBar stable during route navigation - ([a4e8658](https://github.com/szinn/BookBoss/commit/a4e8658bcb0f428a07f50f430740ddc926a7415b))
+- _(frontend)_ Add /healthz and /readyz health endpoints - ([a22c7a2](https://github.com/szinn/BookBoss/commit/a22c7a2309732377c93535eac53ab21fc591409c))
+
+### Bug Fixes
+
+- _(frontend)_ Limit inbound HTTP request body size to 10 MiB - ([1db685f](https://github.com/szinn/BookBoss/commit/1db685f0a0f69b5fcbb05ba99ba5e3f0e60021a1))
+- _(frontend)_ Fix banner image width on mobile screens - ([6272ca2](https://github.com/szinn/BookBoss/commit/6272ca2be93455ffbeb5ab046305e47b83b63565))
+- _(metadata)_ Add 5s request timeout to all metadata providers - ([a90ada8](https://github.com/szinn/BookBoss/commit/a90ada8c55384245f760caa46b43010abf927b21))
+
+### Miscellaneous Tasks
+
+- _(clippy)_ Clean up some clippy warnings - ([3aa0b3f](https://github.com/szinn/BookBoss/commit/3aa0b3f2b7015275593da793d25ed57aa61105a3))
+
 ## [0.2.4](https://github.com/szinn/BookBoss/compare/v0.2.3..v0.2.4) - 2026-03-11
 
 ### Features

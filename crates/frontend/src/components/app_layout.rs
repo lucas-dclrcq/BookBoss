@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
+
 #[cfg(feature = "server")]
 use crate::server::AuthSession;
-
 use crate::{Route, components::NavBar};
 
 #[get("/api/v1/check_auth", auth_session: axum::Extension<AuthSession>)]
