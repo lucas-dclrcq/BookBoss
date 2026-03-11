@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.4](https://github.com/szinn/BookBoss/compare/v0.2.3..v0.2.4) - 2026-03-11
+
+### Features
+
+- _(frontend)_ Display genres and tags on book detail page - ([b598ddf](https://github.com/szinn/BookBoss/commit/b598ddf71add84a139820280ca34b91aae79cb0d))
+
+### Bug Fixes
+
+- _(frontend)_ Tie banner graphic to login/register widths - ([8bbf01a](https://github.com/szinn/BookBoss/commit/8bbf01ab9fa2f1f9defe5f1ae64b33e1c12686fd))
+- _(frontend)_ Capability-gate edit/delete buttons and add delete confirmation - ([d22d8b5](https://github.com/szinn/BookBoss/commit/d22d8b5cf14c048bcb69631e7627fed43f256f4a))
+- _(frontend)_ Programmatically focus username field on login form mount - ([2171e38](https://github.com/szinn/BookBoss/commit/2171e3834bb746e6241b8cea9f52278ab971c6eb))
+
+### Refactor
+
+- _(frontend)_ Integrate frontend as tokio-graceful-shutdown subsystem - ([8487aec](https://github.com/szinn/BookBoss/commit/8487aec95a86972073bad8df27d1f24670073db3))
+
 ## [0.2.3](https://github.com/szinn/BookBoss/compare/v0.2.2..v0.2.3) - 2026-03-09
 
 ### Features
