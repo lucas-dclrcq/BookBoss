@@ -22,6 +22,7 @@ path = "src/bin/bookboss.rs"
 server = [
     "dioxus/server",
     "dep:async-trait",
+    "dep:mimalloc",
     "dep:bb-api",
     "dep:bb-core",
     "dep:bb-database",
@@ -58,6 +59,7 @@ bb-metadata = { workspace = true, optional = true }
 bb-storage = { workspace = true, optional = true }
 
 anyhow = { workspace = true, optional = true }
+mimalloc = { workspace = true, optional = true }
 clap = { workspace = true, optional = true }
 config = { workspace = true, optional = true }
 dioxus = { workspace = true, optional = true }
