@@ -43,7 +43,7 @@ pub(crate) fn RegisterAdminForm() -> Element {
                 img {
                     src: asset!("/assets/BookBoss-Banner.png"),
                     alt: "BookBoss",
-                    class: "w-[33vw] max-w-full h-auto",
+                    class: "w-full h-auto",
                 }
             }
             form {

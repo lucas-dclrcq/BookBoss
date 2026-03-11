@@ -22,7 +22,7 @@ pub(crate) fn LoginForm(on_must_change: EventHandler<String>) -> Element {
                 img {
                     src: asset!("/assets/BookBoss-Banner.png"),
                     alt: "BookBoss",
-                    class: "w-[33vw] max-w-full h-auto",
+                    class: "w-full h-auto",
                 }
             }
             form {
