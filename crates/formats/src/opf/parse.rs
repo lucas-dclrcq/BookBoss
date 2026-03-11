@@ -378,6 +378,7 @@ pub fn parse_sidecar(xml: &[u8]) -> Result<BookSidecar, Error> {
         .into_iter()
         .enumerate()
         .map(|(i, raw)| {
+            #[expect(clippy::cast_possible_truncation, reason = "author list index; books have far fewer authors than i32::MAX")]
             let sort_order = sort_order_map.get(raw.name.as_str()).copied().unwrap_or(i as i32);
             let role = raw.role_code.as_deref().map_or(AuthorRole::Author, marc_to_author_role);
             SidecarAuthor {
@@ -429,10 +430,14 @@ pub fn extract_metadata(xml: &[u8]) -> Result<ExtractedMetadata, Error> {
         .authors
         .into_iter()
         .enumerate()
-        .map(|(i, raw)| ExtractedAuthor {
-            name: raw.name,
-            role: raw.role_code.as_deref().map(marc_to_author_role),
-            sort_order: i as i32,
+        .map(|(i, raw)| {
+            #[expect(clippy::cast_possible_truncation, reason = "author list index; books have far fewer authors than i32::MAX")]
+            let sort_order = i as i32;
+            ExtractedAuthor {
+                name: raw.name,
+                role: raw.role_code.as_deref().map(marc_to_author_role),
+                sort_order,
+            }
         })
         .collect();
 

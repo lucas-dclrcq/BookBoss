@@ -25,7 +25,9 @@ async fn get_pending_count() -> Result<Option<u32>, ServerFnError> {
         .list_needs_review(None, None)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
-    Ok(Some(jobs.len() as u32))
+    #[expect(clippy::cast_possible_truncation, reason = "pending review count; will never approach u32::MAX")]
+    let count = jobs.len() as u32;
+    Ok(Some(count))
 }
 
 #[put("/api/v1/logout", auth_session: axum::Extension<AuthSession>)]

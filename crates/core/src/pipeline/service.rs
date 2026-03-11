@@ -306,6 +306,10 @@ impl PipelineService for PipelineServiceImpl {
         let cover_filename: Option<String> = cover_bytes.as_deref().map(|b| detect_cover_filename(b).to_string());
 
         // ── 7. Capture file size before the file is moved ─────────────────────
+        #[expect(
+            clippy::cast_possible_wrap,
+            reason = "file size stored as i64 in DB; files in practice will not exceed i64::MAX bytes"
+        )]
         let file_size = tokio::fs::metadata(&path).await.map(|m| m.len() as i64).unwrap_or(0);
 
         // ── 8. Determine title (fall back to filename stem) ───────────────────
@@ -689,9 +693,9 @@ impl PipelineService for PipelineServiceImpl {
                         Some(a) => a,
                         None => author_repo.add_author(tx, NewAuthor { name, bio: None }).await?,
                     };
-                    book_repo2
-                        .add_book_author(tx, book_id, author.id, AuthorRole::Author, sort_order as i32)
-                        .await?;
+                    #[expect(clippy::cast_possible_truncation, reason = "author list index; books have far fewer authors than i32::MAX")]
+                    let sort_order = sort_order as i32;
+                    book_repo2.add_book_author(tx, book_id, author.id, AuthorRole::Author, sort_order).await?;
                 }
 
                 // Replace identifiers (deduplicate by type, keep first)
@@ -769,11 +773,15 @@ impl PipelineService for PipelineServiceImpl {
             .iter()
             .filter(|n| !n.is_empty())
             .enumerate()
-            .map(|(i, name)| SidecarAuthor {
-                name: normalize_name(name),
-                role: AuthorRole::Author,
-                sort_order: i as i32,
-                file_as: None,
+            .map(|(i, name)| {
+                #[expect(clippy::cast_possible_truncation, reason = "author list index; books have far fewer authors than i32::MAX")]
+                let sort_order = i as i32;
+                SidecarAuthor {
+                    name: normalize_name(name),
+                    role: AuthorRole::Author,
+                    sort_order,
+                    file_as: None,
+                }
             })
             .collect();
 
@@ -952,9 +960,9 @@ impl PipelineService for PipelineServiceImpl {
                         Some(a) => a,
                         None => author_repo.add_author(tx, NewAuthor { name, bio: None }).await?,
                     };
-                    book_repo2
-                        .add_book_author(tx, book_id, author.id, AuthorRole::Author, sort_order as i32)
-                        .await?;
+                    #[expect(clippy::cast_possible_truncation, reason = "author list index; books have far fewer authors than i32::MAX")]
+                    let sort_order = sort_order as i32;
+                    book_repo2.add_book_author(tx, book_id, author.id, AuthorRole::Author, sort_order).await?;
                 }
 
                 // Replace identifiers (deduplicate by type, keep first)
@@ -1028,11 +1036,15 @@ impl PipelineService for PipelineServiceImpl {
             .iter()
             .filter(|n| !n.is_empty())
             .enumerate()
-            .map(|(i, name)| SidecarAuthor {
-                name: normalize_name(name),
-                role: AuthorRole::Author,
-                sort_order: i as i32,
-                file_as: None,
+            .map(|(i, name)| {
+                #[expect(clippy::cast_possible_truncation, reason = "author list index; books have far fewer authors than i32::MAX")]
+                let sort_order = i as i32;
+                SidecarAuthor {
+                    name: normalize_name(name),
+                    role: AuthorRole::Author,
+                    sort_order,
+                    file_as: None,
+                }
             })
             .collect();
 

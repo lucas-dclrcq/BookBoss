@@ -153,7 +153,9 @@ impl IntoSubsystem<Error> for LibraryScanner {
                         self.scan_once().await;
                     }
                     counter += 1;
-                    if counter >= self.poll_interval.as_secs() as u32 {
+                    #[expect(clippy::cast_possible_truncation, reason = "poll interval in seconds fits in u32; no sane interval exceeds ~136 years")]
+                    let poll_secs = self.poll_interval.as_secs() as u32;
+                    if counter >= poll_secs {
                         counter = 0;
                     }
                     tokio::time::sleep(Duration::from_secs(1)).await;

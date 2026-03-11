@@ -89,10 +89,14 @@ impl OpenLibraryAdapter {
             authors
                 .iter()
                 .enumerate()
-                .map(|(i, a)| ExtractedAuthor {
-                    name: a.name.clone(),
-                    role: Some(AuthorRole::Author),
-                    sort_order: i as i32,
+                .map(|(i, a)| {
+                    #[expect(clippy::cast_possible_truncation, reason = "author list index; books have far fewer authors than i32::MAX")]
+                    let sort_order = i as i32;
+                    ExtractedAuthor {
+                        name: a.name.clone(),
+                        role: Some(AuthorRole::Author),
+                        sort_order,
+                    }
                 })
                 .collect()
         });

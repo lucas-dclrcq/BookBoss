@@ -9,6 +9,7 @@ const ALPHABET: &[u8; 32] = b"Y4XK0N8AR3G6JM2VT9BS5WC1DPH7EUZF";
 
 /// Reverse lookup table: ASCII byte → alphabet index (or `0xFF` for invalid).
 /// Covers the full range `0..=b'Z'` (91 entries).
+#[expect(clippy::cast_possible_truncation, reason = "ALPHABET has 32 entries; i is 0..31, always fits u8")]
 const DECODE_TABLE: [u8; 91] = {
     let mut table = [0xFF_u8; 91];
     let mut i = 0;
@@ -53,7 +54,12 @@ impl TokenId for u64 {
     const ENCODED_LEN: usize = 13; // 32^13 > u64::MAX
 
     fn random_in_range(max: u128) -> Self {
-        rand::rng().random_range(1..=max as Self)
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "MAX const for u64 tokens is bounded by u64::MAX; caller guarantees max fits in u64"
+        )]
+        let max_u64 = max as Self;
+        rand::rng().random_range(1..=max_u64)
     }
 
     fn encode(self) -> String {

@@ -129,6 +129,7 @@ async fn list_books() -> Result<ListBooksResponse, ServerFnError> {
                     ReadStatus::Abandoned => "Abandoned",
                 }
                 .to_string(),
+                #[expect(clippy::cast_possible_truncation, reason = "bps / 100 gives 0–100 percentage; always fits u8")]
                 progress_pct: m.progress_percentage.map(|bps| (bps / 100) as u8),
                 personal_rating: m.personal_rating,
                 times_read: m.times_read,

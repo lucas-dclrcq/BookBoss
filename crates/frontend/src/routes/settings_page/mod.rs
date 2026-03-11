@@ -109,9 +109,9 @@ async fn get_reading_settings() -> Result<ReadingSettings, ServerFnError> {
 
     let threshold_bps = setting.and_then(|s| s.value.parse::<u16>().ok()).unwrap_or(DEFAULT_AUTO_READ_THRESHOLD);
 
-    Ok(ReadingSettings {
-        auto_read_threshold_pct: (threshold_bps / 100) as u8,
-    })
+    #[expect(clippy::cast_possible_truncation, reason = "bps / 100 gives 0–100 percentage; always fits u8")]
+    let auto_read_threshold_pct = (threshold_bps / 100) as u8;
+    Ok(ReadingSettings { auto_read_threshold_pct })
 }
 
 #[post(

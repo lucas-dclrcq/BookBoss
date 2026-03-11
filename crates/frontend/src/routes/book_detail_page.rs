@@ -76,6 +76,7 @@ fn to_reading_state_dto(meta: &UserBookMetadata) -> ReadingStateDto {
             ReadStatus::Abandoned => "Abandoned",
         }
         .to_string(),
+        #[expect(clippy::cast_possible_truncation, reason = "bps / 100 gives 0–100 percentage; always fits u8")]
         progress_pct: meta.progress_percentage.map(|bps| (bps / 100) as u8),
         personal_rating: meta.personal_rating,
         times_read: meta.times_read,
@@ -464,7 +465,9 @@ fn format_file_size(bytes: i64) -> String {
     } else if bytes < MB {
         format!("{} KB", bytes / KB)
     } else {
-        format!("{:.1} MB", bytes as f64 / MB as f64)
+        #[expect(clippy::cast_precision_loss, reason = "precision loss acceptable for human-readable file size display")]
+        let mb = bytes as f64 / MB as f64;
+        format!("{mb:.1} MB")
     }
 }
 
