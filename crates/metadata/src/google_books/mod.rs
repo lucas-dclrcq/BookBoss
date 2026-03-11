@@ -24,7 +24,10 @@ pub struct GoogleBooksAdapter {
 impl GoogleBooksAdapter {
     pub fn new(api_token: impl Into<String>) -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .timeout(crate::REQUEST_TIMEOUT)
+                .build()
+                .expect("failed to build reqwest client"),
             api_token: api_token.into(),
             base_url: "https://www.googleapis.com/books/v1".to_string(),
         }
@@ -34,7 +37,10 @@ impl GoogleBooksAdapter {
     /// mock server.
     pub fn with_base_url(api_token: impl Into<String>, base_url: impl Into<String>) -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .timeout(crate::REQUEST_TIMEOUT)
+                .build()
+                .expect("failed to build reqwest client"),
             api_token: api_token.into(),
             base_url: base_url.into(),
         }

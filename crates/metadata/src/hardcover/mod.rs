@@ -26,7 +26,10 @@ pub struct HardcoverAdapter {
 impl HardcoverAdapter {
     pub fn new(api_token: impl Into<String>) -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .timeout(crate::REQUEST_TIMEOUT)
+                .build()
+                .expect("failed to build reqwest client"),
             api_token: api_token.into(),
             base_url: "https://api.hardcover.app/v1/graphql".to_string(),
         }
@@ -36,7 +39,10 @@ impl HardcoverAdapter {
     /// mock server.
     pub fn with_base_url(api_token: impl Into<String>, base_url: impl Into<String>) -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .timeout(crate::REQUEST_TIMEOUT)
+                .build()
+                .expect("failed to build reqwest client"),
             api_token: api_token.into(),
             base_url: base_url.into(),
         }

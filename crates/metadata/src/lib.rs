@@ -4,6 +4,9 @@ mod open_library;
 
 use std::sync::Arc;
 
+/// Default HTTP request timeout for all metadata provider clients.
+pub(crate) const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 use bb_core::pipeline::MetadataProvider;
 pub use google_books::GoogleBooksAdapter;
 pub use hardcover::HardcoverAdapter;

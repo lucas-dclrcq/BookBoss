@@ -32,7 +32,10 @@ impl Default for OpenLibraryAdapter {
 impl OpenLibraryAdapter {
     pub fn new() -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .timeout(crate::REQUEST_TIMEOUT)
+                .build()
+                .expect("failed to build reqwest client"),
             base_url: "https://openlibrary.org".to_string(),
             covers_base_url: "https://covers.openlibrary.org".to_string(),
         }
@@ -42,7 +45,10 @@ impl OpenLibraryAdapter {
     /// mock server.
     pub fn with_base_urls(base_url: impl Into<String>, covers_base_url: impl Into<String>) -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .timeout(crate::REQUEST_TIMEOUT)
+                .build()
+                .expect("failed to build reqwest client"),
             base_url: base_url.into(),
             covers_base_url: covers_base_url.into(),
         }
