@@ -4,6 +4,8 @@ pipx_uvx = true
 [tools]
 "aqua:astral-sh/uv" = "latest"
 "cargo-binstall" = "1.17.4"
+"cargo:cargo-audit" = "0.22.1"
+"cargo:cargo-deny" = "0.19.0"
 "cargo:cargo-insta" = "1.43.1"
 "cargo:cargo-nextest" = "0.9.126"
 "cargo:dioxus-cli" = "0.7.3"
