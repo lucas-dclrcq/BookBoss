@@ -66,12 +66,18 @@ impl IntoSubsystem<anyhow::Error> for FrontendSubsystem {
             .layer(SessionLayer::new(session_store))
             .layer(AuthSessionLayer::<AuthUser, UserId, BackendSessionPool, BackendSessionPool>::new(Some(backend_pool)).with_config(auth_config));
 
-        let router = axum::Router::new()
+        let app_router = axum::Router::new()
             .route("/api/v1/covers/{book_token}", axum::routing::get(covers::serve_cover))
             .route("/api/v1/books/{book_token}/download/{format}", axum::routing::get(downloads::serve_book_file))
             .serve_dioxus_application(dioxus_server::ServeConfig::new(), BookBossFrontend)
             .layer(Extension(core_services))
             .layer(middleware);
+
+        let health_handler = || async { axum::http::StatusCode::OK };
+        let router = axum::Router::new()
+            .route("/healthz", axum::routing::get(health_handler))
+            .route("/readyz", axum::routing::get(health_handler))
+            .merge(app_router);
 
         let ip = std::env::var("IP").ok().unwrap_or_else(|| self.config.listen_ip.clone());
         let port: u16 = std::env::var("PORT").ok().and_then(|s| s.parse().ok()).unwrap_or(self.config.listen_port);
