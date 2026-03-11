@@ -372,7 +372,7 @@ pub(crate) async fn books_for_shelf(token: String, cursor: Option<u64>, page_siz
 // Components
 // ---------------------------------------------------------------------------
 
-/// Shelf detail page — shows the ShelfBar and book grid, matching BooksPage
+/// Shelf detail page — shows the `ShelfBar` and book grid, matching `BooksPage`
 /// layout.
 #[component]
 pub(crate) fn ShelfPage(token: String) -> Element {
@@ -408,9 +408,9 @@ pub(crate) fn ShelfPage(token: String) -> Element {
 
     // Derive current shelf info from the shelves list (avoids a separate get_shelf
     // call).
-    let shelves: Vec<ShelfSummary> = shelves_resource().and_then(|r| r.ok()).unwrap_or_default();
+    let shelves: Vec<ShelfSummary> = shelves_resource().and_then(std::result::Result::ok).unwrap_or_default();
     let current_shelf = shelves.iter().find(|s| s.token == token).cloned();
-    let is_own = current_shelf.as_ref().map(|s| s.is_own).unwrap_or(false);
+    let is_own = current_shelf.as_ref().is_some_and(|s| s.is_own);
     let current_name = current_shelf.as_ref().map(|s| s.name.clone()).unwrap_or_default();
     let current_vis = current_shelf.as_ref().map(|s| s.visibility.clone()).unwrap_or_default();
 
@@ -428,14 +428,14 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                 on_edit_shelf: {
                     let name_for_edit = current_name.clone();
                     let vis_for_edit = current_vis.clone();
-                    move |_| {
+                    move |()| {
                         edit_name.set(name_for_edit.clone());
                         edit_private.set(vis_for_edit == "Private");
                         edit_error.set(None);
                         show_edit.set(true);
                     }
                 },
-                on_delete_shelf: move |_| show_delete.set(true),
+                on_delete_shelf: move |()| show_delete.set(true),
             }
 
             match books_resource() {
@@ -466,7 +466,7 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                             BookGrid {
                                 books,
                                 context: context.clone(),
-                                on_action: move |_| books_resource.restart(),
+                                on_action: move |()| books_resource.restart(),
                             }
                         }
                     }
@@ -596,12 +596,9 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                                     let tok = tok.clone();
                                     deleting.set(true);
                                     spawn(async move {
-                                        match delete_shelf(tok).await {
-                                            Ok(()) => { nav.push(Route::BooksPage {}); }
-                                            Err(_) => {
-                                                deleting.set(false);
-                                                show_delete.set(false);
-                                            }
+                                        if let Ok(()) = delete_shelf(tok).await { nav.push(Route::BooksPage {}); } else {
+                                            deleting.set(false);
+                                            show_delete.set(false);
                                         }
                                     });
                                 }

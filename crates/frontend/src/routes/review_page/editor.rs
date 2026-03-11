@@ -656,7 +656,9 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                                         .as_ref()
                                                         .and_then(|r| r.identifiers.get(&tk_copy).cloned())
                                                         .unwrap_or_default();
-                                                    if !provider_val.is_empty() {
+                                                    if provider_val.is_empty() {
+                                                        rsx! {}
+                                                    } else {
                                                         let tk2 = tk_copy.clone();
                                                         let pv = provider_val.clone();
                                                         rsx! {
@@ -669,8 +671,6 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                                                 "←"
                                                             }
                                                         }
-                                                    } else {
-                                                        rsx! {}
                                                     }
                                                 }
                                             }

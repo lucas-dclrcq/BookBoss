@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use sha2::{Digest, Sha256};
+use sha2::{Digest as _, Sha256};
 
 #[derive(Debug, thiserror::Error)]
 pub enum HashError {

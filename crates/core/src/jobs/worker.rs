@@ -47,11 +47,11 @@ impl IntoSubsystem<Error> for JobWorker {
         let mut counter: u32 = 0;
         loop {
             tokio::select! {
-                _ = subsys.on_shutdown_requested() => {
+                () = subsys.on_shutdown_requested() => {
                     tracing::info!("JobWorker shutting down...");
                     break;
                 }
-                _ = async {} => {
+                () = async {} => {
                     let mut job_processed = false;
                     if counter == 0 {
                         // Claim the next pending job.

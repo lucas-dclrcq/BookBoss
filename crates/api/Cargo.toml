@@ -39,3 +39,6 @@ bb-core = { workspace = true, features = ["test-support"] }
 
 [build-dependencies]
 tonic-prost-build.workspace = true
+
+[lints]
+workspace = true

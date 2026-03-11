@@ -530,11 +530,11 @@ enum RoleChoice {
 impl RoleChoice {
     fn from_caps(caps: &[String]) -> Self {
         if caps.iter().any(|c| c == "SuperAdmin") {
-            RoleChoice::SuperAdmin
+            Self::SuperAdmin
         } else if caps.iter().any(|c| c == "Admin") {
-            RoleChoice::Admin
+            Self::Admin
         } else {
-            RoleChoice::User
+            Self::User
         }
     }
 }
@@ -543,7 +543,7 @@ impl RoleChoice {
 fn UserModal(editing: Option<UserAdminRow>, is_super_admin: bool, on_close: EventHandler<()>, on_saved: EventHandler<()>) -> Element {
     let is_edit = editing.is_some();
 
-    let initial_role = editing.as_ref().map(|r| RoleChoice::from_caps(&r.capabilities)).unwrap_or(RoleChoice::User);
+    let initial_role = editing.as_ref().map_or(RoleChoice::User, |r| RoleChoice::from_caps(&r.capabilities));
     let editing_is_super = initial_role == RoleChoice::SuperAdmin;
     let initial_user_caps: Vec<String> = editing
         .as_ref()

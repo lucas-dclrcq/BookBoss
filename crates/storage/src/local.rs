@@ -12,6 +12,7 @@ pub struct LocalLibraryStore {
 }
 
 impl LocalLibraryStore {
+    #[must_use]
     pub fn new(library_path: PathBuf) -> Self {
         Self { library_path }
     }

@@ -139,7 +139,7 @@ impl BookService for BookServiceImpl {
             .await)?;
         let next = match max {
             Some(d) => {
-                use rust_decimal::prelude::ToPrimitive;
+                use rust_decimal::prelude::ToPrimitive as _;
                 let floor = d.floor().to_u32().unwrap_or(0);
                 floor + 1
             }

@@ -18,7 +18,7 @@ pub enum BookStatus {
 
 /// Filter criteria for listing books.
 ///
-/// All set fields are ANDed together. An empty filter returns all books.
+/// All set fields are `ANDed` together. An empty filter returns all books.
 #[derive(Debug, Clone, Default)]
 pub struct BookFilter {
     pub status: Option<BookStatus>,

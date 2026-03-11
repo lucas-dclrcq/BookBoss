@@ -24,3 +24,6 @@ tracing.workspace = true
 bb-core = { workspace = true, features = ["test-support"] }
 tokio.workspace = true
 serde_json.workspace = true
+
+[lints]
+workspace = true

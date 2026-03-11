@@ -5,7 +5,7 @@ use crate::{fixtures, setup};
 /// Build a `CoreServices` backed by the same repos as `ctx` but with a
 /// `SilentLibraryStore` so that `LibraryService::delete_book` can complete
 /// without panicking on the no-op store.
-async fn library_services(ctx: &crate::context::TestContext) -> std::sync::Arc<bb_core::CoreServices> {
+fn library_services(ctx: &crate::context::TestContext) -> std::sync::Arc<bb_core::CoreServices> {
     bb_core::create_services(
         ctx.repos.clone(),
         fixtures::silent_library_store(),
@@ -17,7 +17,7 @@ async fn library_services(ctx: &crate::context::TestContext) -> std::sync::Arc<b
 #[tokio::test]
 async fn delete_book_removes_book_record() {
     let ctx = setup().await;
-    let svc = library_services(&ctx).await;
+    let svc = library_services(&ctx);
     let book = fixtures::insert_book(&ctx.repos, "To Delete", BookStatus::Available).await;
 
     svc.library_service.delete_book(&book.token).await.unwrap();
@@ -29,7 +29,7 @@ async fn delete_book_removes_book_record() {
 #[tokio::test]
 async fn delete_book_removes_linked_import_job() {
     let ctx = setup().await;
-    let svc = library_services(&ctx).await;
+    let svc = library_services(&ctx);
     let book = fixtures::insert_book(&ctx.repos, "Book With Job", BookStatus::Available).await;
     let job = fixtures::insert_import_job(&ctx.repos, "job_hash_for_delete").await;
     let job = fixtures::link_job_to_book(&ctx.repos, job, book.id).await;
@@ -43,7 +43,7 @@ async fn delete_book_removes_linked_import_job() {
 #[tokio::test]
 async fn delete_book_removes_orphan_author() {
     let ctx = setup().await;
-    let svc = library_services(&ctx).await;
+    let svc = library_services(&ctx);
     let book = fixtures::insert_book(&ctx.repos, "Only Book By Author", BookStatus::Available).await;
     let author = fixtures::insert_author(&ctx.repos, "Orphan Author").await;
     fixtures::link_book_author(&ctx.repos, book.id, author.id).await;
@@ -64,7 +64,7 @@ async fn delete_book_removes_orphan_author() {
 #[tokio::test]
 async fn delete_book_preserves_author_with_other_books() {
     let ctx = setup().await;
-    let svc = library_services(&ctx).await;
+    let svc = library_services(&ctx);
     let book1 = fixtures::insert_book(&ctx.repos, "Book One", BookStatus::Available).await;
     let book2 = fixtures::insert_book(&ctx.repos, "Book Two", BookStatus::Available).await;
     let author = fixtures::insert_author(&ctx.repos, "Shared Author").await;
@@ -87,7 +87,7 @@ async fn delete_book_preserves_author_with_other_books() {
 #[tokio::test]
 async fn delete_book_returns_not_found_for_missing_token() {
     let ctx = setup().await;
-    let svc = library_services(&ctx).await;
+    let svc = library_services(&ctx);
     let ghost_token = bb_core::book::BookToken::new(999_999);
 
     let result = svc.library_service.delete_book(&ghost_token).await;

@@ -94,12 +94,10 @@ pub(crate) fn ChipInput(mut values: Signal<Vec<String>>, options: Vec<String>, p
                                     show_dropdown.set(false);
                                 }
                             }
-                            Key::Backspace => {
-                                if input_text.read().is_empty() {
-                                    let mut v = values.write();
-                                    if !v.is_empty() {
-                                        v.pop();
-                                    }
+                            Key::Backspace if input_text.read().is_empty() => {
+                                let mut v = values.write();
+                                if !v.is_empty() {
+                                    v.pop();
                                 }
                             }
                             Key::Escape => {

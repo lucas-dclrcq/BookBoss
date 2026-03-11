@@ -8,7 +8,7 @@ use crate::{
 
 /// Filter criteria for a smart shelf.
 ///
-/// All set fields are ANDed together. Within each field, any match suffices.
+/// All set fields are `ANDed` together. Within each field, any match suffices.
 /// Stored as JSONB in `shelves.filter_criteria`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ShelfFilter {

@@ -7,6 +7,7 @@ pub struct JobRegistry {
 }
 
 impl JobRegistry {
+    #[must_use]
     pub fn new() -> Self {
         Self { handlers: HashMap::new() }
     }
@@ -17,7 +18,7 @@ impl JobRegistry {
     }
 
     pub(crate) fn get(&self, job_type: &str) -> Option<&dyn ErasedJobHandler> {
-        self.handlers.get(job_type).map(|h| h.as_ref())
+        self.handlers.get(job_type).map(std::convert::AsRef::as_ref)
     }
 }
 

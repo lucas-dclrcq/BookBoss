@@ -13,7 +13,7 @@ pub trait JobHandler: Send + Sync + 'static {
     fn handle(&self, payload: Self::Payload) -> impl Future<Output = Result<(), Error>> + Send;
 }
 
-/// Object-safe erased version of `JobHandler` used for HashMap storage.
+/// Object-safe erased version of `JobHandler` used for `HashMap` storage.
 /// Not part of the public API — handler authors implement `JobHandler`.
 pub(crate) trait ErasedJobHandler: Send + Sync {
     fn job_type(&self) -> &str;

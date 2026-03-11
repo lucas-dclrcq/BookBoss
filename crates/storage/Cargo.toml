@@ -22,3 +22,6 @@ bb-core = { workspace = true, features = ["test-support"] }
 bb-formats.workspace = true
 tempfile = "3.27.0"
 tokio.workspace = true
+
+[lints]
+workspace = true

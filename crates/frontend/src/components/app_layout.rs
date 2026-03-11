@@ -34,7 +34,7 @@ pub(crate) fn AppLayout() -> Element {
 }
 
 /// Wraps the Outlet so that only the page content area suspends during the auth
-/// check, leaving the NavBar visible immediately.
+/// check, leaving the `NavBar` visible immediately.
 #[component]
 fn AuthGate() -> Element {
     let navigator = use_navigator();

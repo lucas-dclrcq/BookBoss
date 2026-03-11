@@ -8,15 +8,24 @@ mod library;
 mod postgres;
 
 #[cfg(feature = "sqlite")]
-#[cfg_attr(feature = "postgres", allow(dead_code))]
+#[cfg_attr(
+    feature = "postgres",
+    allow(dead_code, reason = "postgres takes priority; other backends are inactive when it is enabled")
+)]
 mod sqlite;
 
 #[cfg(feature = "mariadb")]
-#[cfg_attr(feature = "postgres", allow(dead_code))]
+#[cfg_attr(
+    feature = "postgres",
+    allow(dead_code, reason = "postgres takes priority; other backends are inactive when it is enabled")
+)]
 mod mariadb;
 
 #[cfg(feature = "mysql")]
-#[cfg_attr(feature = "postgres", allow(dead_code))]
+#[cfg_attr(
+    feature = "postgres",
+    allow(dead_code, reason = "postgres takes priority; other backends are inactive when it is enabled")
+)]
 mod mysql;
 
 // Priority: postgres > mysql > sqlite when multiple features are enabled.

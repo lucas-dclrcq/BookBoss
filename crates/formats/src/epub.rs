@@ -1,4 +1,4 @@
-use std::{io::Read, path::Path};
+use std::{io::Read as _, path::Path};
 
 use async_trait::async_trait;
 use bb_core::{

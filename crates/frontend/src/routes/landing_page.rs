@@ -11,8 +11,8 @@ const SPECIAL_CHARS: &str = "!@#$%^&*()_+-=[]{}|;:,.<>?";
 fn password_requirements(pw: &str) -> Vec<(String, bool)> {
     vec![
         (format!("At least {MIN_PASSWORD_LEN} characters"), pw.len() >= MIN_PASSWORD_LEN),
-        ("One uppercase letter (A–Z)".to_string(), pw.chars().any(|c| c.is_uppercase())),
-        ("One lowercase letter (a–z)".to_string(), pw.chars().any(|c| c.is_lowercase())),
+        ("One uppercase letter (A–Z)".to_string(), pw.chars().any(char::is_uppercase)),
+        ("One lowercase letter (a–z)".to_string(), pw.chars().any(char::is_lowercase)),
         ("One digit (0–9)".to_string(), pw.chars().any(|c| c.is_ascii_digit())),
         ("One special character (!@#$%^&*…)".to_string(), pw.chars().any(|c| SPECIAL_CHARS.contains(c))),
     ]
@@ -206,8 +206,8 @@ pub(crate) fn LandingPage() -> Element {
             if let Some(token) = change_pw_token() {
                 ForceChangePasswordForm {
                     user_token: token,
-                    on_changed: move |_| { navigator.push(Route::BooksPage {}); },
-                    on_cancel: move |_| change_pw_token.set(None),
+                    on_changed: move |()| { navigator.push(Route::BooksPage {}); },
+                    on_cancel: move |()| change_pw_token.set(None),
                 }
             } else {
                 match landing_state() {

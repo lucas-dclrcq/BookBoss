@@ -154,7 +154,7 @@ pub(crate) fn AuthorDetailPage(token: String) -> Element {
                         BookGrid {
                             books: author.books,
                             context: BookGridContext::ReadOnly,
-                            on_action: |_| {},
+                            on_action: |()| {},
                         }
                     }
                 },

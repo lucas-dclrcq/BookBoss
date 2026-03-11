@@ -6,7 +6,7 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 use bb_core::{
     Error,
     import::ImportStatus,
-    jobs::JobRepositoryExt,
+    jobs::JobRepositoryExt as _,
     repository::{RepositoryService, read_only_transaction, transaction},
 };
 pub use handler::{ProcessImportHandler, ProcessImportPayload};
@@ -99,6 +99,7 @@ impl IntoSubsystem<Error> for ImportSubsystem {
     }
 }
 
+#[must_use]
 pub fn create_import_subsystem(bookdrop_path: PathBuf, poll_interval: Duration, repository_service: Arc<RepositoryService>) -> ImportSubsystem {
     ImportSubsystem {
         bookdrop_path,

@@ -25,6 +25,7 @@ pub struct MetadataConfig {
 /// Providers are tried in order during the acquisition pipeline — the first
 /// one that returns a result wins. Priority: Hardcover → Google Books →
 /// Open Library (always the final fallback).
+#[must_use]
 pub fn create_metadata_providers(config: &MetadataConfig) -> Vec<Arc<dyn MetadataProvider>> {
     let mut providers: Vec<Arc<dyn MetadataProvider>> = vec![];
     if let Some(token) = &config.hardcover_api_token {

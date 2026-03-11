@@ -8,11 +8,11 @@ use bb_core::{
     Error,
     book::FileFormat,
     import::{ImportJobRepository, NewImportJob},
-    jobs::{JobRepository, JobRepositoryExt},
+    jobs::{JobRepository, JobRepositoryExt as _},
     repository::{Repository, transaction},
 };
 use chrono::Utc;
-use sha2::{Digest, Sha256};
+use sha2::{Digest as _, Sha256};
 use tokio_graceful_shutdown::{IntoSubsystem, SubsystemHandle};
 
 use crate::handler::ProcessImportPayload;
@@ -144,11 +144,11 @@ impl IntoSubsystem<Error> for LibraryScanner {
 
         loop {
             tokio::select! {
-                _ = subsys.on_shutdown_requested() => {
+                () = subsys.on_shutdown_requested() => {
                     tracing::info!("LibraryScanner shutting down...");
                     break;
                 }
-                _ = async {} => {
+                () = async {} => {
                     if counter == 0 {
                         self.scan_once().await;
                     }
@@ -181,7 +181,7 @@ fn detect_format(path: &Path) -> Option<FileFormat> {
 fn hash_file(path: &Path) -> std::io::Result<String> {
     use std::{
         fs::File,
-        io::{BufReader, Read},
+        io::{BufReader, Read as _},
     };
 
     let file = File::open(path)?;

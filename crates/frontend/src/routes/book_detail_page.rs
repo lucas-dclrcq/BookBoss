@@ -130,13 +130,13 @@ async fn get_book(token: String) -> Result<BookDetail, ServerFnError> {
     // Fetch unique authors (token + name)
     let mut author_map: std::collections::HashMap<u64, (String, String)> = std::collections::HashMap::new();
     for ba in &book_author_links {
-        if !author_map.contains_key(&ba.author_id) {
+        if let std::collections::hash_map::Entry::Vacant(e) = author_map.entry(ba.author_id) {
             if let Some(author) = book_service
                 .find_author_by_token(&AuthorToken::new(ba.author_id))
                 .await
                 .map_err(|e| ServerFnError::new(e.to_string()))?
             {
-                author_map.insert(ba.author_id, (author.token.to_string(), author.name));
+                e.insert((author.token.to_string(), author.name));
             }
         }
     }
@@ -515,14 +515,11 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                                                 let bk = bk.clone();
                                                 deleting.set(true);
                                                 spawn(async move {
-                                                    match delete_library_book(bk).await {
-                                                        Ok(()) => {
-                                                            let _ = nav.push(Route::BooksPage {});
-                                                        }
-                                                        Err(_) => {
-                                                            deleting.set(false);
-                                                            show_confirm.set(false);
-                                                        }
+                                                    if let Ok(()) = delete_library_book(bk).await {
+                                                        let _ = nav.push(Route::BooksPage {});
+                                                    } else {
+                                                        deleting.set(false);
+                                                        show_confirm.set(false);
                                                     }
                                                 });
                                             }
@@ -758,7 +755,7 @@ fn BookCover(token: String, progress_pct: Option<u8>) -> Element {
 
 #[component]
 fn StatusPill(token: String, initial_state: Option<ReadingStateDto>) -> Element {
-    let mut status = use_signal(move || initial_state.map(|s| s.status).unwrap_or_else(|| "Unread".to_string()));
+    let mut status = use_signal(move || initial_state.map_or_else(|| "Unread".to_string(), |s| s.status));
     let mut show_dropdown = use_signal(|| false);
     let mut busy = use_signal(|| false);
 

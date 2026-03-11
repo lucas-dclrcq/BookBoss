@@ -17,17 +17,19 @@ impl EmailAddress {
     pub fn new(email: impl Into<String>) -> Result<Self, Error> {
         let email = email.into();
         if !email.contains('@') {
-            return Err(Error::Validation(format!("Invalid email format: {}", email)));
+            return Err(Error::Validation(format!("Invalid email format: {email}")));
         }
         Ok(Self(email))
     }
 
     /// Returns the email as a string slice.
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
     /// Consumes self and returns the inner String.
+    #[must_use]
     pub fn into_inner(self) -> String {
         self.0
     }
@@ -60,6 +62,6 @@ impl<'de> Deserialize<'de> for EmailAddress {
         D: serde::Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        EmailAddress::new(s).map_err(|e| de::Error::custom(e.to_string()))
+        Self::new(s).map_err(|e| de::Error::custom(e.to_string()))
     }
 }

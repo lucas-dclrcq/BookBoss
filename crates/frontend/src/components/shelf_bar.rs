@@ -7,7 +7,7 @@ use crate::{
 };
 
 /// Horizontal pill-button row listing the user's shelves and a "+" new-shelf
-/// button. Shown above the book grid on both BooksPage and ShelfPage.
+/// button. Shown above the book grid on both `BooksPage` and `ShelfPage`.
 ///
 /// When `current_shelf_token` matches an own shelf, edit (✎) and delete
 /// buttons appear at the right edge, calling the optional handlers.
@@ -36,8 +36,7 @@ pub(crate) fn ShelfBar(
     let current_is_own = current_shelf_token
         .as_ref()
         .and_then(|tok| shelves.iter().find(|s| &s.token == tok))
-        .map(|s| s.is_own)
-        .unwrap_or(false);
+        .is_some_and(|s| s.is_own);
 
     let mut do_create = move || {
         let name = shelf_name().trim().to_string();

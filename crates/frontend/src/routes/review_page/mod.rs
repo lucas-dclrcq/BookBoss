@@ -29,7 +29,7 @@ pub(crate) fn ReviewPage(token: String) -> Element {
                 ReviewEditor {
                     data,
                     edit_mode: false,
-                    on_back: move |_| {
+                    on_back: move |()| {
                         *incoming_refresh.write() += 1;
                         nav.push(crate::Route::IncomingPage {});
                     },

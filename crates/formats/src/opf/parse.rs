@@ -42,7 +42,7 @@ struct DcFields {
     language: Option<String>,
     identifiers: Vec<RawIdentifier>,
     bb_meta_content: Option<String>,
-    /// OPF 3 refines data: maps element id → (role_code, file_as)
+    /// OPF 3 refines data: maps element id → (`role_code`, `file_as`)
     meta_refines: HashMap<String, (Option<String>, Option<String>)>,
 }
 
@@ -359,7 +359,7 @@ fn parse_dc(xml: &[u8]) -> Result<DcFields, Error> {
 // ── public API
 // ────────────────────────────────────────────────────────────────
 
-/// Parse a BookBoss `metadata.opf` sidecar back into a [`BookSidecar`].
+/// Parse a `BookBoss` `metadata.opf` sidecar back into a [`BookSidecar`].
 pub fn parse_sidecar(xml: &[u8]) -> Result<BookSidecar, Error> {
     let fields = parse_dc(xml)?;
 
@@ -379,7 +379,7 @@ pub fn parse_sidecar(xml: &[u8]) -> Result<BookSidecar, Error> {
         .enumerate()
         .map(|(i, raw)| {
             let sort_order = sort_order_map.get(raw.name.as_str()).copied().unwrap_or(i as i32);
-            let role = raw.role_code.as_deref().map(marc_to_author_role).unwrap_or(AuthorRole::Author);
+            let role = raw.role_code.as_deref().map_or(AuthorRole::Author, marc_to_author_role);
             SidecarAuthor {
                 name: raw.name,
                 role,
@@ -468,6 +468,7 @@ pub fn extract_metadata(xml: &[u8]) -> Result<ExtractedMetadata, Error> {
 /// lookup) and EPUB 3 (`<item properties="cover-image"/>` in the manifest).
 /// Returns the href exactly as written in the manifest (caller must resolve it
 /// relative to the OPF file's directory within the ZIP archive).
+#[must_use]
 pub fn extract_cover_href(opf_xml: &[u8]) -> Option<String> {
     use std::collections::HashMap;
 
@@ -491,13 +492,11 @@ pub fn extract_cover_href(opf_xml: &[u8]) -> Option<String> {
                         let mut content = None;
                         for attr in e.attributes().flatten() {
                             match attr.key.as_ref() {
-                                b"name" => {
-                                    if attr.decode_and_unescape_value(reader.decoder()).ok().as_deref() == Some("cover") {
-                                        is_cover = true;
-                                    }
+                                b"name" if attr.decode_and_unescape_value(reader.decoder()).ok().as_deref() == Some("cover") => {
+                                    is_cover = true;
                                 }
                                 b"content" => {
-                                    content = attr.decode_and_unescape_value(reader.decoder()).ok().map(|v| v.into_owned());
+                                    content = attr.decode_and_unescape_value(reader.decoder()).ok().map(std::borrow::Cow::into_owned);
                                 }
                                 _ => {}
                             }
@@ -513,10 +512,10 @@ pub fn extract_cover_href(opf_xml: &[u8]) -> Option<String> {
                         for attr in e.attributes().flatten() {
                             match attr.key.as_ref() {
                                 b"id" => {
-                                    id = attr.decode_and_unescape_value(reader.decoder()).ok().map(|v| v.into_owned());
+                                    id = attr.decode_and_unescape_value(reader.decoder()).ok().map(std::borrow::Cow::into_owned);
                                 }
                                 b"href" => {
-                                    href = attr.decode_and_unescape_value(reader.decoder()).ok().map(|v| v.into_owned());
+                                    href = attr.decode_and_unescape_value(reader.decoder()).ok().map(std::borrow::Cow::into_owned);
                                 }
                                 b"properties" => {
                                     // EPUB 3: properties may be a space-separated list

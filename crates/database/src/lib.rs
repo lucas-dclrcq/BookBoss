@@ -1,3 +1,13 @@
+// SeaORM uses i64 for all primary keys; domain types use u64. Auto-increment
+// IDs are always positive and will not exceed i64::MAX in practice, so these
+// casts are safe at this boundary. Page sizes/counts are similarly bounded.
+#![allow(
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    reason = "SeaORM i64/u64 boundary — IDs and page values are always in range"
+)]
+
 use std::sync::Arc;
 
 use bb_core::{

@@ -74,6 +74,7 @@ pub struct ReadingServiceImpl {
 }
 
 impl ReadingServiceImpl {
+    #[must_use]
     pub fn new(repository_service: Arc<RepositoryService>) -> Self {
         Self { repository_service }
     }

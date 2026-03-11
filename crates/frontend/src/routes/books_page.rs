@@ -165,7 +165,7 @@ async fn list_books() -> Result<ListBooksResponse, ServerFnError> {
         .iter()
         .filter(|m| matches!(m.read_status, ReadStatus::Reading | ReadStatus::Rereading | ReadStatus::Paused))
         .collect();
-    reading_now.sort_by(|a, b| b.last_progress_at.cmp(&a.last_progress_at));
+    reading_now.sort_by_key(|b| std::cmp::Reverse(b.last_progress_at));
     let currently_reading: Vec<BookSummary> = reading_now
         .iter()
         .filter_map(|m| book_id_to_idx.get(&m.book_id).map(|&idx| summaries[idx].clone()))
@@ -183,7 +183,7 @@ pub(crate) fn BooksPage() -> Element {
     use_context_provider(|| Signal::new(None::<String>)); // DraggedBookToken
     let mut page_data = use_server_future(list_books)?;
     let shelves_resource = use_server_future(list_all_accessible_shelves)?;
-    let shelves: Vec<ShelfSummary> = shelves_resource().and_then(|r| r.ok()).unwrap_or_default();
+    let shelves: Vec<ShelfSummary> = shelves_resource().and_then(std::result::Result::ok).unwrap_or_default();
 
     rsx! {
         match page_data() {
@@ -202,14 +202,14 @@ pub(crate) fn BooksPage() -> Element {
                     ShelfBar {
                         shelves,
                         current_shelf_token: None,
-                        on_edit_shelf: |_| {},
-                        on_delete_shelf: |_| {},
+                        on_edit_shelf: |()| {},
+                        on_delete_shelf: |()| {},
                     }
                     CurrentlyReadingSection { books: currently_reading }
                     BookGrid {
                         books,
                         context: BookGridContext::AllBooks { can_delete: can_delete_books },
-                        on_action: move |_| page_data.restart(),
+                        on_action: move |()| page_data.restart(),
                     }
                 }
             },

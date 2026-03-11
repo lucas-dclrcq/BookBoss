@@ -77,7 +77,7 @@ impl HardcoverAdapter {
                 .enumerate()
                 .filter_map(|(i, c)| {
                     let name = c.author.as_ref()?.name.clone();
-                    let role = types.get(i).map(|t| Self::map_contribution_type(t)).unwrap_or(AuthorRole::Author);
+                    let role = types.get(i).map_or(AuthorRole::Author, |t| Self::map_contribution_type(t));
                     Some(ExtractedAuthor {
                         name,
                         role: Some(role),

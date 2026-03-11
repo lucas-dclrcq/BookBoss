@@ -55,3 +55,6 @@ server = [
     "dep:tokio-graceful-shutdown",
     "dioxus/server",
 ]
+
+[lints]
+workspace = true

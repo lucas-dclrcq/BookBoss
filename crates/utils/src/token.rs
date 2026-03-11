@@ -53,7 +53,7 @@ impl TokenId for u64 {
     const ENCODED_LEN: usize = 13; // 32^13 > u64::MAX
 
     fn random_in_range(max: u128) -> Self {
-        rand::rng().random_range(1..=max as u64)
+        rand::rng().random_range(1..=max as Self)
     }
 
     fn encode(self) -> String {
@@ -72,14 +72,14 @@ impl TokenId for u64 {
     }
 
     fn decode(s: &str) -> Result<Self, TokenError> {
-        let mut value: u64 = 0;
+        let mut value: Self = 0;
         for ch in s.chars() {
             let byte = ch as usize;
             let idx = if byte < DECODE_TABLE.len() { DECODE_TABLE[byte] } else { 0xFF };
             if idx == 0xFF {
                 return Err(TokenError::InvalidCharacter(ch));
             }
-            value = value.checked_shl(5).and_then(|v| v.checked_add(idx as u64)).ok_or(TokenError::Overflow)?;
+            value = value.checked_shl(5).and_then(|v| v.checked_add(Self::from(idx))).ok_or(TokenError::Overflow)?;
         }
         Ok(value)
     }
@@ -109,14 +109,14 @@ impl TokenId for u128 {
     }
 
     fn decode(s: &str) -> Result<Self, TokenError> {
-        let mut value: u128 = 0;
+        let mut value: Self = 0;
         for ch in s.chars() {
             let byte = ch as usize;
             let idx = if byte < DECODE_TABLE.len() { DECODE_TABLE[byte] } else { 0xFF };
             if idx == 0xFF {
                 return Err(TokenError::InvalidCharacter(ch));
             }
-            value = value.checked_shl(5).and_then(|v| v.checked_add(idx as u128)).ok_or(TokenError::Overflow)?;
+            value = value.checked_shl(5).and_then(|v| v.checked_add(Self::from(idx))).ok_or(TokenError::Overflow)?;
         }
         Ok(value)
     }
@@ -165,6 +165,7 @@ impl<P: TokenPrefix, I: TokenId, const MAX: u128> Token<P, I, MAX> {
     }
 
     /// Generate a new token with a random ID in `1..=MAX`.
+    #[must_use]
     pub fn generate() -> Self {
         Self::new(I::random_in_range(MAX))
     }
@@ -198,6 +199,7 @@ impl<P: TokenPrefix, I: TokenId, const MAX: u128> Token<P, I, MAX> {
     }
 
     /// Check if a string is a well-formed token of this type.
+    #[must_use]
     pub fn is_valid(s: &str) -> bool {
         Self::parse(s).is_ok()
     }

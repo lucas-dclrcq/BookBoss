@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use argon2::{
     Argon2,
-    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
+    password_hash::{PasswordHash, PasswordHasher as _, PasswordVerifier as _, SaltString, rand_core::OsRng},
 };
 use bb_utils::{define_token_prefix, token::Token};
 use chrono::{DateTime, Utc};
@@ -96,6 +96,7 @@ impl User {
         Argon2::default().verify_password(password.as_bytes(), &parsed_hash).is_ok()
     }
 
+    #[must_use]
     pub fn has_capability(&self, capability: Capability) -> bool {
         self.capabilities.contains(&capability)
             || self.capabilities.contains(&Capability::SuperAdmin)
@@ -118,7 +119,7 @@ impl NewUser {
     ///
     /// # Errors
     ///
-    /// Returns `Error::Validation` if full_name is empty or email is invalid.
+    /// Returns `Error::Validation` if `full_name` is empty or email is invalid.
     pub fn new(
         username: impl Into<String>,
         password: impl Into<String>,
@@ -208,6 +209,7 @@ impl PartialUserUpdate {
     }
 
     /// Returns true if all fields are None.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.password_hash.is_none()
             && self.email_address.is_none()

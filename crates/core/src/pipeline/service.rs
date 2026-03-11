@@ -21,10 +21,10 @@ pub trait PipelineService: Send + Sync {
     /// `candidate_book_id` set, or `Rejected` if the file is a duplicate.
     async fn process_job(&self, job: ImportJob) -> Result<ImportJob, Error>;
 
-    /// Rejects a NeedsReview import job, cleaning up all associated artifacts:
-    /// removes the library directory, deletes the candidate book record, and
-    /// deletes the import job record so the file can be re-imported if dropped
-    /// again.
+    /// Rejects a `NeedsReview` import job, cleaning up all associated
+    /// artifacts: removes the library directory, deletes the candidate book
+    /// record, and deletes the import job record so the file can be
+    /// re-imported if dropped again.
     async fn reject_job(&self, job_token: ImportJobToken) -> Result<(), Error>;
 
     /// Returns the human-readable names of all configured metadata providers,
@@ -96,6 +96,7 @@ const GOOD_COVER_MIN_SIDE: u32 = 500;
 /// Parse image dimensions from raw bytes by inspecting format-specific headers.
 /// Supports PNG, GIF, WebP (VP8/VP8L/VP8X), and JPEG (SOF markers).
 /// Returns `None` if the format is unrecognised or the header is truncated.
+#[must_use]
 pub fn image_dimensions(data: &[u8]) -> Option<(u32, u32)> {
     // PNG: 8-byte signature followed by IHDR (width at 16, height at 20)
     if data.starts_with(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) && data.len() >= 24 {
@@ -105,8 +106,8 @@ pub fn image_dimensions(data: &[u8]) -> Option<(u32, u32)> {
     }
     // GIF: "GIF87a" / "GIF89a" + 2-byte LE width + 2-byte LE height at offset 6
     if (data.starts_with(b"GIF87a") || data.starts_with(b"GIF89a")) && data.len() >= 10 {
-        let w = u16::from_le_bytes([data[6], data[7]]) as u32;
-        let h = u16::from_le_bytes([data[8], data[9]]) as u32;
+        let w = u32::from(u16::from_le_bytes([data[6], data[7]]));
+        let h = u32::from(u16::from_le_bytes([data[8], data[9]]));
         return Some((w, h));
     }
     // WebP: RIFF....WEBP
@@ -114,8 +115,8 @@ pub fn image_dimensions(data: &[u8]) -> Option<(u32, u32)> {
         match &data[12..16] {
             b"VP8 " => {
                 // Lossy: 14-bit LE width/height at offset 26/28 (mask 0x3FFF)
-                let w = (u16::from_le_bytes([data[26], data[27]]) & 0x3FFF) as u32;
-                let h = (u16::from_le_bytes([data[28], data[29]]) & 0x3FFF) as u32;
+                let w = u32::from(u16::from_le_bytes([data[26], data[27]]) & 0x3FFF);
+                let h = u32::from(u16::from_le_bytes([data[28], data[29]]) & 0x3FFF);
                 return Some((w, h));
             }
             b"VP8L" if data.len() >= 25 => {
@@ -143,8 +144,8 @@ pub fn image_dimensions(data: &[u8]) -> Option<(u32, u32)> {
             }
             let marker = data[i + 1];
             if matches!(marker, 0xC0..=0xCF) && !matches!(marker, 0xC4 | 0xC8 | 0xCC) && i + 8 < data.len() {
-                let h = u16::from_be_bytes([data[i + 5], data[i + 6]]) as u32;
-                let w = u16::from_be_bytes([data[i + 7], data[i + 8]]) as u32;
+                let h = u32::from(u16::from_be_bytes([data[i + 5], data[i + 6]]));
+                let w = u32::from(u16::from_be_bytes([data[i + 7], data[i + 8]]));
                 return Some((w, h));
             }
             if i + 3 >= data.len() {
@@ -163,7 +164,7 @@ pub fn image_dimensions(data: &[u8]) -> Option<(u32, u32)> {
 /// Returns the minimum side of an image's dimensions, used for quality
 /// comparison.
 fn cover_min_side(data: &[u8]) -> u32 {
-    image_dimensions(data).map(|(w, h)| w.min(h)).unwrap_or(0)
+    image_dimensions(data).map_or(0, |(w, h)| w.min(h))
 }
 
 /// Detect a cover image filename from leading magic bytes.
@@ -260,7 +261,7 @@ impl PipelineService for PipelineServiceImpl {
         let (final_meta, cover_bytes, job_source) = {
             let mut meta: Option<(ExtractedMetadata, ImportSource)> = None;
             let mut best_cover: Option<Vec<u8>> = extracted.cover_bytes.clone();
-            let mut best_min_side: u32 = best_cover.as_deref().map(cover_min_side).unwrap_or(0);
+            let mut best_min_side: u32 = best_cover.as_deref().map_or(0, cover_min_side);
 
             for provider in &self.providers {
                 let cover_good_enough = best_min_side >= GOOD_COVER_MIN_SIDE;

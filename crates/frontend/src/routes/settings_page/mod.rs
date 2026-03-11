@@ -153,22 +153,22 @@ enum SettingSection {
 }
 
 impl SettingSection {
-    fn all() -> &'static [SettingSection] {
-        &[SettingSection::Users, SettingSection::Reading, SettingSection::About]
+    fn all() -> &'static [Self] {
+        &[Self::Users, Self::Reading, Self::About]
     }
 
     fn label(&self) -> &'static str {
         match self {
-            SettingSection::Users => "Users",
-            SettingSection::Reading => "Reading",
-            SettingSection::About => "About",
+            Self::Users => "Users",
+            Self::Reading => "Reading",
+            Self::About => "About",
         }
     }
 
     fn is_visible(&self, ctx: &SettingsContext) -> bool {
         match self {
-            SettingSection::Users => ctx.is_admin || ctx.is_super_admin,
-            SettingSection::Reading | SettingSection::About => true,
+            Self::Users => ctx.is_admin || ctx.is_super_admin,
+            Self::Reading | Self::About => true,
         }
     }
 }
@@ -190,7 +190,7 @@ pub(crate) fn SettingsPage() -> Element {
         }
     });
 
-    let context = ctx().and_then(|r| r.ok()).unwrap_or(SettingsContext {
+    let context = ctx().and_then(std::result::Result::ok).unwrap_or(SettingsContext {
         is_admin: false,
         is_super_admin: false,
         current_user_token: String::new(),
@@ -241,7 +241,7 @@ pub(crate) fn SettingsPage() -> Element {
                     },
                     SettingSection::Reading => rsx! { ReadingSection {} },
                     SettingSection::About => rsx! {
-                        AboutSection { stats: stats().and_then(|r| r.ok()) }
+                        AboutSection { stats: stats().and_then(std::result::Result::ok) }
                     },
                 }
             }

@@ -98,6 +98,7 @@ impl IntoSubsystem<Error> for CoreSubsystem {
     }
 }
 
+#[must_use]
 pub fn create_core_subsystem(registry: JobRegistry, repository_service: Arc<RepositoryService>, poll_interval: Duration) -> CoreSubsystem {
     CoreSubsystem {
         registry,

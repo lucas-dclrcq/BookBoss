@@ -49,13 +49,14 @@ pub enum Error {
 
 impl Error {
     /// Returns the error kind for response mapping in adapters.
+    #[must_use]
     pub fn kind(&self) -> ErrorKind {
         match self {
-            Error::InvalidId(_) | Error::InvalidPageSize(_) | Error::InvalidToken(_) => ErrorKind::BadRequest,
-            Error::Validation(_) => ErrorKind::InvalidInput,
-            Error::InvalidTransactionType | Error::Infrastructure(_) | Error::CryptoError(_) => ErrorKind::Internal,
-            Error::RepositoryError(e) => e.kind(),
-            Error::FrontendError(_) => ErrorKind::Internal,
+            Self::InvalidId(_) | Self::InvalidPageSize(_) | Self::InvalidToken(_) => ErrorKind::BadRequest,
+            Self::Validation(_) => ErrorKind::InvalidInput,
+            Self::InvalidTransactionType | Self::Infrastructure(_) | Self::CryptoError(_) => ErrorKind::Internal,
+            Self::RepositoryError(e) => e.kind(),
+            Self::FrontendError(_) => ErrorKind::Internal,
             #[cfg(any(test, feature = "test-support"))]
             Error::MockNotConfigured(_) => ErrorKind::Internal,
         }
@@ -85,12 +86,13 @@ pub enum RepositoryError {
 
 impl RepositoryError {
     /// Returns the error kind for response mapping in adapters.
+    #[must_use]
     pub fn kind(&self) -> ErrorKind {
         match self {
-            RepositoryError::NotFound => ErrorKind::NotFound,
-            RepositoryError::Conflict => ErrorKind::Conflict,
-            RepositoryError::Constraint(_) => ErrorKind::InvalidInput,
-            RepositoryError::ReadOnly | RepositoryError::Database(_) | RepositoryError::QueryCanceled => ErrorKind::Internal,
+            Self::NotFound => ErrorKind::NotFound,
+            Self::Conflict => ErrorKind::Conflict,
+            Self::Constraint(_) => ErrorKind::InvalidInput,
+            Self::ReadOnly | Self::Database(_) | Self::QueryCanceled => ErrorKind::Internal,
         }
     }
 }

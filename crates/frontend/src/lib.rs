@@ -9,12 +9,12 @@ pub(crate) mod settings;
 pub struct FrontendConfig {
     /// IP address where the server should listen.
     /// e.g. 0.0.0.0
-    /// Environment variable: BOOKBOSS__FRONTEND__LISTEN_IP
+    /// Environment variable: `BOOKBOSS__FRONTEND__LISTEN_IP`
     pub listen_ip: String,
 
     /// Port the server should listen on.
     /// e.g. 8080
-    /// Environment variable: BOOKBOSS__FRONTEND__LISTEN_PORT
+    /// Environment variable: `BOOKBOSS__FRONTEND__LISTEN_PORT`
     pub listen_port: u16,
 }
 

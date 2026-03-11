@@ -25,7 +25,7 @@ pub(crate) fn EditMetadataPage(token: String) -> Element {
                 ReviewEditor {
                     data,
                     edit_mode: true,
-                    on_back: move |_| {
+                    on_back: move |()| {
                         nav.push(Route::BookDetailPage { token: book_token.clone() });
                     },
                 }

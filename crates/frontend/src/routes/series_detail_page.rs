@@ -149,7 +149,7 @@ pub(crate) fn SeriesDetailPage(token: String) -> Element {
                         BookGrid {
                             books: series.books,
                             context: BookGridContext::ReadOnly,
-                            on_action: |_| {},
+                            on_action: |()| {},
                         }
                     }
                 },

@@ -15,6 +15,7 @@ pub enum Capability {
 }
 
 impl Capability {
+    #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Admin => "Admin",
@@ -26,6 +27,7 @@ impl Capability {
         }
     }
 
+    #[must_use]
     pub fn display_name(&self) -> &'static str {
         match self {
             Self::Admin => "Admin",
@@ -38,9 +40,10 @@ impl Capability {
     }
 
     /// All granular capabilities that can be individually granted to a User
-    /// role. Excludes Admin and SuperAdmin which are role-level
+    /// role. Excludes Admin and `SuperAdmin` which are role-level
     /// designations.
-    pub fn user_grantable() -> &'static [Capability] {
+    #[must_use]
+    pub fn user_grantable() -> &'static [Self] {
         &[Self::ApproveImports, Self::ConvertBook, Self::DeleteBook, Self::EditBook]
     }
 }
