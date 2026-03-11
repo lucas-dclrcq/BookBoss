@@ -307,6 +307,8 @@ The initial UI rendered by the component on the client must be identical to the 
   #[get("/api/v1/foo", ...)]
   ```
 - `use_server_future(fn)?` returns `Resource<Result<T, E>>` after `?` unwraps the outer `RenderError`
+- Without `?`, returns `Result<Resource<Result<T, E>>, RenderError>` — extract value with `match result { Ok(r) => r().and_then(...), Err(_) => None }`
+- `?` suspends the entire component subtree up to the nearest `SuspenseBoundary`; use `SuspenseBoundary { fallback: |_| rsx! {}, ChildComponent {} }` to contain suspension to a subtree (e.g. keep NavBar visible while page content loads)
 - **HTTP method rule**: `#[get]` only for zero-parameter fns (browser rejects GET with body).
   Parameterized fns use `#[post]` for reads or `#[put]` for writes.
   Called with: `use_server_future(move || get_book(token.clone()))?`

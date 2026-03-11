@@ -43,7 +43,11 @@ pub(crate) fn NavBar() -> Element {
     let pending_count = use_server_future(move || {
         let _rev = incoming_refresh();
         get_pending_count()
-    })?;
+    });
+    let count_opt = match pending_count {
+        Ok(resource) => resource().and_then(|r: Result<Option<u32>, ServerFnError>| r.ok()).flatten(),
+        Err(_) => None,
+    };
 
     let on_logout = move |_| {
         user_menu_open.set(false);
@@ -65,7 +69,6 @@ pub(crate) fn NavBar() -> Element {
                     "Library"
                 }
                 {
-                    let count_opt = pending_count().and_then(|r| r.ok()).flatten();
                     count_opt.map(|count| rsx! {
                         Link { to: Route::IncomingPage {}, class: "relative text-sm hover:text-indigo-200 flex items-center gap-1.5",
                             "Incoming"

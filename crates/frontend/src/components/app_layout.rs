@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 #[cfg(feature = "server")]
-use {crate::server::AuthSession, bb_core::CoreServices, std::sync::Arc};
+use crate::server::AuthSession;
 
 use crate::{Route, components::NavBar};
 
@@ -11,15 +11,6 @@ async fn check_auth() -> Result<bool, ServerFnError> {
 
 #[component]
 pub(crate) fn AppLayout() -> Element {
-    let navigator = use_navigator();
-    let auth = use_server_future(check_auth)?;
-
-    use_effect(move || {
-        if let Some(Ok(false)) = auth() {
-            navigator.replace(Route::LandingPage {});
-        }
-    });
-
     // Shared counter bumped after approve/reject so NavBar re-fetches the pending
     // count.
     use_context_provider(|| Signal::new(0u32));
@@ -33,8 +24,27 @@ pub(crate) fn AppLayout() -> Element {
         div { class: "min-h-screen flex flex-col bg-gray-50 text-gray-900",
             NavBar {}
             main { class: "flex-1 flex overflow-hidden",
-                Outlet::<Route> {}
+                SuspenseBoundary {
+                    fallback: |_| rsx! {},
+                    AuthGate {}
+                }
             }
         }
     }
+}
+
+/// Wraps the Outlet so that only the page content area suspends during the auth
+/// check, leaving the NavBar visible immediately.
+#[component]
+fn AuthGate() -> Element {
+    let navigator = use_navigator();
+    let auth = use_server_future(check_auth)?;
+
+    use_effect(move || {
+        if let Some(Ok(false)) = auth() {
+            navigator.replace(Route::LandingPage {});
+        }
+    });
+
+    rsx! { Outlet::<Route> {} }
 }
