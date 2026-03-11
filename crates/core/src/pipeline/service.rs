@@ -98,12 +98,10 @@ const GOOD_COVER_MIN_SIDE: u32 = 500;
 /// Returns `None` if the format is unrecognised or the header is truncated.
 pub fn image_dimensions(data: &[u8]) -> Option<(u32, u32)> {
     // PNG: 8-byte signature followed by IHDR (width at 16, height at 20)
-    if data.starts_with(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) {
-        if data.len() >= 24 {
-            let w = u32::from_be_bytes([data[16], data[17], data[18], data[19]]);
-            let h = u32::from_be_bytes([data[20], data[21], data[22], data[23]]);
-            return Some((w, h));
-        }
+    if data.starts_with(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) && data.len() >= 24 {
+        let w = u32::from_be_bytes([data[16], data[17], data[18], data[19]]);
+        let h = u32::from_be_bytes([data[20], data[21], data[22], data[23]]);
+        return Some((w, h));
     }
     // GIF: "GIF87a" / "GIF89a" + 2-byte LE width + 2-byte LE height at offset 6
     if (data.starts_with(b"GIF87a") || data.starts_with(b"GIF89a")) && data.len() >= 10 {
@@ -144,12 +142,10 @@ pub fn image_dimensions(data: &[u8]) -> Option<(u32, u32)> {
                 break;
             }
             let marker = data[i + 1];
-            if matches!(marker, 0xC0..=0xCF) && !matches!(marker, 0xC4 | 0xC8 | 0xCC) {
-                if i + 8 < data.len() {
-                    let h = u16::from_be_bytes([data[i + 5], data[i + 6]]) as u32;
-                    let w = u16::from_be_bytes([data[i + 7], data[i + 8]]) as u32;
-                    return Some((w, h));
-                }
+            if matches!(marker, 0xC0..=0xCF) && !matches!(marker, 0xC4 | 0xC8 | 0xCC) && i + 8 < data.len() {
+                let h = u16::from_be_bytes([data[i + 5], data[i + 6]]) as u32;
+                let w = u16::from_be_bytes([data[i + 7], data[i + 8]]) as u32;
+                return Some((w, h));
             }
             if i + 3 >= data.len() {
                 break;
@@ -554,7 +550,7 @@ impl PipelineService for PipelineServiceImpl {
     async fn approve_job(&self, job_token: ImportJobToken, edit: BookEdit, temp_dir: &std::path::Path) -> Result<(), Error> {
         // ── 1. Load job and guard status ──────────────────────────────────────
         let import_job_repo = self.repository_service.import_job_repository().clone();
-        let jt = job_token.clone();
+        let jt = job_token;
         let job = read_only_transaction(&**self.repository_service.repository(), |tx| {
             Box::pin(async move { import_job_repo.find_by_token(tx, &jt).await })
         })
