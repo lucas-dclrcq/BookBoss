@@ -12,6 +12,7 @@ use dioxus::server::{self, DioxusRouterExt};
 use tokio_graceful_shutdown::{IntoSubsystem, SubsystemHandle};
 use tower::ServiceBuilder;
 use tower_http::{
+    limit::RequestBodyLimitLayer,
     request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
     trace::TraceLayer,
 };
@@ -30,6 +31,7 @@ pub(crate) use auth_user::AuthUser;
 
 const REQUEST_ID_HEADER: &str = "x-request-id";
 const DEFAULT_EXPIRATION_DURATION: Duration = Duration::days(7);
+const MAX_REQUEST_BODY_SIZE: usize = 10 * 1024 * 1024; // 10 MiB
 
 pub struct FrontendSubsystem {
     config: FrontendConfig,
@@ -49,6 +51,7 @@ impl IntoSubsystem<anyhow::Error> for FrontendSubsystem {
         let session_store = SessionStore::<BackendSessionPool>::new(Some(backend_pool.clone()), session_config).await?;
 
         let middleware = ServiceBuilder::new()
+            .layer(RequestBodyLimitLayer::new(MAX_REQUEST_BODY_SIZE))
             .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
             .layer(TraceLayer::new_for_http().make_span_with(|request: &Request<_>| {
                 let request_id = request
