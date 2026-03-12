@@ -1,10 +1,12 @@
 # Exclude the entire Rust build output directory.
 # This is crucial as it can be several gigabytes in size.
 target/
+assets-source/
 
 # Exclude source control files and directories
 .git
 .gitignore
+.jj
 
 # Exclude common development environment files
 .DS_Store

@@ -51,7 +51,7 @@ impl Config {
             .add_source(config::Environment::with_prefix("BOOKBOSS").try_parsing(true).separator("__"))
             .build()?;
 
-        let config: Config = config.try_deserialize()?;
+        let config = config.try_deserialize()?;
 
         Ok(config)
     }

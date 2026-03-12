@@ -198,7 +198,6 @@ impl MetadataProvider for GoogleBooksAdapter {
 
 #[cfg(test)]
 mod tests {
-    use bb_core::pipeline::ExtractedIdentifier;
     use wiremock::{
         Mock, MockServer, ResponseTemplate,
         matchers::{method, path, query_param},

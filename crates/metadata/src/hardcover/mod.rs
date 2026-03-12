@@ -213,7 +213,6 @@ impl MetadataProvider for HardcoverAdapter {
 
 #[cfg(test)]
 mod tests {
-    use bb_core::pipeline::ExtractedIdentifier;
     use wiremock::{
         Mock, MockServer, ResponseTemplate,
         matchers::{header, method, path},

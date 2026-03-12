@@ -47,7 +47,7 @@ release VERSION:
 
 [doc('Run Clippy on codebase for linting')]
 clippy:
-    cargo +nightly clippy --workspace --all-targets --all-features
+    cargo +nightly clippy --workspace --all-targets --all-features --target-dir target/clippy
 
 [doc('Update rust crate dependencies')]
 deps:
