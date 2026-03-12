@@ -46,7 +46,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn load() -> Result<Config, Error> {
+    pub fn load() -> Result<Self, Error> {
         let config = config::Config::builder()
             .add_source(config::Environment::with_prefix("BOOKBOSS").try_parsing(true).separator("__"))
             .build()?;

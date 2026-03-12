@@ -32,7 +32,7 @@ pub mod web {
     use crate::BookBossFrontend;
 
     pub fn launch_web_frontend() {
-        dioxus::launch(BookBossFrontend)
+        dioxus::launch(BookBossFrontend);
     }
 }
 
@@ -53,10 +53,10 @@ use serde::Deserialize;
 #[rustfmt::skip]
 enum Route {
     #[route("/")]
-    LandingPage {},
+    LandingPage,
     #[layout(AppLayout)]
         #[route("/library")]
-        BooksPage {},
+        BooksPage,
         #[route("/library/books/:token")]
         BookDetailPage { token: String },
         #[route("/library/books/:token/edit")]
@@ -66,11 +66,11 @@ enum Route {
         #[route("/library/series/:token")]
         SeriesDetailPage { token: String },
         #[route("/library/incoming")]
-        IncomingPage {},
+        IncomingPage,
         #[route("/library/incoming/:token")]
         ReviewPage { token: String },
         #[route("/settings")]
-        SettingsPage {},
+        SettingsPage,
         #[route("/shelves/:token")]
         ShelfPage { token: String },
 }

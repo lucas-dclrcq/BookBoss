@@ -175,6 +175,7 @@ mod tests {
     // ─── Mock UserRepository ─────────────────────────────────────────────────
 
     #[derive(Default)]
+    #[allow(clippy::struct_field_names, reason = "Used for mocking and identifies these are all results")]
     struct MockUserRepository {
         add_user_result: Mutex<Option<Result<User, Error>>>,
         update_user_result: Mutex<Option<Result<User, Error>>>,

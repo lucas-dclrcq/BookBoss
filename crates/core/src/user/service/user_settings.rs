@@ -62,7 +62,7 @@ mod tests {
         sync::{Arc, Mutex},
     };
 
-    use super::{UserSettingService, UserSettingServiceImpl};
+    use super::{UserSettingService as _, UserSettingServiceImpl};
     use crate::{
         Error, RepositoryError,
         auth::{NewSession, Session, repository::SessionRepository},
@@ -181,6 +181,7 @@ mod tests {
     // ─── Mock UserSettingRepository ──────────────────────────────────────────
 
     #[derive(Default)]
+    #[allow(clippy::struct_field_names, reason = "Used for mocking and identifies these are all results")]
     struct MockUserSettingRepository {
         get_result: Mutex<Option<Result<Option<UserSetting>, Error>>>,
         set_result: Mutex<Option<Result<UserSetting, Error>>>,
@@ -672,7 +673,7 @@ mod tests {
 
         let result = svc.delete(1, "theme").await;
 
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[tokio::test]

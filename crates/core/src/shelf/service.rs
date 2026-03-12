@@ -1302,7 +1302,7 @@ mod tests {
         // Ok(vec![])) so just verify it doesn't error and returns the empty
         // default
         let result = svc.list_public_shelves(1).await;
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     // ─── set_visibility ───────────────────────────────────────────────────────
@@ -1324,7 +1324,7 @@ mod tests {
 
         let result = svc.set_visibility(&token, ShelfVisibility::Public, 1).await;
 
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[tokio::test]
@@ -1412,7 +1412,7 @@ mod tests {
 
         let result = svc.get_shelf(&token, 2).await; // user 2
 
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     // ─── update_shelf ─────────────────────────────────────────────────────────
@@ -1436,7 +1436,7 @@ mod tests {
 
         let result = svc.update_shelf(&token, "Renamed".to_string(), ShelfVisibility::Public, 1).await;
 
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[tokio::test]
@@ -1512,6 +1512,6 @@ mod tests {
         // Same name, different visibility — must not conflict with itself
         let result = svc.update_shelf(&token, "My Shelf".to_string(), ShelfVisibility::Public, 1).await;
 
-        assert!(result.is_ok());
+        result.unwrap();
     }
 }

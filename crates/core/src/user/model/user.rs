@@ -280,13 +280,13 @@ mod tests {
     #[test]
     fn test_new_user_invalid_email_returns_error() {
         let result = NewUser::new("alice", "password", "not-an-email", HashSet::new(), "Alice", false);
-        assert!(result.is_err());
+        result.unwrap_err();
     }
 
     #[test]
     fn test_new_user_empty_full_name_returns_error() {
         let result = NewUser::new("alice", "password", "alice@example.com", HashSet::new(), "", false);
-        assert!(result.is_err());
+        result.unwrap_err();
     }
 
     #[test]
@@ -347,7 +347,7 @@ mod tests {
     #[test]
     fn test_partial_update_new_invalid_email_returns_error() {
         let result = PartialUserUpdate::new(None::<String>, Some("bad-email"), None);
-        assert!(result.is_err());
+        result.unwrap_err();
     }
 
     #[test]

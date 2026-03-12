@@ -1,4 +1,4 @@
-use std::{future::Future, pin::Pin};
+use std::pin::Pin;
 
 use serde::de::DeserializeOwned;
 
