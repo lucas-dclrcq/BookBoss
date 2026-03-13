@@ -19,7 +19,6 @@ pub struct Series {
 impl Series {
     #[cfg(any(test, feature = "test-support"))]
     pub fn fake(id: SeriesId, name: impl Into<String>) -> Self {
-        use chrono::Utc;
         Self {
             id,
             version: 1,

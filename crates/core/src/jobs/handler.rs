@@ -16,6 +16,7 @@ pub trait JobHandler: Send + Sync + 'static {
 /// Object-safe erased version of `JobHandler` used for `HashMap` storage.
 /// Not part of the public API — handler authors implement `JobHandler`.
 pub(crate) trait ErasedJobHandler: Send + Sync {
+    #[allow(dead_code, reason = "reserved for future use in job routing/debugging")]
     fn job_type(&self) -> &str;
     fn handle<'a>(&'a self, payload: serde_json::Value) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'a>>;
 }

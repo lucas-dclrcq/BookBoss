@@ -17,12 +17,12 @@ impl LocalLibraryStore {
         Self { library_path }
     }
 
-    fn book_dir(&self, token: &BookToken) -> PathBuf {
+    fn book_dir(&self, token: BookToken) -> PathBuf {
         self.library_path.join(token.to_string())
     }
 }
 
-fn format_ext(format: FileFormat) -> &'static str {
+fn format_ext(format: &FileFormat) -> &'static str {
     match format {
         FileFormat::Epub => "epub",
         FileFormat::Mobi => "mobi",
@@ -32,6 +32,7 @@ fn format_ext(format: FileFormat) -> &'static str {
     }
 }
 
+#[allow(clippy::needless_pass_by_value, reason = "owned error needed for map_err ergonomics")]
 fn io_err(e: impl ToString) -> Error {
     Error::Infrastructure(e.to_string())
 }
@@ -39,21 +40,21 @@ fn io_err(e: impl ToString) -> Error {
 #[async_trait]
 impl LibraryStore for LocalLibraryStore {
     fn book_file_path(&self, token: &BookToken, slug: &str, format: FileFormat) -> PathBuf {
-        self.book_dir(token).join(format!("{slug}.{}", format_ext(format)))
+        self.book_dir(*token).join(format!("{slug}.{}", format_ext(&format)))
     }
 
     fn cover_path(&self, token: &BookToken, filename: &str) -> PathBuf {
-        self.book_dir(token).join(filename)
+        self.book_dir(*token).join(filename)
     }
 
     fn metadata_path(&self, token: &BookToken) -> PathBuf {
-        self.book_dir(token).join("metadata.opf")
+        self.book_dir(*token).join("metadata.opf")
     }
 
     async fn store_book_file(&self, token: &BookToken, slug: &str, format: FileFormat, source: &Path) -> Result<(), Error> {
-        let book_dir = self.book_dir(token);
+        let book_dir = self.book_dir(*token);
         tokio::fs::create_dir_all(&book_dir).await.map_err(io_err)?;
-        let dest = book_dir.join(format!("{slug}.{}", format_ext(format)));
+        let dest = book_dir.join(format!("{slug}.{}", format_ext(&format)));
         // Try rename first (fast, same filesystem)
         if tokio::fs::rename(source, &dest).await.is_err() {
             // Fall back to copy then remove source
@@ -64,7 +65,7 @@ impl LibraryStore for LocalLibraryStore {
     }
 
     async fn store_cover(&self, token: &BookToken, filename: &str, data: &[u8]) -> Result<(), Error> {
-        let book_dir = self.book_dir(token);
+        let book_dir = self.book_dir(*token);
         tokio::fs::create_dir_all(&book_dir).await.map_err(io_err)?;
         let cover_path = self.cover_path(token, filename);
         tokio::fs::write(cover_path, data).await.map_err(io_err)?;
@@ -72,7 +73,7 @@ impl LibraryStore for LocalLibraryStore {
     }
 
     async fn store_metadata(&self, token: &BookToken, sidecar: &BookSidecar) -> Result<(), Error> {
-        let book_dir = self.book_dir(token);
+        let book_dir = self.book_dir(*token);
         tokio::fs::create_dir_all(&book_dir).await.map_err(io_err)?;
         let bytes = bb_formats::opf::write_sidecar(sidecar).map_err(|e| Error::Infrastructure(e.to_string()))?;
         let metadata_path = self.metadata_path(token);
@@ -81,7 +82,7 @@ impl LibraryStore for LocalLibraryStore {
     }
 
     async fn rename_book_files(&self, token: &BookToken, old_slug: &str, new_slug: &str) -> Result<(), Error> {
-        let book_dir = self.book_dir(token);
+        let book_dir = self.book_dir(*token);
         let prefix = format!("{old_slug}.");
         let mut entries = tokio::fs::read_dir(&book_dir).await.map_err(io_err)?;
         while let Some(entry) = entries.next_entry().await.map_err(io_err)? {
@@ -96,7 +97,7 @@ impl LibraryStore for LocalLibraryStore {
     }
 
     async fn delete_book(&self, token: &BookToken) -> Result<(), Error> {
-        let book_dir = self.book_dir(token);
+        let book_dir = self.book_dir(*token);
         match tokio::fs::remove_dir_all(&book_dir).await {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),

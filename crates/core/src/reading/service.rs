@@ -715,10 +715,6 @@ mod tests {
             *self.find_result.lock().unwrap() = Some(r);
             self
         }
-        fn with_upsert(self, r: Result<UserBookMetadata, Error>) -> Self {
-            *self.upsert_result.lock().unwrap() = Some(r);
-            self
-        }
         fn with_list(self, r: Result<Vec<UserBookMetadata>, Error>) -> Self {
             *self.list_result.lock().unwrap() = Some(r);
             self
@@ -727,8 +723,8 @@ mod tests {
 
     #[async_trait::async_trait]
     impl UserBookMetadataRepository for MockUserBookMetadataRepository {
-        async fn upsert(&self, _: &dyn Transaction, meta: UserBookMetadata) -> Result<UserBookMetadata, Error> {
-            self.upsert_result.lock().unwrap().clone().unwrap_or(Ok(meta))
+        async fn upsert(&self, _: &dyn Transaction, metadata: UserBookMetadata) -> Result<UserBookMetadata, Error> {
+            self.upsert_result.lock().unwrap().clone().unwrap_or(Ok(metadata))
         }
         async fn find_by_user_and_book(&self, _: &dyn Transaction, _: UserId, _: BookId) -> Result<Option<UserBookMetadata>, Error> {
             self.find_result.lock().unwrap().clone().unwrap_or(Ok(None))

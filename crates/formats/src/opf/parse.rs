@@ -103,10 +103,10 @@ struct BbMetaJson {
 
 fn marc_to_author_role(code: &str) -> AuthorRole {
     match code {
-        "aut" => AuthorRole::Author,
         "edt" => AuthorRole::Editor,
         "trl" => AuthorRole::Translator,
         "ill" => AuthorRole::Illustrator,
+        //"aut" => AuthorRole::Author,
         _ => AuthorRole::Author,
     }
 }
@@ -378,7 +378,7 @@ pub fn parse_sidecar(xml: &[u8]) -> Result<BookSidecar, Error> {
         .into_iter()
         .enumerate()
         .map(|(i, raw)| {
-            #[expect(clippy::cast_possible_truncation, reason = "author list index; books have far fewer authors than i32::MAX")]
+            #[expect(clippy::cast_possible_truncation, clippy::cast_possible_wrap, reason = "author list index; books have far fewer authors than i32::MAX")]
             let sort_order = sort_order_map.get(raw.name.as_str()).copied().unwrap_or(i as i32);
             let role = raw.role_code.as_deref().map_or(AuthorRole::Author, marc_to_author_role);
             SidecarAuthor {
@@ -431,7 +431,7 @@ pub fn extract_metadata(xml: &[u8]) -> Result<ExtractedMetadata, Error> {
         .into_iter()
         .enumerate()
         .map(|(i, raw)| {
-            #[expect(clippy::cast_possible_truncation, reason = "author list index; books have far fewer authors than i32::MAX")]
+            #[expect(clippy::cast_possible_truncation, clippy::cast_possible_wrap, reason = "author list index; books have far fewer authors than i32::MAX")]
             let sort_order = i as i32;
             ExtractedAuthor {
                 name: raw.name,
@@ -475,9 +475,7 @@ pub fn extract_metadata(xml: &[u8]) -> Result<ExtractedMetadata, Error> {
 /// relative to the OPF file's directory within the ZIP archive).
 #[must_use]
 pub fn extract_cover_href(opf_xml: &[u8]) -> Option<String> {
-    use std::collections::HashMap;
-
-    use quick_xml::{Reader, events::Event};
+    use quick_xml::Reader;
 
     let mut reader = Reader::from_reader(opf_xml);
     reader.config_mut().trim_text(true);

@@ -52,9 +52,8 @@ pub(crate) async fn serve_book_file(
     };
 
     // Verify the requested format exists for this book.
-    let files = match core_services.book_service.files_for_book(book.id).await {
-        Ok(f) => f,
-        Err(_) => return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap(),
+    let Ok(files) = core_services.book_service.files_for_book(book.id).await else {
+        return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap();
     };
     if !files.iter().any(|f| f.format == format) {
         return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap();
@@ -62,9 +61,8 @@ pub(crate) async fn serve_book_file(
 
     // Compute slug: same logic as pipeline service — first author (by sort_order) +
     // title.
-    let mut authors = match core_services.book_service.authors_for_book(book.id).await {
-        Ok(a) => a,
-        Err(_) => return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap(),
+    let Ok(mut authors) = core_services.book_service.authors_for_book(book.id).await else {
+        return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap();
     };
     authors.sort_by_key(|a| a.sort_order);
 

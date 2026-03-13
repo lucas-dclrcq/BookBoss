@@ -693,7 +693,7 @@ impl PipelineService for PipelineServiceImpl {
                         Some(a) => a,
                         None => author_repo.add_author(tx, NewAuthor { name, bio: None }).await?,
                     };
-                    #[expect(clippy::cast_possible_truncation, reason = "author list index; books have far fewer authors than i32::MAX")]
+                    #[expect(clippy::cast_possible_truncation, clippy::cast_possible_wrap, reason = "author list index; books have far fewer authors than i32::MAX")]
                     let sort_order = sort_order as i32;
                     book_repo2.add_book_author(tx, book_id, author.id, AuthorRole::Author, sort_order).await?;
                 }
@@ -774,7 +774,7 @@ impl PipelineService for PipelineServiceImpl {
             .filter(|n| !n.is_empty())
             .enumerate()
             .map(|(i, name)| {
-                #[expect(clippy::cast_possible_truncation, reason = "author list index; books have far fewer authors than i32::MAX")]
+                #[expect(clippy::cast_possible_truncation, clippy::cast_possible_wrap, reason = "author list index; books have far fewer authors than i32::MAX")]
                 let sort_order = i as i32;
                 SidecarAuthor {
                     name: normalize_name(name),
@@ -960,7 +960,7 @@ impl PipelineService for PipelineServiceImpl {
                         Some(a) => a,
                         None => author_repo.add_author(tx, NewAuthor { name, bio: None }).await?,
                     };
-                    #[expect(clippy::cast_possible_truncation, reason = "author list index; books have far fewer authors than i32::MAX")]
+                    #[expect(clippy::cast_possible_truncation, clippy::cast_possible_wrap, reason = "author list index; books have far fewer authors than i32::MAX")]
                     let sort_order = sort_order as i32;
                     book_repo2.add_book_author(tx, book_id, author.id, AuthorRole::Author, sort_order).await?;
                 }
@@ -1037,7 +1037,7 @@ impl PipelineService for PipelineServiceImpl {
             .filter(|n| !n.is_empty())
             .enumerate()
             .map(|(i, name)| {
-                #[expect(clippy::cast_possible_truncation, reason = "author list index; books have far fewer authors than i32::MAX")]
+                #[expect(clippy::cast_possible_truncation, clippy::cast_possible_wrap, reason = "author list index; books have far fewer authors than i32::MAX")]
                 let sort_order = i as i32;
                 SidecarAuthor {
                     name: normalize_name(name),

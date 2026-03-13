@@ -31,7 +31,7 @@ impl GrpcSubsystem {
 impl IntoSubsystem<Error> for GrpcSubsystem {
     async fn run(self, subsys: &mut SubsystemHandle) -> Result<(), Error> {
         let host_addr = format!("{}:{}", self.config.grpc_listen_ip, self.config.grpc_listen_port);
-        let addr = host_addr.parse().map_err(|_| Error::from(ApiError::AddressParse(host_addr)))?;
+        let addr = host_addr.parse().map_err(|_e| Error::from(ApiError::AddressParse(host_addr)))?;
 
         let service = tonic_reflection::server::Builder::configure()
             .register_encoded_file_descriptor_set(system_proto::FILE_DESCRIPTOR_SET)

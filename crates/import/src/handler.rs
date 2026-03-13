@@ -41,8 +41,8 @@ impl JobHandler for ProcessImportHandler {
     const JOB_TYPE: &'static str = "process_import";
     type Payload = ProcessImportPayload;
 
-    async fn handle(&self, p: ProcessImportPayload) -> Result<(), Error> {
-        let import_job_id = p.import_job_id;
+    async fn handle(&self, payload: ProcessImportPayload) -> Result<(), Error> {
+        let import_job_id = payload.import_job_id;
         let repo = self.repository_service.clone();
         let repository = self.repository_service.repository().clone();
 

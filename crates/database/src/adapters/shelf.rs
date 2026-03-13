@@ -50,7 +50,7 @@ fn str_to_shelf_visibility(s: &str) -> ShelfVisibility {
     }
 }
 
-fn read_status_to_str(s: &ReadStatus) -> &'static str {
+fn read_status_to_str(s: ReadStatus) -> &'static str {
     match s {
         ReadStatus::Unread => "unread",
         ReadStatus::Reading => "reading",
@@ -109,7 +109,7 @@ impl ShelfRepositoryAdapter {
 
 #[async_trait::async_trait]
 impl ShelfRepository for ShelfRepositoryAdapter {
-    async fn add_shelf(&self, transaction: &dyn Transaction, shelf: NewShelf) -> Result<Shelf, Error> {
+    async fn add_shelf(&self, transaction: &dyn Transaction, book_shelf: NewShelf) -> Result<Shelf, Error> {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
         let token = ShelfToken::generate();
@@ -118,12 +118,12 @@ impl ShelfRepository for ShelfRepositoryAdapter {
         let model = shelves::ActiveModel {
             id: Set(token.id() as i64),
             token: Set(token.to_string()),
-            owner_id: Set(shelf.owner_id as i64),
-            name: Set(shelf.name),
-            shelf_type: Set(shelf_type_to_str(&shelf.shelf_type).to_owned()),
-            visibility: Set(shelf_visibility_to_str(&shelf.visibility).to_owned()),
-            device_id: Set(shelf.device_id.map(|id| id as i64)),
-            filter_criteria: Set(shelf.filter_criteria.and_then(|f| serde_json::to_value(f).ok())),
+            owner_id: Set(book_shelf.owner_id as i64),
+            name: Set(book_shelf.name),
+            shelf_type: Set(shelf_type_to_str(&book_shelf.shelf_type).to_owned()),
+            visibility: Set(shelf_visibility_to_str(&book_shelf.visibility).to_owned()),
+            device_id: Set(book_shelf.device_id.map(|id| id as i64)),
+            filter_criteria: Set(book_shelf.filter_criteria.and_then(|f| serde_json::to_value(f).ok())),
             version: Set(0),
             created_at: Set(now.into()),
             updated_at: Set(now.into()),
@@ -133,33 +133,37 @@ impl ShelfRepository for ShelfRepositoryAdapter {
         Ok(model.into())
     }
 
-    async fn update_shelf(&self, transaction: &dyn Transaction, shelf: Shelf) -> Result<Shelf, Error> {
+    async fn update_shelf(&self, transaction: &dyn Transaction, book_shelf: Shelf) -> Result<Shelf, Error> {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
-        let existing = prelude::Shelves::find_by_id(shelf.id as i64)
+        let existing = prelude::Shelves::find_by_id(book_shelf.id as i64)
             .one(transaction)
             .await
             .map_err(handle_dberr)?
             .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
-        if existing.version != shelf.version as i64 {
+        if existing.version != book_shelf.version as i64 {
             return Err(Error::RepositoryError(RepositoryError::Conflict));
         }
 
         let mut updater: shelves::ActiveModel = existing.into();
-        updater.name = Set(shelf.name);
-        updater.visibility = Set(shelf_visibility_to_str(&shelf.visibility).to_owned());
-        updater.device_id = Set(shelf.device_id.map(|id| id as i64));
-        updater.filter_criteria = Set(shelf.filter_criteria.and_then(|f| serde_json::to_value(f).ok()));
+        updater.name = Set(book_shelf.name);
+        updater.visibility = Set(shelf_visibility_to_str(&book_shelf.visibility).to_owned());
+        updater.device_id = Set(book_shelf.device_id.map(|id| id as i64));
+        updater.filter_criteria = Set(book_shelf.filter_criteria.and_then(|f| serde_json::to_value(f).ok()));
 
         let result = updater.update(transaction).await.map_err(handle_dberr)?;
         Ok(result.into())
     }
 
-    async fn delete_shelf(&self, transaction: &dyn Transaction, shelf: Shelf) -> Result<(), Error> {
+    async fn delete_shelf(&self, transaction: &dyn Transaction, book_shelf: Shelf) -> Result<(), Error> {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
-        if let Some(existing) = prelude::Shelves::find_by_id(shelf.id as i64).one(transaction).await.map_err(handle_dberr)? {
+        if let Some(existing) = prelude::Shelves::find_by_id(book_shelf.id as i64)
+            .one(transaction)
+            .await
+            .map_err(handle_dberr)?
+        {
             existing.delete(transaction).await.map_err(handle_dberr)?;
         }
 
@@ -395,7 +399,7 @@ fn apply_shelf_filter(mut query: sea_orm::Select<books::Entity>, filter: &ShelfF
 
     if let Some(read_statuses) = &filter.read_status {
         if !read_statuses.is_empty() {
-            let status_strs: Vec<String> = read_statuses.iter().map(|s| read_status_to_str(s).to_owned()).collect();
+            let status_strs: Vec<String> = read_statuses.iter().map(|s| read_status_to_str(*s).to_owned()).collect();
             let mut subq = Query::select();
             subq.column(user_book_metadata::Column::BookId)
                 .from(user_book_metadata::Entity)

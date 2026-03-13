@@ -4,13 +4,13 @@ use bb_core::{Error as CoreError, ErrorKind};
 use tonic::Status;
 
 /// Maps a core error to the appropriate tonic Status code.
+#[allow(clippy::needless_pass_by_value, reason = "owned error needed for map_err ergonomics")]
 pub fn map_core_error(error: CoreError) -> Status {
     let message = error.to_string();
     match error.kind() {
         ErrorKind::NotFound => Status::not_found(message),
         ErrorKind::Conflict => Status::already_exists(message),
-        ErrorKind::InvalidInput => Status::invalid_argument(message),
-        ErrorKind::BadRequest => Status::invalid_argument(message),
+        ErrorKind::InvalidInput | ErrorKind::BadRequest => Status::invalid_argument(message),
         ErrorKind::Internal => Status::internal(message),
     }
 }

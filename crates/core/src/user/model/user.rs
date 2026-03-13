@@ -221,10 +221,7 @@ impl PartialUserUpdate {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use super::*;
-    use crate::types::Capability;
 
     // ─── User::has_capability ────────────────────────────────────────────────
 

@@ -17,7 +17,7 @@ use crate::{
 // ── String conversions
 // ────────────────────────────────────────────────────────
 
-fn read_status_to_str(s: &ReadStatus) -> &'static str {
+fn read_status_to_str(s: ReadStatus) -> &'static str {
     match s {
         ReadStatus::Unread => "unread",
         ReadStatus::Reading => "reading",
@@ -84,7 +84,7 @@ impl UserBookMetadataRepository for UserBookMetadataRepositoryAdapter {
 
         let model = if let Some(existing) = existing {
             let mut active: user_book_metadata::ActiveModel = existing.into();
-            active.read_status = Set(read_status_to_str(&metadata.read_status).to_owned());
+            active.read_status = Set(read_status_to_str(metadata.read_status).to_owned());
             active.progress_percentage = Set(metadata.progress_percentage.map(|v| v as i16));
             active.position_token = Set(metadata.position_token);
             active.last_progress_at = Set(metadata.last_progress_at.map(Into::into));
@@ -99,7 +99,7 @@ impl UserBookMetadataRepository for UserBookMetadataRepositoryAdapter {
             let active = user_book_metadata::ActiveModel {
                 user_id: Set(metadata.user_id as i64),
                 book_id: Set(metadata.book_id as i64),
-                read_status: Set(read_status_to_str(&metadata.read_status).to_owned()),
+                read_status: Set(read_status_to_str(metadata.read_status).to_owned()),
                 progress_percentage: Set(metadata.progress_percentage.map(|v| v as i16)),
                 position_token: Set(metadata.position_token),
                 last_progress_at: Set(metadata.last_progress_at.map(Into::into)),
@@ -150,7 +150,7 @@ impl UserBookMetadataRepository for UserBookMetadataRepositoryAdapter {
             .order_by_asc(user_book_metadata::Column::BookId);
 
         if let Some(status) = status {
-            query = query.filter(user_book_metadata::Column::ReadStatus.eq(read_status_to_str(&status)));
+            query = query.filter(user_book_metadata::Column::ReadStatus.eq(read_status_to_str(status)));
         }
 
         if let Some(start_id) = start_book_id {

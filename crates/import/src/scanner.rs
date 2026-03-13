@@ -189,7 +189,7 @@ fn hash_file(path: &Path) -> std::io::Result<String> {
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);
     let mut hasher = Sha256::new();
-    let mut buf = [0u8; 65536];
+    let mut buf = vec![0u8; 65536].into_boxed_slice();
 
     loop {
         let n = reader.read(&mut buf)?;
@@ -204,8 +204,6 @@ fn hash_file(path: &Path) -> std::io::Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
-
     use super::*;
 
     #[test]

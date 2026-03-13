@@ -117,7 +117,7 @@ pub(crate) fn image_dimensions(data: &[u8]) -> Option<(u32, u32)> {
 }
 
 #[cfg(feature = "server")]
-fn provider_book_to_result(pb: ProviderBook) -> ProviderResult {
+fn provider_book_to_result(pb: &ProviderBook) -> ProviderResult {
     let meta = &pb.metadata;
     let title = meta.title.clone().unwrap_or_default();
     let description = meta.description.clone().unwrap_or_default();
@@ -322,7 +322,7 @@ pub(super) async fn fetch_provider_metadata(
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    Ok(result.map(provider_book_to_result))
+    Ok(result.as_ref().map(provider_book_to_result))
 }
 
 #[put(
@@ -571,7 +571,7 @@ pub(super) async fn fetch_provider_for_edit(
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    Ok(result.map(provider_book_to_result))
+    Ok(result.as_ref().map(provider_book_to_result))
 }
 
 #[put(

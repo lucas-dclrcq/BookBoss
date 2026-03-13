@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 
 use axum_session_auth::Authentication;
-use bb_core::{CoreServices, user::UserId};
+use bb_core::user::UserId;
 use serde::{Deserialize, Serialize};
 
-use crate::{server::BackendSessionPool, settings::FrontendSettings};
+use crate::server::BackendSessionPool;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct AuthUser {
@@ -59,23 +59,5 @@ impl Authentication<Self, UserId, BackendSessionPool> for AuthUser {
 impl AuthUser {
     pub(crate) fn id(&self) -> UserId {
         self.id
-    }
-
-    pub(crate) async fn get_api_key(&self, core: &CoreServices) -> String {
-        if self.anonymous {
-            return String::new();
-        }
-        core.user_setting_service
-            .get(self.id, FrontendSettings::ApiKey.key())
-            .await
-            .inspect_err(|e| tracing::warn!("Failed to load api_key for user {}: {e}", self.id))
-            .ok()
-            .flatten()
-            .map(|s| s.value)
-            .unwrap_or_default()
-    }
-
-    pub(crate) async fn set_api_key(&self, key: &str, core: &CoreServices) -> Result<(), bb_core::Error> {
-        core.user_setting_service.set(self.id, FrontendSettings::ApiKey.key(), key).await.map(|_| ())
     }
 }

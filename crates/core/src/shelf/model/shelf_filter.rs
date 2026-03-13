@@ -30,7 +30,6 @@ mod tests {
     use chrono::TimeZone;
 
     use super::*;
-    use crate::reading::ReadStatus;
 
     #[test]
     fn shelf_filter_empty_round_trip() {

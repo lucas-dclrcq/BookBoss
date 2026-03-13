@@ -107,6 +107,7 @@ impl DatabasePool for BackendSessionPool {
 
 #[async_trait::async_trait]
 impl HasPermission<BackendSessionPool> for AuthUser {
+    #[allow(clippy::ref_option_ref, reason = "signature required by axum_session_auth::HasPermission trait")]
     async fn has(&self, perm: &str, _pool: &Option<&BackendSessionPool>) -> bool {
         self.permissions.contains(Capability::SuperAdmin.as_str())
             || self.permissions.contains(perm)

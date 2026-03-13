@@ -1,3 +1,5 @@
+#![allow(dead_code, reason = "device sync not yet implemented; entities reserved for future use")]
+
 use bb_core::device::DeviceToken;
 use chrono::Utc;
 use sea_orm::{ActiveValue::Set, entity::prelude::*};

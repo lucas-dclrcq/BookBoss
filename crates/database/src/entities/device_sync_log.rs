@@ -1,3 +1,5 @@
+#![allow(dead_code, reason = "device sync not yet implemented; entities reserved for future use")]
+
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 

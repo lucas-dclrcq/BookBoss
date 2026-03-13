@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 pub type Capabilities = HashSet<Capability>;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Capability {
     Admin,
     ApproveImports,

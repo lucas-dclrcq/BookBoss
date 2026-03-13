@@ -65,7 +65,6 @@ impl TokenId for u64 {
     fn encode(self) -> String {
         let mut buf = [0u8; Self::ENCODED_LEN];
         self.encode_to_buf(&mut buf);
-        // SAFETY: all bytes come from ALPHABET which is ASCII
         String::from_utf8(buf.to_vec()).expect("alphabet is ASCII")
     }
 
@@ -102,7 +101,6 @@ impl TokenId for u128 {
     fn encode(self) -> String {
         let mut buf = [0u8; Self::ENCODED_LEN];
         self.encode_to_buf(&mut buf);
-        // SAFETY: all bytes come from ALPHABET which is ASCII
         String::from_utf8(buf.to_vec()).expect("alphabet is ASCII")
     }
 
@@ -217,7 +215,6 @@ impl<P: TokenPrefix, I: TokenId, const MAX: u128> fmt::Display for Token<P, I, M
         let mut buf = [0u8; 26]; // max encoded length (u128)
         let buf = &mut buf[..I::ENCODED_LEN];
         self.id.encode_to_buf(buf);
-        // SAFETY: all bytes come from ALPHABET which is ASCII
         f.write_str(std::str::from_utf8(buf).expect("alphabet is ASCII"))
     }
 }
@@ -474,7 +471,7 @@ mod tests {
         for _ in 0..1000 {
             let token = CappedToken::generate();
             assert!(token.id() >= 1);
-            assert!(i64::try_from(token.id()).is_ok());
+            i64::try_from(token.id()).unwrap();
         }
     }
 }

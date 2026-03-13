@@ -1,4 +1,4 @@
-use std::{any::Any, future::Future, pin::Pin, sync::Arc};
+use std::{any::Any, pin::Pin, sync::Arc};
 
 use derive_builder::Builder;
 

@@ -21,7 +21,6 @@ pub struct Author {
 impl Author {
     #[cfg(any(test, feature = "test-support"))]
     pub fn fake(id: AuthorId, name: impl Into<String>) -> Self {
-        use chrono::Utc;
         Self {
             id,
             version: 1,

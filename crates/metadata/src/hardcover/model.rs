@@ -17,7 +17,8 @@ pub(super) struct SearchResult {
 
 #[derive(Debug, Deserialize)]
 pub(super) struct SearchResults {
-    pub found: u32,
+    #[serde(rename = "found")]
+    pub _found: u32,
     pub hits: Option<Vec<Hit>>,
 }
 
