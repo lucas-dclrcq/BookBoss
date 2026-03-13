@@ -36,6 +36,7 @@ impl Author {
 
 impl BookAuthor {
     #[cfg(any(test, feature = "test-support"))]
+    #[must_use]
     pub fn fake(book_id: BookId, author_id: AuthorId, role: &str, sort_order: i32) -> Self {
         let role = match role {
             "editor" => AuthorRole::Editor,

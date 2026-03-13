@@ -46,6 +46,7 @@ impl LibraryStore for NopLibraryStore {
     }
 }
 
+#[must_use]
 pub fn nop_library_store() -> Arc<dyn LibraryStore> {
     Arc::new(NopLibraryStore)
 }
@@ -81,6 +82,7 @@ impl PipelineService for NopPipelineService {
     }
 }
 
+#[must_use]
 pub fn nop_pipeline_service() -> Arc<dyn PipelineService> {
     Arc::new(NopPipelineService)
 }
@@ -97,6 +99,7 @@ impl LibraryService for NopLibraryService {
     }
 }
 
+#[must_use]
 pub fn nop_library_service() -> Arc<dyn LibraryService> {
     Arc::new(NopLibraryService)
 }

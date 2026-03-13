@@ -35,7 +35,7 @@ use {crate::server::AuthSession, bb_core::CoreServices};
 
 #[get("/api/v1/get_landing_state", core_services: axum::Extension<std::sync::Arc<CoreServices>>, auth_session: axum::Extension<AuthSession>)]
 async fn get_landing_state() -> Result<LandingState, ServerFnError> {
-    let is_authenticated = auth_session.current_user.as_ref().map(|u| !u.username.is_empty()).unwrap_or(false);
+    let is_authenticated = auth_session.current_user.as_ref().is_some_and(|u| !u.username.is_empty());
 
     let users = core_services
         .user_service
@@ -85,10 +85,10 @@ pub(crate) async fn change_password_and_login(user_token: String, new_password: 
     if new_password.len() < MIN_PASSWORD_LEN {
         return Err(ServerFnError::new(format!("Password must be at least {MIN_PASSWORD_LEN} characters")));
     }
-    if !new_password.chars().any(|c| c.is_uppercase()) {
+    if !new_password.chars().any(char::is_uppercase) {
         return Err(ServerFnError::new("Password must contain at least one uppercase letter"));
     }
-    if !new_password.chars().any(|c| c.is_lowercase()) {
+    if !new_password.chars().any(char::is_lowercase) {
         return Err(ServerFnError::new("Password must contain at least one lowercase letter"));
     }
     if !new_password.chars().any(|c| c.is_ascii_digit()) {
@@ -141,10 +141,10 @@ pub(crate) async fn register_admin(username: String, full_name: String, password
     if password.len() < MIN_PASSWORD_LEN {
         return Err(ServerFnError::new("Password must be at least 12 characters"));
     }
-    if !password.chars().any(|c| c.is_uppercase()) {
+    if !password.chars().any(char::is_uppercase) {
         return Err(ServerFnError::new("Password must contain at least one uppercase letter"));
     }
-    if !password.chars().any(|c| c.is_lowercase()) {
+    if !password.chars().any(char::is_lowercase) {
         return Err(ServerFnError::new("Password must contain at least one lowercase letter"));
     }
     if !password.chars().any(|c| c.is_ascii_digit()) {

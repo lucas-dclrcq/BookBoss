@@ -130,7 +130,7 @@ async fn save_auto_read_threshold(threshold_pct: u8) -> Result<(), ServerFnError
     }
 
     let user_id = user.id();
-    let bps = threshold_pct as u16 * 100;
+    let bps = u16::from(threshold_pct) * 100;
     core_services
         .user_setting_service
         .set(user_id, AUTO_READ_THRESHOLD_KEY, &bps.to_string())

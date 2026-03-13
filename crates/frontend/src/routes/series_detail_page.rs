@@ -99,7 +99,7 @@ async fn get_series(token: String) -> Result<SeriesPageData, ServerFnError> {
                 cover_path: book.cover_path.clone(),
                 author_names,
                 series_name: Some(series.name.clone()),
-                series_number: book.series_number.as_ref().map(|n| n.to_string()),
+                series_number: book.series_number.as_ref().map(std::string::ToString::to_string),
                 reading_state: None,
             }
         })

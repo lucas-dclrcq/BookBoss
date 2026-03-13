@@ -153,7 +153,7 @@ async fn list_books() -> Result<ListBooksResponse, ServerFnError> {
                 cover_path: book.cover_path.clone(),
                 author_names,
                 series_name: book.series_id.and_then(|sid| series_map.get(&sid).cloned()),
-                series_number: book.series_number.as_ref().map(|n| n.to_string()),
+                series_number: book.series_number.as_ref().map(std::string::ToString::to_string),
                 reading_state: reading_map.get(&book.id).cloned(),
             }
         })

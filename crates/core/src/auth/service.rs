@@ -807,7 +807,7 @@ mod tests {
 
         let result = svc.delete_by_id("sess-1").await;
 
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[tokio::test]
@@ -875,7 +875,7 @@ mod tests {
 
         let result = svc.delete_all().await;
 
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[tokio::test]

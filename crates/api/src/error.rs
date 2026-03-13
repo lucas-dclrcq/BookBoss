@@ -17,6 +17,6 @@ pub enum ApiError {
 
 impl From<ApiError> for CoreError {
     fn from(err: ApiError) -> Self {
-        CoreError::Infrastructure(err.to_string())
+        Self::Infrastructure(err.to_string())
     }
 }

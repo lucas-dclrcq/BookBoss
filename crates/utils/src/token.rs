@@ -395,7 +395,7 @@ mod tests {
     #[test]
     fn serde_rejects_invalid_token() {
         let result = serde_json::from_str::<TestToken>(r#""INVALID""#);
-        assert!(result.is_err());
+        result.unwrap_err();
     }
 
     #[test]
@@ -412,7 +412,7 @@ mod tests {
 
     #[test]
     fn u128_round_trip() {
-        for id in [0u128, 1, u64::MAX as u128, u128::MAX] {
+        for id in [0u128, 1, u128::from(u64::MAX), u128::MAX] {
             let token = BigToken::new(id);
             let s = token.to_string();
             let parsed = BigToken::parse(&s).unwrap();
@@ -474,7 +474,7 @@ mod tests {
         for _ in 0..1000 {
             let token = CappedToken::generate();
             assert!(token.id() >= 1);
-            assert!(token.id() <= i64::MAX as u64);
+            assert!(i64::try_from(token.id()).is_ok());
         }
     }
 }

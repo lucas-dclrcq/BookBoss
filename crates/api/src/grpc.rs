@@ -41,7 +41,7 @@ impl IntoSubsystem<Error> for GrpcSubsystem {
 
         tracing::info!("listening on {}", addr);
         tokio::select! {
-            _ = subsys.on_shutdown_requested() => {
+            () = subsys.on_shutdown_requested() => {
                 tracing::info!("GrpcSubsystem shutting down...");
             }
             _ = Server::builder()

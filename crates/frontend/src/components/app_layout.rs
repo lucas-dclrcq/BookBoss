@@ -6,7 +6,7 @@ use crate::{Route, components::NavBar};
 
 #[get("/api/v1/check_auth", auth_session: axum::Extension<AuthSession>)]
 async fn check_auth() -> Result<bool, ServerFnError> {
-    Ok(auth_session.current_user.as_ref().map(|u| !u.username.is_empty()).unwrap_or(false))
+    Ok(auth_session.current_user.as_ref().is_some_and(|u| !u.username.is_empty()))
 }
 
 #[component]

@@ -310,7 +310,7 @@ impl PipelineService for PipelineServiceImpl {
             clippy::cast_possible_wrap,
             reason = "file size stored as i64 in DB; files in practice will not exceed i64::MAX bytes"
         )]
-        let file_size = tokio::fs::metadata(&path).await.map(|m| m.len() as i64).unwrap_or(0);
+        let file_size = tokio::fs::metadata(&path).await.map_or(0, |m| m.len() as i64);
 
         // ── 8. Determine title (fall back to filename stem) ───────────────────
         let title = normalize_name(

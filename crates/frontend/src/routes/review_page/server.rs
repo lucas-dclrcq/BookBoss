@@ -71,15 +71,15 @@ pub(crate) fn image_dimensions(data: &[u8]) -> Option<(u32, u32)> {
         return Some((w, h));
     }
     if (data.starts_with(b"GIF87a") || data.starts_with(b"GIF89a")) && data.len() >= 10 {
-        let w = u16::from_le_bytes([data[6], data[7]]) as u32;
-        let h = u16::from_le_bytes([data[8], data[9]]) as u32;
+        let w = u32::from(u16::from_le_bytes([data[6], data[7]]));
+        let h = u32::from(u16::from_le_bytes([data[8], data[9]]));
         return Some((w, h));
     }
     if data.len() >= 30 && data.starts_with(b"RIFF") && &data[8..12] == b"WEBP" {
         match &data[12..16] {
             b"VP8 " => {
-                let w = (u16::from_le_bytes([data[26], data[27]]) & 0x3FFF) as u32;
-                let h = (u16::from_le_bytes([data[28], data[29]]) & 0x3FFF) as u32;
+                let w = u32::from(u16::from_le_bytes([data[26], data[27]]) & 0x3FFF);
+                let h = u32::from(u16::from_le_bytes([data[28], data[29]]) & 0x3FFF);
                 return Some((w, h));
             }
             b"VP8L" if data.len() >= 25 => {
@@ -102,8 +102,8 @@ pub(crate) fn image_dimensions(data: &[u8]) -> Option<(u32, u32)> {
             }
             let marker = data[i + 1];
             if matches!(marker, 0xC0..=0xCF) && !matches!(marker, 0xC4 | 0xC8 | 0xCC) && i + 8 < data.len() {
-                let h = u16::from_be_bytes([data[i + 5], data[i + 6]]) as u32;
-                let w = u16::from_be_bytes([data[i + 7], data[i + 8]]) as u32;
+                let h = u32::from(u16::from_be_bytes([data[i + 5], data[i + 6]]));
+                let w = u32::from(u16::from_be_bytes([data[i + 7], data[i + 8]]));
                 return Some((w, h));
             }
             let len = u16::from_be_bytes([data[i + 2], data[i + 3]]) as usize;
@@ -124,7 +124,7 @@ fn provider_book_to_result(pb: ProviderBook) -> ProviderResult {
     let published_date = meta.published_date.map(|y| y.to_string()).unwrap_or_default();
     let language = meta.language.clone().unwrap_or_default();
     let series_name = meta.series_name.clone().unwrap_or_default();
-    let series_number = meta.series_number.as_ref().map(|n| n.to_string()).unwrap_or_default();
+    let series_number = meta.series_number.as_ref().map(std::string::ToString::to_string).unwrap_or_default();
     let publisher_name = meta.publisher.clone().unwrap_or_default();
     let authors = meta.authors.as_deref().unwrap_or(&[]).iter().map(|a| a.name.clone()).collect::<Vec<_>>();
     let identifiers = meta
@@ -241,7 +241,7 @@ pub(super) async fn get_review_data(job_token: String) -> Result<BookReviewData,
         .map(|i| (identifier_type_key(&i.identifier_type).to_string(), i.value.clone()))
         .collect();
 
-    let provider_names = pipeline_service.list_provider_names().into_iter().map(|s| s.to_string()).collect();
+    let provider_names = pipeline_service.list_provider_names().into_iter().map(std::string::ToString::to_string).collect();
 
     // Read cover file to determine dimensions.
     let cover_dimensions = if let Some(filename) = &book.cover_path {
@@ -274,7 +274,7 @@ pub(super) async fn get_review_data(job_token: String) -> Result<BookReviewData,
         published_date: book.published_date.map(|y| y.to_string()).unwrap_or_default(),
         language: book.language.unwrap_or_default(),
         series_name,
-        series_number: book.series_number.as_ref().map(|n| n.to_string()).unwrap_or_default(),
+        series_number: book.series_number.as_ref().map(std::string::ToString::to_string).unwrap_or_default(),
         publisher_name,
         page_count: book.page_count.map(|p| p.to_string()).unwrap_or_default(),
         authors: author_names,
@@ -491,7 +491,7 @@ pub(crate) async fn get_book_for_edit(book_token: String) -> Result<BookReviewDa
         .map(|i| (identifier_type_key(&i.identifier_type).to_string(), i.value.clone()))
         .collect();
 
-    let provider_names = pipeline_service.list_provider_names().into_iter().map(|s| s.to_string()).collect();
+    let provider_names = pipeline_service.list_provider_names().into_iter().map(std::string::ToString::to_string).collect();
 
     // Cover dimensions
     let cover_dimensions = if let Some(filename) = &book.cover_path {
@@ -524,7 +524,7 @@ pub(crate) async fn get_book_for_edit(book_token: String) -> Result<BookReviewDa
         published_date: book.published_date.map(|y| y.to_string()).unwrap_or_default(),
         language: book.language.unwrap_or_default(),
         series_name,
-        series_number: book.series_number.as_ref().map(|n| n.to_string()).unwrap_or_default(),
+        series_number: book.series_number.as_ref().map(std::string::ToString::to_string).unwrap_or_default(),
         publisher_name,
         page_count: book.page_count.map(|p| p.to_string()).unwrap_or_default(),
         authors: author_names,
@@ -638,7 +638,7 @@ pub(super) async fn save_library_book(book_token: String, fields: BookEditFields
     auth_session: axum::Extension<AuthSession>,
     core_services: axum::Extension<Arc<CoreServices>>
 )]
-pub(crate) async fn get_picklist_data(_: ()) -> Result<PicklistData, ServerFnError> {
+pub(crate) async fn get_picklist_data((): ()) -> Result<PicklistData, ServerFnError> {
     let current_user = auth_session.current_user.clone().unwrap_or_default();
     if !Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::POST], true)
         .requires(Rights::any([

@@ -58,7 +58,7 @@ impl Error {
             Self::RepositoryError(e) => e.kind(),
             Self::FrontendError(_) => ErrorKind::Internal,
             #[cfg(any(test, feature = "test-support"))]
-            Error::MockNotConfigured(_) => ErrorKind::Internal,
+            Self::MockNotConfigured(_) => ErrorKind::Internal,
         }
     }
 }

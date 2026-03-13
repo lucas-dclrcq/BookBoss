@@ -19,6 +19,7 @@ pub struct BookFile {
 
 impl BookFile {
     #[cfg(any(test, feature = "test-support"))]
+    #[must_use]
     pub fn fake(book_id: BookId, format: &str) -> Self {
         let format = match format {
             "mobi" => FileFormat::Mobi,

@@ -250,7 +250,7 @@ async fn get_book(token: String) -> Result<BookDetail, ServerFnError> {
         page_count: book.page_count,
         series_token,
         series_name,
-        series_number: book.series_number.as_ref().map(|n| n.to_string()),
+        series_number: book.series_number.as_ref().map(std::string::ToString::to_string),
         authors,
         files,
         identifiers,
@@ -352,7 +352,7 @@ async fn update_reading_progress(token: String, progress_pct: u8) -> Result<Read
         .map_err(|e| ServerFnError::new(e.to_string()))?
         .ok_or_else(|| ServerFnError::new("Book not found"))?;
 
-    let progress_bps = progress_pct as u16 * 100;
+    let progress_bps = u16::from(progress_pct) * 100;
     let threshold = load_threshold(user_id, &core_services).await;
     let meta = core_services
         .reading_service

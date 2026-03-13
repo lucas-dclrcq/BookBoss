@@ -77,7 +77,7 @@ pub mod api {
 
     #[tracing::instrument(level = "trace")]
     pub async fn status(host: &str, port: u16) -> Result<String, Error> {
-        let uri = format!("{}:{}", host, port);
+        let uri = format!("{host}:{port}");
         let endpoint = tonic::transport::Channel::from_shared(uri.clone()).map_err(|e| Error::from(ApiError::GrpcClient(e.to_string())))?;
         let endpoint = if uri.starts_with("https://") {
             let tls = tonic::transport::ClientTlsConfig::new().with_native_roots();

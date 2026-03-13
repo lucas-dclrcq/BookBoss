@@ -16,12 +16,12 @@ pub use error::ApiError;
 pub struct ApiConfig {
     /// IP address where the GRPC server should listen.
     /// e.g. 0.0.0.0
-    /// Environment variable: BOOKBOSS__API__GRPC_LISTEN_IP
+    /// Environment variable: `BOOKBOSS__API__GRPC_LISTEN_IP`
     pub grpc_listen_ip: String,
 
     /// Port the GRPC server should listen on.
     /// e.g. 8081
-    /// Environment variable: BOOKBOSS__API__GRPC_LISTEN_PORT
+    /// Environment variable: `BOOKBOSS__API__GRPC_LISTEN_PORT`
     pub grpc_listen_port: u16,
 }
 
@@ -55,6 +55,7 @@ impl IntoSubsystem<Error> for ApiSubsystem {
     }
 }
 
+#[must_use]
 pub fn create_api_subsystem(config: &ApiConfig, core_services: Arc<CoreServices>) -> ApiSubsystem {
     ApiSubsystem {
         config: config.to_owned(),

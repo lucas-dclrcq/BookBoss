@@ -991,7 +991,7 @@ mod tests {
         let svc = create_service(MockShelfRepository::default(), MockBookRepository::default());
         let token = ShelfToken::new(1);
 
-        let result = svc.rename_shelf(&token, "".to_string(), 1).await;
+        let result = svc.rename_shelf(&token, String::new(), 1).await;
 
         assert!(matches!(result, Err(Error::Validation(_))));
     }
@@ -1057,7 +1057,7 @@ mod tests {
 
         let result = svc.rename_shelf(&token, "My Shelf".to_string(), 1).await;
 
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     // ─── delete_shelf ─────────────────────────────────────────────────────────
@@ -1090,7 +1090,7 @@ mod tests {
 
         let result = svc.delete_shelf(&token, 1).await;
 
-        assert!(result.is_ok());
+        result.unwrap();
         assert!(shelf_repo.delete_shelf_was_called());
     }
 
@@ -1146,7 +1146,7 @@ mod tests {
 
         let result = svc.add_book_to_shelf(&ShelfToken::new(1), &BookToken::new(1), 1).await;
 
-        assert!(result.is_ok());
+        result.unwrap();
         assert!(shelf_repo.add_book_to_shelf_was_called());
     }
 
@@ -1211,7 +1211,7 @@ mod tests {
 
         let result = svc.remove_book_from_shelf(&ShelfToken::new(1), &BookToken::new(1), 1).await;
 
-        assert!(result.is_ok());
+        result.unwrap();
         assert!(shelf_repo.remove_book_from_shelf_was_called());
     }
 
@@ -1260,7 +1260,7 @@ mod tests {
 
         let result = svc.books_for_shelf(&token, 2, None, None).await; // user 2 accessing user 1's public shelf
 
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[tokio::test]

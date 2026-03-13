@@ -1,4 +1,4 @@
-use std::{net::IpAddr, sync::Arc};
+use std::sync::Arc;
 
 use axum::{
     Extension,
@@ -8,7 +8,7 @@ use axum_session::{SessionConfig, SessionLayer, SessionStore};
 use axum_session_auth::{AuthConfig, AuthSessionLayer};
 use bb_core::{CoreServices, user::UserId};
 use chrono::Duration;
-use dioxus::server::{self, DioxusRouterExt};
+use dioxus::server::DioxusRouterExt;
 use tokio_graceful_shutdown::{IntoSubsystem, SubsystemHandle};
 use tower::ServiceBuilder;
 use tower_http::{
@@ -84,12 +84,12 @@ impl IntoSubsystem<anyhow::Error> for FrontendSubsystem {
 
         let ip = std::env::var("IP").ok().unwrap_or_else(|| self.config.listen_ip.clone());
         let port: u16 = std::env::var("PORT").ok().and_then(|s| s.parse().ok()).unwrap_or(self.config.listen_port);
-        let listener = tokio::net::TcpListener::bind(&format!("{}:{}", ip, port)).await?;
+        let listener = tokio::net::TcpListener::bind(&format!("{ip}:{port}")).await?;
 
         tracing::info!("Frontend listening on {}", listener.local_addr()?);
 
         tokio::select! {
-            _ = subsys.on_shutdown_requested() => {
+            () = subsys.on_shutdown_requested() => {
                 tracing::info!("Frontend shutting down...");
             }
             result = axum::serve(listener, router) => {
@@ -104,6 +104,7 @@ impl IntoSubsystem<anyhow::Error> for FrontendSubsystem {
     }
 }
 
+#[must_use]
 pub fn create_frontend_subsystem(config: &FrontendConfig, core_services: Arc<CoreServices>) -> FrontendSubsystem {
     FrontendSubsystem {
         config: config.to_owned(),

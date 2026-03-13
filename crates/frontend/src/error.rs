@@ -11,6 +11,6 @@ pub enum FrontendError {
 
 impl From<FrontendError> for CoreError {
     fn from(err: FrontendError) -> Self {
-        CoreError::FrontendError(err.to_string())
+        Self::FrontendError(err.to_string())
     }
 }
