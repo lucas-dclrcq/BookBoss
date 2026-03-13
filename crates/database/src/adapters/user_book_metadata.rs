@@ -88,7 +88,7 @@ impl UserBookMetadataRepository for UserBookMetadataRepositoryAdapter {
             active.progress_percentage = Set(metadata.progress_percentage.map(|v| v as i16));
             active.position_token = Set(metadata.position_token);
             active.last_progress_at = Set(metadata.last_progress_at.map(Into::into));
-            active.personal_rating = Set(metadata.personal_rating.map(|v| v as i16));
+            active.personal_rating = Set(metadata.personal_rating.map(i16::from));
             active.times_read = Set(metadata.times_read as i32);
             active.date_started = Set(metadata.date_started.map(Into::into));
             active.date_finished = Set(metadata.date_finished.map(Into::into));
@@ -103,7 +103,7 @@ impl UserBookMetadataRepository for UserBookMetadataRepositoryAdapter {
                 progress_percentage: Set(metadata.progress_percentage.map(|v| v as i16)),
                 position_token: Set(metadata.position_token),
                 last_progress_at: Set(metadata.last_progress_at.map(Into::into)),
-                personal_rating: Set(metadata.personal_rating.map(|v| v as i16)),
+                personal_rating: Set(metadata.personal_rating.map(i16::from)),
                 times_read: Set(metadata.times_read as i32),
                 date_started: Set(metadata.date_started.map(Into::into)),
                 date_finished: Set(metadata.date_finished.map(Into::into)),

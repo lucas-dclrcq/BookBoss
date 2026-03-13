@@ -1,6 +1,6 @@
 use bb_database::create_repository_service;
 use sea_orm::Database;
-use testcontainers::runners::AsyncRunner as _;
+use testcontainers::runners::AsyncRunner;
 use testcontainers_modules::mariadb::Mariadb;
 
 use crate::context::TestContext;

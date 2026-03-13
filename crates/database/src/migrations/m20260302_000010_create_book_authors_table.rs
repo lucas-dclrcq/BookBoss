@@ -1,4 +1,7 @@
-use sea_orm_migration::{prelude::*, schema::*};
+use sea_orm_migration::{
+    prelude::*,
+    schema::{big_integer, integer, string},
+};
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;

@@ -983,7 +983,7 @@ mod tests {
 
         let result = svc.rename_shelf(&token, "New Name".to_string(), 1).await;
 
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[tokio::test]

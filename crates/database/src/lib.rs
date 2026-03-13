@@ -44,13 +44,13 @@ use crate::{
     },
     migrations::Migrator,
     repository::RepositoryImpl,
-    transaction::*,
+    transaction::TransactionImpl,
 };
 
 #[derive(Debug, Deserialize)]
 pub struct DatabaseConfig {
     /// (required) Fully qualified URL for accessing the database.
-    /// e.g. postgres://user:password@host/database
+    /// e.g. <postgres://user:password@host/database>
     pub database_url: String,
 }
 

@@ -100,10 +100,7 @@ impl JobRepository for JobRepositoryAdapter {
                 .await
                 .map_err(handle_dberr)?;
 
-            let candidate = match candidate {
-                None => return Ok(None),
-                Some(c) => c,
-            };
+            let Some(candidate) = candidate else { return Ok(None) };
 
             let candidate_id = candidate.id;
             let candidate_version = candidate.version;
@@ -221,10 +218,7 @@ impl JobRepository for JobRepositoryAdapter {
 mod tests {
     use std::sync::Arc;
 
-    use bb_core::{
-        jobs::{JobRepository, JobStatus},
-        repository::RepositoryService,
-    };
+    use bb_core::{jobs::JobStatus, repository::RepositoryService};
     use sea_orm::Database;
 
     use crate::create_repository_service;

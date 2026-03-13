@@ -1,6 +1,6 @@
 use bb_database::create_repository_service;
 use sea_orm::Database;
-use testcontainers::{ImageExt as _, runners::AsyncRunner as _};
+use testcontainers::{ImageExt, runners::AsyncRunner};
 use testcontainers_modules::postgres::Postgres;
 
 use crate::context::TestContext;

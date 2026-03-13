@@ -83,9 +83,9 @@ impl GenreRepository for GenreRepositoryAdapter {
             updater.name = Set(genre.name);
         }
 
-        let updated = updater.update(transaction).await.map_err(handle_dberr)?;
+        let result = updater.update(transaction).await.map_err(handle_dberr)?;
 
-        Ok(updated.into())
+        Ok(result.into())
     }
 
     async fn find_by_id(&self, transaction: &dyn Transaction, id: GenreId) -> Result<Option<Genre>, Error> {
@@ -161,7 +161,7 @@ mod tests {
 
     use bb_core::{
         Error, RepositoryError,
-        book::{Genre, GenreRepository, GenreToken, NewGenre},
+        book::{Genre, GenreToken, NewGenre},
         repository::RepositoryService,
     };
     use sea_orm::Database;

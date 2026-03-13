@@ -221,9 +221,9 @@ impl BookRepository for BookRepositoryAdapter {
         updater.metadata_source = Set(book.metadata_source.as_ref().map(|ms| metadata_source_to_str(ms).to_string()));
         updater.cover_path = Set(book.cover_path);
 
-        let updated = updater.update(transaction).await.map_err(handle_dberr)?;
+        let result = updater.update(transaction).await.map_err(handle_dberr)?;
 
-        Ok(updated.into())
+        Ok(result.into())
     }
 
     async fn find_by_id(&self, transaction: &dyn Transaction, id: BookId) -> Result<Option<Book>, Error> {
@@ -623,8 +623,7 @@ mod tests {
     use bb_core::{
         Error, RepositoryError,
         book::{
-            AuthorRole, Book, BookFilter, BookRepository, BookStatus, BookToken, FileFormat, IdentifierType, MetadataSource, NewAuthor, NewBook, NewGenre,
-            NewSeries, NewTag,
+            AuthorRole, Book, BookFilter, BookStatus, BookToken, FileFormat, IdentifierType, MetadataSource, NewAuthor, NewBook, NewGenre, NewSeries, NewTag,
         },
         repository::RepositoryService,
     };

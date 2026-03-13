@@ -1,6 +1,6 @@
 use std::{fmt, hash::Hash, marker::PhantomData, str::FromStr};
 
-use rand::RngExt as _;
+use rand::RngExt;
 use serde::{Deserialize, Serialize, de};
 use thiserror::Error;
 

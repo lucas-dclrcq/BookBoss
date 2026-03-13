@@ -1,4 +1,4 @@
-use std::{io::Read as _, path::Path};
+use std::{io::Read, path::Path};
 
 use async_trait::async_trait;
 use bb_core::{
@@ -138,7 +138,7 @@ fn find_opf_path(xml: &[u8]) -> Result<String, crate::Error> {
 mod tests {
     use std::io::Write;
 
-    use bb_core::{book::FileFormat, pipeline::MetadataExtractor as _};
+    use bb_core::{book::FileFormat, pipeline::MetadataExtractor};
 
     use super::EpubExtractor;
 

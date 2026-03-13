@@ -109,9 +109,9 @@ impl UserRepository for UserRepositoryAdapter {
             updater.change_password_on_login = Set(user.change_password_on_login);
         }
 
-        let updated = updater.update(transaction).await.map_err(handle_dberr)?;
+        let result = updater.update(transaction).await.map_err(handle_dberr)?;
 
-        Ok(updated.into())
+        Ok(result.into())
     }
 
     async fn delete_user(&self, transaction: &dyn Transaction, user: User) -> Result<User, Error> {

@@ -10,7 +10,7 @@ fn main() {
 #[cfg(feature = "server")]
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    use anyhow::Context as _;
+    use anyhow::Context;
     use bb_api::create_api_subsystem;
     use bb_core::{create_core_subsystem, create_services};
     use bb_database::{create_repository_service, open_database};
@@ -20,14 +20,14 @@ async fn main() -> anyhow::Result<()> {
         config::Config,
         logging::init_logging,
     };
-    use tokio_graceful_shutdown::{IntoSubsystem as _, SubsystemBuilder, SubsystemHandle, Toplevel};
+    use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, SubsystemHandle, Toplevel};
 
     let cli: CommandLine = clap::Parser::parse();
     let config = Config::load().context("Cannot load configuration")?;
 
     match cli.command {
         Commands::DumpEpub { file } => {
-            use bb_core::{book::FileFormat, pipeline::MetadataExtractor as _};
+            use bb_core::{book::FileFormat, pipeline::MetadataExtractor};
             use bb_formats::{EpubExtractor, read_opf_metadata_xml};
 
             let raw = read_opf_metadata_xml(&file)?;
@@ -48,7 +48,7 @@ async fn main() -> anyhow::Result<()> {
         Commands::OpenLibrary { isbn } => {
             use bb_core::{
                 book::IdentifierType,
-                pipeline::{ExtractedIdentifier, ExtractedMetadata, MetadataProvider as _},
+                pipeline::{ExtractedIdentifier, ExtractedMetadata, MetadataProvider},
             };
             use bb_metadata::OpenLibraryAdapter;
 
@@ -82,7 +82,7 @@ async fn main() -> anyhow::Result<()> {
         Commands::Hardcover { isbn } => {
             use bb_core::{
                 book::IdentifierType,
-                pipeline::{ExtractedIdentifier, ExtractedMetadata, MetadataProvider as _},
+                pipeline::{ExtractedIdentifier, ExtractedMetadata, MetadataProvider},
             };
             use bb_metadata::HardcoverAdapter;
 

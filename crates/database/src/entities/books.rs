@@ -1,7 +1,6 @@
 use bb_core::book::BookToken;
 use chrono::Utc;
-use rust_decimal::Decimal;
-use sea_orm::{ActiveModelTrait, ActiveValue::Set, entity::prelude::*};
+use sea_orm::{ActiveValue::Set, entity::prelude::*};
 use serde::{Deserialize, Serialize};
 
 #[sea_orm::model]

@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use argon2::{
     Argon2,
-    password_hash::{PasswordHash, PasswordHasher as _, PasswordVerifier as _, SaltString, rand_core::OsRng},
+    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
 };
 use bb_utils::{define_token_prefix, token::Token};
 use chrono::{DateTime, Utc};

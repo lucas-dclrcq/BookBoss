@@ -6,7 +6,7 @@ use {
     crate::server::{AuthSession, AuthUser, BackendSessionPool},
     axum::http::Method,
     axum_session_auth::{Auth, Rights},
-    base64::{Engine as _, engine::general_purpose::STANDARD as B64},
+    base64::{Engine, engine::general_purpose::STANDARD as B64},
     bb_core::{
         CoreServices,
         book::{AuthorToken, BookToken, IdentifierType, PublisherToken, SeriesToken},

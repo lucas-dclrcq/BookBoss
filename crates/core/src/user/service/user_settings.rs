@@ -62,7 +62,7 @@ mod tests {
         sync::{Arc, Mutex},
     };
 
-    use super::{UserSettingService as _, UserSettingServiceImpl};
+    use super::{UserSettingService, UserSettingServiceImpl};
     use crate::{
         Error, RepositoryError,
         auth::{NewSession, Session, repository::SessionRepository},

@@ -88,9 +88,9 @@ impl AuthorRepository for AuthorRepositoryAdapter {
             updater.bio = Set(author.bio);
         }
 
-        let updated = updater.update(transaction).await.map_err(handle_dberr)?;
+        let result = updater.update(transaction).await.map_err(handle_dberr)?;
 
-        Ok(updated.into())
+        Ok(result.into())
     }
 
     async fn find_by_id(&self, transaction: &dyn Transaction, id: AuthorId) -> Result<Option<Author>, Error> {
@@ -184,7 +184,7 @@ mod tests {
 
     use bb_core::{
         Error, RepositoryError,
-        book::{Author, AuthorRepository, NewAuthor},
+        book::{Author, NewAuthor},
         repository::RepositoryService,
     };
     use sea_orm::Database;
@@ -319,10 +319,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_find_by_token_not_found() {
+        use bb_core::book::AuthorToken;
+
         let svc = setup().await;
         let tx = svc.repository().begin().await.unwrap();
-
-        use bb_core::book::AuthorToken;
         let token = AuthorToken::new(999);
         let result = svc.author_repository().find_by_token(&*tx, &token).await;
 

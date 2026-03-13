@@ -285,7 +285,7 @@ pub(crate) async fn generate_password() -> Result<String, ServerFnError> {
 
 #[cfg(feature = "server")]
 fn make_password() -> String {
-    use rand::{Rng, RngExt as _};
+    use rand::{Rng, RngExt};
 
     const UPPER: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     const LOWER: &[u8] = b"abcdefghijklmnopqrstuvwxyz";

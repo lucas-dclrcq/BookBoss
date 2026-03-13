@@ -26,7 +26,6 @@ pub(crate) struct SettingsContext {
 #[get(
     "/api/v1/settings/context",
     auth_session: axum::Extension<AuthSession>,
-    core_services: axum::Extension<Arc<CoreServices>>
 )]
 async fn get_settings_context() -> Result<SettingsContext, ServerFnError> {
     let user = auth_session

@@ -1,4 +1,7 @@
-use sea_orm_migration::{prelude::*, schema::*};
+use sea_orm_migration::{
+    prelude::*,
+    schema::{string, timestamp_with_time_zone},
+};
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;

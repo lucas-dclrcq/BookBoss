@@ -32,8 +32,8 @@ impl UserSettingRepositoryAdapter {
 
 #[async_trait::async_trait]
 impl UserSettingRepository for UserSettingRepositoryAdapter {
-    async fn get(&self, transaction: &dyn Transaction, user_id: UserId, key: &str) -> Result<Option<UserSetting>, Error> {
-        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+    async fn get(&self, tx: &dyn Transaction, user_id: UserId, key: &str) -> Result<Option<UserSetting>, Error> {
+        let transaction = TransactionImpl::get_db_transaction(tx)?;
 
         Ok(prelude::UserSettings::find_by_id((user_id as i64, key.to_owned()))
             .one(transaction)
@@ -42,8 +42,8 @@ impl UserSettingRepository for UserSettingRepositoryAdapter {
             .map(Into::into))
     }
 
-    async fn set(&self, transaction: &dyn Transaction, setting: NewUserSetting) -> Result<UserSetting, Error> {
-        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+    async fn set(&self, tx: &dyn Transaction, setting: NewUserSetting) -> Result<UserSetting, Error> {
+        let transaction = TransactionImpl::get_db_transaction(tx)?;
         let now = Utc::now();
 
         let active_model = user_settings::ActiveModel {
@@ -72,8 +72,8 @@ impl UserSettingRepository for UserSettingRepositoryAdapter {
             .ok_or(Error::RepositoryError(RepositoryError::NotFound))
     }
 
-    async fn delete(&self, transaction: &dyn Transaction, user_id: UserId, key: &str) -> Result<(), Error> {
-        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+    async fn delete(&self, tx: &dyn Transaction, user_id: UserId, key: &str) -> Result<(), Error> {
+        let transaction = TransactionImpl::get_db_transaction(tx)?;
 
         prelude::UserSettings::delete_by_id((user_id as i64, key.to_owned()))
             .exec(transaction)
@@ -83,8 +83,8 @@ impl UserSettingRepository for UserSettingRepositoryAdapter {
         Ok(())
     }
 
-    async fn list_by_user(&self, transaction: &dyn Transaction, user_id: UserId) -> Result<Vec<UserSetting>, Error> {
-        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+    async fn list_by_user(&self, tx: &dyn Transaction, user_id: UserId) -> Result<Vec<UserSetting>, Error> {
+        let transaction = TransactionImpl::get_db_transaction(tx)?;
 
         let settings = prelude::UserSettings::find()
             .filter(user_settings::Column::UserId.eq(user_id as i64))
@@ -267,7 +267,7 @@ mod tests {
 
         let result = svc.user_setting_repository().delete(&*tx, user.id, "nonexistent").await;
 
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     // ─── list_by_user ────────────────────────────────────────────────────────

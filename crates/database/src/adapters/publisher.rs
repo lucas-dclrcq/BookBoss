@@ -83,9 +83,9 @@ impl PublisherRepository for PublisherRepositoryAdapter {
             updater.name = Set(publisher.name);
         }
 
-        let updated = updater.update(transaction).await.map_err(handle_dberr)?;
+        let result = updater.update(transaction).await.map_err(handle_dberr)?;
 
-        Ok(updated.into())
+        Ok(result.into())
     }
 
     async fn find_by_id(&self, transaction: &dyn Transaction, id: PublisherId) -> Result<Option<Publisher>, Error> {
@@ -149,7 +149,7 @@ mod tests {
 
     use bb_core::{
         Error, RepositoryError,
-        book::{NewPublisher, Publisher, PublisherRepository, PublisherToken},
+        book::{NewPublisher, Publisher, PublisherToken},
         repository::RepositoryService,
     };
     use sea_orm::Database;

@@ -6,7 +6,7 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 use bb_core::{
     Error,
     import::ImportStatus,
-    jobs::JobRepositoryExt as _,
+    jobs::JobRepositoryExt,
     repository::{RepositoryService, read_only_transaction, transaction},
 };
 pub use handler::{ProcessImportHandler, ProcessImportPayload};

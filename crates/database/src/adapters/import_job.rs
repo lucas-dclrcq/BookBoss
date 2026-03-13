@@ -169,8 +169,8 @@ impl ImportJobRepository for ImportJobRepositoryAdapter {
         updater.reviewed_by = Set(job.reviewed_by.map(|id| id as i64));
         updater.reviewed_at = Set(job.reviewed_at.map(Into::into));
 
-        let updated = updater.update(transaction).await.map_err(handle_dberr)?;
-        Ok(updated.into())
+        let result = updater.update(transaction).await.map_err(handle_dberr)?;
+        Ok(result.into())
     }
 
     async fn find_by_id(&self, transaction: &dyn Transaction, id: ImportJobId) -> Result<Option<ImportJob>, Error> {
@@ -299,7 +299,7 @@ mod tests {
     use bb_core::{
         Error, RepositoryError,
         book::FileFormat,
-        import::{ImportJob, ImportJobRepository, ImportStatus, NewImportJob},
+        import::{ImportJob, ImportStatus, NewImportJob},
         repository::RepositoryService,
     };
     use chrono::Utc;
@@ -529,10 +529,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_job_not_found() {
+        use bb_core::import::ImportJobToken;
+
         let svc = setup().await;
         let tx = svc.repository().begin().await.unwrap();
 
-        use bb_core::import::ImportJobToken;
         let job = ImportJob {
             id: 999,
             version: 1,
@@ -559,10 +560,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_job_zero_id_returns_error() {
+        use bb_core::import::ImportJobToken;
+
         let svc = setup().await;
         let tx = svc.repository().begin().await.unwrap();
 
-        use bb_core::import::ImportJobToken;
         let job = ImportJob {
             id: 0,
             version: 1,

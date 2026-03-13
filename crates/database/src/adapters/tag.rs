@@ -83,9 +83,9 @@ impl TagRepository for TagRepositoryAdapter {
             updater.name = Set(tag.name);
         }
 
-        let updated = updater.update(transaction).await.map_err(handle_dberr)?;
+        let result = updater.update(transaction).await.map_err(handle_dberr)?;
 
-        Ok(updated.into())
+        Ok(result.into())
     }
 
     async fn find_by_id(&self, transaction: &dyn Transaction, id: TagId) -> Result<Option<Tag>, Error> {
@@ -161,7 +161,7 @@ mod tests {
 
     use bb_core::{
         Error, RepositoryError,
-        book::{NewTag, Tag, TagRepository, TagToken},
+        book::{NewTag, Tag, TagToken},
         repository::RepositoryService,
     };
     use sea_orm::Database;

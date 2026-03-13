@@ -152,8 +152,8 @@ impl ShelfRepository for ShelfRepositoryAdapter {
         updater.device_id = Set(shelf.device_id.map(|id| id as i64));
         updater.filter_criteria = Set(shelf.filter_criteria.and_then(|f| serde_json::to_value(f).ok()));
 
-        let updated = updater.update(transaction).await.map_err(handle_dberr)?;
-        Ok(updated.into())
+        let result = updater.update(transaction).await.map_err(handle_dberr)?;
+        Ok(result.into())
     }
 
     async fn delete_shelf(&self, transaction: &dyn Transaction, shelf: Shelf) -> Result<(), Error> {
@@ -226,8 +226,7 @@ impl ShelfRepository for ShelfRepositoryAdapter {
             .one(transaction)
             .await
             .map_err(handle_dberr)?
-            .map(|m| m.sort_order)
-            .unwrap_or(-1);
+            .map_or(-1, |m| m.sort_order);
 
         let model = book_shelves::ActiveModel {
             book_id: Set(book_shelf.book_id as i64),
@@ -411,7 +410,7 @@ fn apply_shelf_filter(mut query: sea_orm::Select<books::Entity>, filter: &ShelfF
         subq.column(user_book_metadata::Column::BookId)
             .from(user_book_metadata::Entity)
             .and_where(user_book_metadata::Column::UserId.eq(user_id as i64))
-            .and_where(user_book_metadata::Column::PersonalRating.gte(rating_min as i64));
+            .and_where(user_book_metadata::Column::PersonalRating.gte(i64::from(rating_min)));
         query = query.filter(books::Column::Id.in_subquery(subq));
     }
 
@@ -425,11 +424,11 @@ mod tests {
     use std::sync::Arc;
 
     use bb_core::{
-        book::{BookRepository, BookStatus, NewBook, NewSeries, SeriesRepository},
+        book::{BookStatus, NewBook, NewSeries},
         repository::RepositoryService,
         shelf::{BookShelf, NewShelf, ShelfFilter, ShelfType, ShelfVisibility},
         types::Capabilities,
-        user::{NewUser, UserRepository},
+        user::NewUser,
     };
     use chrono::Utc;
     use sea_orm::Database;
@@ -550,7 +549,7 @@ mod tests {
         let svc = setup().await;
         let tx = svc.repository().begin().await.unwrap();
 
-        assert!(svc.shelf_repository().find_by_id(&*tx, 999999).await.unwrap().is_none());
+        assert!(svc.shelf_repository().find_by_id(&*tx, 999_999).await.unwrap().is_none());
     }
 
     // ─── find_by_token ───────────────────────────────────────────────────────
@@ -643,7 +642,7 @@ mod tests {
         let tx = svc.repository().begin().await.unwrap();
 
         let mut shelf = svc.shelf_repository().add_shelf(&*tx, manual_shelf(user_id, "Shelf")).await.unwrap();
-        shelf.id = 999999;
+        shelf.id = 999_999;
 
         assert!(matches!(
             svc.shelf_repository().update_shelf(&*tx, shelf).await,
@@ -718,7 +717,7 @@ mod tests {
             .unwrap();
         let result = svc.shelf_repository().add_book_to_shelf(&*tx, book_shelf_entry(book_id, shelf.id)).await;
 
-        assert!(result.is_ok());
+        result.unwrap();
         let books = svc.shelf_repository().books_for_shelf(&*tx, shelf.id, None, None).await.unwrap();
         assert_eq!(books.len(), 1);
     }
@@ -766,9 +765,9 @@ mod tests {
         let tx = svc.repository().begin().await.unwrap();
 
         let shelf = svc.shelf_repository().add_shelf(&*tx, manual_shelf(user_id, "Favs")).await.unwrap();
-        let result = svc.shelf_repository().remove_book_from_shelf(&*tx, shelf.id, 999999).await;
+        let result = svc.shelf_repository().remove_book_from_shelf(&*tx, shelf.id, 999_999).await;
 
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     // ─── books_for_shelf ─────────────────────────────────────────────────────
@@ -790,8 +789,8 @@ mod tests {
                 .unwrap();
         }
 
-        let books = svc.shelf_repository().books_for_shelf(&*tx, shelf.id, None, None).await.unwrap();
-        assert_eq!(books.len(), 3);
+        let all_books = svc.shelf_repository().books_for_shelf(&*tx, shelf.id, None, None).await.unwrap();
+        assert_eq!(all_books.len(), 3);
     }
 
     #[tokio::test]

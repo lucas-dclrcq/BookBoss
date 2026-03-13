@@ -309,7 +309,7 @@ mod tests {
             .unwrap();
 
         let result = svc.session_repository().delete_by_id(&*tx, "sess-1").await;
-        assert!(result.is_ok());
+        result.unwrap();
 
         let loaded = svc.session_repository().load(&*tx, "sess-1").await.unwrap();
         assert!(loaded.is_none());
@@ -322,7 +322,7 @@ mod tests {
 
         let result = svc.session_repository().delete_by_id(&*tx, "nonexistent").await;
 
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     // ===================
@@ -343,7 +343,7 @@ mod tests {
             .unwrap();
 
         let result = svc.session_repository().delete_all(&*tx).await;
-        assert!(result.is_ok());
+        result.unwrap();
 
         let count = svc.session_repository().count(&*tx).await.unwrap();
         assert_eq!(count, 0);

@@ -42,7 +42,7 @@ impl SeriesRepositoryAdapter {
 
 #[async_trait::async_trait]
 impl SeriesRepository for SeriesRepositoryAdapter {
-    async fn add_series(&self, transaction: &dyn Transaction, s: NewSeries) -> Result<Series, Error> {
+    async fn add_series(&self, transaction: &dyn Transaction, series: NewSeries) -> Result<Series, Error> {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
         let token = SeriesToken::generate();
@@ -51,8 +51,8 @@ impl SeriesRepository for SeriesRepositoryAdapter {
         let model = series::ActiveModel {
             id: Set(token.id() as i64),
             token: Set(token.to_string()),
-            name: Set(s.name),
-            description: Set(s.description),
+            name: Set(series.name),
+            description: Set(series.description),
             version: Set(0),
             created_at: Set(now.into()),
             updated_at: Set(now.into()),
@@ -63,34 +63,34 @@ impl SeriesRepository for SeriesRepositoryAdapter {
         Ok(model.into())
     }
 
-    async fn update_series(&self, transaction: &dyn Transaction, s: Series) -> Result<Series, Error> {
-        if s.id == 0 {
-            return Err(Error::InvalidId(s.id));
+    async fn update_series(&self, transaction: &dyn Transaction, series: Series) -> Result<Series, Error> {
+        if series.id == 0 {
+            return Err(Error::InvalidId(series.id));
         }
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
-        let existing = prelude::Series::find_by_id(s.id as i64)
+        let existing = prelude::Series::find_by_id(series.id as i64)
             .one(transaction)
             .await
             .map_err(handle_dberr)?
             .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
-        if existing.version != s.version as i64 {
+        if existing.version != series.version as i64 {
             return Err(Error::RepositoryError(RepositoryError::Conflict));
         }
 
         let mut updater: series::ActiveModel = existing.clone().into();
 
-        if existing.name != s.name {
-            updater.name = Set(s.name);
+        if existing.name != series.name {
+            updater.name = Set(series.name);
         }
-        if existing.description != s.description {
-            updater.description = Set(s.description);
+        if existing.description != series.description {
+            updater.description = Set(series.description);
         }
 
-        let updated = updater.update(transaction).await.map_err(handle_dberr)?;
+        let result = updater.update(transaction).await.map_err(handle_dberr)?;
 
-        Ok(updated.into())
+        Ok(result.into())
     }
 
     async fn find_by_id(&self, transaction: &dyn Transaction, id: SeriesId) -> Result<Option<Series>, Error> {
@@ -182,7 +182,7 @@ mod tests {
 
     use bb_core::{
         Error, RepositoryError,
-        book::{NewSeries, Series, SeriesRepository, SeriesToken},
+        book::{NewSeries, Series, SeriesToken},
         repository::RepositoryService,
     };
     use sea_orm::Database;
