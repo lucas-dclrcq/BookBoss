@@ -748,6 +748,7 @@ dependencies = [
  "rand 0.10.0",
  "rust_decimal",
  "serde",
+ "serde_json",
  "thiserror 2.0.18",
  "tokio",
  "tokio-graceful-shutdown",

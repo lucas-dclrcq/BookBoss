@@ -369,48 +369,67 @@ fn FilterGroupEditor(
 ) -> Element {
     let is_and = group.condition == FilterCondition::And;
 
-    let toggle_oc = on_change.clone();
-    let toggle_group = group.clone();
+    let condition_oc = on_change.clone();
+    let condition_group = group.clone();
     let add_rule_oc = on_change.clone();
     let add_rule_group = group.clone();
     let add_group_oc = on_change.clone();
     let add_group_group = group.clone();
 
-    rsx! {
-        div {
-            class: "border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50",
+    // Root group has a subtle card look; sub-groups use a left accent border.
+    let container_class = if is_root {
+        "rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2"
+    } else {
+        "rounded-lg border border-gray-200 bg-gray-50 border-l-4 border-l-indigo-400 pl-3 pr-3 pt-3 pb-3 space-y-2"
+    };
 
-            // ── AND / OR toggle + remove ────────────────────────────────────
-            div { class: "flex items-center gap-2",
-                span { class: "text-xs text-gray-500 mr-1", if is_root { "Match" } else { "Match" } }
-                button {
-                    r#type: "button",
-                    class: if is_and { "px-2 py-0.5 text-xs font-medium rounded bg-indigo-600 text-white" } else { "px-2 py-0.5 text-xs font-medium rounded border border-gray-300 text-gray-600 hover:bg-gray-100" },
-                    onclick: {
-                        let mut g = toggle_group.clone();
-                        let oc = toggle_oc.clone();
-                        move |_| { g.condition = FilterCondition::And; oc.call(g.clone()); }
+    let select_class = "text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400";
+
+    rsx! {
+        div { class: "{container_class}",
+
+            // ── Condition row ────────────────────────────────────────────────
+            div { class: "flex items-center gap-2 flex-wrap",
+                span { class: "text-sm font-medium text-gray-600", "Condition:" }
+                select {
+                    class: select_class,
+                    value: if is_and { "and" } else { "or" },
+                    onchange: move |e| {
+                        let mut g = condition_group.clone();
+                        g.condition = if e.value() == "and" { FilterCondition::And } else { FilterCondition::Or };
+                        condition_oc.call(g);
                     },
-                    "ALL"
+                    option { value: "and", "AND — all rules must match" }
+                    option { value: "or", "OR — any rule must match" }
                 }
                 button {
                     r#type: "button",
-                    class: if !is_and { "px-2 py-0.5 text-xs font-medium rounded bg-indigo-600 text-white" } else { "px-2 py-0.5 text-xs font-medium rounded border border-gray-300 text-gray-600 hover:bg-gray-100" },
-                    onclick: {
-                        let mut g = toggle_group.clone();
-                        let oc = toggle_oc.clone();
-                        move |_| { g.condition = FilterCondition::Or; oc.call(g.clone()); }
+                    class: "text-xs font-medium text-indigo-600 hover:text-indigo-800 border border-indigo-300 rounded px-2 py-1 hover:bg-indigo-50",
+                    onclick: move |_| {
+                        let mut g = add_rule_group.clone();
+                        g.items.push(BookFilter::Rule(FilterRule::TitleText {
+                            op: TextOp::Contains,
+                            value: String::new(),
+                        }));
+                        add_rule_oc.call(g);
                     },
-                    "ANY"
+                    "+ Add Rule"
                 }
-                span { class: "text-xs text-gray-500", "of the following:" }
-                if !is_root {
-                    button {
-                        r#type: "button",
-                        class: "ml-auto text-xs text-red-500 hover:text-red-700",
-                        onclick: move |_| on_remove.call(()),
-                        "Remove group"
-                    }
+                button {
+                    r#type: "button",
+                    class: "text-xs font-medium text-gray-600 hover:text-gray-800 border border-gray-300 rounded px-2 py-1 hover:bg-gray-100",
+                    onclick: move |_| {
+                        let mut g = add_group_group.clone();
+                        g.items.push(BookFilter::Group(FilterGroup {
+                            condition: FilterCondition::And,
+                            items: vec![BookFilter::Rule(FilterRule::TitleText {
+                                op: TextOp::Contains,
+                                value: String::new(),
+                            })],
+                        }));
+                        add_group_oc.call(g);
+                    },
+                    "+ Add Group"
                 }
             }
 
@@ -419,6 +438,7 @@ fn FilterGroupEditor(
                 {
                     let oc1 = on_change.clone();
                     let oc2 = on_change.clone();
+                    let or2 = on_remove.clone();
                     let gc1 = group.clone();
                     let gc2 = group.clone();
                     match item {
@@ -435,7 +455,11 @@ fn FilterGroupEditor(
                                 on_remove: move |()| {
                                     let mut g = gc2.clone();
                                     g.items.remove(i);
-                                    oc2.call(g);
+                                    if g.items.is_empty() && !is_root {
+                                        or2.call(());
+                                    } else {
+                                        oc2.call(g);
+                                    }
                                 },
                             }
                         },
@@ -453,38 +477,15 @@ fn FilterGroupEditor(
                                 on_remove: move |()| {
                                     let mut g = gc2.clone();
                                     g.items.remove(i);
-                                    oc2.call(g);
+                                    if g.items.is_empty() && !is_root {
+                                        or2.call(());
+                                    } else {
+                                        oc2.call(g);
+                                    }
                                 },
                             }
                         },
                     }
-                }
-            }
-
-            // ── Add rule / group buttons ──────────────────────────────────────
-            div { class: "flex gap-2 pt-1",
-                button {
-                    r#type: "button",
-                    class: "px-2 py-1 text-xs font-medium rounded border border-dashed border-gray-300 text-gray-600 hover:bg-white hover:border-indigo-400 hover:text-indigo-600",
-                    onclick: move |_| {
-                        let mut g = add_rule_group.clone();
-                        g.items.push(BookFilter::Rule(FilterRule::TitleText { op: TextOp::Contains, value: String::new() }));
-                        add_rule_oc.call(g);
-                    },
-                    "+ Add Rule"
-                }
-                button {
-                    r#type: "button",
-                    class: "px-2 py-1 text-xs font-medium rounded border border-dashed border-gray-300 text-gray-600 hover:bg-white hover:border-indigo-400 hover:text-indigo-600",
-                    onclick: move |_| {
-                        let mut g = add_group_group.clone();
-                        g.items.push(BookFilter::Group(FilterGroup {
-                            condition: FilterCondition::And,
-                            items: vec![BookFilter::Rule(FilterRule::TitleText { op: TextOp::Contains, value: String::new() })],
-                        }));
-                        add_group_oc.call(g);
-                    },
-                    "+ Add Group"
                 }
             }
         }
@@ -766,12 +767,12 @@ fn FilterRuleRow(rule: FilterRule, entity_options: FilterEntityOptions, on_chang
     };
 
     rsx! {
-        div { class: "flex items-start gap-2 flex-wrap",
+        div { class: "flex items-center gap-2 flex-wrap",
             { field_select }
             { rule_ui }
             button {
                 r#type: "button",
-                class: "text-gray-400 hover:text-red-500 text-lg leading-none self-center flex-shrink-0",
+                class: "text-gray-400 hover:text-red-500 text-lg leading-none flex-shrink-0",
                 onclick: move |_| on_remove.call(()),
                 "×"
             }

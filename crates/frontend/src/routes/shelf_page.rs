@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     Route,
-    components::{BookGrid, BookGridContext, FilterEntityOptions, ShelfBar},
+    components::{BookFilter, BookGrid, BookGridContext, FilterBuilder, FilterEntityOptions, ShelfBar, default_book_filter},
     routes::books_page::BookSummary,
 };
 
@@ -20,6 +20,11 @@ pub(crate) struct ShelfSummary {
     pub visibility: String,
     /// `true` if the current user owns this shelf.
     pub is_own: bool,
+    /// `true` if this is a smart (filter-based) shelf.
+    pub is_smart: bool,
+    /// Serialized `BookFilter` JSON — present only for smart shelves owned by
+    /// the current user.
+    pub filter_json: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -32,7 +37,8 @@ use {
     bb_core::{
         CoreServices,
         book::{AuthorToken, BookToken, SeriesToken},
-        shelf::{ShelfToken, ShelfVisibility},
+        filter::BookFilter as CoreBookFilter,
+        shelf::{ShelfToken, ShelfType, ShelfVisibility},
     },
     std::sync::Arc,
 };
@@ -84,11 +90,21 @@ pub(crate) async fn list_my_shelves() -> Result<Vec<ShelfSummary>, ServerFnError
 
     Ok(shelves
         .iter()
-        .map(|s| ShelfSummary {
-            token: s.token.to_string(),
-            name: s.name.clone(),
-            visibility: visibility_str(&s.visibility).to_string(),
-            is_own: true,
+        .map(|s| {
+            let is_smart = s.shelf_type == ShelfType::Smart;
+            let filter_json = if is_smart {
+                s.filter_criteria.as_ref().and_then(|f| serde_json::to_string(f).ok())
+            } else {
+                None
+            };
+            ShelfSummary {
+                token: s.token.to_string(),
+                name: s.name.clone(),
+                visibility: visibility_str(&s.visibility).to_string(),
+                is_own: true,
+                is_smart,
+                filter_json,
+            }
         })
         .collect())
 }
@@ -116,6 +132,59 @@ pub(crate) async fn create_shelf(name: String, visibility: String) -> Result<Str
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(token.to_string())
+}
+
+/// Creates a new smart shelf from a serialized `BookFilter` JSON.
+///
+/// `filter_json` must be a valid JSON-encoded `BookFilter`.  Returns the new
+/// shelf token.
+#[post(
+    "/api/v1/shelves/smart",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+pub(crate) async fn create_smart_shelf(name: String, visibility: String, filter_json: String) -> Result<String, ServerFnError> {
+    let user = auth_session
+        .current_user
+        .as_ref()
+        .filter(|u| !u.username.is_empty())
+        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+    let user_id = user.id();
+
+    let vis = parse_visibility(&visibility)?;
+    let filter: CoreBookFilter = serde_json::from_str(&filter_json).map_err(|e| ServerFnError::new(format!("Invalid filter: {e}")))?;
+
+    let token = core_services
+        .shelf_service
+        .create_smart_shelf(user_id, name, vis, filter)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(token.to_string())
+}
+
+/// Updates the filter on an existing smart shelf. Only the owner may update.
+#[put(
+    "/api/v1/shelves/smart/filter",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+pub(crate) async fn update_smart_shelf_filter(token: String, filter_json: String) -> Result<(), ServerFnError> {
+    let user = auth_session
+        .current_user
+        .as_ref()
+        .filter(|u| !u.username.is_empty())
+        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+    let user_id = user.id();
+
+    let shelf_token: ShelfToken = token.parse().map_err(|_| ServerFnError::new("Invalid shelf token"))?;
+    let filter: CoreBookFilter = serde_json::from_str(&filter_json).map_err(|e| ServerFnError::new(format!("Invalid filter: {e}")))?;
+
+    core_services
+        .shelf_service
+        .update_shelf_filter(&shelf_token, filter, user_id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))
 }
 
 /// Deletes a shelf. Only the owner may delete.
@@ -306,11 +375,21 @@ pub(crate) async fn list_all_accessible_shelves() -> Result<Vec<ShelfSummary>, S
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?
         .into_iter()
-        .map(|s| ShelfSummary {
-            token: s.token.to_string(),
-            name: s.name.clone(),
-            visibility: visibility_str(&s.visibility).to_string(),
-            is_own: true,
+        .map(|s| {
+            let is_smart = s.shelf_type == ShelfType::Smart;
+            let filter_json = if is_smart {
+                s.filter_criteria.as_ref().and_then(|f| serde_json::to_string(f).ok())
+            } else {
+                None
+            };
+            ShelfSummary {
+                token: s.token.to_string(),
+                name: s.name.clone(),
+                visibility: visibility_str(&s.visibility).to_string(),
+                is_own: true,
+                is_smart,
+                filter_json,
+            }
         })
         .collect::<Vec<_>>();
 
@@ -324,6 +403,8 @@ pub(crate) async fn list_all_accessible_shelves() -> Result<Vec<ShelfSummary>, S
             name: s.name.clone(),
             visibility: visibility_str(&s.visibility).to_string(),
             is_own: false,
+            is_smart: s.shelf_type == ShelfType::Smart,
+            filter_json: None, // don't expose others' filter JSON
         });
 
     own.extend(others);
@@ -450,8 +531,12 @@ pub(crate) fn ShelfPage(token: String) -> Element {
     let mut show_edit = use_signal(|| false);
     let mut edit_name = use_signal(String::new);
     let mut edit_private = use_signal(|| true);
+    let mut edit_filter = use_signal(default_book_filter);
     let mut saving = use_signal(|| false);
     let mut edit_error: Signal<Option<String>> = use_signal(|| None);
+
+    // Entity options for the smart shelf filter editor
+    let entity_options_resource = use_resource(get_filter_entity_options);
 
     // Delete shelf modal state
     let mut show_delete = use_signal(|| false);
@@ -479,6 +564,10 @@ pub(crate) fn ShelfPage(token: String) -> Element {
     let is_own = current_shelf.as_ref().is_some_and(|s| s.is_own);
     let current_name = current_shelf.as_ref().map(|s| s.name.clone()).unwrap_or_default();
     let current_vis = current_shelf.as_ref().map(|s| s.visibility.clone()).unwrap_or_default();
+    let current_is_smart = current_shelf.as_ref().is_some_and(|s| s.is_smart);
+    let current_filter_json = current_shelf.as_ref().and_then(|s| s.filter_json.clone());
+
+    let entity_options: FilterEntityOptions = entity_options_resource().and_then(std::result::Result::ok).unwrap_or_default();
 
     let context = if is_own {
         BookGridContext::OwnShelf { shelf_token: token.clone() }
@@ -494,9 +583,15 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                 on_edit_shelf: {
                     let name_for_edit = current_name.clone();
                     let vis_for_edit = current_vis.clone();
+                    let filter_json_for_edit = current_filter_json.clone();
                     move |()| {
                         edit_name.set(name_for_edit.clone());
                         edit_private.set(vis_for_edit == "Private");
+                        let parsed = filter_json_for_edit
+                            .as_deref()
+                            .and_then(|j| serde_json::from_str::<BookFilter>(j).ok())
+                            .unwrap_or_else(default_book_filter);
+                        edit_filter.set(parsed);
                         edit_error.set(None);
                         show_edit.set(true);
                     }
@@ -543,7 +638,12 @@ pub(crate) fn ShelfPage(token: String) -> Element {
         // Edit shelf modal
         if show_edit() {
             div { class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
-                div { class: "bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4",
+                div {
+                    class: if current_is_smart {
+                        "bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl mx-4 max-h-[85vh] overflow-y-auto"
+                    } else {
+                        "bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4"
+                    },
                     h2 { class: "text-lg font-semibold text-gray-900 mb-4", "Edit Shelf" }
                     form {
                         onsubmit: {
@@ -559,19 +659,45 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                                 let tok = tok.clone();
                                 saving.set(true);
                                 edit_error.set(None);
-                                spawn(async move {
-                                    match update_shelf(tok, name, vis).await {
-                                        Ok(()) => {
-                                            show_edit.set(false);
+                                if current_is_smart {
+                                    let filter_json = match serde_json::to_string(&edit_filter()) {
+                                        Ok(j) => j,
+                                        Err(err) => {
                                             saving.set(false);
-                                            shelves_resource.restart();
+                                            edit_error.set(Some(format!("Filter error: {err}")));
+                                            return;
                                         }
-                                        Err(e) => {
-                                            saving.set(false);
-                                            edit_error.set(Some(e.to_string()));
+                                    };
+                                    spawn(async move {
+                                        let r1 = update_shelf(tok.clone(), name, vis).await;
+                                        let r2 = update_smart_shelf_filter(tok, filter_json).await;
+                                        match (r1, r2) {
+                                            (Ok(()), Ok(())) => {
+                                                show_edit.set(false);
+                                                saving.set(false);
+                                                shelves_resource.restart();
+                                            }
+                                            (Err(e), _) | (_, Err(e)) => {
+                                                saving.set(false);
+                                                edit_error.set(Some(e.to_string()));
+                                            }
                                         }
-                                    }
-                                });
+                                    });
+                                } else {
+                                    spawn(async move {
+                                        match update_shelf(tok, name, vis).await {
+                                            Ok(()) => {
+                                                show_edit.set(false);
+                                                saving.set(false);
+                                                shelves_resource.restart();
+                                            }
+                                            Err(e) => {
+                                                saving.set(false);
+                                                edit_error.set(Some(e.to_string()));
+                                            }
+                                        }
+                                    });
+                                }
                             }
                         },
 
@@ -606,7 +732,7 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                             }
                         }
 
-                        div { class: "mb-6 flex items-center gap-2",
+                        div { class: "mb-4 flex items-center gap-2",
                             input {
                                 id: "edit-shelf-private",
                                 class: "h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500",
@@ -616,6 +742,13 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                             }
                             label { class: "text-sm text-gray-700 cursor-pointer", r#for: "edit-shelf-private",
                                 "Private"
+                            }
+                        }
+
+                        if current_is_smart {
+                            div { class: "mb-6",
+                                p { class: "text-sm font-medium text-gray-700 mb-2", "Filter rules" }
+                                FilterBuilder { filter: edit_filter, entity_options: entity_options.clone() }
                             }
                         }
 
