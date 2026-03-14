@@ -444,6 +444,33 @@ mod tests {
         assert_eq!(buf, b"<html><body>Hello</body></html>");
     }
 
+    /// Verify that genres in the sidecar appear as `dc:subject` elements in
+    /// the enriched EPUB's OPF. Genres stored only in `bookboss:metadata`
+    /// would be invisible to e-readers.
+    #[test]
+    fn genres_written_as_dc_subject_in_enriched_epub() {
+        let dir = tempdir().unwrap();
+        let src = dir.path().join("src.epub");
+        let dst = dir.path().join("dst.epub");
+        std::fs::write(&src, build_epub_no_cover("Test")).unwrap();
+
+        let mut sidecar = make_sidecar("Test");
+        sidecar.genres = vec!["Fantasy".to_string(), "Epic Fantasy".to_string()];
+
+        enrich_epub(&src, &dst, &sidecar, None).unwrap();
+
+        let opf_bytes = read_opf_from_epub(&dst);
+        let opf_str = std::str::from_utf8(&opf_bytes).expect("utf8");
+
+        for genre in &sidecar.genres {
+            let expected = format!("<dc:subject>{genre}</dc:subject>");
+            assert!(opf_str.contains(&expected), "expected {expected:?} in enriched EPUB OPF");
+        }
+
+        let parsed = parse_sidecar(&opf_bytes).expect("parse sidecar");
+        assert_eq!(parsed.genres, sidecar.genres, "genres must roundtrip through enriched EPUB");
+    }
+
     #[test]
     fn mimetype_is_first_entry() {
         let dir = tempdir().unwrap();

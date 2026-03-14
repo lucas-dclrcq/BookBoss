@@ -106,6 +106,12 @@ pub(crate) fn write_metadata_xml(sidecar: &BookSidecar) -> Result<Vec<u8>, Error
         writer.write_event(Event::End(BytesEnd::new("dc:language")))?;
     }
 
+    for genre in &sidecar.genres {
+        writer.write_event(Event::Start(BytesStart::new("dc:subject")))?;
+        writer.write_event(Event::Text(BytesText::new(genre)))?;
+        writer.write_event(Event::End(BytesEnd::new("dc:subject")))?;
+    }
+
     for identifier in &sidecar.identifiers {
         let mut id_elem = BytesStart::new("dc:identifier");
         id_elem.push_attribute(("opf:scheme", identifier_type_to_scheme(&identifier.identifier_type)));
@@ -208,6 +214,48 @@ pub(crate) mod tests {
                 format: FileFormat::Epub,
                 hash: "abc123".to_string(),
             }],
+        }
+    }
+
+    /// Verify that every field present in the sidecar survives a write → parse
+    /// roundtrip. This catches regressions where a field is stored only in a
+    /// secondary location (e.g. JSON blob) but silently lost on one of the two
+    /// paths.
+    #[test]
+    fn all_fields_roundtrip() {
+        let original = full_test_sidecar();
+        let bytes = write_sidecar(&original).expect("write failed");
+        let parsed = parse_sidecar(&bytes).expect("parse failed");
+
+        assert_eq!(parsed.title, original.title);
+        assert_eq!(parsed.authors.len(), original.authors.len());
+        assert_eq!(parsed.description, original.description);
+        assert_eq!(parsed.publisher, original.publisher);
+        assert_eq!(parsed.published_date, original.published_date);
+        assert_eq!(parsed.language, original.language);
+        assert_eq!(parsed.identifiers.len(), original.identifiers.len());
+        assert_eq!(parsed.series.as_ref().map(|s| &s.name), original.series.as_ref().map(|s| &s.name));
+        assert_eq!(parsed.series.as_ref().and_then(|s| s.number), original.series.as_ref().and_then(|s| s.number));
+        assert_eq!(parsed.genres, original.genres, "genres must survive write → parse");
+        assert_eq!(parsed.tags, original.tags, "tags must survive write → parse");
+        assert_eq!(parsed.rating, original.rating);
+        assert_eq!(parsed.status, original.status);
+        assert_eq!(parsed.metadata_source, original.metadata_source);
+        assert_eq!(parsed.files.len(), original.files.len());
+    }
+
+    /// Verify that genres are emitted as `dc:subject` elements so e-readers
+    /// (e.g. Kobo) can display them. Genres stored only in the private
+    /// `bookboss:metadata` blob would not be caught by a roundtrip test alone.
+    #[test]
+    fn genres_written_as_dc_subject() {
+        let sidecar = full_test_sidecar();
+        let bytes = write_sidecar(&sidecar).expect("write failed");
+        let xml = std::str::from_utf8(&bytes).expect("utf8");
+
+        for genre in &sidecar.genres {
+            let expected = format!("<dc:subject>{genre}</dc:subject>");
+            assert!(xml.contains(&expected), "expected {expected:?} in OPF output");
         }
     }
 
