@@ -7,12 +7,27 @@ use async_trait::async_trait;
 
 use crate::{
     Error,
-    book::{BookToken, FileFormat, IdentifierType},
+    book::{BookId, BookToken, FileFormat, IdentifierType},
+    conversion::ConversionService,
     import::{ImportJob, ImportJobToken},
     library::{LibraryService, LibraryStats},
     pipeline::{BookEdit, PipelineService, ProviderBook},
     storage::{BookSidecar, LibraryStore},
 };
+
+pub struct NopConversionService;
+
+#[async_trait]
+impl ConversionService for NopConversionService {
+    async fn queue_enrich_epub(&self, _book_id: BookId) -> Result<(), Error> {
+        unimplemented!("NopConversionService")
+    }
+}
+
+#[must_use]
+pub fn nop_conversion_service() -> Arc<dyn ConversionService> {
+    Arc::new(NopConversionService)
+}
 
 /// No-op `LibraryStore` for use in tests and as a placeholder until
 /// `LocalLibraryStore` is wired in during M3.8.

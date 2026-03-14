@@ -130,7 +130,7 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     use bb_api::create_api_subsystem;
     use bb_core::{create_core_subsystem, create_services, jobs::JobRegistry, pipeline::PipelineServiceImpl};
     use bb_database::{create_repository_service, open_database};
-    use bb_formats::EpubExtractor;
+    use bb_formats::{ConversionServiceImpl, EpubExtractor};
     use bb_frontend::server::create_frontend_subsystem;
     use bb_import::{ProcessImportHandler, create_import_subsystem};
     use bb_metadata::create_metadata_providers;
@@ -148,7 +148,9 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
         Arc::new(EpubExtractor),
         create_metadata_providers(&config.metadata),
     )) as Arc<dyn bb_core::pipeline::PipelineService>;
-    let core_services = create_services(repository_service.clone(), library_store, pipeline_service).context("Couldn't create core services")?;
+    let conversion_service = Arc::new(ConversionServiceImpl::new(repository_service.clone()));
+    let core_services =
+        create_services(repository_service.clone(), library_store, pipeline_service, conversion_service).context("Couldn't create core services")?;
 
     let scan_interval = Duration::from_secs(config.import.scan_interval_secs);
     let worker_poll_interval = Duration::from_secs(config.import.worker_poll_interval_secs);

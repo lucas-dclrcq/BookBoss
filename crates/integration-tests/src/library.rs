@@ -10,6 +10,7 @@ fn library_services(ctx: &crate::context::TestContext) -> std::sync::Arc<bb_core
         ctx.repos.clone(),
         fixtures::silent_library_store(),
         bb_core::test_support::nop_pipeline_service(),
+        bb_core::test_support::nop_conversion_service(),
     )
     .unwrap()
 }

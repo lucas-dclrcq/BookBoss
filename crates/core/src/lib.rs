@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod book;
+pub mod conversion;
 pub mod device;
 pub mod error;
 pub mod filter;
@@ -22,6 +23,7 @@ use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, SubsystemHandle};
 use crate::{
     auth::{AuthService, AuthServiceImpl},
     book::{BookService, BookServiceImpl},
+    conversion::ConversionService,
     device::{DeviceService, service::DeviceServiceImpl},
     import::{ImportJobService, service::ImportJobServiceImpl},
     jobs::{JobRegistry, JobWorker},
@@ -46,13 +48,19 @@ pub struct CoreServices {
     pub library_store: Arc<dyn LibraryStore>,
     pub library_service: Arc<dyn LibraryService>,
     pub pipeline_service: Arc<dyn PipelineService>,
+    pub conversion_service: Arc<dyn ConversionService>,
     pub shelf_service: Arc<dyn ShelfService>,
     pub reading_service: Arc<dyn ReadingService>,
     pub device_service: Arc<dyn DeviceService>,
 }
 
 impl CoreServices {
-    pub(crate) fn new(repository_service: Arc<RepositoryService>, library_store: Arc<dyn LibraryStore>, pipeline_service: Arc<dyn PipelineService>) -> Self {
+    pub(crate) fn new(
+        repository_service: Arc<RepositoryService>,
+        library_store: Arc<dyn LibraryStore>,
+        pipeline_service: Arc<dyn PipelineService>,
+        conversion_service: Arc<dyn ConversionService>,
+    ) -> Self {
         Self {
             auth_service: Arc::new(AuthServiceImpl::new(repository_service.clone())),
             user_service: Arc::new(UserServiceImpl::new(repository_service.clone())),
@@ -62,6 +70,7 @@ impl CoreServices {
             library_service: Arc::new(LibraryServiceImpl::new(repository_service.clone(), library_store.clone())),
             library_store,
             pipeline_service,
+            conversion_service,
             shelf_service: Arc::new(ShelfServiceImpl::new(repository_service.clone())),
             reading_service: Arc::new(ReadingServiceImpl::new(repository_service.clone())),
             device_service: Arc::new(DeviceServiceImpl::new(repository_service)),
@@ -73,8 +82,14 @@ pub fn create_services(
     repository_service: Arc<RepositoryService>,
     library_store: Arc<dyn LibraryStore>,
     pipeline_service: Arc<dyn PipelineService>,
+    conversion_service: Arc<dyn ConversionService>,
 ) -> Result<Arc<CoreServices>, Error> {
-    Ok(Arc::new(CoreServices::new(repository_service, library_store, pipeline_service)))
+    Ok(Arc::new(CoreServices::new(
+        repository_service,
+        library_store,
+        pipeline_service,
+        conversion_service,
+    )))
 }
 
 pub struct CoreSubsystem {
