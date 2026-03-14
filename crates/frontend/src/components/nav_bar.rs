@@ -133,6 +133,14 @@ pub(crate) fn NavBar() -> Element {
                         div { class: "absolute right-0 top-full mt-1 w-36 bg-white rounded-lg shadow-lg py-1 z-50",
                             button {
                                 class: "w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100",
+                                onclick: move |_| {
+                                    user_menu_open.set(false);
+                                    navigator.push(Route::ProfilePage {});
+                                },
+                                "Profile"
+                            }
+                            button {
+                                class: "w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100",
                                 onclick: on_logout,
                                 "Logout"
                             }
