@@ -489,7 +489,7 @@ impl ShelfService for ShelfServiceImpl {
 
     #[tracing::instrument(level = "trace", skip(self))]
     async fn find_device_shelf(&self, device_id: DeviceId) -> Result<Option<Shelf>, Error> {
-        with_read_only_transaction!(self, shelf_repository, |tx| { shelf_repository.find_by_device_id(tx, device_id).await })
+        with_read_only_transaction!(self, shelf_repository, |tx| shelf_repository.find_by_device_id(tx, device_id).await)
     }
 }
 

@@ -22,6 +22,7 @@ use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, SubsystemHandle};
 use crate::{
     auth::{AuthService, AuthServiceImpl},
     book::{BookService, BookServiceImpl},
+    device::{DeviceService, service::DeviceServiceImpl},
     import::{ImportJobService, service::ImportJobServiceImpl},
     jobs::{JobRegistry, JobWorker},
     library::{LibraryService, LibraryServiceImpl},
@@ -47,6 +48,7 @@ pub struct CoreServices {
     pub pipeline_service: Arc<dyn PipelineService>,
     pub shelf_service: Arc<dyn ShelfService>,
     pub reading_service: Arc<dyn ReadingService>,
+    pub device_service: Arc<dyn DeviceService>,
 }
 
 impl CoreServices {
@@ -61,7 +63,8 @@ impl CoreServices {
             library_store,
             pipeline_service,
             shelf_service: Arc::new(ShelfServiceImpl::new(repository_service.clone())),
-            reading_service: Arc::new(ReadingServiceImpl::new(repository_service)),
+            reading_service: Arc::new(ReadingServiceImpl::new(repository_service.clone())),
+            device_service: Arc::new(DeviceServiceImpl::new(repository_service)),
         }
     }
 }
