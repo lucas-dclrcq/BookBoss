@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0](https://github.com/szinn/BookBoss/compare/v0.2.5..v0.3.0) - 2026-03-14
+
+### Features
+
+- _(core)_ MP.4 + MP.5 — DeviceService trait, impl, and CoreServices wiring - ([e8de684](https://github.com/szinn/BookBoss/commit/e8de68438588ed3ebe19caad8db07ac5db66749e))
+- _(core)_ MP.3 — ShelfService::create_device_shelf + find_device_shelf - ([021c5aa](https://github.com/szinn/BookBoss/commit/021c5aae3e34be47cc5c569746ee3784f8fad69d))
+- _(core)_ Add filter domain with BookFilter tree model - ([23422e1](https://github.com/szinn/BookBoss/commit/23422e1dddb02c50810e62b4ed9a703b2c6e8de4))
+- _(core,database)_ MP.2 — ShelfRepository::find_by_device_id - ([db12232](https://github.com/szinn/BookBoss/commit/db1223247ae9c8c41ff9c970e7dc3f83be3566cb))
+- _(core,database)_ MP.1 — DeviceRepository CRUD + database adapter - ([1e9a4bb](https://github.com/szinn/BookBoss/commit/1e9a4bb74f65320d9b0a324a0d16cbaf748fbf61))
+- _(core,database)_ Replace ShelfFilter with BookFilter tree (M6.2) - ([f35764f](https://github.com/szinn/BookBoss/commit/f35764f1ec5b7e835d24706bb0657ff810c43c05))
+- _(database)_ Implement build_condition() filter translator (M6.3) - ([e40e060](https://github.com/szinn/BookBoss/commit/e40e060a4f2f63f76712b3fc2cc43c3882eba087))
+- _(frontend)_ MP.13 — disable shelf delete for device-linked shelves - ([df254b9](https://github.com/szinn/BookBoss/commit/df254b96666a62aca58cd1fe410fb6e8ea404a6a))
+- _(frontend)_ MP.12 — My Devices section on Profile page - ([97e3a6f](https://github.com/szinn/BookBoss/commit/97e3a6fe21e262397ee4c44757a2c59d9b0fb961))
+- _(frontend)_ MP.11 — move Reading section from Settings to Profile - ([7942131](https://github.com/szinn/BookBoss/commit/79421312bbfa3b16d075247da760da2663bc02ad))
+- _(frontend)_ MP.10 — profile section with modal password change - ([7e53ce2](https://github.com/szinn/BookBoss/commit/7e53ce20ff7503c04a87c79aab06da73fa32cc08))
+- _(frontend)_ Rework ProfilePage to single-page scroll layout - ([23c31d8](https://github.com/szinn/BookBoss/commit/23c31d83f84be5bc76ee70dfe9d1d70f3f2cca72))
+- _(frontend)_ MP.8 + MP.9 — Profile link in NavBar and ProfilePage skeleton - ([a5154b2](https://github.com/szinn/BookBoss/commit/a5154b23ed1bb4bc9e4565b1636ad205105a6349))
+- _(frontend)_ M6.7 — badge counts on smart shelf pills - ([dabde74](https://github.com/szinn/BookBoss/commit/dabde74c5e8f33cab3854125878f05405ac5c79a))
+- _(frontend)_ ReadStatus filter rule — chip input with centered hint - ([fb8abad](https://github.com/szinn/BookBoss/commit/fb8abad464884f5bca437a31c0761b86af1a0149))
+- _(frontend)_ M6.6 — smart shelf detail page - ([26f818c](https://github.com/szinn/BookBoss/commit/26f818cf75135c4dd70fd8e797dc6945ce4d7579))
+- _(frontend)_ M6.5 smart shelf create/edit UI - ([a1f1547](https://github.com/szinn/BookBoss/commit/a1f15478a6a0d9b6b602d2208fdc530c77c8ba0e))
+- _(frontend)_ M6.4 filter builder component and entity options server fn - ([bcb6072](https://github.com/szinn/BookBoss/commit/bcb60724e9cc471d255f27555709148eaec4377f))
+
+### Bug Fixes
+
+- _(core)_ Sync device name when companion shelf is renamed - ([3f406a1](https://github.com/szinn/BookBoss/commit/3f406a10c4f899c7044c094013b83e9b5baa841f))
+- _(frontend)_ Resize graphic assets - ([ee46937](https://github.com/szinn/BookBoss/commit/ee46937267448c56c7c14af407a060f94f295493))
+
+### Refactor
+
+- _(core)_ Clippy warning cleanup and lint tuning - ([242a3c7](https://github.com/szinn/BookBoss/commit/242a3c73df0d17f639be1bbdc8a45321f324abad))
+- _(core,database,frontend)_ Rename BookFilter → BookQuery in book domain - ([848feb6](https://github.com/szinn/BookBoss/commit/848feb6247d3d371d8e14e0812ee20fdf283d73f))
+
+### Miscellaneous Tasks
+
+- _(bookboss)_ Add mimalloc as global allocator - ([a9452d3](https://github.com/szinn/BookBoss/commit/a9452d3f549e58122f1ae8114beb87ef1d895ef8))
+- _(core)_ Suppress remaining cast warnings with #[expect] and reason - ([fae77bf](https://github.com/szinn/BookBoss/commit/fae77bf87ab90930bd7e974eeac34414c03247b4))
+- _(core)_ Remove clone_on_ref_ptr lint; allow SeaORM cast warnings - ([eaf8265](https://github.com/szinn/BookBoss/commit/eaf8265f732cc5689bcb7d53d5c15c3db885dbe8))
+
 ## [0.2.5](https://github.com/szinn/BookBoss/compare/v0.2.4..v0.2.5) - 2026-03-11
 
 ### Features
