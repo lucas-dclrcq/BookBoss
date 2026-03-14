@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::{
     Error, RepositoryError,
     book::{Book, BookId, BookToken},
+    device::DeviceId,
     filter::BookFilter,
     repository::RepositoryService,
     shelf::{BookShelf, Shelf, ShelfToken, ShelfType, ShelfVisibility},
@@ -80,6 +81,16 @@ pub trait ShelfService: Send + Sync {
     ///
     /// Only callable for smart shelves the caller can access.
     async fn count_for_filter(&self, token: &ShelfToken, user_id: UserId) -> Result<u64, Error>;
+
+    /// Creates a private smart shelf linked to a device, with a default filter
+    /// of `ReadStatus IncludesAny [Active]`.
+    ///
+    /// Intended to be called by `DeviceService` at device creation time. The
+    /// name is expected to already be unique for the owner.
+    async fn create_device_shelf(&self, device_id: DeviceId, owner_id: UserId, name: String) -> Result<ShelfToken, Error>;
+
+    /// Returns the companion shelf linked to the given device, if one exists.
+    async fn find_device_shelf(&self, device_id: DeviceId) -> Result<Option<Shelf>, Error>;
 }
 
 pub(crate) struct ShelfServiceImpl {
@@ -448,6 +459,38 @@ impl ShelfService for ShelfServiceImpl {
             Ok(())
         })
     }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    async fn create_device_shelf(&self, device_id: DeviceId, owner_id: UserId, name: String) -> Result<ShelfToken, Error> {
+        use crate::filter::{BookFilter, FilterReadStatus, FilterRule, SetOp};
+
+        let filter = BookFilter::Rule(FilterRule::ReadStatus {
+            op: SetOp::IncludesAny,
+            values: vec![FilterReadStatus::Active],
+        });
+
+        with_transaction!(self, shelf_repository, |tx| {
+            let shelf = shelf_repository
+                .add_shelf(
+                    tx,
+                    crate::shelf::NewShelf {
+                        owner_id,
+                        name,
+                        shelf_type: ShelfType::Smart,
+                        visibility: ShelfVisibility::Private,
+                        device_id: Some(device_id),
+                        filter_criteria: Some(filter),
+                    },
+                )
+                .await?;
+            Ok(shelf.token)
+        })
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    async fn find_device_shelf(&self, device_id: DeviceId) -> Result<Option<Shelf>, Error> {
+        with_read_only_transaction!(self, shelf_repository, |tx| { shelf_repository.find_by_device_id(tx, device_id).await })
+    }
 }
 
 #[cfg(test)]
@@ -526,6 +569,7 @@ mod tests {
         add_book_to_shelf_called: Mutex<bool>,
         remove_book_from_shelf_called: Mutex<bool>,
         books_for_shelf_result: Mutex<Option<Result<Vec<BookShelf>, Error>>>,
+        find_by_device_id_result: Mutex<Option<Result<Option<Shelf>, Error>>>,
     }
 
     impl MockShelfRepository {
@@ -557,6 +601,10 @@ mod tests {
         }
         fn remove_book_from_shelf_was_called(&self) -> bool {
             *self.remove_book_from_shelf_called.lock().unwrap()
+        }
+        fn with_find_by_device_id(self, result: Result<Option<Shelf>, Error>) -> Self {
+            *self.find_by_device_id_result.lock().unwrap() = Some(result);
+            self
         }
     }
 
@@ -621,7 +669,11 @@ mod tests {
             unimplemented!()
         }
         async fn find_by_device_id(&self, _: &dyn Transaction, _: crate::device::DeviceId) -> Result<Option<Shelf>, Error> {
-            unimplemented!()
+            self.find_by_device_id_result
+                .lock()
+                .unwrap()
+                .clone()
+                .unwrap_or_else(|| Err(Error::MockNotConfigured("find_by_device_id")))
         }
     }
 
@@ -1817,5 +1869,69 @@ mod tests {
         let result = svc.update_shelf_filter(&token, simple_filter(), 1).await;
 
         assert!(matches!(result, Err(Error::Validation(_))));
+    }
+
+    // ─── create_device_shelf ──────────────────────────────────────────────────
+
+    fn fake_device_shelf(owner_id: UserId, device_id: u64) -> Shelf {
+        use crate::filter::{BookFilter, FilterReadStatus, FilterRule, SetOp};
+        Shelf {
+            shelf_type: ShelfType::Smart,
+            device_id: Some(device_id),
+            filter_criteria: Some(BookFilter::Rule(FilterRule::ReadStatus {
+                op: SetOp::IncludesAny,
+                values: vec![FilterReadStatus::Active],
+            })),
+            ..fake_shelf(owner_id, ShelfVisibility::Private)
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_device_shelf_succeeds() {
+        let device_id = 42u64;
+        let shelf = fake_device_shelf(1, device_id);
+        let svc = create_service(MockShelfRepository::default().with_add_shelf(Ok(shelf)), MockBookRepository::default());
+
+        let result = svc.create_device_shelf(device_id, 1, "My Kobo".to_string()).await;
+
+        result.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_create_device_shelf_creates_private_smart_shelf() {
+        let device_id = 42u64;
+        let shelf = fake_device_shelf(1, device_id);
+        let returned_token = shelf.token;
+        let svc = create_service(MockShelfRepository::default().with_add_shelf(Ok(shelf)), MockBookRepository::default());
+
+        let token = svc.create_device_shelf(device_id, 1, "My Kobo".to_string()).await.unwrap();
+
+        assert_eq!(token, returned_token);
+    }
+
+    // ─── find_device_shelf ────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_find_device_shelf_returns_shelf_when_found() {
+        let device_id = 42u64;
+        let shelf = fake_device_shelf(1, device_id);
+        let shelf_token = shelf.token;
+        let svc = create_service(
+            MockShelfRepository::default().with_find_by_device_id(Ok(Some(shelf))),
+            MockBookRepository::default(),
+        );
+
+        let result = svc.find_device_shelf(device_id).await.unwrap();
+
+        assert_eq!(result.map(|s| s.token), Some(shelf_token));
+    }
+
+    #[tokio::test]
+    async fn test_find_device_shelf_returns_none_when_not_found() {
+        let svc = create_service(MockShelfRepository::default().with_find_by_device_id(Ok(None)), MockBookRepository::default());
+
+        let result = svc.find_device_shelf(99).await.unwrap();
+
+        assert!(result.is_none());
     }
 }
