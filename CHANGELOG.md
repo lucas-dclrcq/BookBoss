@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2](https://github.com/szinn/BookBoss/compare/v0.3.1..v0.3.2) - 2026-03-14
+
+### Bug Fixes
+
+- _(frontend)_ Fix Incoming nav link not rendering after page refresh - ([ece7f35](https://github.com/szinn/BookBoss/commit/ece7f3552d737ae8f9a68f7b8bd818f5c1745052))
+
+### Performance
+
+- _(database)_ Add missing indices to existing migrations - ([656563e](https://github.com/szinn/BookBoss/commit/656563edcb5729efdc26594257a88d4e1ff00be0))
+
 ## [0.3.0](https://github.com/szinn/BookBoss/compare/v0.2.5..v0.3.0) - 2026-03-14
 
 ### Features
