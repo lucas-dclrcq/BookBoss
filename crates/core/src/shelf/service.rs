@@ -401,7 +401,7 @@ mod tests {
         Error, RepositoryError,
         auth::{NewSession, Session, repository::SessionRepository},
         book::{
-            Author, AuthorId, AuthorRepository, AuthorToken, Book, BookAuthor, BookFile, BookFilter, BookId, BookIdentifier, BookRepository, BookStatus,
+            Author, AuthorId, AuthorRepository, AuthorToken, Book, BookAuthor, BookFile, BookId, BookIdentifier, BookQuery, BookRepository, BookStatus,
             BookToken, FileFormat, Genre, GenreId, GenreRepository, GenreToken, IdentifierType, NewAuthor, NewBook, NewGenre, NewPublisher, NewSeries, NewTag,
             Publisher, PublisherId, PublisherRepository, PublisherToken, Series, SeriesId, SeriesRepository, SeriesToken, Tag, TagId, TagRepository, TagToken,
         },
@@ -593,7 +593,7 @@ mod tests {
                 .clone()
                 .unwrap_or_else(|| Err(Error::MockNotConfigured("find_by_token")))
         }
-        async fn list_books(&self, _: &dyn Transaction, _: &BookFilter, _: Option<BookId>, _: Option<u64>) -> Result<Vec<Book>, Error> {
+        async fn list_books(&self, _: &dyn Transaction, _: &BookQuery, _: Option<BookId>, _: Option<u64>) -> Result<Vec<Book>, Error> {
             unimplemented!()
         }
         async fn count_available_books(&self, _: &dyn Transaction) -> Result<u64, Error> {

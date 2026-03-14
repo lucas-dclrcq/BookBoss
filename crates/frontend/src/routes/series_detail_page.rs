@@ -19,7 +19,7 @@ pub(crate) struct SeriesPageData {
 use {
     crate::server::AuthSession,
     bb_core::CoreServices,
-    bb_core::book::{AuthorToken, BookFilter, BookStatus, SeriesToken},
+    bb_core::book::{AuthorToken, BookQuery, BookStatus, SeriesToken},
     std::collections::{HashMap, HashSet},
     std::str::FromStr,
     std::sync::Arc,
@@ -43,7 +43,7 @@ async fn get_series(token: String) -> Result<SeriesPageData, ServerFnError> {
         .map_err(|e| ServerFnError::new(e.to_string()))?
         .ok_or_else(|| ServerFnError::new("Series not found"))?;
 
-    let filter = BookFilter {
+    let filter = BookQuery {
         series_id: Some(series.id),
         status: Some(BookStatus::Available),
         ..Default::default()

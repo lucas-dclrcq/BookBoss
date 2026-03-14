@@ -36,7 +36,7 @@ use {
     axum_session_auth::{Auth, Rights},
     bb_core::{
         CoreServices,
-        book::{AuthorToken, BookFilter, BookStatus, SeriesToken},
+        book::{AuthorToken, BookQuery, BookStatus, SeriesToken},
         reading::ReadStatus,
         types::Capability,
     },
@@ -63,7 +63,7 @@ async fn list_books() -> Result<ListBooksResponse, ServerFnError> {
 
     let book_service = &core_services.book_service;
 
-    let filter = BookFilter {
+    let filter = BookQuery {
         status: Some(BookStatus::Available),
         ..Default::default()
     };

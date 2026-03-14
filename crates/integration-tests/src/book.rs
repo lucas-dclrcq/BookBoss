@@ -1,4 +1,4 @@
-use bb_core::book::{BookFilter, BookStatus};
+use bb_core::book::{BookQuery, BookStatus};
 
 use crate::{fixtures, setup};
 
@@ -26,7 +26,7 @@ async fn find_book_by_token_returns_none_for_unknown_token() {
 #[tokio::test]
 async fn list_books_returns_empty_initially() {
     let ctx = setup().await;
-    let filter = BookFilter::default();
+    let filter = BookQuery::default();
 
     let books = ctx.services.book_service.list_books(&filter, None, None).await.unwrap();
 
@@ -39,7 +39,7 @@ async fn list_books_filters_by_status() {
     fixtures::insert_book(&ctx.repos, "Available Book", BookStatus::Available).await;
     fixtures::insert_book(&ctx.repos, "Incoming Book", BookStatus::Incoming).await;
 
-    let filter = BookFilter {
+    let filter = BookQuery {
         status: Some(BookStatus::Available),
         ..Default::default()
     };
@@ -55,7 +55,7 @@ async fn list_books_returns_all_without_filter() {
     fixtures::insert_book(&ctx.repos, "Book A", BookStatus::Available).await;
     fixtures::insert_book(&ctx.repos, "Book B", BookStatus::Incoming).await;
 
-    let books = ctx.services.book_service.list_books(&BookFilter::default(), None, None).await.unwrap();
+    let books = ctx.services.book_service.list_books(&BookQuery::default(), None, None).await.unwrap();
 
     assert_eq!(books.len(), 2);
 }

@@ -1,8 +1,8 @@
 use bb_core::{
     Error, RepositoryError,
     book::{
-        AuthorId, AuthorRole, Book, BookAuthor, BookFile, BookFilter, BookId, BookIdentifier, BookRepository, BookStatus, BookToken, FileFormat, Genre,
-        GenreId, IdentifierType, MetadataSource, NewBook, Tag, TagId,
+        AuthorId, AuthorRole, Book, BookAuthor, BookFile, BookId, BookIdentifier, BookQuery, BookRepository, BookStatus, BookToken, FileFormat, Genre, GenreId,
+        IdentifierType, MetadataSource, NewBook, Tag, TagId,
     },
     repository::Transaction,
 };
@@ -246,7 +246,7 @@ impl BookRepository for BookRepositoryAdapter {
     async fn list_books(
         &self,
         transaction: &dyn Transaction,
-        filter: &BookFilter,
+        filter: &BookQuery,
         start_id: Option<BookId>,
         page_size: Option<u64>,
     ) -> Result<Vec<Book>, Error> {
@@ -623,7 +623,7 @@ mod tests {
     use bb_core::{
         Error, RepositoryError,
         book::{
-            AuthorRole, Book, BookFilter, BookStatus, BookToken, FileFormat, IdentifierType, MetadataSource, NewAuthor, NewBook, NewGenre, NewSeries, NewTag,
+            AuthorRole, Book, BookQuery, BookStatus, BookToken, FileFormat, IdentifierType, MetadataSource, NewAuthor, NewBook, NewGenre, NewSeries, NewTag,
         },
         repository::RepositoryService,
     };
@@ -868,7 +868,7 @@ mod tests {
 
         assert!(
             svc.book_repository()
-                .list_books(&*tx, &BookFilter::default(), None, None)
+                .list_books(&*tx, &BookQuery::default(), None, None)
                 .await
                 .unwrap()
                 .is_empty()
@@ -884,7 +884,7 @@ mod tests {
         svc.book_repository().add_book(&*tx, new_book("Book B")).await.unwrap();
 
         assert_eq!(
-            svc.book_repository().list_books(&*tx, &BookFilter::default(), None, None).await.unwrap().len(),
+            svc.book_repository().list_books(&*tx, &BookQuery::default(), None, None).await.unwrap().len(),
             2
         );
     }
@@ -906,7 +906,7 @@ mod tests {
             .await
             .unwrap();
 
-        let filter = BookFilter {
+        let filter = BookQuery {
             status: Some(BookStatus::Available),
             ..Default::default()
         };
@@ -945,7 +945,7 @@ mod tests {
             .unwrap();
         svc.book_repository().add_book(&*tx, new_book("Other")).await.unwrap();
 
-        let filter = BookFilter {
+        let filter = BookQuery {
             series_id: Some(series.id),
             ..Default::default()
         };
@@ -985,7 +985,7 @@ mod tests {
         .await
         .unwrap();
 
-        let filter = BookFilter {
+        let filter = BookQuery {
             author_id: Some(author.id),
             ..Default::default()
         };
@@ -1013,7 +1013,7 @@ mod tests {
         .await
         .unwrap();
 
-        let filter = BookFilter {
+        let filter = BookQuery {
             genre_id: Some(genre.id),
             ..Default::default()
         };
@@ -1041,7 +1041,7 @@ mod tests {
         .await
         .unwrap();
 
-        let filter = BookFilter {
+        let filter = BookQuery {
             tag_id: Some(tag.id),
             ..Default::default()
         };
@@ -1059,10 +1059,10 @@ mod tests {
         svc.book_repository().add_book(&*tx, new_book("Book A")).await.unwrap();
         svc.book_repository().add_book(&*tx, new_book("Book B")).await.unwrap();
 
-        let all = svc.book_repository().list_books(&*tx, &BookFilter::default(), None, None).await.unwrap();
+        let all = svc.book_repository().list_books(&*tx, &BookQuery::default(), None, None).await.unwrap();
         let result = svc
             .book_repository()
-            .list_books(&*tx, &BookFilter::default(), Some(all[1].id), None)
+            .list_books(&*tx, &BookQuery::default(), Some(all[1].id), None)
             .await
             .unwrap();
 
@@ -1076,7 +1076,7 @@ mod tests {
         let tx = svc.repository().begin().await.unwrap();
 
         assert!(matches!(
-            svc.book_repository().list_books(&*tx, &BookFilter::default(), None, Some(0)).await,
+            svc.book_repository().list_books(&*tx, &BookQuery::default(), None, Some(0)).await,
             Err(Error::InvalidPageSize(0))
         ));
     }

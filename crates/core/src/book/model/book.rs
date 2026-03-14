@@ -20,7 +20,7 @@ pub enum BookStatus {
 ///
 /// All set fields are `ANDed` together. An empty filter returns all books.
 #[derive(Debug, Clone, Default)]
-pub struct BookFilter {
+pub struct BookQuery {
     pub status: Option<BookStatus>,
     pub series_id: Option<SeriesId>,
     pub author_id: Option<AuthorId>,

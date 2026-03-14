@@ -19,7 +19,7 @@ pub(crate) struct AuthorPageData {
 use {
     crate::server::AuthSession,
     bb_core::CoreServices,
-    bb_core::book::{AuthorToken, BookFilter, BookStatus, SeriesToken},
+    bb_core::book::{AuthorToken, BookQuery, BookStatus, SeriesToken},
     std::collections::{HashMap, HashSet},
     std::str::FromStr,
     std::sync::Arc,
@@ -43,7 +43,7 @@ async fn get_author(token: String) -> Result<AuthorPageData, ServerFnError> {
         .map_err(|e| ServerFnError::new(e.to_string()))?
         .ok_or_else(|| ServerFnError::new("Author not found"))?;
 
-    let filter = BookFilter {
+    let filter = BookQuery {
         author_id: Some(author.id),
         status: Some(BookStatus::Available),
         ..Default::default()

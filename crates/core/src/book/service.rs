@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::{
     Error,
     book::{
-        Author, AuthorId, AuthorToken, Book, BookAuthor, BookFile, BookFilter, BookId, BookIdentifier, BookToken, Genre, Series, SeriesId, SeriesToken, Tag,
+        Author, AuthorId, AuthorToken, Book, BookAuthor, BookFile, BookId, BookIdentifier, BookQuery, BookToken, Genre, Series, SeriesId, SeriesToken, Tag,
     },
     repository::RepositoryService,
     with_read_only_transaction,
@@ -11,7 +11,7 @@ use crate::{
 
 #[async_trait::async_trait]
 pub trait BookService: Send + Sync {
-    async fn list_books(&self, filter: &BookFilter, start_id: Option<BookId>, page_size: Option<u64>) -> Result<Vec<Book>, Error>;
+    async fn list_books(&self, filter: &BookQuery, start_id: Option<BookId>, page_size: Option<u64>) -> Result<Vec<Book>, Error>;
     async fn find_book_by_token(&self, token: &BookToken) -> Result<Option<Book>, Error>;
     async fn authors_for_book(&self, book_id: BookId) -> Result<Vec<BookAuthor>, Error>;
     async fn files_for_book(&self, book_id: BookId) -> Result<Vec<BookFile>, Error>;
@@ -43,7 +43,7 @@ impl BookServiceImpl {
 #[async_trait::async_trait]
 impl BookService for BookServiceImpl {
     #[tracing::instrument(level = "trace", skip(self, filter))]
-    async fn list_books(&self, filter: &BookFilter, start_id: Option<BookId>, page_size: Option<u64>) -> Result<Vec<Book>, Error> {
+    async fn list_books(&self, filter: &BookQuery, start_id: Option<BookId>, page_size: Option<u64>) -> Result<Vec<Book>, Error> {
         let filter = filter.clone();
         with_read_only_transaction!(self, book_repository, |tx| book_repository.list_books(tx, &filter, start_id, page_size).await)
     }
@@ -158,7 +158,7 @@ mod tests {
         Error, RepositoryError,
         auth::{NewSession, Session, repository::SessionRepository},
         book::{
-            Author, AuthorId, AuthorRepository, AuthorRole, AuthorToken, Book, BookAuthor, BookFile, BookFilter, BookId, BookIdentifier, BookRepository,
+            Author, AuthorId, AuthorRepository, AuthorRole, AuthorToken, Book, BookAuthor, BookFile, BookId, BookIdentifier, BookQuery, BookRepository,
             BookStatus, BookToken, FileFormat, Genre, GenreId, GenreRepository, GenreToken, IdentifierType, NewAuthor, NewBook, NewGenre, NewPublisher,
             NewSeries, NewTag, Publisher, PublisherId, PublisherRepository, PublisherToken, Series, SeriesId, SeriesRepository, SeriesToken, Tag, TagId,
             TagRepository, TagToken,
@@ -537,7 +537,7 @@ mod tests {
                 .clone()
                 .unwrap_or_else(|| Err(Error::MockNotConfigured("find_by_token")))
         }
-        async fn list_books(&self, _: &dyn Transaction, _: &BookFilter, _: Option<BookId>, _: Option<u64>) -> Result<Vec<Book>, Error> {
+        async fn list_books(&self, _: &dyn Transaction, _: &BookQuery, _: Option<BookId>, _: Option<u64>) -> Result<Vec<Book>, Error> {
             self.list_books_result.clone().unwrap_or_else(|| Err(Error::MockNotConfigured("list_books")))
         }
         async fn authors_for_book(&self, _: &dyn Transaction, _: BookId) -> Result<Vec<BookAuthor>, Error> {
@@ -787,7 +787,7 @@ mod tests {
         let books = vec![fake_book(1, "Dune"), fake_book(2, "Foundation")];
         let svc = default_service_with_book_repo(MockBookRepository::new().with_list_books(Ok(books)));
 
-        let result = svc.list_books(&BookFilter::default(), None, None).await;
+        let result = svc.list_books(&BookQuery::default(), None, None).await;
 
         assert!(result.is_ok());
         let list = result.unwrap();
@@ -800,7 +800,7 @@ mod tests {
     async fn test_list_books_returns_empty() {
         let svc = default_service_with_book_repo(MockBookRepository::new().with_list_books(Ok(vec![])));
 
-        let result = svc.list_books(&BookFilter::default(), None, None).await;
+        let result = svc.list_books(&BookQuery::default(), None, None).await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
@@ -812,7 +812,7 @@ mod tests {
             MockBookRepository::new().with_list_books(Err(Error::RepositoryError(RepositoryError::Database("db error".into())))),
         );
 
-        let result = svc.list_books(&BookFilter::default(), None, None).await;
+        let result = svc.list_books(&BookQuery::default(), None, None).await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::Database(_)))));
     }
