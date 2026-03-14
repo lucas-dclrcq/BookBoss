@@ -142,13 +142,14 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     let database = open_database(&config.database).await.context("Couldn't create database connection")?;
     let repository_service = create_repository_service(database).await.context("Couldn't create database connection")?;
     let library_store = Arc::new(bb_storage::LocalLibraryStore::new(config.library.library_path.clone()));
+    let conversion_service = Arc::new(ConversionServiceImpl::new(repository_service.clone()));
     let pipeline_service = Arc::new(PipelineServiceImpl::new(
         repository_service.clone(),
         library_store.clone(),
         Arc::new(EpubExtractor),
         create_metadata_providers(&config.metadata),
+        conversion_service.clone(),
     )) as Arc<dyn bb_core::pipeline::PipelineService>;
-    let conversion_service = Arc::new(ConversionServiceImpl::new(repository_service.clone()));
     let core_services =
         create_services(repository_service.clone(), library_store, pipeline_service, conversion_service).context("Couldn't create core services")?;
 

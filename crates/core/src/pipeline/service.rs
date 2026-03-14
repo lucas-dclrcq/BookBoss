@@ -5,6 +5,7 @@ use crate::{
     book::{
         AuthorRole, BookStatus, BookToken, FileRole, IdentifierType, MetadataSource, NewAuthor, NewBook, NewGenre, NewPublisher, NewSeries, NewTag, book_slug,
     },
+    conversion::ConversionService,
     import::{ImportJob, ImportJobToken, ImportSource, ImportStatus},
     pipeline::{
         MetadataExtractor, MetadataProvider,
@@ -73,6 +74,7 @@ pub struct PipelineServiceImpl {
     library_store: Arc<dyn LibraryStore>,
     extractor: Arc<dyn MetadataExtractor>,
     providers: Vec<Arc<dyn MetadataProvider>>,
+    conversion_service: Arc<dyn ConversionService>,
 }
 
 impl PipelineServiceImpl {
@@ -81,12 +83,14 @@ impl PipelineServiceImpl {
         library_store: Arc<dyn LibraryStore>,
         extractor: Arc<dyn MetadataExtractor>,
         providers: Vec<Arc<dyn MetadataProvider>>,
+        conversion_service: Arc<dyn ConversionService>,
     ) -> Self {
         Self {
             repository_service,
             library_store,
             extractor,
             providers,
+            conversion_service,
         }
     }
 }
@@ -838,6 +842,9 @@ impl PipelineService for PipelineServiceImpl {
         };
         self.library_store.store_metadata(&book.token, &sidecar).await?;
 
+        // ── 8. Enqueue EPUB enrichment ────────────────────────────────────────
+        self.conversion_service.queue_enrich_epub(book_id).await?;
+
         Ok(())
     }
 
@@ -1100,6 +1107,9 @@ impl PipelineService for PipelineServiceImpl {
                 .unwrap_or_default(),
         };
         self.library_store.store_metadata(&book.token, &sidecar).await?;
+
+        // ── 7. Enqueue EPUB enrichment ────────────────────────────────────────
+        self.conversion_service.queue_enrich_epub(book_id).await?;
 
         Ok(())
     }
