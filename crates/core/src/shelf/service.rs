@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::{
     Error, RepositoryError,
     book::{Book, BookId, BookToken},
-    device::DeviceId,
+    device::{Device, DeviceId},
     filter::BookFilter,
     repository::RepositoryService,
     shelf::{BookShelf, Shelf, ShelfToken, ShelfType, ShelfVisibility},
@@ -146,7 +146,7 @@ impl ShelfService for ShelfServiceImpl {
         let token = *token;
         let new_name_lower = new_name.to_lowercase();
 
-        with_transaction!(self, shelf_repository, |tx| {
+        with_transaction!(self, shelf_repository, device_repository, |tx| {
             let shelf = shelf_repository
                 .find_by_token(tx, &token)
                 .await?
@@ -161,8 +161,18 @@ impl ShelfService for ShelfServiceImpl {
                 return Err(Error::RepositoryError(RepositoryError::Conflict));
             }
 
-            let updated = Shelf { name: new_name, ..shelf };
+            let device_id = shelf.device_id;
+            let updated = Shelf {
+                name: new_name.clone(),
+                ..shelf
+            };
             shelf_repository.update_shelf(tx, updated).await?;
+
+            if let Some(did) = device_id {
+                if let Some(device) = device_repository.find_by_id(tx, did).await? {
+                    device_repository.update_device(tx, Device { name: new_name, ..device }).await?;
+                }
+            }
 
             Ok(())
         })
@@ -301,7 +311,7 @@ impl ShelfService for ShelfServiceImpl {
         let token = *token;
         let new_name_lower = new_name.to_lowercase();
 
-        with_transaction!(self, shelf_repository, |tx| {
+        with_transaction!(self, shelf_repository, device_repository, |tx| {
             let shelf = shelf_repository
                 .find_by_token(tx, &token)
                 .await?
@@ -316,12 +326,19 @@ impl ShelfService for ShelfServiceImpl {
                 return Err(Error::RepositoryError(RepositoryError::Conflict));
             }
 
+            let device_id = shelf.device_id;
             let updated = Shelf {
-                name: new_name,
+                name: new_name.clone(),
                 visibility,
                 ..shelf
             };
             shelf_repository.update_shelf(tx, updated).await?;
+
+            if let Some(did) = device_id {
+                if let Some(device) = device_repository.find_by_id(tx, did).await? {
+                    device_repository.update_device(tx, Device { name: new_name, ..device }).await?;
+                }
+            }
 
             Ok(())
         })
