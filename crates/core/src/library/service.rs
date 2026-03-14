@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     Error, RepositoryError,
-    book::BookToken,
+    book::{BookToken, FileRole},
     repository::{RepositoryService, read_only_transaction, transaction},
     storage::LibraryStore,
 };
@@ -61,7 +61,7 @@ impl LibraryService for LibraryServiceImpl {
         let author_repo = self.repository_service.author_repository().clone();
         let job_repo = self.repository_service.import_job_repository().clone();
 
-        transaction(&**self.repository_service.repository(), |tx| {
+        let original_filenames = transaction(&**self.repository_service.repository(), |tx| {
             let br = book_repo.clone();
             let ar = author_repo.clone();
             let jr = job_repo.clone();
@@ -70,6 +70,15 @@ impl LibraryService for LibraryServiceImpl {
 
                 let author_links = br.authors_for_book(tx, book.id).await?;
                 let author_ids: Vec<u64> = author_links.iter().map(|a| a.author_id).collect();
+
+                // Collect original filenames before deleting records.
+                let original_filenames: Vec<String> = br
+                    .files_for_book(tx, book.id)
+                    .await?
+                    .into_iter()
+                    .filter(|f| f.file_role == FileRole::Original)
+                    .filter_map(|f| f.original_filename)
+                    .collect();
 
                 // Delete the originating import job so the file can be re-imported.
                 if let Some(job) = jr.find_by_candidate_book_id(tx, book.id).await? {
@@ -86,12 +95,15 @@ impl LibraryService for LibraryServiceImpl {
                     }
                 }
 
-                Ok(())
+                Ok(original_filenames)
             })
         })
         .await?;
 
         self.library_store.delete_book(&token).await?;
+        for filename in original_filenames {
+            self.library_store.delete_original_file(&filename).await?;
+        }
 
         Ok(())
     }

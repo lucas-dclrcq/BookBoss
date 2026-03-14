@@ -53,6 +53,9 @@ impl LibraryStore for SilentLibraryStore {
     async fn delete_book(&self, _token: &BookToken) -> Result<(), Error> {
         Ok(())
     }
+    async fn delete_original_file(&self, _original_filename: &str) -> Result<(), Error> {
+        Ok(())
+    }
 }
 
 pub fn silent_library_store() -> Arc<dyn LibraryStore> {

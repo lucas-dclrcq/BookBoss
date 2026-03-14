@@ -68,6 +68,9 @@ impl LibraryStore for NopLibraryStore {
     async fn delete_book(&self, _token: &BookToken) -> Result<(), Error> {
         unimplemented!("NopLibraryStore")
     }
+    async fn delete_original_file(&self, _original_filename: &str) -> Result<(), Error> {
+        unimplemented!("NopLibraryStore")
+    }
 }
 
 #[must_use]

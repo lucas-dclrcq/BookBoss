@@ -55,4 +55,8 @@ pub trait LibraryStore: Send + Sync {
 
     /// Removes the book's entire directory and all its contents.
     async fn delete_book(&self, token: &BookToken) -> Result<(), Error>;
+
+    /// Removes a file from the flat `Originals/` directory. No-op if the file
+    /// does not exist.
+    async fn delete_original_file(&self, original_filename: &str) -> Result<(), Error>;
 }

@@ -148,6 +148,15 @@ impl LibraryStore for LocalLibraryStore {
             Err(e) => Err(io_err(e)),
         }
     }
+
+    async fn delete_original_file(&self, original_filename: &str) -> Result<(), Error> {
+        let path = self.original_file_path(original_filename);
+        match tokio::fs::remove_file(&path).await {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(io_err(e)),
+        }
+    }
 }
 
 #[cfg(test)]
