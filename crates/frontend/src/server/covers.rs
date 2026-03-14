@@ -45,7 +45,7 @@ pub(crate) async fn serve_cover(
         return Response::builder()
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, HeaderValue::from_static("image/png"))
-            .header(header::CACHE_CONTROL, HeaderValue::from_static("private, max-age=3600"))
+            .header(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"))
             .body(Body::from(BLANK_COVER))
             .unwrap();
     };
@@ -58,7 +58,7 @@ pub(crate) async fn serve_cover(
             return Response::builder()
                 .status(StatusCode::OK)
                 .header(header::CONTENT_TYPE, HeaderValue::from_static("image/png"))
-                .header(header::CACHE_CONTROL, HeaderValue::from_static("private, max-age=3600"))
+                .header(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"))
                 .body(Body::from(BLANK_COVER))
                 .unwrap();
         }
@@ -68,7 +68,7 @@ pub(crate) async fn serve_cover(
     Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, HeaderValue::from_static(content_type))
-        .header(header::CACHE_CONTROL, HeaderValue::from_static("private, max-age=3600"))
+        .header(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"))
         .body(Body::from(data))
         .unwrap()
 }
