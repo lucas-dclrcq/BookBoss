@@ -22,6 +22,9 @@ pub trait JobRepository: Send + Sync {
     /// startup to recover from a previous crash. Returns the number of jobs
     /// reset.
     async fn reset_running_to_pending(&self, transaction: &dyn Transaction) -> Result<u64, Error>;
+
+    /// Count jobs of the given type that are currently pending or running.
+    async fn count_pending_by_type(&self, transaction: &dyn Transaction, job_type: &str) -> Result<u64, Error>;
 }
 
 /// Marker trait for typed job payloads. Implement this on your payload struct

@@ -4,7 +4,9 @@ use bb_core::{
     repository::Transaction,
 };
 use chrono::Utc;
-use sea_orm::{ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, ExprTrait, QueryFilter, QueryOrder, sea_query::Expr};
+use sea_orm::{
+    ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, ExprTrait, PaginatorTrait, QueryFilter, QueryOrder, sea_query::Expr,
+};
 
 use crate::{
     entities::{jobs, prelude},
@@ -193,6 +195,17 @@ impl JobRepository for JobRepositoryAdapter {
             .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
         Ok(updated.into())
+    }
+
+    async fn count_pending_by_type(&self, transaction: &dyn Transaction, job_type: &str) -> Result<u64, Error> {
+        let db_tx = TransactionImpl::get_db_transaction(transaction)?;
+        let count = prelude::Jobs::find()
+            .filter(jobs::Column::JobType.eq(job_type))
+            .filter(jobs::Column::Status.is_in(["pending", "running"]))
+            .count(db_tx)
+            .await
+            .map_err(handle_dberr)?;
+        Ok(count)
     }
 
     async fn reset_running_to_pending(&self, transaction: &dyn Transaction) -> Result<u64, Error> {

@@ -30,6 +30,15 @@ async fn get_pending_count() -> Result<Option<u32>, ServerFnError> {
     Ok(Some(count))
 }
 
+#[get("/api/v1/conversions/pending_count", core_services: axum::Extension<Arc<CoreServices>>)]
+async fn get_conversion_pending_count() -> Result<u32, ServerFnError> {
+    core_services
+        .conversion_service
+        .count_pending()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))
+}
+
 #[put("/api/v1/logout", auth_session: axum::Extension<AuthSession>)]
 async fn logout() -> Result<(), ServerFnError> {
     auth_session.logout_user();
@@ -68,6 +77,46 @@ fn IncomingBadge() -> Element {
     }
 }
 
+/// Shows a subtle count badge when EPUB enrichment jobs are in flight.
+/// Hidden when the count is zero. Uses the same SuspenseBoundary pattern
+/// as `IncomingBadge`.
+#[component]
+fn ConversionBadge() -> Element {
+    let pending_count = use_server_future(move || get_conversion_pending_count())?;
+    let count = pending_count().and_then(|r: Result<u32, ServerFnError>| r.ok()).unwrap_or(0);
+
+    if count == 0 {
+        return rsx! {};
+    }
+
+    rsx! {
+        span { class: "inline-flex items-center gap-1 text-sm text-indigo-300",
+            svg {
+                class: "w-3.5 h-3.5 animate-spin",
+                xmlns: "http://www.w3.org/2000/svg",
+                fill: "none",
+                view_box: "0 0 24 24",
+                circle {
+                    class: "opacity-25",
+                    cx: "12",
+                    cy: "12",
+                    r: "10",
+                    stroke: "currentColor",
+                    stroke_width: "4",
+                }
+                path {
+                    class: "opacity-75",
+                    fill: "currentColor",
+                    d: "M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z",
+                }
+            }
+            span { class: "inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-gray-500 text-white text-[0.6rem] font-bold leading-none",
+                "{count}"
+            }
+        }
+    }
+}
+
 #[component]
 pub(crate) fn NavBar() -> Element {
     let navigator = use_navigator();
@@ -95,6 +144,10 @@ pub(crate) fn NavBar() -> Element {
                 SuspenseBoundary {
                     fallback: |_| rsx! {},
                     IncomingBadge {}
+                }
+                SuspenseBoundary {
+                    fallback: |_| rsx! {},
+                    ConversionBadge {}
                 }
             }
             div { class: "flex items-center gap-4",

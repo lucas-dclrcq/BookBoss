@@ -537,6 +537,9 @@ mod tests {
         async fn reset_running_to_pending(&self, _: &dyn Transaction) -> Result<u64, Error> {
             unimplemented!()
         }
+        async fn count_pending_by_type(&self, _: &dyn Transaction, _: &str) -> Result<u64, Error> {
+            unimplemented!()
+        }
     }
 
     struct MockShelfRepository;

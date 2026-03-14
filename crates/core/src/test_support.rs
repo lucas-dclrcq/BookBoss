@@ -22,6 +22,9 @@ impl ConversionService for NopConversionService {
     async fn queue_enrich_epub(&self, _book_id: BookId) -> Result<(), Error> {
         unimplemented!("NopConversionService")
     }
+    async fn count_pending(&self) -> Result<u32, Error> {
+        unimplemented!("NopConversionService")
+    }
 }
 
 #[must_use]

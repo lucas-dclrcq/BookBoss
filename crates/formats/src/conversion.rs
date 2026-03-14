@@ -5,7 +5,7 @@ use bb_core::{
     book::BookId,
     conversion::ConversionService,
     jobs::{Enqueueable, JobRepositoryExt},
-    repository::{RepositoryService, transaction},
+    repository::{RepositoryService, read_only_transaction, transaction},
 };
 use serde::{Deserialize, Serialize};
 
@@ -44,6 +44,16 @@ impl ConversionService for ConversionServiceImpl {
             })
         })
         .await
+    }
+
+    async fn count_pending(&self) -> Result<u32, Error> {
+        let job_repo = self.repository_service.job_repository().clone();
+        let count = read_only_transaction(&**self.repository_service.repository(), |tx| {
+            Box::pin(async move { job_repo.count_pending_by_type(tx, EnrichEpubPayload::JOB_TYPE).await })
+        })
+        .await?;
+        #[expect(clippy::cast_possible_truncation, reason = "pending enrichment count; will never approach u32::MAX")]
+        Ok(count as u32)
     }
 }
 
