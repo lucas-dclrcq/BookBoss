@@ -443,6 +443,9 @@ mod tests {
         async fn list_publishers(&self, _: &dyn Transaction, _: Option<PublisherId>, _: Option<u64>) -> Result<Vec<Publisher>, Error> {
             unimplemented!()
         }
+        async fn list_all_publishers(&self, _: &dyn Transaction) -> Result<Vec<Publisher>, Error> {
+            unimplemented!()
+        }
         async fn find_by_name(&self, _: &dyn Transaction, _: &str) -> Result<Option<Publisher>, Error> {
             unimplemented!()
         }

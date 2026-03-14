@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     Route,
-    components::{BookGrid, BookGridContext, ShelfBar},
+    components::{BookGrid, BookGridContext, FilterEntityOptions, ShelfBar},
     routes::books_page::BookSummary,
 };
 
@@ -212,6 +212,72 @@ pub(crate) async fn update_shelf(token: String, name: String, visibility: String
         .update_shelf(&shelf_token, name, vis, user_id)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))
+}
+
+/// Returns all entity options needed by the filter builder (authors, series,
+/// genres, tags, publishers), each as `(id, name)` pairs for use as `EntityRef`
+/// values.
+#[get(
+    "/api/v1/shelves/filter-entities",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+pub(crate) async fn get_filter_entity_options() -> Result<FilterEntityOptions, ServerFnError> {
+    let _user = auth_session
+        .current_user
+        .as_ref()
+        .filter(|u| !u.username.is_empty())
+        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+
+    let book_service = &core_services.book_service;
+
+    let authors = book_service
+        .list_all_authors()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .into_iter()
+        .map(|a| (a.id as i64, a.name))
+        .collect();
+
+    let series = book_service
+        .list_all_series()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .into_iter()
+        .map(|s| (s.id as i64, s.name))
+        .collect();
+
+    let genres = book_service
+        .list_all_genres()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .into_iter()
+        .map(|g| (g.id as i64, g.name))
+        .collect();
+
+    let tags = book_service
+        .list_all_tags()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .into_iter()
+        .map(|t| (t.id as i64, t.name))
+        .collect();
+
+    let publishers = book_service
+        .list_all_publishers()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .into_iter()
+        .map(|p| (p.id as i64, p.name))
+        .collect();
+
+    Ok(FilterEntityOptions {
+        authors,
+        series,
+        genres,
+        tags,
+        publishers,
+    })
 }
 
 /// Returns the current user's own shelves plus all public shelves from other

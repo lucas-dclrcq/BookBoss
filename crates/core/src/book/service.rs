@@ -3,7 +3,8 @@ use std::sync::Arc;
 use crate::{
     Error,
     book::{
-        Author, AuthorId, AuthorToken, Book, BookAuthor, BookFile, BookId, BookIdentifier, BookQuery, BookToken, Genre, Series, SeriesId, SeriesToken, Tag,
+        Author, AuthorId, AuthorToken, Book, BookAuthor, BookFile, BookId, BookIdentifier, BookQuery, BookToken, Genre, Publisher, Series, SeriesId,
+        SeriesToken, Tag,
     },
     repository::RepositoryService,
     with_read_only_transaction,
@@ -27,6 +28,7 @@ pub trait BookService: Send + Sync {
     async fn list_all_tags(&self) -> Result<Vec<Tag>, Error>;
     async fn list_all_series(&self) -> Result<Vec<Series>, Error>;
     async fn list_all_authors(&self) -> Result<Vec<Author>, Error>;
+    async fn list_all_publishers(&self) -> Result<Vec<Publisher>, Error>;
     async fn series_next_number(&self, series_name: &str) -> Result<u32, Error>;
 }
 
@@ -124,6 +126,11 @@ impl BookService for BookServiceImpl {
     #[tracing::instrument(level = "trace", skip(self))]
     async fn list_all_authors(&self) -> Result<Vec<Author>, Error> {
         with_read_only_transaction!(self, author_repository, |tx| author_repository.list_all_authors(tx).await)
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    async fn list_all_publishers(&self) -> Result<Vec<Publisher>, Error> {
+        with_read_only_transaction!(self, publisher_repository, |tx| publisher_repository.list_all_publishers(tx).await)
     }
 
     #[tracing::instrument(level = "trace", skip(self, series_name))]
@@ -334,6 +341,9 @@ mod tests {
             unimplemented!()
         }
         async fn list_publishers(&self, _: &dyn Transaction, _: Option<PublisherId>, _: Option<u64>) -> Result<Vec<Publisher>, Error> {
+            unimplemented!()
+        }
+        async fn list_all_publishers(&self, _: &dyn Transaction) -> Result<Vec<Publisher>, Error> {
             unimplemented!()
         }
         async fn find_by_name(&self, _: &dyn Transaction, _: &str) -> Result<Option<Publisher>, Error> {

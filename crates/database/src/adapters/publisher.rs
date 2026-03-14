@@ -141,6 +141,18 @@ impl PublisherRepository for PublisherRepositoryAdapter {
 
         Ok(rows.into_iter().map(Into::into).collect())
     }
+
+    async fn list_all_publishers(&self, transaction: &dyn Transaction) -> Result<Vec<Publisher>, Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        let rows = prelude::Publishers::find()
+            .order_by_asc(publishers::Column::Name)
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
 }
 
 #[cfg(test)]
