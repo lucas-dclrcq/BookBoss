@@ -23,6 +23,9 @@ pub struct SilentLibraryStore;
 
 #[async_trait]
 impl LibraryStore for SilentLibraryStore {
+    fn original_file_path(&self, _original_filename: &str) -> PathBuf {
+        PathBuf::new()
+    }
     fn book_file_path(&self, _token: &BookToken, _slug: &str, _format: FileFormat) -> PathBuf {
         PathBuf::new()
     }
@@ -31,6 +34,9 @@ impl LibraryStore for SilentLibraryStore {
     }
     fn metadata_path(&self, _token: &BookToken) -> PathBuf {
         PathBuf::new()
+    }
+    async fn store_original_file(&self, _source_hash: &str, _original_filename: &str, _source: &Path) -> Result<String, Error> {
+        Ok(_original_filename.to_string())
     }
     async fn store_book_file(&self, _token: &BookToken, _slug: &str, _format: FileFormat, _source: &Path) -> Result<(), Error> {
         Ok(())

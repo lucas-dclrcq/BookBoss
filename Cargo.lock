@@ -796,6 +796,7 @@ dependencies = [
  "async-trait",
  "bb-core",
  "bb-formats",
+ "bb-utils",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",

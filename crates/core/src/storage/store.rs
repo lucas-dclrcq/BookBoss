@@ -12,20 +12,33 @@ use crate::{
 pub trait LibraryStore: Send + Sync {
     // ── Path derivation (sync, no I/O) ──────────────────────────────────────
 
-    /// Returns the full path to a book's file:
-    /// `{library}/{token}/{slug}.{ext}`.
+    /// Returns the path for an original file in the flat Originals directory:
+    /// `{library}/Originals/{original_filename}`.
+    fn original_file_path(&self, original_filename: &str) -> PathBuf;
+
+    /// Returns the full path to a book's enriched file:
+    /// `{library}/BK_{token}/{slug}.{ext}`.
     fn book_file_path(&self, token: &BookToken, slug: &str, format: FileFormat) -> PathBuf;
 
     /// Returns the path to a book's cover image:
-    /// `{library}/{token}/{filename}`.
+    /// `{library}/BK_{token}/{filename}`.
     fn cover_path(&self, token: &BookToken, filename: &str) -> PathBuf;
 
-    /// Returns the path to a book's sidecar: `{library}/{token}/metadata.opf`.
+    /// Returns the path to a book's sidecar:
+    /// `{library}/BK_{token}/metadata.opf`.
     fn metadata_path(&self, token: &BookToken) -> PathBuf;
 
     // ── Filesystem I/O (async) ───────────────────────────────────────────────
 
-    /// Moves or copies the source file into the book's directory.
+    /// Moves or copies `source` into `Originals/`, creating the directory if
+    /// needed. Tries `original_filename` first; if a file already exists there
+    /// with a different hash, falls back to `{stem}_{source_hash_prefix}.{ext}`
+    /// using the first 8 chars of `source_hash`.
+    /// Returns the filename actually used (may differ from `original_filename`
+    /// on collision).
+    async fn store_original_file(&self, source_hash: &str, original_filename: &str, source: &Path) -> Result<String, Error>;
+
+    /// Moves or copies the source file into the book's enriched directory.
     async fn store_book_file(&self, token: &BookToken, slug: &str, format: FileFormat, source: &Path) -> Result<(), Error>;
 
     /// Writes raw bytes as the book's cover image. `filename` determines the

@@ -366,6 +366,7 @@ impl BookRepository for BookRepositoryAdapter {
                     book_id: m.book_id as u64,
                     format: str_to_file_format(&m.format)?,
                     file_role: str_to_file_role(&m.file_role)?,
+                    original_filename: m.original_filename,
                     file_size: m.file_size,
                     file_hash: m.file_hash,
                 })
@@ -410,6 +411,7 @@ impl BookRepository for BookRepositoryAdapter {
                 book_id: m.book_id as u64,
                 format: str_to_file_format(&m.format)?,
                 file_role: str_to_file_role(&m.file_role)?,
+                original_filename: m.original_filename,
                 file_size: m.file_size,
                 file_hash: m.file_hash,
             })
@@ -423,6 +425,7 @@ impl BookRepository for BookRepositoryAdapter {
         book_id: BookId,
         format: FileFormat,
         file_role: FileRole,
+        original_filename: Option<String>,
         file_size: i64,
         file_hash: String,
     ) -> Result<BookFile, Error> {
@@ -432,6 +435,7 @@ impl BookRepository for BookRepositoryAdapter {
             book_id: Set(book_id as i64),
             format: Set(file_format_to_str(&format).to_string()),
             file_role: Set(file_role_to_str(&file_role).to_string()),
+            original_filename: Set(original_filename.clone()),
             file_size: Set(file_size),
             file_hash: Set(file_hash.clone()),
         };
@@ -442,6 +446,7 @@ impl BookRepository for BookRepositoryAdapter {
             book_id,
             format,
             file_role,
+            original_filename,
             file_size,
             file_hash,
         })
@@ -1205,6 +1210,7 @@ mod tests {
             book_id: Set(book.id as i64),
             format: Set("epub".to_owned()),
             file_role: Set("original".to_owned()),
+            original_filename: Set(Some("dune.epub".to_owned())),
             file_size: Set(1_024_000),
             file_hash: Set("abc123".to_owned()),
         }

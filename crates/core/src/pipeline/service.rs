@@ -312,6 +312,13 @@ impl PipelineService for PipelineServiceImpl {
         )]
         let file_size = tokio::fs::metadata(&path).await.map_or(0, |m| m.len() as i64);
 
+        // ── 7a. Store original file in Originals/ before the transaction ───────
+        // Must happen before the DB transaction so the actual filename (possibly
+        // collision-resolved) is available to pass into add_book_file.
+        // Uses copy semantics — source file is preserved for store_book_file.
+        let intended_filename = path.file_name().and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
+        let actual_original_filename = self.library_store.store_original_file(&job.file_hash, &intended_filename, &path).await?;
+
         // ── 8. Determine title (fall back to filename stem) ───────────────────
         let title = normalize_name(
             &final_meta
@@ -366,6 +373,7 @@ impl PipelineService for PipelineServiceImpl {
         let js = job_source.clone();
         let file_hash = job.file_hash.clone();
         let file_format = job.file_format.clone();
+        let original_filename = actual_original_filename.clone();
         let title_c = title.clone();
         let mut job_c = job;
 
@@ -419,7 +427,7 @@ impl PipelineService for PipelineServiceImpl {
 
                 // Record the book file
                 book_repo
-                    .add_book_file(tx, book.id, file_format, FileRole::Original, file_size, file_hash)
+                    .add_book_file(tx, book.id, file_format, FileRole::Original, Some(original_filename), file_size, file_hash)
                     .await?;
 
                 // Find or create each author, then link to book

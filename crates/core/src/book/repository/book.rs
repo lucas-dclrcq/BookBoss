@@ -25,6 +25,7 @@ pub trait BookRepository: Send + Sync {
         book_id: BookId,
         format: FileFormat,
         file_role: FileRole,
+        original_filename: Option<String>,
         file_size: i64,
         file_hash: String,
     ) -> Result<BookFile, Error>;

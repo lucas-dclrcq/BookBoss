@@ -12,6 +12,7 @@ repository = { workspace = true }
 [dependencies]
 bb-core.workspace = true
 bb-formats.workspace = true
+bb-utils.workspace = true
 async-trait.workspace = true
 thiserror.workspace = true
 tokio.workspace = true

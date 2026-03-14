@@ -20,6 +20,9 @@ pub struct NopLibraryStore;
 
 #[async_trait]
 impl LibraryStore for NopLibraryStore {
+    fn original_file_path(&self, _original_filename: &str) -> PathBuf {
+        unimplemented!("NopLibraryStore")
+    }
     fn book_file_path(&self, _token: &BookToken, _slug: &str, _format: FileFormat) -> PathBuf {
         unimplemented!("NopLibraryStore")
     }
@@ -27,6 +30,9 @@ impl LibraryStore for NopLibraryStore {
         unimplemented!("NopLibraryStore")
     }
     fn metadata_path(&self, _token: &BookToken) -> PathBuf {
+        unimplemented!("NopLibraryStore")
+    }
+    async fn store_original_file(&self, _source_hash: &str, _original_filename: &str, _source: &Path) -> Result<String, Error> {
         unimplemented!("NopLibraryStore")
     }
     async fn store_book_file(&self, _token: &BookToken, _slug: &str, _format: FileFormat, _source: &Path) -> Result<(), Error> {

@@ -1,6 +1,6 @@
 use sea_orm_migration::{
     prelude::*,
-    schema::{big_integer, string},
+    schema::{big_integer, string, string_null},
 };
 
 #[derive(DeriveMigrationName)]
@@ -17,6 +17,7 @@ impl MigrationTrait for Migration {
                     .col(big_integer(BookFiles::BookId).not_null())
                     .col(string(BookFiles::Format).not_null())
                     .col(string(BookFiles::FileRole).not_null())
+                    .col(string_null(BookFiles::OriginalFilename))
                     .col(big_integer(BookFiles::FileSize))
                     .col(string(BookFiles::FileHash))
                     .primary_key(Index::create().col(BookFiles::BookId).col(BookFiles::Format).col(BookFiles::FileRole))
@@ -54,6 +55,7 @@ enum BookFiles {
     BookId,
     Format,
     FileRole,
+    OriginalFilename,
     FileSize,
     FileHash,
 }

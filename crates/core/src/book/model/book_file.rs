@@ -21,6 +21,7 @@ pub struct BookFile {
     pub book_id: BookId,
     pub format: FileFormat,
     pub file_role: FileRole,
+    pub original_filename: Option<String>,
     pub file_size: i64,
     pub file_hash: String,
 }
@@ -41,6 +42,7 @@ impl BookFile {
             book_id,
             format,
             file_role: FileRole::Original,
+            original_filename: None,
             file_size: 0,
             file_hash: String::new(),
         }

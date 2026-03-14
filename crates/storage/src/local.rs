@@ -6,6 +6,7 @@ use bb_core::{
     book::{BookToken, FileFormat},
     storage::{BookSidecar, LibraryStore},
 };
+use bb_utils::hash::hash_file;
 
 pub struct LocalLibraryStore {
     library_path: PathBuf,
@@ -15,6 +16,10 @@ impl LocalLibraryStore {
     #[must_use]
     pub fn new(library_path: PathBuf) -> Self {
         Self { library_path }
+    }
+
+    fn originals_dir(&self) -> PathBuf {
+        self.library_path.join("Originals")
     }
 
     fn book_dir(&self, token: BookToken) -> PathBuf {
@@ -40,6 +45,10 @@ fn io_err(e: impl ToString) -> Error {
 
 #[async_trait]
 impl LibraryStore for LocalLibraryStore {
+    fn original_file_path(&self, original_filename: &str) -> PathBuf {
+        self.originals_dir().join(original_filename)
+    }
+
     fn book_file_path(&self, token: &BookToken, slug: &str, format: FileFormat) -> PathBuf {
         self.book_dir(*token).join(format!("{slug}.{}", format_ext(&format)))
     }
@@ -50,6 +59,40 @@ impl LibraryStore for LocalLibraryStore {
 
     fn metadata_path(&self, token: &BookToken) -> PathBuf {
         self.book_dir(*token).join("metadata.opf")
+    }
+
+    async fn store_original_file(&self, source_hash: &str, original_filename: &str, source: &Path) -> Result<String, Error> {
+        let originals_dir = self.originals_dir();
+        tokio::fs::create_dir_all(&originals_dir).await.map_err(io_err)?;
+
+        let preferred = originals_dir.join(original_filename);
+
+        // Check for collision with an existing file.
+        if tokio::fs::try_exists(&preferred).await.map_err(io_err)? {
+            let existing_hash = hash_file(&preferred).await.map_err(|e| io_err(e.to_string()))?;
+            if existing_hash == source_hash {
+                // Same content already stored — idempotent, nothing to do.
+                return Ok(original_filename.to_string());
+            }
+            // Different content: fall back to a hash-prefixed name.
+            let hash_prefix = &source_hash[..8.min(source_hash.len())];
+            let filename = {
+                let path = std::path::Path::new(original_filename);
+                let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or(original_filename);
+                let ext = path.extension().and_then(|s| s.to_str());
+                match ext {
+                    Some(e) => format!("{stem}_{hash_prefix}.{e}"),
+                    None => format!("{stem}_{hash_prefix}"),
+                }
+            };
+            let dest = originals_dir.join(&filename);
+            tokio::fs::copy(source, &dest).await.map_err(io_err)?;
+            return Ok(filename);
+        }
+
+        // No collision — copy to the preferred path.
+        tokio::fs::copy(source, &preferred).await.map_err(io_err)?;
+        Ok(original_filename.to_string())
     }
 
     async fn store_book_file(&self, token: &BookToken, slug: &str, format: FileFormat, source: &Path) -> Result<(), Error> {

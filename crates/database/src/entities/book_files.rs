@@ -11,6 +11,7 @@ pub struct Model {
     pub format: String,
     #[sea_orm(primary_key, auto_increment = false)]
     pub file_role: String,
+    pub original_filename: Option<String>,
     pub file_size: i64,
     pub file_hash: String,
 }

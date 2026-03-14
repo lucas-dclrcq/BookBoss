@@ -836,7 +836,16 @@ mod tests {
         async fn identifiers_for_book(&self, _: &dyn Transaction, _: BookId) -> Result<Vec<BookIdentifier>, Error> {
             unimplemented!()
         }
-        async fn add_book_file(&self, _: &dyn Transaction, _: BookId, _: FileFormat, _: FileRole, _: i64, _: String) -> Result<BookFile, Error> {
+        async fn add_book_file(
+            &self,
+            _: &dyn Transaction,
+            _: BookId,
+            _: FileFormat,
+            _: FileRole,
+            _: Option<String>,
+            _: i64,
+            _: String,
+        ) -> Result<BookFile, Error> {
             unimplemented!()
         }
         async fn files_for_book(&self, _: &dyn Transaction, _: BookId) -> Result<Vec<BookFile>, Error> {
