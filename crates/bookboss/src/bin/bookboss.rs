@@ -35,7 +35,7 @@ async fn main() -> anyhow::Result<()> {
 #[cfg(feature = "server")]
 async fn cmd_dump_epub(file: std::path::PathBuf) -> anyhow::Result<()> {
     use bb_core::{book::FileFormat, pipeline::MetadataExtractor};
-    use bb_formats::{EpubExtractor, read_opf_metadata_xml};
+    use bb_formats::{EpubExtractor, parse_sidecar, read_opf_metadata_xml, read_opf_xml};
 
     let raw = read_opf_metadata_xml(&file)?;
     println!("=== raw OPF metadata ===\n{raw}\n");
@@ -51,6 +51,17 @@ async fn cmd_dump_epub(file: std::path::PathBuf) -> anyhow::Result<()> {
     println!("identifiers:  {:?}", meta.identifiers);
     println!("series_name:  {:?}", meta.series_name);
     println!("series_num:   {:?}", meta.series_number);
+
+    let opf_xml = read_opf_xml(&file)?;
+    if let Ok(sidecar) = parse_sidecar(opf_xml.as_bytes()) {
+        println!("\n=== bookboss sidecar fields ===");
+        println!("genres:       {:?}", sidecar.genres);
+        println!("tags:         {:?}", sidecar.tags);
+        println!("rating:       {:?}", sidecar.rating);
+        println!("status:       {:?}", sidecar.status);
+        println!("series:       {:?}", sidecar.series);
+        println!("metadata_src: {:?}", sidecar.metadata_source);
+    }
     Ok(())
 }
 

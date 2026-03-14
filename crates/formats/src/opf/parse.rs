@@ -41,6 +41,7 @@ struct DcFields {
     published_date: Option<String>,
     language: Option<String>,
     identifiers: Vec<RawIdentifier>,
+    subjects: Vec<String>,
     bb_meta_content: Option<String>,
     /// OPF 3 refines data: maps element id → (`role_code`, `file_as`)
     meta_refines: HashMap<String, (Option<String>, Option<String>)>,
@@ -58,6 +59,7 @@ enum ParseState {
     InPublisher,
     InDate,
     InLanguage,
+    InSubject,
     InIdentifier {
         id: Option<String>,
         scheme: Option<String>,
@@ -233,6 +235,7 @@ fn parse_dc(xml: &[u8]) -> Result<DcFields, Error> {
                     b"publisher" => state = ParseState::InPublisher,
                     b"date" => state = ParseState::InDate,
                     b"language" => state = ParseState::InLanguage,
+                    b"subject" => state = ParseState::InSubject,
                     b"identifier" => {
                         let mut id = None;
                         let mut scheme = None;
@@ -316,6 +319,12 @@ fn parse_dc(xml: &[u8]) -> Result<DcFields, Error> {
                     ParseState::InPublisher => fields.publisher = Some(text),
                     ParseState::InDate => fields.published_date = Some(text),
                     ParseState::InLanguage => fields.language = Some(text),
+                    ParseState::InSubject => {
+                        let s = text.trim().to_string();
+                        if !s.is_empty() {
+                            fields.subjects.push(s);
+                        }
+                    }
                     ParseState::InIdentifier { id, scheme } => {
                         fields.identifiers.push(RawIdentifier { id, scheme, value: text });
                     }
@@ -415,7 +424,7 @@ pub fn parse_sidecar(xml: &[u8]) -> Result<BookSidecar, Error> {
         language: fields.language,
         identifiers,
         series: bb.series,
-        genres: bb.genres,
+        genres: if bb.genres.is_empty() { fields.subjects } else { bb.genres },
         tags: bb.tags,
         rating: bb.rating,
         status: bb.status,
