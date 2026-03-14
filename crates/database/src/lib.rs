@@ -31,6 +31,7 @@ pub use error::*;
 
 mod adapters;
 mod entities;
+mod filter;
 mod migrations;
 mod repository;
 mod transaction;

@@ -12,6 +12,7 @@ use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, Mode
 use crate::{
     entities::{book_shelves, books, prelude, shelves},
     error::handle_dberr,
+    filter::build_condition,
     transaction::TransactionImpl,
 };
 
@@ -280,12 +281,11 @@ impl ShelfRepository for ShelfRepositoryAdapter {
     async fn books_for_filter(
         &self,
         transaction: &dyn Transaction,
-        _filter: &BookFilter,
-        _user_id: UserId,
+        filter: &BookFilter,
+        user_id: UserId,
         start_id: Option<BookId>,
         page_size: Option<u64>,
     ) -> Result<Vec<Book>, Error> {
-        // TODO(M6.3): apply BookFilter via build_condition()
         const DEFAULT_PAGE_SIZE: u64 = 50;
         const MAX_PAGE_SIZE: u64 = 50;
 
@@ -299,6 +299,7 @@ impl ShelfRepository for ShelfRepositoryAdapter {
 
         let mut query = prelude::Books::find()
             .filter(books::Column::Status.eq("available"))
+            .filter(build_condition(filter, user_id))
             .order_by_asc(books::Column::Id);
 
         if let Some(start_id) = start_id {
@@ -312,11 +313,12 @@ impl ShelfRepository for ShelfRepositoryAdapter {
         Ok(rows.into_iter().map(Into::into).collect())
     }
 
-    async fn count_for_filter(&self, transaction: &dyn Transaction, _filter: &BookFilter, _user_id: UserId) -> Result<u64, Error> {
-        // TODO(M6.3): apply BookFilter via build_condition()
+    async fn count_for_filter(&self, transaction: &dyn Transaction, filter: &BookFilter, user_id: UserId) -> Result<u64, Error> {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
-        let query = prelude::Books::find().filter(books::Column::Status.eq("available"));
+        let query = prelude::Books::find()
+            .filter(books::Column::Status.eq("available"))
+            .filter(build_condition(filter, user_id));
 
         Ok(query.count(transaction).await.map_err(handle_dberr)?)
     }
@@ -329,8 +331,9 @@ mod tests {
     use std::sync::Arc;
 
     use bb_core::{
-        book::{BookStatus, NewBook, NewSeries},
-        filter::BookFilter,
+        book::{AuthorRole, BookStatus, NewAuthor, NewBook, NewGenre, NewSeries, NewTag},
+        filter::{BookFilter, EntityRef, FilterCondition, FilterGroup, FilterReadStatus, FilterRule, NumericOp, SetOp, TextOp},
+        reading::{ReadStatus, UserBookMetadata},
         repository::RepositoryService,
         shelf::{BookShelf, NewShelf, ShelfType, ShelfVisibility},
         types::Capabilities,
@@ -413,6 +416,117 @@ mod tests {
             added_at: Utc::now(),
             sort_order: 0,
         }
+    }
+
+    async fn new_book_with_rating(svc: &RepositoryService, title: &str, rating: i16) -> u64 {
+        let tx = svc.repository().begin().await.unwrap();
+        let book = svc
+            .book_repository()
+            .add_book(
+                &*tx,
+                NewBook {
+                    title: title.to_owned(),
+                    status: BookStatus::Available,
+                    rating: Some(rating),
+                    description: None,
+                    published_date: None,
+                    language: None,
+                    series_id: None,
+                    series_number: None,
+                    publisher_id: None,
+                    page_count: None,
+                    metadata_source: None,
+                    cover_path: None,
+                },
+            )
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+        book.id
+    }
+
+    async fn new_author(svc: &RepositoryService, name: &str) -> u64 {
+        let tx = svc.repository().begin().await.unwrap();
+        let author = svc
+            .author_repository()
+            .add_author(
+                &*tx,
+                NewAuthor {
+                    name: name.to_owned(),
+                    bio: None,
+                },
+            )
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+        author.id
+    }
+
+    async fn link_author(svc: &RepositoryService, book_id: u64, author_id: u64) {
+        let tx = svc.repository().begin().await.unwrap();
+        svc.book_repository()
+            .add_book_author(&*tx, book_id, author_id, AuthorRole::Author, 0)
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+    }
+
+    async fn new_genre(svc: &RepositoryService, name: &str) -> u64 {
+        let tx = svc.repository().begin().await.unwrap();
+        let genre = svc.genre_repository().add_genre(&*tx, NewGenre { name: name.to_owned() }).await.unwrap();
+        tx.commit().await.unwrap();
+        genre.id
+    }
+
+    async fn link_genre(svc: &RepositoryService, book_id: u64, genre_id: u64) {
+        let tx = svc.repository().begin().await.unwrap();
+        svc.book_repository().add_book_genre(&*tx, book_id, genre_id).await.unwrap();
+        tx.commit().await.unwrap();
+    }
+
+    async fn new_tag(svc: &RepositoryService, name: &str) -> u64 {
+        let tx = svc.repository().begin().await.unwrap();
+        let tag = svc.tag_repository().add_tag(&*tx, NewTag { name: name.to_owned() }).await.unwrap();
+        tx.commit().await.unwrap();
+        tag.id
+    }
+
+    async fn link_tag(svc: &RepositoryService, book_id: u64, tag_id: u64) {
+        let tx = svc.repository().begin().await.unwrap();
+        svc.book_repository().add_book_tag(&*tx, book_id, tag_id).await.unwrap();
+        tx.commit().await.unwrap();
+    }
+
+    async fn set_read_status(svc: &RepositoryService, user_id: u64, book_id: u64, status: ReadStatus) {
+        let tx = svc.repository().begin().await.unwrap();
+        svc.user_book_metadata_repository()
+            .upsert(
+                &*tx,
+                UserBookMetadata {
+                    user_id,
+                    book_id,
+                    read_status: status,
+                    progress_percentage: None,
+                    position_token: None,
+                    last_progress_at: None,
+                    personal_rating: None,
+                    times_read: 0,
+                    date_started: None,
+                    date_finished: None,
+                    last_opened_at: None,
+                    notes: None,
+                },
+            )
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+    }
+
+    fn empty_and_filter() -> BookFilter {
+        BookFilter::Group(FilterGroup {
+            condition: FilterCondition::And,
+            items: vec![],
+        })
     }
 
     // ─── add_shelf ────────────────────────────────────────────────────────────
@@ -731,7 +845,7 @@ mod tests {
     // ─── books_for_filter ────────────────────────────────────────────────────
 
     #[tokio::test]
-    async fn test_books_for_filter_empty_returns_all_available() {
+    async fn test_books_for_filter_empty_and_returns_all_available() {
         let svc = setup().await;
         let user_id = new_user(&svc, "alice").await;
         new_book(&svc, "Dune").await;
@@ -740,16 +854,7 @@ mod tests {
         let tx = svc.repository().begin().await.unwrap();
         let books = svc
             .shelf_repository()
-            .books_for_filter(
-                &*tx,
-                &BookFilter::Group(bb_core::filter::FilterGroup {
-                    condition: bb_core::filter::FilterCondition::And,
-                    items: vec![],
-                }),
-                user_id,
-                None,
-                None,
-            )
+            .books_for_filter(&*tx, &empty_and_filter(), user_id, None, None)
             .await
             .unwrap();
 
@@ -757,7 +862,78 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_books_for_filter_by_series() {
+    async fn test_books_for_filter_page_size_zero_returns_error() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        assert!(matches!(
+            svc.shelf_repository().books_for_filter(&*tx, &empty_and_filter(), user_id, None, Some(0)).await,
+            Err(bb_core::Error::InvalidPageSize(0))
+        ));
+    }
+
+    // ─── TitleText filter ─────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_books_for_filter_title_contains() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        let dune = new_book(&svc, "Dune").await;
+        new_book(&svc, "Foundation").await;
+
+        let filter = BookFilter::Rule(FilterRule::TitleText {
+            op: TextOp::Contains,
+            value: "dun".to_owned(),
+        });
+        let tx = svc.repository().begin().await.unwrap();
+        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+
+        assert_eq!(books.len(), 1);
+        assert_eq!(books[0].id, dune);
+    }
+
+    #[tokio::test]
+    async fn test_books_for_filter_title_contains_case_insensitive() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        let dune = new_book(&svc, "Dune Messiah").await;
+        new_book(&svc, "Foundation").await;
+
+        // Search in uppercase — should still match
+        let filter = BookFilter::Rule(FilterRule::TitleText {
+            op: TextOp::Contains,
+            value: "DUNE".to_owned(),
+        });
+        let tx = svc.repository().begin().await.unwrap();
+        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+
+        assert_eq!(books.len(), 1);
+        assert_eq!(books[0].id, dune);
+    }
+
+    #[tokio::test]
+    async fn test_books_for_filter_title_starts_with() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        let dune = new_book(&svc, "Dune Messiah").await;
+        new_book(&svc, "Children of Dune").await;
+
+        let filter = BookFilter::Rule(FilterRule::TitleText {
+            op: TextOp::StartsWith,
+            value: "Dune".to_owned(),
+        });
+        let tx = svc.repository().begin().await.unwrap();
+        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+
+        assert_eq!(books.len(), 1);
+        assert_eq!(books[0].id, dune);
+    }
+
+    // ─── Series filter ────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_books_for_filter_series_includes_any() {
         let svc = setup().await;
         let user_id = new_user(&svc, "alice").await;
 
@@ -776,7 +952,7 @@ mod tests {
         tx.commit().await.unwrap();
 
         let tx = svc.repository().begin().await.unwrap();
-        let book_in_series = svc
+        let dune = svc
             .book_repository()
             .add_book(
                 &*tx,
@@ -801,43 +977,409 @@ mod tests {
 
         new_book(&svc, "Foundation").await;
 
-        let tx = svc.repository().begin().await.unwrap();
-        // TODO(M6.3): use SetOp::IncludesAny once build_condition() is implemented;
-        // until then the filter is ignored and all available books are returned.
-        let filter = BookFilter::Rule(bb_core::filter::FilterRule::Series {
-            op: bb_core::filter::SetOp::IncludesAny,
-            values: vec![bb_core::filter::EntityRef {
+        let filter = BookFilter::Rule(FilterRule::Series {
+            op: SetOp::IncludesAny,
+            values: vec![EntityRef {
                 id: series.id as i64,
                 label: "Dune Saga".to_owned(),
             }],
         });
+        let tx = svc.repository().begin().await.unwrap();
         let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
 
-        assert!(!books.is_empty());
-        assert!(books.iter().any(|b| b.id == book_in_series.id));
+        assert_eq!(books.len(), 1);
+        assert_eq!(books[0].id, dune.id);
     }
 
     #[tokio::test]
-    async fn test_books_for_filter_page_size_zero_returns_error() {
+    async fn test_books_for_filter_series_is_empty() {
         let svc = setup().await;
         let user_id = new_user(&svc, "alice").await;
-        let tx = svc.repository().begin().await.unwrap();
 
-        assert!(matches!(
-            svc.shelf_repository()
-                .books_for_filter(
-                    &*tx,
-                    &BookFilter::Group(bb_core::filter::FilterGroup {
-                        condition: bb_core::filter::FilterCondition::And,
-                        items: vec![]
-                    }),
-                    user_id,
-                    None,
-                    Some(0)
-                )
-                .await,
-            Err(bb_core::Error::InvalidPageSize(0))
-        ));
+        let tx = svc.repository().begin().await.unwrap();
+        let series = svc
+            .series_repository()
+            .add_series(
+                &*tx,
+                NewSeries {
+                    name: "Dune Saga".to_owned(),
+                    description: None,
+                },
+            )
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+
+        let tx = svc.repository().begin().await.unwrap();
+        svc.book_repository()
+            .add_book(
+                &*tx,
+                NewBook {
+                    title: "Dune".to_owned(),
+                    status: BookStatus::Available,
+                    series_id: Some(series.id),
+                    description: None,
+                    published_date: None,
+                    language: None,
+                    series_number: None,
+                    publisher_id: None,
+                    page_count: None,
+                    rating: None,
+                    metadata_source: None,
+                    cover_path: None,
+                },
+            )
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+
+        let standalone = new_book(&svc, "Foundation").await;
+
+        let filter = BookFilter::Rule(FilterRule::Series {
+            op: SetOp::IsEmpty,
+            values: vec![],
+        });
+        let tx = svc.repository().begin().await.unwrap();
+        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+
+        assert_eq!(books.len(), 1);
+        assert_eq!(books[0].id, standalone);
+    }
+
+    // ─── Author filter ────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_books_for_filter_author_includes_any() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        let dune = new_book(&svc, "Dune").await;
+        let foundation = new_book(&svc, "Foundation").await;
+        let herbert = new_author(&svc, "Frank Herbert").await;
+        let asimov = new_author(&svc, "Isaac Asimov").await;
+        link_author(&svc, dune, herbert).await;
+        link_author(&svc, foundation, asimov).await;
+
+        let filter = BookFilter::Rule(FilterRule::Author {
+            op: SetOp::IncludesAny,
+            values: vec![EntityRef {
+                id: herbert as i64,
+                label: "Frank Herbert".to_owned(),
+            }],
+        });
+        let tx = svc.repository().begin().await.unwrap();
+        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+
+        assert_eq!(books.len(), 1);
+        assert_eq!(books[0].id, dune);
+    }
+
+    #[tokio::test]
+    async fn test_books_for_filter_author_includes_all() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        let co_authored = new_book(&svc, "Co-Authored Book").await;
+        let solo = new_book(&svc, "Solo Book").await;
+        let author_a = new_author(&svc, "Author A").await;
+        let author_b = new_author(&svc, "Author B").await;
+        link_author(&svc, co_authored, author_a).await;
+        link_author(&svc, co_authored, author_b).await;
+        link_author(&svc, solo, author_a).await;
+
+        // IncludesAll([A, B]) — only the co-authored book qualifies
+        let filter = BookFilter::Rule(FilterRule::Author {
+            op: SetOp::IncludesAll,
+            values: vec![
+                EntityRef {
+                    id: author_a as i64,
+                    label: "Author A".to_owned(),
+                },
+                EntityRef {
+                    id: author_b as i64,
+                    label: "Author B".to_owned(),
+                },
+            ],
+        });
+        let tx = svc.repository().begin().await.unwrap();
+        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+
+        assert_eq!(books.len(), 1);
+        assert_eq!(books[0].id, co_authored);
+    }
+
+    #[tokio::test]
+    async fn test_books_for_filter_author_excludes_all() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        let dune = new_book(&svc, "Dune").await;
+        let foundation = new_book(&svc, "Foundation").await;
+        let herbert = new_author(&svc, "Frank Herbert").await;
+        link_author(&svc, dune, herbert).await;
+        // "Foundation" has no Herbert
+
+        let filter = BookFilter::Rule(FilterRule::Author {
+            op: SetOp::ExcludesAll,
+            values: vec![EntityRef {
+                id: herbert as i64,
+                label: "Frank Herbert".to_owned(),
+            }],
+        });
+        let tx = svc.repository().begin().await.unwrap();
+        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+
+        assert_eq!(books.len(), 1);
+        assert_eq!(books[0].id, foundation);
+    }
+
+    #[tokio::test]
+    async fn test_books_for_filter_author_text_contains() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        let dune = new_book(&svc, "Dune").await;
+        new_book(&svc, "Foundation").await;
+        let herbert = new_author(&svc, "Frank Herbert").await;
+        link_author(&svc, dune, herbert).await;
+
+        let filter = BookFilter::Rule(FilterRule::AuthorText {
+            op: TextOp::Contains,
+            value: "herbert".to_owned(),
+        });
+        let tx = svc.repository().begin().await.unwrap();
+        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+
+        assert_eq!(books.len(), 1);
+        assert_eq!(books[0].id, dune);
+    }
+
+    // ─── Genre filter ─────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_books_for_filter_genre_includes_any() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        let dune = new_book(&svc, "Dune").await;
+        new_book(&svc, "Foundation").await;
+        let scifi = new_genre(&svc, "Science Fiction").await;
+        link_genre(&svc, dune, scifi).await;
+
+        let filter = BookFilter::Rule(FilterRule::Genre {
+            op: SetOp::IncludesAny,
+            values: vec![EntityRef {
+                id: scifi as i64,
+                label: "Science Fiction".to_owned(),
+            }],
+        });
+        let tx = svc.repository().begin().await.unwrap();
+        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+
+        assert_eq!(books.len(), 1);
+        assert_eq!(books[0].id, dune);
+    }
+
+    // ─── Tag filter ───────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_books_for_filter_tag_includes_any() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        let dune = new_book(&svc, "Dune").await;
+        new_book(&svc, "Foundation").await;
+        let fav = new_tag(&svc, "favourite").await;
+        link_tag(&svc, dune, fav).await;
+
+        let filter = BookFilter::Rule(FilterRule::Tag {
+            op: SetOp::IncludesAny,
+            values: vec![EntityRef {
+                id: fav as i64,
+                label: "favourite".to_owned(),
+            }],
+        });
+        let tx = svc.repository().begin().await.unwrap();
+        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+
+        assert_eq!(books.len(), 1);
+        assert_eq!(books[0].id, dune);
+    }
+
+    // ─── ReadStatus filter ────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_books_for_filter_read_status_includes_any_explicit() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        let reading_book = new_book(&svc, "Currently Reading").await;
+        new_book(&svc, "Unread Book").await;
+        set_read_status(&svc, user_id, reading_book, ReadStatus::Reading).await;
+
+        let filter = BookFilter::Rule(FilterRule::ReadStatus {
+            op: SetOp::IncludesAny,
+            values: vec![FilterReadStatus::Reading],
+        });
+        let tx = svc.repository().begin().await.unwrap();
+        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+
+        assert_eq!(books.len(), 1);
+        assert_eq!(books[0].id, reading_book);
+    }
+
+    #[tokio::test]
+    async fn test_books_for_filter_read_status_unread_includes_implicit() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        let unread_book = new_book(&svc, "No UBM Row").await;
+        let reading_book = new_book(&svc, "Currently Reading").await;
+        set_read_status(&svc, user_id, reading_book, ReadStatus::Reading).await;
+
+        // Unread includes books with no UBM row (implicit unread)
+        let filter = BookFilter::Rule(FilterRule::ReadStatus {
+            op: SetOp::IncludesAny,
+            values: vec![FilterReadStatus::Unread],
+        });
+        let tx = svc.repository().begin().await.unwrap();
+        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+
+        assert_eq!(books.len(), 1);
+        assert_eq!(books[0].id, unread_book);
+    }
+
+    #[tokio::test]
+    async fn test_books_for_filter_read_status_active_expands() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        let unread = new_book(&svc, "Unread (no row)").await;
+        let reading = new_book(&svc, "Reading").await;
+        let done = new_book(&svc, "Done").await;
+        set_read_status(&svc, user_id, reading, ReadStatus::Reading).await;
+        set_read_status(&svc, user_id, done, ReadStatus::Read).await;
+
+        // Active expands to Unread + Reading + Rereading
+        let filter = BookFilter::Rule(FilterRule::ReadStatus {
+            op: SetOp::IncludesAny,
+            values: vec![FilterReadStatus::Active],
+        });
+        let tx = svc.repository().begin().await.unwrap();
+        let mut books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        books.sort_by_key(|b| b.id);
+
+        let ids: Vec<u64> = books.iter().map(|b| b.id).collect();
+        assert!(ids.contains(&unread), "implicit unread should be included");
+        assert!(ids.contains(&reading), "reading should be included");
+        assert!(!ids.contains(&done), "read should be excluded");
+    }
+
+    #[tokio::test]
+    async fn test_books_for_filter_read_status_excludes_all() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        let unread = new_book(&svc, "Unread (no row)").await;
+        let reading = new_book(&svc, "Reading").await;
+        set_read_status(&svc, user_id, reading, ReadStatus::Reading).await;
+
+        // ExcludesAll([Reading]) — only the implicit-unread book passes
+        let filter = BookFilter::Rule(FilterRule::ReadStatus {
+            op: SetOp::ExcludesAll,
+            values: vec![FilterReadStatus::Reading],
+        });
+        let tx = svc.repository().begin().await.unwrap();
+        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+
+        assert_eq!(books.len(), 1);
+        assert_eq!(books[0].id, unread);
+    }
+
+    // ─── Rating filter ────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_books_for_filter_rating_gte() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        let high = new_book_with_rating(&svc, "Five Star", 5).await;
+        new_book_with_rating(&svc, "Two Star", 2).await;
+        new_book(&svc, "Unrated").await;
+
+        let filter = BookFilter::Rule(FilterRule::Rating { op: NumericOp::Gte, value: 4 });
+        let tx = svc.repository().begin().await.unwrap();
+        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+
+        assert_eq!(books.len(), 1);
+        assert_eq!(books[0].id, high);
+    }
+
+    // ─── Composite filters ────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_books_for_filter_or_group() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        let dune = new_book(&svc, "Dune").await;
+        let foundation = new_book(&svc, "Foundation").await;
+        new_book(&svc, "Hyperion").await;
+
+        // OR(title contains "Dune", title contains "Foundation")
+        let filter = BookFilter::Group(FilterGroup {
+            condition: FilterCondition::Or,
+            items: vec![
+                BookFilter::Rule(FilterRule::TitleText {
+                    op: TextOp::Contains,
+                    value: "Dune".to_owned(),
+                }),
+                BookFilter::Rule(FilterRule::TitleText {
+                    op: TextOp::Contains,
+                    value: "Foundation".to_owned(),
+                }),
+            ],
+        });
+        let tx = svc.repository().begin().await.unwrap();
+        let mut books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        books.sort_by_key(|b| b.id);
+
+        let ids: Vec<u64> = books.iter().map(|b| b.id).collect();
+        assert_eq!(books.len(), 2);
+        assert!(ids.contains(&dune));
+        assert!(ids.contains(&foundation));
+    }
+
+    #[tokio::test]
+    async fn test_books_for_filter_and_narrows_results() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        let dune = new_book(&svc, "Dune").await;
+        new_book(&svc, "Foundation").await;
+        let herbert = new_author(&svc, "Frank Herbert").await;
+        link_author(&svc, dune, herbert).await;
+
+        // AND(title contains "Dune", author includes Frank Herbert) — exact match
+        let filter = BookFilter::Rule(FilterRule::TitleText {
+            op: TextOp::Contains,
+            value: "Dune".to_owned(),
+        })
+        .and(BookFilter::Rule(FilterRule::Author {
+            op: SetOp::IncludesAny,
+            values: vec![EntityRef {
+                id: herbert as i64,
+                label: "Frank Herbert".to_owned(),
+            }],
+        }));
+        let tx = svc.repository().begin().await.unwrap();
+        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+
+        assert_eq!(books.len(), 1);
+        assert_eq!(books[0].id, dune);
+    }
+
+    #[tokio::test]
+    async fn test_books_for_filter_empty_or_group_returns_nothing() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        new_book(&svc, "Dune").await;
+
+        let filter = BookFilter::Group(FilterGroup {
+            condition: FilterCondition::Or,
+            items: vec![],
+        });
+        let tx = svc.repository().begin().await.unwrap();
+        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+
+        assert!(books.is_empty());
     }
 
     // ─── count_for_filter ────────────────────────────────────────────────────
@@ -850,11 +1392,8 @@ mod tests {
         new_book(&svc, "Foundation").await;
         new_book(&svc, "Hyperion").await;
 
+        let filter = empty_and_filter();
         let tx = svc.repository().begin().await.unwrap();
-        let filter = BookFilter::Group(bb_core::filter::FilterGroup {
-            condition: bb_core::filter::FilterCondition::And,
-            items: vec![],
-        });
         let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
         let count = svc.shelf_repository().count_for_filter(&*tx, &filter, user_id).await.unwrap();
 
