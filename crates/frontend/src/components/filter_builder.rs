@@ -781,36 +781,12 @@ fn FilterRuleRow(rule: FilterRule, entity_options: FilterEntityOptions, on_chang
                     option { value: "is_not_empty", "is not empty" }
                 }
                 if needs_value {
-                    div { class: "flex flex-wrap gap-1",
-                        for status in FilterReadStatus::all() {
-                            {
-                                let is_selected = values.iter().any(|v| v == status);
-                                let status_clone = (*status).clone();
-                                let op_for_toggle = op_for_val.clone();
-                                let values_for_toggle = values.clone();  // will be defined below
-                                let oc = oc_val.clone();
-                                rsx! {
-                                    button {
-                                        key: "{status_clone:?}",
-                                        r#type: "button",
-                                        class: if is_selected {
-                                            "px-2 py-0.5 text-xs rounded-full bg-indigo-600 text-white border border-indigo-600"
-                                        } else {
-                                            "px-2 py-0.5 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50"
-                                        },
-                                        onclick: move |_| {
-                                            let mut new_vals = values_for_toggle.clone();
-                                            if is_selected {
-                                                new_vals.retain(|v| v != &status_clone);
-                                            } else {
-                                                new_vals.push(status_clone.clone());
-                                            }
-                                            oc.call(FilterRule::ReadStatus { op: op_for_toggle.clone(), values: new_vals });
-                                        },
-                                        { status.label() }
-                                    }
-                                }
-                            }
+                    div { class: "flex-1 min-w-[200px]",
+                        ReadStatusChipInput {
+                            values: values.clone(),
+                            on_change: move |new_vals: Vec<FilterReadStatus>| {
+                                oc_val.call(FilterRule::ReadStatus { op: op_for_val.clone(), values: new_vals });
+                            },
                         }
                     }
                 }
@@ -886,15 +862,24 @@ fn FilterRuleRow(rule: FilterRule, entity_options: FilterEntityOptions, on_chang
         }
     };
 
+    let is_read_status = matches!(rule, FilterRule::ReadStatus { .. });
+
     rsx! {
-        div { class: "flex items-center gap-2 flex-wrap",
-            { field_select }
-            { rule_ui }
-            button {
-                r#type: "button",
-                class: "text-gray-400 hover:text-red-500 text-lg leading-none flex-shrink-0",
-                onclick: move |_| on_remove.call(()),
-                "×"
+        div { class: "flex flex-col gap-0.5",
+            div { class: "flex items-center gap-2 flex-wrap",
+                { field_select }
+                { rule_ui }
+                button {
+                    r#type: "button",
+                    class: "text-gray-400 hover:text-red-500 text-lg leading-none flex-shrink-0",
+                    onclick: move |_| on_remove.call(()),
+                    "×"
+                }
+            }
+            if is_read_status {
+                p { class: "text-xs text-gray-400 text-center leading-snug",
+                    "Active (Unread · Reading · Rereading) · Paused · Read · Abandoned"
+                }
             }
         }
     }
@@ -1095,6 +1080,129 @@ fn LanguageChipInput(values: Vec<String>, on_change: EventHandler<Vec<String>>) 
                         _ => {}
                     }
                 },
+            }
+        }
+    }
+}
+
+/// Chip-picker for `Vec<FilterReadStatus>`.
+///
+/// Opens a dropdown on focus showing all unselected statuses (filterable by
+/// typing). A hint line below the input lists all available options with the
+/// `Active` alias expanded.
+#[component]
+fn ReadStatusChipInput(values: Vec<FilterReadStatus>, on_change: EventHandler<Vec<FilterReadStatus>>) -> Element {
+    let mut input_text = use_signal(String::new);
+    let mut show_dropdown = use_signal(|| false);
+
+    let query = input_text.read().to_lowercase();
+
+    // Owned vec so it can be shared between the Enter handler and the dropdown.
+    // Prefix match so "Read" finds "Read" and "Reading" but not "Rereading".
+    // Sorted alphabetically so shorter/exact matches naturally rise to the top.
+    let mut filtered: Vec<FilterReadStatus> = FilterReadStatus::all()
+        .iter()
+        .filter(|s| {
+            let label = s.label().to_lowercase();
+            (query.is_empty() || label.starts_with(&query)) && !values.iter().any(|v| v == *s)
+        })
+        .cloned()
+        .collect();
+    filtered.sort_by(|a, b| a.label().cmp(b.label()));
+
+    // Pre-compute the top match so the Enter closure doesn't need to own
+    // `filtered`.
+    let first_filtered = filtered.first().cloned();
+
+    rsx! {
+        div { class: "relative",
+            div { class: "flex flex-wrap gap-1 items-center border border-gray-300 rounded px-2 py-1 min-h-[34px] focus-within:ring-1 focus-within:ring-indigo-400",
+                for (i, status) in values.iter().enumerate() {
+                    {
+                        let label = status.label();
+                        let new_values: Vec<FilterReadStatus> = values
+                            .iter()
+                            .cloned()
+                            .enumerate()
+                            .filter(|(j, _)| *j != i)
+                            .map(|(_, v)| v)
+                            .collect();
+                        let oc = on_change.clone();
+                        rsx! {
+                            span {
+                                key: "{i}",
+                                class: "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-indigo-100 text-indigo-800 border border-indigo-300",
+                                "{label}"
+                                button {
+                                    r#type: "button",
+                                    class: "ml-0.5 text-indigo-400 hover:text-indigo-700 cursor-pointer leading-none",
+                                    onclick: move |_| oc.call(new_values.clone()),
+                                    "×"
+                                }
+                            }
+                        }
+                    }
+                }
+                input {
+                    class: "flex-1 min-w-[80px] text-sm outline-none bg-transparent py-0.5",
+                    value: "{input_text}",
+                    placeholder: if values.is_empty() { "add status…" } else { "" },
+                    onfocus: move |_| show_dropdown.set(true),
+                    oninput: move |e| {
+                        input_text.set(e.value());
+                        show_dropdown.set(true);
+                    },
+                    onfocusout: move |_| show_dropdown.set(false),
+                    onkeydown: move |e: KeyboardEvent| {
+                        match e.key() {
+                            Key::Enter => {
+                                e.prevent_default();
+                                if let Some(first) = first_filtered.clone() {
+                                    let mut new_vals = values.clone();
+                                    new_vals.push(first);
+                                    on_change.call(new_vals);
+                                    input_text.set(String::new());
+                                }
+                            }
+                            Key::Escape => {
+                                show_dropdown.set(false);
+                                input_text.set(String::new());
+                            }
+                            Key::Backspace if input_text.read().is_empty() => {
+                                let mut new_vals = values.clone();
+                                if !new_vals.is_empty() {
+                                    new_vals.pop();
+                                    on_change.call(new_vals);
+                                }
+                            }
+                            _ => {}
+                        }
+                    },
+                }
+            }
+            if *show_dropdown.read() && !filtered.is_empty() {
+                div { class: "absolute left-0 right-0 bottom-full mb-1 bg-white border border-gray-200 rounded shadow-lg z-50 max-h-48 overflow-y-auto",
+                    for status in &filtered {
+                        {
+                            let label = status.label();
+                            let mut new_values = values.clone();
+                            new_values.push(status.clone());
+                            let oc = on_change.clone();
+                            rsx! {
+                                div {
+                                    key: "{label}",
+                                    class: "px-3 py-1.5 text-sm text-gray-700 hover:bg-indigo-50 cursor-pointer",
+                                    onmousedown: move |e| e.prevent_default(),
+                                    onclick: move |_| {
+                                        oc.call(new_values.clone());
+                                        input_text.set(String::new());
+                                    },
+                                    "{label}"
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
