@@ -11,9 +11,11 @@ pub trait DeviceRepository: Send + Sync {
     // Device CRUD
     async fn add_device(&self, transaction: &dyn Transaction, device: NewDevice) -> Result<Device, Error>;
     async fn update_device(&self, transaction: &dyn Transaction, device: Device) -> Result<Device, Error>;
+    async fn delete_device(&self, transaction: &dyn Transaction, device: Device) -> Result<(), Error>;
     async fn find_by_id(&self, transaction: &dyn Transaction, id: DeviceId) -> Result<Option<Device>, Error>;
     async fn find_by_token(&self, transaction: &dyn Transaction, token: &DeviceToken) -> Result<Option<Device>, Error>;
     async fn list_for_user(&self, transaction: &dyn Transaction, owner_id: UserId) -> Result<Vec<Device>, Error>;
+    async fn count_with_name_prefix(&self, transaction: &dyn Transaction, owner_id: UserId, prefix: &str) -> Result<u64, Error>;
 
     // Device books
     async fn add_device_book(&self, transaction: &dyn Transaction, book: DeviceBook) -> Result<DeviceBook, Error>;

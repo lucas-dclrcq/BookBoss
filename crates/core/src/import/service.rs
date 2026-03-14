@@ -98,6 +98,7 @@ mod tests {
             BookToken, FileFormat, Genre, GenreId, GenreRepository, GenreToken, IdentifierType, NewAuthor, NewBook, NewGenre, NewPublisher, NewSeries, NewTag,
             Publisher, PublisherId, PublisherRepository, PublisherToken, Series, SeriesId, SeriesRepository, SeriesToken, Tag, TagId, TagRepository, TagToken,
         },
+        device::{Device, DeviceBook, DeviceId, DeviceRepository, DeviceSyncLog, DeviceToken, NewDevice, NewDeviceSyncLog},
         import::{ImportJob, ImportJobId, ImportJobRepository, ImportJobToken, ImportStatus, NewImportJob},
         jobs::{Job, JobRepository},
         reading::{ReadStatus, UserBookMetadata, UserBookMetadataRepository},
@@ -601,6 +602,50 @@ mod tests {
         }
     }
 
+    // ─── Mock DeviceRepository ───────────────────────────────────────────────
+
+    struct MockDeviceRepository;
+
+    #[async_trait::async_trait]
+    impl DeviceRepository for MockDeviceRepository {
+        async fn add_device(&self, _: &dyn Transaction, _: NewDevice) -> Result<Device, Error> {
+            unimplemented!()
+        }
+        async fn update_device(&self, _: &dyn Transaction, _: Device) -> Result<Device, Error> {
+            unimplemented!()
+        }
+        async fn delete_device(&self, _: &dyn Transaction, _: Device) -> Result<(), Error> {
+            unimplemented!()
+        }
+        async fn find_by_id(&self, _: &dyn Transaction, _: DeviceId) -> Result<Option<Device>, Error> {
+            unimplemented!()
+        }
+        async fn find_by_token(&self, _: &dyn Transaction, _: &DeviceToken) -> Result<Option<Device>, Error> {
+            unimplemented!()
+        }
+        async fn list_for_user(&self, _: &dyn Transaction, _: UserId) -> Result<Vec<Device>, Error> {
+            unimplemented!()
+        }
+        async fn count_with_name_prefix(&self, _: &dyn Transaction, _: UserId, _: &str) -> Result<u64, Error> {
+            unimplemented!()
+        }
+        async fn add_device_book(&self, _: &dyn Transaction, _: DeviceBook) -> Result<DeviceBook, Error> {
+            unimplemented!()
+        }
+        async fn remove_device_book(&self, _: &dyn Transaction, _: DeviceId, _: BookId) -> Result<(), Error> {
+            unimplemented!()
+        }
+        async fn books_for_device(&self, _: &dyn Transaction, _: DeviceId) -> Result<Vec<DeviceBook>, Error> {
+            unimplemented!()
+        }
+        async fn add_sync_log(&self, _: &dyn Transaction, _: NewDeviceSyncLog) -> Result<DeviceSyncLog, Error> {
+            unimplemented!()
+        }
+        async fn list_sync_logs_for_device(&self, _: &dyn Transaction, _: DeviceId, _: Option<u64>) -> Result<Vec<DeviceSyncLog>, Error> {
+            unimplemented!()
+        }
+    }
+
     // ─── Helper ───────────────────────────────────────────────────────────────
 
     fn create_service(mock: MockImportJobRepository) -> ImportJobServiceImpl {
@@ -620,6 +665,7 @@ mod tests {
                 .job_repository(Arc::new(MockJobRepository) as Arc<dyn JobRepository>)
                 .shelf_repository(Arc::new(MockShelfRepository) as Arc<dyn ShelfRepository>)
                 .user_book_metadata_repository(Arc::new(MockUserBookMetadataRepository) as Arc<dyn UserBookMetadataRepository>)
+                .device_repository(Arc::new(MockDeviceRepository) as Arc<dyn DeviceRepository>)
                 .build()
                 .expect("all fields provided"),
         );

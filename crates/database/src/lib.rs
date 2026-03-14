@@ -14,6 +14,7 @@ use bb_core::{
     Error,
     auth::SessionRepository,
     book::{AuthorRepository, BookRepository, GenreRepository, PublisherRepository, SeriesRepository, TagRepository},
+    device::DeviceRepository,
     import::ImportJobRepository,
     jobs::JobRepository,
     reading::UserBookMetadataRepository,
@@ -38,10 +39,10 @@ mod transaction;
 
 use crate::{
     adapters::{
-        author::AuthorRepositoryAdapter, book::BookRepositoryAdapter, genre::GenreRepositoryAdapter, import_job::ImportJobRepositoryAdapter,
-        job::JobRepositoryAdapter, publisher::PublisherRepositoryAdapter, series::SeriesRepositoryAdapter, session::SessionRepositoryAdapter,
-        shelf::ShelfRepositoryAdapter, tag::TagRepositoryAdapter, user::UserRepositoryAdapter, user_book_metadata::UserBookMetadataRepositoryAdapter,
-        user_settings::UserSettingRepositoryAdapter,
+        author::AuthorRepositoryAdapter, book::BookRepositoryAdapter, device::DeviceRepositoryAdapter, genre::GenreRepositoryAdapter,
+        import_job::ImportJobRepositoryAdapter, job::JobRepositoryAdapter, publisher::PublisherRepositoryAdapter, series::SeriesRepositoryAdapter,
+        session::SessionRepositoryAdapter, shelf::ShelfRepositoryAdapter, tag::TagRepositoryAdapter, user::UserRepositoryAdapter,
+        user_book_metadata::UserBookMetadataRepositoryAdapter, user_settings::UserSettingRepositoryAdapter,
     },
     migrations::Migrator,
     repository::RepositoryImpl,
@@ -87,6 +88,7 @@ pub async fn create_repository_service(database: DatabaseConnection) -> Result<A
         .job_repository(Arc::new(JobRepositoryAdapter::new()) as Arc<dyn JobRepository>)
         .shelf_repository(Arc::new(ShelfRepositoryAdapter::new()) as Arc<dyn ShelfRepository>)
         .user_book_metadata_repository(Arc::new(UserBookMetadataRepositoryAdapter::new()) as Arc<dyn UserBookMetadataRepository>)
+        .device_repository(Arc::new(DeviceRepositoryAdapter::new()) as Arc<dyn DeviceRepository>)
         .build()
         .map_err(|e| Error::Infrastructure(e.to_string()))?;
 

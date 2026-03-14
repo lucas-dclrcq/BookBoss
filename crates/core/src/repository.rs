@@ -6,6 +6,7 @@ use crate::{
     Error,
     auth::SessionRepository,
     book::{AuthorRepository, BookRepository, GenreRepository, PublisherRepository, SeriesRepository, TagRepository},
+    device::DeviceRepository,
     import::ImportJobRepository,
     jobs::JobRepository,
     reading::UserBookMetadataRepository,
@@ -30,6 +31,7 @@ pub struct RepositoryService {
     job_repository: Arc<dyn JobRepository>,
     shelf_repository: Arc<dyn ShelfRepository>,
     user_book_metadata_repository: Arc<dyn UserBookMetadataRepository>,
+    device_repository: Arc<dyn DeviceRepository>,
 }
 
 impl RepositoryService {
@@ -115,6 +117,12 @@ impl RepositoryService {
     #[must_use]
     pub fn user_book_metadata_repository(&self) -> &Arc<dyn UserBookMetadataRepository> {
         &self.user_book_metadata_repository
+    }
+
+    /// Returns a reference to the device repository.
+    #[must_use]
+    pub fn device_repository(&self) -> &Arc<dyn DeviceRepository> {
+        &self.device_repository
     }
 }
 
