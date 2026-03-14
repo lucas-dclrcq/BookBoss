@@ -71,7 +71,7 @@ fn read_opf_bytes(path: &Path) -> Result<Vec<u8>, crate::Error> {
 /// For example, `opf_dir = "OEBPS"` and `href = "images/cover.jpg"` yields
 /// `"OEBPS/images/cover.jpg"`.  A root-level OPF (`opf_dir = ""`) returns
 /// the href unchanged.
-fn resolve_zip_path(opf_dir: &str, href: &str) -> String {
+pub(crate) fn resolve_zip_path(opf_dir: &str, href: &str) -> String {
     if opf_dir.is_empty() { href.to_string() } else { format!("{opf_dir}/{href}") }
 }
 
@@ -109,7 +109,7 @@ pub fn read_opf_metadata_xml(path: &Path) -> Result<String, crate::Error> {
 }
 
 /// Parse META-INF/container.xml and return the `full-path` of the rootfile.
-fn find_opf_path(xml: &[u8]) -> Result<String, crate::Error> {
+pub(crate) fn find_opf_path(xml: &[u8]) -> Result<String, crate::Error> {
     use quick_xml::{Reader, events::Event};
     let mut reader = Reader::from_reader(xml);
     reader.config_mut().trim_text(true);

@@ -6,7 +6,7 @@ use bb_core::{
 };
 use quick_xml::{
     Writer,
-    events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event},
+    events::{BytesEnd, BytesStart, BytesText, Event},
 };
 use serde::Serialize;
 
@@ -52,15 +52,11 @@ struct BbMeta<'a> {
     files: &'a Vec<SidecarFile>,
 }
 
-pub fn write_sidecar(sidecar: &BookSidecar) -> Result<Vec<u8>, Error> {
+/// Serialises only the `<metadata>…</metadata>` block for the given sidecar.
+/// Used both by `write_sidecar` (for standalone `.opf` files) and by
+/// `enrich_epub` (to splice updated metadata into an existing EPUB OPF).
+pub(crate) fn write_metadata_xml(sidecar: &BookSidecar) -> Result<Vec<u8>, Error> {
     let mut writer = Writer::new(Cursor::new(Vec::new()));
-
-    writer.write_event(Event::Decl(BytesDecl::new("1.0", Some("utf-8"), None)))?;
-
-    let mut pkg = BytesStart::new("package");
-    pkg.push_attribute(("xmlns", "http://www.idpf.org/2007/opf"));
-    pkg.push_attribute(("version", "2.0"));
-    writer.write_event(Event::Start(pkg))?;
 
     let mut meta_elem = BytesStart::new("metadata");
     meta_elem.push_attribute(("xmlns:dc", "http://purl.org/dc/elements/1.1/"));
@@ -142,11 +138,19 @@ pub fn write_sidecar(sidecar: &BookSidecar) -> Result<Vec<u8>, Error> {
     writer.write_event(Event::Empty(meta_bb))?;
 
     writer.write_event(Event::End(BytesEnd::new("metadata")))?;
-    writer.write_event(Event::Empty(BytesStart::new("manifest")))?;
-    writer.write_event(Event::Empty(BytesStart::new("spine")))?;
-    writer.write_event(Event::End(BytesEnd::new("package")))?;
 
     Ok(writer.into_inner().into_inner())
+}
+
+pub fn write_sidecar(sidecar: &BookSidecar) -> Result<Vec<u8>, Error> {
+    let mut out = Vec::new();
+    out.extend_from_slice(
+        b"<?xml version=\"1.0\" encoding=\"utf-8\"?>\
+          <package xmlns=\"http://www.idpf.org/2007/opf\" version=\"2.0\">",
+    );
+    out.extend(write_metadata_xml(sidecar)?);
+    out.extend_from_slice(b"<manifest/><spine/></package>");
+    Ok(out)
 }
 
 #[cfg(test)]
