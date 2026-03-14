@@ -81,7 +81,11 @@ impl GoogleBooksAdapter {
                 .iter()
                 .enumerate()
                 .map(|(i, name)| {
-                    #[expect(clippy::cast_possible_truncation, clippy::cast_possible_wrap, reason = "author list index; books have far fewer authors than i32::MAX")]
+                    #[expect(
+                        clippy::cast_possible_truncation,
+                        clippy::cast_possible_wrap,
+                        reason = "author list index; books have far fewer authors than i32::MAX"
+                    )]
                     let sort_order = i as i32;
                     ExtractedAuthor {
                         name: name.clone(),

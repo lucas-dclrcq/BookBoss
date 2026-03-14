@@ -241,7 +241,11 @@ pub(super) async fn get_review_data(job_token: String) -> Result<BookReviewData,
         .map(|i| (identifier_type_key(&i.identifier_type).to_string(), i.value.clone()))
         .collect();
 
-    let provider_names = pipeline_service.list_provider_names().into_iter().map(std::string::ToString::to_string).collect();
+    let provider_names = pipeline_service
+        .list_provider_names()
+        .into_iter()
+        .map(std::string::ToString::to_string)
+        .collect();
 
     // Read cover file to determine dimensions.
     let cover_dimensions = if let Some(filename) = &book.cover_path {
@@ -491,7 +495,11 @@ pub(crate) async fn get_book_for_edit(book_token: String) -> Result<BookReviewDa
         .map(|i| (identifier_type_key(&i.identifier_type).to_string(), i.value.clone()))
         .collect();
 
-    let provider_names = pipeline_service.list_provider_names().into_iter().map(std::string::ToString::to_string).collect();
+    let provider_names = pipeline_service
+        .list_provider_names()
+        .into_iter()
+        .map(std::string::ToString::to_string)
+        .collect();
 
     // Cover dimensions
     let cover_dimensions = if let Some(filename) = &book.cover_path {

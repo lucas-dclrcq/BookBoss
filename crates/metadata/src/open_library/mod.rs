@@ -90,7 +90,11 @@ impl OpenLibraryAdapter {
                 .iter()
                 .enumerate()
                 .map(|(i, a)| {
-                    #[expect(clippy::cast_possible_truncation, clippy::cast_possible_wrap, reason = "author list index; books have far fewer authors than i32::MAX")]
+                    #[expect(
+                        clippy::cast_possible_truncation,
+                        clippy::cast_possible_wrap,
+                        reason = "author list index; books have far fewer authors than i32::MAX"
+                    )]
                     let sort_order = i as i32;
                     ExtractedAuthor {
                         name: a.name.clone(),

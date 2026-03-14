@@ -21,11 +21,14 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::load().context("Cannot load configuration")?;
 
     match cli.command {
-        Commands::DumpEpub { file }             => cmd_dump_epub(file).await,
-        Commands::OpenLibrary { isbn }          => cmd_open_library(isbn).await,
-        Commands::Hardcover { isbn }            => cmd_hardcover(isbn, config).await,
-        Commands::Grpc { host, port, command }  => cmd_grpc(host, port, command).await,
-        Commands::Server                        => { init_logging()?; cmd_server(config).await }
+        Commands::DumpEpub { file } => cmd_dump_epub(file).await,
+        Commands::OpenLibrary { isbn } => cmd_open_library(isbn).await,
+        Commands::Hardcover { isbn } => cmd_hardcover(isbn, config).await,
+        Commands::Grpc { host, port, command } => cmd_grpc(host, port, command).await,
+        Commands::Server => {
+            init_logging()?;
+            cmd_server(config).await
+        }
     }
 }
 
@@ -61,7 +64,10 @@ async fn cmd_open_library(isbn: String) -> anyhow::Result<()> {
 
     let isbn_type = if isbn.len() == 10 { IdentifierType::Isbn10 } else { IdentifierType::Isbn13 };
     let extracted = ExtractedMetadata {
-        identifiers: Some(vec![ExtractedIdentifier { identifier_type: isbn_type, value: isbn.clone() }]),
+        identifiers: Some(vec![ExtractedIdentifier {
+            identifier_type: isbn_type,
+            value: isbn.clone(),
+        }]),
         ..Default::default()
     };
 
@@ -87,7 +93,10 @@ async fn cmd_hardcover(isbn: String, config: bookboss::config::Config) -> anyhow
 
     let isbn_type = if isbn.len() == 10 { IdentifierType::Isbn10 } else { IdentifierType::Isbn13 };
     let extracted = ExtractedMetadata {
-        identifiers: Some(vec![ExtractedIdentifier { identifier_type: isbn_type, value: isbn.clone() }]),
+        identifiers: Some(vec![ExtractedIdentifier {
+            identifier_type: isbn_type,
+            value: isbn.clone(),
+        }]),
         ..Default::default()
     };
 
@@ -115,8 +124,7 @@ async fn cmd_grpc(host: String, port: u16, command: bookboss::commands::GrpcSubc
 
 #[cfg(feature = "server")]
 async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
-    use std::sync::Arc;
-    use std::time::Duration;
+    use std::{sync::Arc, time::Duration};
 
     use anyhow::Context;
     use bb_api::create_api_subsystem;

@@ -78,7 +78,11 @@ impl HardcoverAdapter {
                 .filter_map(|(i, c)| {
                     let name = c.author.as_ref()?.name.clone();
                     let role = types.get(i).map_or(AuthorRole::Author, |t| Self::map_contribution_type(t));
-                    #[expect(clippy::cast_possible_truncation, clippy::cast_possible_wrap, reason = "author list index; books have far fewer authors than i32::MAX")]
+                    #[expect(
+                        clippy::cast_possible_truncation,
+                        clippy::cast_possible_wrap,
+                        reason = "author list index; books have far fewer authors than i32::MAX"
+                    )]
                     let sort_order = i as i32;
                     Some(ExtractedAuthor {
                         name,
