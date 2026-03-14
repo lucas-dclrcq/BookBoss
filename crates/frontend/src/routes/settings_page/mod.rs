@@ -1,10 +1,7 @@
 mod users_section;
 
 #[cfg(feature = "server")]
-use bb_core::{
-    CoreServices,
-    reading::{AUTO_READ_THRESHOLD_KEY, DEFAULT_AUTO_READ_THRESHOLD},
-};
+use bb_core::CoreServices;
 use dioxus::prelude::*;
 use users_section::UsersSection;
 #[cfg(feature = "server")]
@@ -79,87 +76,23 @@ async fn get_library_stats() -> Result<LibraryStats, ServerFnError> {
 }
 
 // ---------------------------------------------------------------------------
-// Reading settings
-// ---------------------------------------------------------------------------
-
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-pub(crate) struct ReadingSettings {
-    pub auto_read_threshold_pct: u8,
-}
-
-#[get(
-    "/api/v1/settings/reading",
-    auth_session: axum::Extension<AuthSession>,
-    core_services: axum::Extension<Arc<CoreServices>>
-)]
-async fn get_reading_settings() -> Result<ReadingSettings, ServerFnError> {
-    let user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
-
-    let user_id = user.id();
-    let setting = core_services
-        .user_setting_service
-        .get(user_id, AUTO_READ_THRESHOLD_KEY)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
-
-    let threshold_bps = setting.and_then(|s| s.value.parse::<u16>().ok()).unwrap_or(DEFAULT_AUTO_READ_THRESHOLD);
-
-    #[expect(clippy::cast_possible_truncation, reason = "bps / 100 gives 0–100 percentage; always fits u8")]
-    let auto_read_threshold_pct = (threshold_bps / 100) as u8;
-    Ok(ReadingSettings { auto_read_threshold_pct })
-}
-
-#[post(
-    "/api/v1/settings/reading/auto-read-threshold",
-    auth_session: axum::Extension<AuthSession>,
-    core_services: axum::Extension<Arc<CoreServices>>
-)]
-async fn save_auto_read_threshold(threshold_pct: u8) -> Result<(), ServerFnError> {
-    let user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
-
-    if threshold_pct > 100 {
-        return Err(ServerFnError::new("Threshold must be between 0 and 100"));
-    }
-
-    let user_id = user.id();
-    let bps = u16::from(threshold_pct) * 100;
-    core_services
-        .user_setting_service
-        .set(user_id, AUTO_READ_THRESHOLD_KEY, &bps.to_string())
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
-
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
 // Settings sections
 // ---------------------------------------------------------------------------
 
 #[derive(Clone, PartialEq)]
 enum SettingSection {
     Users,
-    Reading,
     About,
 }
 
 impl SettingSection {
     fn all() -> &'static [Self] {
-        &[Self::Users, Self::Reading, Self::About]
+        &[Self::Users, Self::About]
     }
 
     fn label(&self) -> &'static str {
         match self {
             Self::Users => "Users",
-            Self::Reading => "Reading",
             Self::About => "About",
         }
     }
@@ -167,7 +100,7 @@ impl SettingSection {
     fn is_visible(&self, ctx: &SettingsContext) -> bool {
         match self {
             Self::Users => ctx.is_admin || ctx.is_super_admin,
-            Self::Reading | Self::About => true,
+            Self::About => true,
         }
     }
 }
@@ -179,7 +112,7 @@ impl SettingSection {
 #[component]
 pub(crate) fn SettingsPage() -> Element {
     let navigator = use_navigator();
-    let mut active_section = use_signal(|| SettingSection::Reading);
+    let mut active_section = use_signal(|| SettingSection::About);
     let stats = use_server_future(get_library_stats)?;
     let ctx = use_server_future(get_settings_context)?;
 
@@ -238,84 +171,9 @@ pub(crate) fn SettingsPage() -> Element {
                             current_user_token: context.current_user_token.clone(),
                         }
                     },
-                    SettingSection::Reading => rsx! { ReadingSection {} },
                     SettingSection::About => rsx! {
                         AboutSection { stats: stats().and_then(std::result::Result::ok) }
                     },
-                }
-            }
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Reading section
-// ---------------------------------------------------------------------------
-
-#[component]
-fn ReadingSection() -> Element {
-    let settings = use_server_future(get_reading_settings)?;
-    let mut threshold = use_signal(|| 95u8);
-    let mut saving = use_signal(|| false);
-    let mut saved = use_signal(|| false);
-
-    use_effect(move || {
-        if let Some(Ok(s)) = settings() {
-            threshold.set(s.auto_read_threshold_pct);
-        }
-    });
-
-    rsx! {
-        div { class: "w-full max-w-lg",
-            h2 { class: "text-lg font-semibold text-gray-900 mb-6", "Reading" }
-
-            div { class: "rounded-lg border border-gray-200 bg-white divide-y divide-gray-100",
-                div { class: "px-4 py-4",
-                    label { class: "block text-sm font-medium text-gray-900 mb-1",
-                        "Auto-read threshold"
-                    }
-                    p { class: "text-xs text-gray-500 mb-3",
-                        "Automatically mark a book as Read when progress reaches this percentage."
-                    }
-                    div { class: "flex items-center gap-4",
-                        input {
-                            r#type: "range",
-                            min: "0",
-                            max: "100",
-                            value: threshold,
-                            class: "flex-1 accent-indigo-600",
-                            oninput: move |e| {
-                                saved.set(false);
-                                if let Ok(v) = e.value().parse::<u8>() {
-                                    threshold.set(v);
-                                }
-                            },
-                        }
-                        span { class: "text-sm font-medium text-gray-900 w-12 text-right",
-                            "{threshold}%"
-                        }
-                    }
-                    div { class: "flex items-center justify-end gap-3 mt-3",
-                        if saved() {
-                            span { class: "text-xs text-green-600", "Saved!" }
-                        }
-                        button {
-                            class: "px-3 py-1.5 text-sm font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50",
-                            disabled: saving(),
-                            onclick: move |_| {
-                                let pct = threshold();
-                                saving.set(true);
-                                saved.set(false);
-                                spawn(async move {
-                                    if save_auto_read_threshold(pct).await.is_ok() {
-                                        saved.set(true);
-                                    }
-                                    saving.set(false);
-                                });
-                            },
-                            if saving() { "Saving…" } else { "Save" }
-                        }
-                    }
                 }
             }
         }
