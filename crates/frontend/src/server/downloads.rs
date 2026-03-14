@@ -9,7 +9,7 @@ use axum::{
 };
 use bb_core::{
     CoreServices,
-    book::{AuthorToken, BookToken, FileFormat, book_slug},
+    book::{AuthorToken, BookToken, FileFormat, FileRole, book_slug},
 };
 
 use super::AuthSession;
@@ -51,11 +51,14 @@ pub(crate) async fn serve_book_file(
         Err(_) => return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap(),
     };
 
-    // Verify the requested format exists for this book.
+    // Load file records and split by role for the requested format.
     let Ok(files) = core_services.book_service.files_for_book(book.id).await else {
         return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap();
     };
-    if !files.iter().any(|f| f.format == format) {
+    let enriched_file = files.iter().find(|f| f.format == format && f.file_role == FileRole::Enriched);
+    let original_file = files.iter().find(|f| f.format == format && f.file_role == FileRole::Original);
+
+    if enriched_file.is_none() && original_file.is_none() {
         return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap();
     }
 
@@ -78,14 +81,42 @@ pub(crate) async fn serve_book_file(
     let slug = book_slug(&book.title, first_author_name.as_deref());
 
     let ext = format_ext(&format);
-    let path = core_services.library_store.book_file_path(&token, &slug, format.clone());
 
-    let data = match tokio::fs::read(&path).await {
-        Ok(d) => d,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap();
+    // Try the enriched file first; fall back to the original if not yet on disk.
+    let data = if enriched_file.is_some() {
+        let enriched_path = core_services.library_store.book_file_path(&token, &slug, format.clone());
+        match tokio::fs::read(&enriched_path).await {
+            Ok(d) => d,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                // Enriched record exists but file not on disk yet — fall back to original.
+                match original_file.and_then(|f| f.original_filename.as_deref()) {
+                    Some(orig_filename) => {
+                        let orig_path = core_services.library_store.original_file_path(orig_filename);
+                        match tokio::fs::read(&orig_path).await {
+                            Ok(d) => d,
+                            Err(_) => return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap(),
+                        }
+                    }
+                    None => return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap(),
+                }
+            }
+            Err(_) => return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap(),
         }
-        Err(_) => return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap(),
+    } else {
+        // No enriched record — serve the original directly.
+        match original_file.and_then(|f| f.original_filename.as_deref()) {
+            Some(orig_filename) => {
+                let orig_path = core_services.library_store.original_file_path(orig_filename);
+                match tokio::fs::read(&orig_path).await {
+                    Ok(d) => d,
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                        return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap();
+                    }
+                    Err(_) => return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap(),
+                }
+            }
+            None => return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap(),
+        }
     };
 
     // Use the book title as the suggested download filename.

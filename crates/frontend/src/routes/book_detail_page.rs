@@ -57,7 +57,7 @@ use {
     crate::server::{AuthSession, AuthUser, BackendSessionPool},
     axum::http::Method,
     axum_session_auth::{Auth, Rights},
-    bb_core::book::{AuthorRole, AuthorToken, BookToken, FileFormat, IdentifierType, SeriesToken},
+    bb_core::book::{AuthorRole, AuthorToken, BookToken, FileFormat, FileRole, IdentifierType, SeriesToken},
     bb_core::reading::{AUTO_READ_THRESHOLD_KEY, DEFAULT_AUTO_READ_THRESHOLD, ReadStatus, UserBookMetadata},
     bb_core::{CoreServices, types::Capability, user::UserId},
     std::str::FromStr,
@@ -176,21 +176,26 @@ async fn get_book(token: String) -> Result<BookDetail, ServerFnError> {
         (None, None)
     };
 
-    let files: Vec<FileDetail> = book_files
-        .iter()
-        .map(|f| FileDetail {
-            format: match &f.format {
-                FileFormat::Epub => "EPUB",
-                FileFormat::Kepub => "KEPUB",
-                FileFormat::Mobi => "MOBI",
-                FileFormat::Azw3 => "AZW3",
-                FileFormat::Pdf => "PDF",
-                FileFormat::Cbz => "CBZ",
-            }
-            .to_string(),
-            file_size: f.file_size,
-        })
-        .collect();
+    // Deduplicate by format: Enriched takes priority over Original for display.
+    // This ensures one download badge per format even when both roles exist.
+    let mut format_map: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
+    for f in &book_files {
+        let fmt_str = match &f.format {
+            FileFormat::Epub => "EPUB",
+            FileFormat::Kepub => "KEPUB",
+            FileFormat::Mobi => "MOBI",
+            FileFormat::Azw3 => "AZW3",
+            FileFormat::Pdf => "PDF",
+            FileFormat::Cbz => "CBZ",
+        }
+        .to_string();
+        let entry = format_map.entry(fmt_str).or_insert(f.file_size);
+        if f.file_role == FileRole::Enriched {
+            *entry = f.file_size;
+        }
+    }
+    let mut files: Vec<FileDetail> = format_map.into_iter().map(|(format, file_size)| FileDetail { format, file_size }).collect();
+    files.sort_by(|a, b| a.format.cmp(&b.format));
 
     let identifiers: Vec<IdentifierDetail> = book_identifiers
         .iter()
