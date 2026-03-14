@@ -3,8 +3,9 @@ use std::sync::Arc;
 use crate::{
     Error, RepositoryError,
     book::BookToken,
+    filter::BookFilter,
     repository::RepositoryService,
-    shelf::{BookShelf, Shelf, ShelfToken, ShelfVisibility},
+    shelf::{BookShelf, Shelf, ShelfToken, ShelfType, ShelfVisibility},
     user::UserId,
     with_read_only_transaction, with_transaction,
 };
@@ -56,6 +57,18 @@ pub trait ShelfService: Send + Sync {
     /// Only the owner may update. Returns an error if the name is empty or
     /// another shelf owned by the same user already has that name.
     async fn update_shelf(&self, token: &ShelfToken, new_name: String, visibility: ShelfVisibility, user_id: UserId) -> Result<(), Error>;
+
+    /// Creates a new smart shelf for the given user with the provided filter.
+    ///
+    /// Returns an error if the name is empty or a shelf with the same name
+    /// already exists for the user.
+    async fn create_smart_shelf(&self, owner_id: UserId, name: String, visibility: ShelfVisibility, filter: BookFilter) -> Result<ShelfToken, Error>;
+
+    /// Replaces the filter on an existing smart shelf.
+    ///
+    /// Only the owner may update. Returns an error if the shelf is not a smart
+    /// shelf or the caller does not own it.
+    async fn update_shelf_filter(&self, token: &ShelfToken, filter: BookFilter, user_id: UserId) -> Result<(), Error>;
 }
 
 pub(crate) struct ShelfServiceImpl {
@@ -293,6 +306,66 @@ impl ShelfService for ShelfServiceImpl {
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
+    async fn create_smart_shelf(&self, owner_id: UserId, name: String, visibility: ShelfVisibility, filter: BookFilter) -> Result<ShelfToken, Error> {
+        if name.trim().is_empty() {
+            return Err(Error::Validation("shelf name must not be empty".to_string()));
+        }
+
+        let name_lower = name.to_lowercase();
+
+        with_transaction!(self, shelf_repository, |tx| {
+            let existing = shelf_repository.list_for_user(tx, owner_id).await?;
+            if existing.iter().any(|s| s.name.to_lowercase() == name_lower) {
+                return Err(Error::RepositoryError(RepositoryError::Conflict));
+            }
+
+            let shelf = shelf_repository
+                .add_shelf(
+                    tx,
+                    crate::shelf::NewShelf {
+                        owner_id,
+                        name,
+                        shelf_type: ShelfType::Smart,
+                        visibility,
+                        device_id: None,
+                        filter_criteria: Some(filter),
+                    },
+                )
+                .await?;
+
+            Ok(shelf.token)
+        })
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    async fn update_shelf_filter(&self, token: &ShelfToken, filter: BookFilter, user_id: UserId) -> Result<(), Error> {
+        let token = *token;
+
+        with_transaction!(self, shelf_repository, |tx| {
+            let shelf = shelf_repository
+                .find_by_token(tx, &token)
+                .await?
+                .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
+
+            if shelf.owner_id != user_id {
+                return Err(Error::Validation("only the owner may update a shelf filter".to_string()));
+            }
+
+            if shelf.shelf_type != ShelfType::Smart {
+                return Err(Error::Validation("filter can only be set on a smart shelf".to_string()));
+            }
+
+            let updated = Shelf {
+                filter_criteria: Some(filter),
+                ..shelf
+            };
+            shelf_repository.update_shelf(tx, updated).await?;
+
+            Ok(())
+        })
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn set_visibility(&self, token: &ShelfToken, visibility: ShelfVisibility, user_id: UserId) -> Result<(), Error> {
         let token = *token;
 
@@ -336,7 +409,7 @@ mod tests {
         jobs::{Job, JobRepository},
         reading::{ReadStatus, UserBookMetadata, UserBookMetadataRepository},
         repository::{Repository, RepositoryServiceBuilder, Transaction},
-        shelf::{BookShelf, NewShelf, Shelf, ShelfFilter, ShelfId, ShelfRepository, ShelfToken, ShelfType, ShelfVisibility},
+        shelf::{BookShelf, NewShelf, Shelf, ShelfId, ShelfRepository, ShelfToken, ShelfType, ShelfVisibility},
         user::{
             NewUser, NewUserSetting, User, UserId, UserSetting,
             repository::{UserRepository, UserSettingRepository},
@@ -470,10 +543,17 @@ mod tests {
         async fn books_for_shelf(&self, _: &dyn Transaction, _: ShelfId, _: Option<BookId>, _: Option<u64>) -> Result<Vec<BookShelf>, Error> {
             self.books_for_shelf_result.lock().unwrap().clone().unwrap_or(Ok(vec![]))
         }
-        async fn books_for_filter(&self, _: &dyn Transaction, _: &ShelfFilter, _: UserId, _: Option<BookId>, _: Option<u64>) -> Result<Vec<Book>, Error> {
+        async fn books_for_filter(
+            &self,
+            _: &dyn Transaction,
+            _: &crate::filter::BookFilter,
+            _: UserId,
+            _: Option<BookId>,
+            _: Option<u64>,
+        ) -> Result<Vec<Book>, Error> {
             unimplemented!()
         }
-        async fn count_for_filter(&self, _: &dyn Transaction, _: &ShelfFilter, _: UserId) -> Result<u64, Error> {
+        async fn count_for_filter(&self, _: &dyn Transaction, _: &crate::filter::BookFilter, _: UserId) -> Result<u64, Error> {
             unimplemented!()
         }
     }
@@ -1513,5 +1593,111 @@ mod tests {
         let result = svc.update_shelf(&token, "My Shelf".to_string(), ShelfVisibility::Public, 1).await;
 
         result.unwrap();
+    }
+
+    // ─── create_smart_shelf ───────────────────────────────────────────────────
+
+    fn simple_filter() -> crate::filter::BookFilter {
+        use crate::filter::{BookFilter, FilterReadStatus, FilterRule, SetOp};
+        BookFilter::Rule(FilterRule::ReadStatus {
+            op: SetOp::IncludesAny,
+            values: vec![FilterReadStatus::Active],
+        })
+    }
+
+    fn fake_smart_shelf(owner_id: UserId) -> Shelf {
+        Shelf {
+            shelf_type: ShelfType::Smart,
+            filter_criteria: Some(simple_filter()),
+            ..fake_shelf(owner_id, ShelfVisibility::Private)
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_smart_shelf_succeeds() {
+        let shelf = fake_smart_shelf(1);
+        let svc = create_service(
+            MockShelfRepository::default().with_list_for_user(Ok(vec![])).with_add_shelf(Ok(shelf)),
+            MockBookRepository::default(),
+        );
+
+        svc.create_smart_shelf(1, "Unread Sci-Fi".to_string(), ShelfVisibility::Private, simple_filter())
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_create_smart_shelf_rejects_empty_name() {
+        let svc = create_service(MockShelfRepository::default(), MockBookRepository::default());
+
+        let result = svc.create_smart_shelf(1, "  ".to_string(), ShelfVisibility::Private, simple_filter()).await;
+
+        assert!(matches!(result, Err(Error::Validation(_))));
+    }
+
+    #[tokio::test]
+    async fn test_create_smart_shelf_rejects_duplicate_name() {
+        let existing = fake_shelf(1, ShelfVisibility::Private);
+        let svc = create_service(
+            MockShelfRepository::default().with_list_for_user(Ok(vec![existing])),
+            MockBookRepository::default(),
+        );
+
+        // "my shelf" matches existing "My Shelf" (case-insensitive)
+        let result = svc
+            .create_smart_shelf(1, "My Shelf".to_string(), ShelfVisibility::Private, simple_filter())
+            .await;
+
+        assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::Conflict))));
+    }
+
+    // ─── update_shelf_filter ──────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_update_shelf_filter_succeeds() {
+        let shelf = fake_smart_shelf(1);
+        let token = shelf.token;
+        let updated = Shelf {
+            filter_criteria: Some(simple_filter()),
+            ..shelf.clone()
+        };
+        let svc = create_service(
+            MockShelfRepository::default()
+                .with_find_by_token(Ok(Some(shelf)))
+                .with_update_shelf(Ok(updated)),
+            MockBookRepository::default(),
+        );
+
+        let result = svc.update_shelf_filter(&token, simple_filter(), 1).await;
+
+        result.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_update_shelf_filter_rejects_non_owner() {
+        let shelf = fake_smart_shelf(1);
+        let token = shelf.token;
+        let svc = create_service(
+            MockShelfRepository::default().with_find_by_token(Ok(Some(shelf))),
+            MockBookRepository::default(),
+        );
+
+        let result = svc.update_shelf_filter(&token, simple_filter(), 99).await;
+
+        assert!(matches!(result, Err(Error::Validation(_))));
+    }
+
+    #[tokio::test]
+    async fn test_update_shelf_filter_rejects_non_smart_shelf() {
+        let shelf = fake_shelf(1, ShelfVisibility::Private); // Manual shelf
+        let token = shelf.token;
+        let svc = create_service(
+            MockShelfRepository::default().with_find_by_token(Ok(Some(shelf))),
+            MockBookRepository::default(),
+        );
+
+        let result = svc.update_shelf_filter(&token, simple_filter(), 1).await;
+
+        assert!(matches!(result, Err(Error::Validation(_))));
     }
 }

@@ -95,7 +95,7 @@ mod tests {
         jobs::{Job, JobRepository},
         reading::{ReadStatus, UserBookMetadata, UserBookMetadataRepository},
         repository::{Repository, RepositoryServiceBuilder, Transaction},
-        shelf::{BookShelf, NewShelf, Shelf, ShelfFilter, ShelfId, ShelfRepository, ShelfToken},
+        shelf::{BookShelf, NewShelf, Shelf, ShelfId, ShelfRepository, ShelfToken},
         user::{
             NewUser, NewUserSetting, User, UserId, UserSetting, UserToken,
             repository::{UserRepository, UserSettingRepository},
@@ -553,10 +553,17 @@ mod tests {
         async fn books_for_shelf(&self, _: &dyn Transaction, _: ShelfId, _: Option<BookId>, _: Option<u64>) -> Result<Vec<BookShelf>, Error> {
             unimplemented!()
         }
-        async fn books_for_filter(&self, _: &dyn Transaction, _: &ShelfFilter, _: UserId, _: Option<BookId>, _: Option<u64>) -> Result<Vec<Book>, Error> {
+        async fn books_for_filter(
+            &self,
+            _: &dyn Transaction,
+            _: &crate::filter::BookFilter,
+            _: UserId,
+            _: Option<BookId>,
+            _: Option<u64>,
+        ) -> Result<Vec<Book>, Error> {
             unimplemented!()
         }
-        async fn count_for_filter(&self, _: &dyn Transaction, _: &ShelfFilter, _: UserId) -> Result<u64, Error> {
+        async fn count_for_filter(&self, _: &dyn Transaction, _: &crate::filter::BookFilter, _: UserId) -> Result<u64, Error> {
             unimplemented!()
         }
     }

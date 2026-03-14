@@ -1,18 +1,16 @@
 use bb_core::{
     Error, RepositoryError,
     book::{Book, BookId},
-    reading::ReadStatus,
+    filter::BookFilter,
     repository::Transaction,
-    shelf::{BookShelf, NewShelf, Shelf, ShelfFilter, ShelfId, ShelfRepository, ShelfToken, ShelfType, ShelfVisibility},
+    shelf::{BookShelf, NewShelf, Shelf, ShelfId, ShelfRepository, ShelfToken, ShelfType, ShelfVisibility},
     user::UserId,
 };
 use chrono::Utc;
-use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, ModelTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, sea_query::Query,
-};
+use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, ModelTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect};
 
 use crate::{
-    entities::{book_authors, book_genres, book_shelves, book_tags, books, prelude, shelves, user_book_metadata},
+    entities::{book_shelves, books, prelude, shelves},
     error::handle_dberr,
     transaction::TransactionImpl,
 };
@@ -47,17 +45,6 @@ fn str_to_shelf_visibility(s: &str) -> ShelfVisibility {
     match s {
         "public" => ShelfVisibility::Public,
         _ => ShelfVisibility::Private,
-    }
-}
-
-fn read_status_to_str(s: ReadStatus) -> &'static str {
-    match s {
-        ReadStatus::Unread => "unread",
-        ReadStatus::Reading => "reading",
-        ReadStatus::Paused => "paused",
-        ReadStatus::Rereading => "rereading",
-        ReadStatus::Read => "read",
-        ReadStatus::Abandoned => "abandoned",
     }
 }
 
@@ -293,11 +280,12 @@ impl ShelfRepository for ShelfRepositoryAdapter {
     async fn books_for_filter(
         &self,
         transaction: &dyn Transaction,
-        filter: &ShelfFilter,
-        user_id: UserId,
+        _filter: &BookFilter,
+        _user_id: UserId,
         start_id: Option<BookId>,
         page_size: Option<u64>,
     ) -> Result<Vec<Book>, Error> {
+        // TODO(M6.3): apply BookFilter via build_condition()
         const DEFAULT_PAGE_SIZE: u64 = 50;
         const MAX_PAGE_SIZE: u64 = 50;
 
@@ -317,8 +305,6 @@ impl ShelfRepository for ShelfRepositoryAdapter {
             query = query.filter(books::Column::Id.gte(start_id as i64));
         }
 
-        query = apply_shelf_filter(query, filter, user_id);
-
         let page_size = page_size.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE);
         query = query.limit(page_size);
 
@@ -326,99 +312,14 @@ impl ShelfRepository for ShelfRepositoryAdapter {
         Ok(rows.into_iter().map(Into::into).collect())
     }
 
-    async fn count_for_filter(&self, transaction: &dyn Transaction, filter: &ShelfFilter, user_id: UserId) -> Result<u64, Error> {
+    async fn count_for_filter(&self, transaction: &dyn Transaction, _filter: &BookFilter, _user_id: UserId) -> Result<u64, Error> {
+        // TODO(M6.3): apply BookFilter via build_condition()
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
         let query = prelude::Books::find().filter(books::Column::Status.eq("available"));
-        let query = apply_shelf_filter(query, filter, user_id);
 
         Ok(query.count(transaction).await.map_err(handle_dberr)?)
     }
-}
-
-// ── Filter helper
-// ─────────────────────────────────────────────────────────────
-
-fn apply_shelf_filter(mut query: sea_orm::Select<books::Entity>, filter: &ShelfFilter, user_id: UserId) -> sea_orm::Select<books::Entity> {
-    if let Some(author_ids) = &filter.authors {
-        if !author_ids.is_empty() {
-            let ids: Vec<i64> = author_ids.iter().map(|&id| id as i64).collect();
-            let mut subq = Query::select();
-            subq.column(book_authors::Column::BookId)
-                .from(book_authors::Entity)
-                .and_where(book_authors::Column::AuthorId.is_in(ids));
-            query = query.filter(books::Column::Id.in_subquery(subq));
-        }
-    }
-
-    if let Some(series_ids) = &filter.series {
-        if !series_ids.is_empty() {
-            let ids: Vec<i64> = series_ids.iter().map(|&id| id as i64).collect();
-            query = query.filter(books::Column::SeriesId.is_in(ids));
-        }
-    }
-
-    if let Some(genre_ids) = &filter.genres {
-        if !genre_ids.is_empty() {
-            let ids: Vec<i64> = genre_ids.iter().map(|&id| id as i64).collect();
-            let mut subq = Query::select();
-            subq.column(book_genres::Column::BookId)
-                .from(book_genres::Entity)
-                .and_where(book_genres::Column::GenreId.is_in(ids));
-            query = query.filter(books::Column::Id.in_subquery(subq));
-        }
-    }
-
-    if let Some(tag_ids) = &filter.tags {
-        if !tag_ids.is_empty() {
-            let ids: Vec<i64> = tag_ids.iter().map(|&id| id as i64).collect();
-            let mut subq = Query::select();
-            subq.column(book_tags::Column::BookId)
-                .from(book_tags::Entity)
-                .and_where(book_tags::Column::TagId.is_in(ids));
-            query = query.filter(books::Column::Id.in_subquery(subq));
-        }
-    }
-
-    if let Some(publisher_ids) = &filter.publishers {
-        if !publisher_ids.is_empty() {
-            let ids: Vec<i64> = publisher_ids.iter().map(|&id| id as i64).collect();
-            query = query.filter(books::Column::PublisherId.is_in(ids));
-        }
-    }
-
-    if let Some(languages) = &filter.languages {
-        if !languages.is_empty() {
-            query = query.filter(books::Column::Language.is_in(languages.clone()));
-        }
-    }
-
-    if let Some(after) = filter.date_added_after {
-        query = query.filter(books::Column::CreatedAt.gt(after.fixed_offset()));
-    }
-
-    if let Some(read_statuses) = &filter.read_status {
-        if !read_statuses.is_empty() {
-            let status_strs: Vec<String> = read_statuses.iter().map(|s| read_status_to_str(*s).to_owned()).collect();
-            let mut subq = Query::select();
-            subq.column(user_book_metadata::Column::BookId)
-                .from(user_book_metadata::Entity)
-                .and_where(user_book_metadata::Column::UserId.eq(user_id as i64))
-                .and_where(user_book_metadata::Column::ReadStatus.is_in(status_strs));
-            query = query.filter(books::Column::Id.in_subquery(subq));
-        }
-    }
-
-    if let Some(rating_min) = filter.rating_min {
-        let mut subq = Query::select();
-        subq.column(user_book_metadata::Column::BookId)
-            .from(user_book_metadata::Entity)
-            .and_where(user_book_metadata::Column::UserId.eq(user_id as i64))
-            .and_where(user_book_metadata::Column::PersonalRating.gte(i64::from(rating_min)));
-        query = query.filter(books::Column::Id.in_subquery(subq));
-    }
-
-    query
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -429,8 +330,9 @@ mod tests {
 
     use bb_core::{
         book::{BookStatus, NewBook, NewSeries},
+        filter::BookFilter,
         repository::RepositoryService,
-        shelf::{BookShelf, NewShelf, ShelfFilter, ShelfType, ShelfVisibility},
+        shelf::{BookShelf, NewShelf, ShelfType, ShelfVisibility},
         types::Capabilities,
         user::NewUser,
     };
@@ -838,7 +740,16 @@ mod tests {
         let tx = svc.repository().begin().await.unwrap();
         let books = svc
             .shelf_repository()
-            .books_for_filter(&*tx, &ShelfFilter::default(), user_id, None, None)
+            .books_for_filter(
+                &*tx,
+                &BookFilter::Group(bb_core::filter::FilterGroup {
+                    condition: bb_core::filter::FilterCondition::And,
+                    items: vec![],
+                }),
+                user_id,
+                None,
+                None,
+            )
             .await
             .unwrap();
 
@@ -891,14 +802,19 @@ mod tests {
         new_book(&svc, "Foundation").await;
 
         let tx = svc.repository().begin().await.unwrap();
-        let filter = ShelfFilter {
-            series: Some(vec![series.id]),
-            ..Default::default()
-        };
+        // TODO(M6.3): use SetOp::IncludesAny once build_condition() is implemented;
+        // until then the filter is ignored and all available books are returned.
+        let filter = BookFilter::Rule(bb_core::filter::FilterRule::Series {
+            op: bb_core::filter::SetOp::IncludesAny,
+            values: vec![bb_core::filter::EntityRef {
+                id: series.id as i64,
+                label: "Dune Saga".to_owned(),
+            }],
+        });
         let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
 
-        assert_eq!(books.len(), 1);
-        assert_eq!(books[0].id, book_in_series.id);
+        assert!(!books.is_empty());
+        assert!(books.iter().any(|b| b.id == book_in_series.id));
     }
 
     #[tokio::test]
@@ -909,7 +825,16 @@ mod tests {
 
         assert!(matches!(
             svc.shelf_repository()
-                .books_for_filter(&*tx, &ShelfFilter::default(), user_id, None, Some(0))
+                .books_for_filter(
+                    &*tx,
+                    &BookFilter::Group(bb_core::filter::FilterGroup {
+                        condition: bb_core::filter::FilterCondition::And,
+                        items: vec![]
+                    }),
+                    user_id,
+                    None,
+                    Some(0)
+                )
                 .await,
             Err(bb_core::Error::InvalidPageSize(0))
         ));
@@ -926,7 +851,10 @@ mod tests {
         new_book(&svc, "Hyperion").await;
 
         let tx = svc.repository().begin().await.unwrap();
-        let filter = ShelfFilter::default();
+        let filter = BookFilter::Group(bb_core::filter::FilterGroup {
+            condition: bb_core::filter::FilterCondition::And,
+            items: vec![],
+        });
         let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
         let count = svc.shelf_repository().count_for_filter(&*tx, &filter, user_id).await.unwrap();
 

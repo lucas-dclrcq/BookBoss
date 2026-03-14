@@ -1,7 +1,7 @@
 use bb_utils::{define_token_prefix, token::Token};
 use chrono::{DateTime, Utc};
 
-use crate::{device::DeviceId, shelf::ShelfFilter, user::UserId};
+use crate::{device::DeviceId, filter::BookFilter, user::UserId};
 
 define_token_prefix!(ShelfTokenPrefix, "SH_");
 pub type ShelfId = u64;
@@ -32,7 +32,7 @@ pub struct Shelf {
     /// Device this shelf is synced to, if any.
     pub device_id: Option<DeviceId>,
     /// Filter criteria — only set for `ShelfType::Smart`.
-    pub filter_criteria: Option<ShelfFilter>,
+    pub filter_criteria: Option<BookFilter>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -44,5 +44,5 @@ pub struct NewShelf {
     pub shelf_type: ShelfType,
     pub visibility: ShelfVisibility,
     pub device_id: Option<DeviceId>,
-    pub filter_criteria: Option<ShelfFilter>,
+    pub filter_criteria: Option<BookFilter>,
 }
