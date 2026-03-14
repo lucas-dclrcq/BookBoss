@@ -679,6 +679,9 @@ mod tests {
         async fn count_for_filter(&self, _: &dyn Transaction, _: &crate::filter::BookFilter, _: UserId) -> Result<u64, Error> {
             unimplemented!()
         }
+        async fn find_by_device_id(&self, _: &dyn Transaction, _: crate::device::DeviceId) -> Result<Option<Shelf>, Error> {
+            unimplemented!()
+        }
     }
 
     struct MockImportJobRepository;

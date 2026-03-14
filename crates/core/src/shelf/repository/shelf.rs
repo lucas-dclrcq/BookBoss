@@ -1,6 +1,7 @@
 use crate::{
     Error,
     book::{Book, BookId},
+    device::DeviceId,
     filter::BookFilter,
     repository::Transaction,
     shelf::{BookShelf, NewShelf, Shelf, ShelfId, ShelfToken},
@@ -40,4 +41,7 @@ pub trait ShelfRepository: Send + Sync {
         page_size: Option<u64>,
     ) -> Result<Vec<Book>, Error>;
     async fn count_for_filter(&self, transaction: &dyn Transaction, filter: &BookFilter, user_id: UserId) -> Result<u64, Error>;
+
+    // Device-linked shelf lookup
+    async fn find_by_device_id(&self, transaction: &dyn Transaction, device_id: DeviceId) -> Result<Option<Shelf>, Error>;
 }

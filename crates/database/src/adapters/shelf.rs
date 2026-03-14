@@ -1,6 +1,7 @@
 use bb_core::{
     Error, RepositoryError,
     book::{Book, BookId},
+    device::DeviceId,
     filter::BookFilter,
     repository::Transaction,
     shelf::{BookShelf, NewShelf, Shelf, ShelfId, ShelfRepository, ShelfToken, ShelfType, ShelfVisibility},
@@ -321,6 +322,17 @@ impl ShelfRepository for ShelfRepositoryAdapter {
             .filter(build_condition(filter, user_id));
 
         Ok(query.count(transaction).await.map_err(handle_dberr)?)
+    }
+
+    async fn find_by_device_id(&self, transaction: &dyn Transaction, device_id: DeviceId) -> Result<Option<Shelf>, Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        Ok(prelude::Shelves::find()
+            .filter(shelves::Column::DeviceId.eq(device_id as i64))
+            .one(transaction)
+            .await
+            .map_err(handle_dberr)?
+            .map(Into::into))
     }
 }
 
