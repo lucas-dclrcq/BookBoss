@@ -11,6 +11,15 @@ use crate::{
 // DTOs
 // ---------------------------------------------------------------------------
 
+/// Paginated book result for a shelf.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct ShelfBooksPage {
+    pub books: Vec<BookSummary>,
+    /// Last `book_id` seen; pass as `cursor` to fetch the next page.
+    /// `None` when there are no more results.
+    pub next_cursor: Option<u64>,
+}
+
 /// Lightweight shelf descriptor returned by list and create operations.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct ShelfSummary {
@@ -36,7 +45,7 @@ use {
     crate::server::AuthSession,
     bb_core::{
         CoreServices,
-        book::{AuthorToken, BookToken, SeriesToken},
+        book::{AuthorToken, Book, BookToken, SeriesToken},
         filter::BookFilter as CoreBookFilter,
         shelf::{ShelfToken, ShelfType, ShelfVisibility},
     },
@@ -415,15 +424,18 @@ pub(crate) async fn list_all_accessible_shelves() -> Result<Vec<ShelfSummary>, S
 /// hydrated.
 ///
 /// `cursor` is the last `book_id` seen (exclusive lower bound for the next
-/// page). `page_size` defaults to the server's configured page size when
-/// `None`.
+/// page). `page_size` defaults to 48 when `None`.
+///
+/// Smart shelves use the shelf's filter; manual shelves use the junction table.
 #[post(
     "/api/v1/shelves/books/list",
     auth_session: axum::Extension<AuthSession>,
     core_services: axum::Extension<Arc<CoreServices>>
 )]
-pub(crate) async fn books_for_shelf(token: String, cursor: Option<u64>, page_size: Option<u64>) -> Result<Vec<BookSummary>, ServerFnError> {
+pub(crate) async fn books_for_shelf(token: String, cursor: Option<u64>, page_size: Option<u64>) -> Result<ShelfBooksPage, ServerFnError> {
     use std::collections::{HashMap, HashSet};
+
+    const PAGE_SIZE: u64 = 48;
 
     let user = auth_session
         .current_user
@@ -437,37 +449,65 @@ pub(crate) async fn books_for_shelf(token: String, cursor: Option<u64>, page_siz
     let shelf_service = &core_services.shelf_service;
     let book_service = &core_services.book_service;
 
-    // 1. Load BookShelf entries (cursor-paginated, ordered by book_id).
-    let shelf_entries = shelf_service
-        .books_for_shelf(&shelf_token, user_id, cursor, page_size)
+    let effective_page_size = page_size.unwrap_or(PAGE_SIZE);
+
+    // Load the shelf to determine if it's smart or manual.
+    let shelf = shelf_service
+        .get_shelf(&shelf_token, user_id)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    if shelf_entries.is_empty() {
-        return Ok(vec![]);
-    }
-
-    // 2. Resolve each book_id → Book, preserving shelf order.
-    let mut books = Vec::with_capacity(shelf_entries.len());
-    let mut all_author_ids: HashSet<u64> = HashSet::new();
-
-    for entry in &shelf_entries {
-        let book = book_service
-            .find_book_by_token(&BookToken::new(entry.book_id))
+    // Fetch books: smart → filter query; manual → junction table + book lookup.
+    let books: Vec<Book> = if shelf.shelf_type == ShelfType::Smart {
+        shelf_service
+            .books_for_filter(&shelf_token, user_id, cursor, Some(effective_page_size))
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?
-            .ok_or_else(|| ServerFnError::new("Book not found"))?;
+    } else {
+        let shelf_entries = shelf_service
+            .books_for_shelf(&shelf_token, user_id, cursor, Some(effective_page_size))
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
+        let mut books = Vec::with_capacity(shelf_entries.len());
+        for entry in &shelf_entries {
+            let book = book_service
+                .find_book_by_token(&BookToken::new(entry.book_id))
+                .await
+                .map_err(|e| ServerFnError::new(e.to_string()))?
+                .ok_or_else(|| ServerFnError::new("Book not found"))?;
+            books.push(book);
+        }
+        books
+    };
+
+    // Determine cursor for the next page.
+    let next_cursor = if books.len() as u64 >= effective_page_size {
+        books.last().map(|b| b.id)
+    } else {
+        None
+    };
+
+    if books.is_empty() {
+        return Ok(ShelfBooksPage {
+            books: vec![],
+            next_cursor: None,
+        });
+    }
+
+    // Hydrate authors.
+    let mut all_author_ids: HashSet<u64> = HashSet::new();
+    let mut books_with_authors = Vec::with_capacity(books.len());
+
+    for book in &books {
         let authors = book_service.authors_for_book(book.id).await.map_err(|e| ServerFnError::new(e.to_string()))?;
-
         for ba in &authors {
             all_author_ids.insert(ba.author_id);
         }
-
-        books.push((book, authors));
+        books_with_authors.push((book.clone(), authors));
     }
 
-    // 3. Batch-load unique authors.
+    // Batch-load unique authors.
     let mut author_map: HashMap<u64, String> = HashMap::new();
     for author_id in all_author_ids {
         if let Some(author) = book_service
@@ -479,8 +519,8 @@ pub(crate) async fn books_for_shelf(token: String, cursor: Option<u64>, page_siz
         }
     }
 
-    // 4. Batch-load unique series.
-    let unique_series: HashSet<u64> = books.iter().filter_map(|(b, _)| b.series_id).collect();
+    // Batch-load unique series.
+    let unique_series: HashSet<u64> = books_with_authors.iter().filter_map(|(b, _)| b.series_id).collect();
     let mut series_map: HashMap<u64, String> = HashMap::new();
     for series_id in unique_series {
         if let Some(series) = book_service
@@ -492,8 +532,8 @@ pub(crate) async fn books_for_shelf(token: String, cursor: Option<u64>, page_siz
         }
     }
 
-    // 5. Assemble summaries.
-    let summaries = books
+    // Assemble summaries.
+    let book_summaries = books_with_authors
         .iter()
         .map(|(book, author_links)| {
             let mut sorted = author_links.clone();
@@ -512,7 +552,10 @@ pub(crate) async fn books_for_shelf(token: String, cursor: Option<u64>, page_siz
         })
         .collect();
 
-    Ok(summaries)
+    Ok(ShelfBooksPage {
+        books: book_summaries,
+        next_cursor,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -557,6 +600,23 @@ pub(crate) fn ShelfPage(token: String) -> Element {
         books_for_shelf(tok, None, None)
     })?;
 
+    // Accumulated load-more books (first page comes from books_resource).
+    let mut extra_books: Signal<Vec<BookSummary>> = use_signal(Vec::new);
+    let mut next_cursor: Signal<Option<u64>> = use_signal(|| None);
+    let mut loading_more = use_signal(|| false);
+    let mut load_more_error: Signal<Option<String>> = use_signal(|| None);
+
+    // Sync cursor from first page; reset accumulated state when token/data changes.
+    use_effect(move || {
+        let _ = token_sig(); // subscribe to token changes
+        extra_books.set(vec![]);
+        load_more_error.set(None);
+        match books_resource() {
+            Some(Ok(ref page)) => next_cursor.set(page.next_cursor),
+            Some(Err(_)) | None => next_cursor.set(None),
+        }
+    });
+
     // Derive current shelf info from the shelves list (avoids a separate get_shelf
     // call).
     let shelves: Vec<ShelfSummary> = shelves_resource().and_then(std::result::Result::ok).unwrap_or_default();
@@ -569,11 +629,17 @@ pub(crate) fn ShelfPage(token: String) -> Element {
 
     let entity_options: FilterEntityOptions = entity_options_resource().and_then(std::result::Result::ok).unwrap_or_default();
 
-    let context = if is_own {
+    // Smart shelves are read-only (no drag-drop, no remove button).
+    let context = if is_own && !current_is_smart {
         BookGridContext::OwnShelf { shelf_token: token.clone() }
     } else {
         BookGridContext::ReadOnly
     };
+
+    // Merged book list: first page + any load-more pages.
+    let first_books = books_resource().and_then(Result::ok).map(|p| p.books).unwrap_or_default();
+    let all_books: Vec<BookSummary> = first_books.into_iter().chain(extra_books()).collect();
+    let has_more = next_cursor().is_some();
 
     rsx! {
         div { class: "flex-1 flex flex-col overflow-hidden",
@@ -610,12 +676,14 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                         "Failed to load books: {e}"
                     }
                 },
-                Some(Ok(books)) => {
-                    if books.is_empty() {
+                Some(Ok(_)) => {
+                    if all_books.is_empty() {
                         rsx! {
                             div { class: "flex-1 flex flex-col items-center justify-center py-20 text-center",
-                                p { class: "text-gray-400 text-sm", "No books on this shelf yet." }
-                                if is_own {
+                                p { class: "text-gray-400 text-sm",
+                                    if current_is_smart { "No books match this filter." } else { "No books on this shelf yet." }
+                                }
+                                if is_own && !current_is_smart {
                                     p { class: "text-gray-300 text-xs mt-1",
                                         "Drag a book here or open any book and use \"Add to Shelf\"."
                                     }
@@ -624,10 +692,46 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                         }
                     } else {
                         rsx! {
-                            BookGrid {
-                                books,
-                                context: context.clone(),
-                                on_action: move |()| books_resource.restart(),
+                            div { class: "flex-1 flex flex-col overflow-hidden",
+                                BookGrid {
+                                    books: all_books.clone(),
+                                    context: context.clone(),
+                                    on_action: move |()| books_resource.restart(),
+                                }
+                                if has_more {
+                                    div { class: "flex flex-col items-center gap-2 py-4 shrink-0",
+                                        if let Some(err) = load_more_error() {
+                                            p { class: "text-red-600 text-xs", "{err}" }
+                                        }
+                                        button {
+                                            class: "px-6 py-2 text-sm font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50",
+                                            disabled: loading_more(),
+                                            onclick: {
+                                                let tok = token.clone();
+                                                move |_| {
+                                                    let tok = tok.clone();
+                                                    let cursor = next_cursor();
+                                                    loading_more.set(true);
+                                                    load_more_error.set(None);
+                                                    spawn(async move {
+                                                        match books_for_shelf(tok, cursor, None).await {
+                                                            Ok(page) => {
+                                                                next_cursor.set(page.next_cursor);
+                                                                extra_books.write().extend(page.books);
+                                                                loading_more.set(false);
+                                                            }
+                                                            Err(e) => {
+                                                                load_more_error.set(Some(e.to_string()));
+                                                                loading_more.set(false);
+                                                            }
+                                                        }
+                                                    });
+                                                }
+                                            },
+                                            if loading_more() { "Loading…" } else { "Load more" }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -676,6 +780,7 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                                                 show_edit.set(false);
                                                 saving.set(false);
                                                 shelves_resource.restart();
+                                                books_resource.restart();
                                             }
                                             (Err(e), _) | (_, Err(e)) => {
                                                 saving.set(false);

@@ -12,7 +12,7 @@ pub(crate) use app_layout::AppLayout;
 pub(crate) use autocomplete_input::AutocompleteInput;
 pub(crate) use book_grid::{BookGrid, BookGridContext, DraggedBookToken};
 pub(crate) use chip_input::ChipInput;
-pub(crate) use filter_builder::{BookFilter, FilterBuilder, FilterEntityOptions, default_book_filter};
+pub(crate) use filter_builder::{BookFilter, FilterBuilder, FilterEntityOptions, default_book_filter, filter_to_summary};
 pub(crate) use login_form::LoginForm;
 pub(crate) use nav_bar::NavBar;
 pub(crate) use register_admin_form::RegisterAdminForm;

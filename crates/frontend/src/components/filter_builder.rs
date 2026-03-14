@@ -145,6 +145,126 @@ pub(crate) struct FilterEntityOptions {
 // ── Public helpers
 // ────────────────────────────────────────────────────────────
 
+/// Converts a `BookFilter` into a compact human-readable summary string,
+/// suitable for use as a tooltip.
+pub(crate) fn filter_to_summary(filter: &BookFilter) -> String {
+    match filter {
+        BookFilter::Group(g) => group_to_summary(g, true),
+        BookFilter::Rule(r) => rule_to_summary(r),
+    }
+}
+
+fn group_to_summary(group: &FilterGroup, is_top: bool) -> String {
+    if group.items.is_empty() {
+        return String::from("(empty filter)");
+    }
+    let join = match group.condition {
+        FilterCondition::And => " AND ",
+        FilterCondition::Or => " OR ",
+    };
+    let parts: Vec<String> = group
+        .items
+        .iter()
+        .map(|item| match item {
+            BookFilter::Group(g) => format!("({})", group_to_summary(g, false)),
+            BookFilter::Rule(r) => rule_to_summary(r),
+        })
+        .collect();
+    if is_top && parts.len() == 1 {
+        return parts.into_iter().next().unwrap();
+    }
+    parts.join(join)
+}
+
+fn rule_to_summary(rule: &FilterRule) -> String {
+    match rule {
+        FilterRule::TitleText { op, value } => {
+            if matches!(op, TextOp::IsEmpty | TextOp::IsNotEmpty) {
+                format!("title {}", text_op_summary(op))
+            } else {
+                format!("title {} \"{}\"", text_op_summary(op), value)
+            }
+        }
+        FilterRule::AuthorText { op, value } => {
+            if matches!(op, TextOp::IsEmpty | TextOp::IsNotEmpty) {
+                format!("author text {}", text_op_summary(op))
+            } else {
+                format!("author text {} \"{}\"", text_op_summary(op), value)
+            }
+        }
+        FilterRule::Author { op, values } => format!("author {} {}", set_op_summary(op), entity_label_list(values)),
+        FilterRule::Series { op, values } => format!("series {} {}", set_op_summary(op), entity_label_list(values)),
+        FilterRule::Genre { op, values } => format!("genre {} {}", set_op_summary(op), entity_label_list(values)),
+        FilterRule::Tag { op, values } => format!("tag {} {}", set_op_summary(op), entity_label_list(values)),
+        FilterRule::Publisher { op, values } => format!("publisher {} {}", set_op_summary(op), entity_label_list(values)),
+        FilterRule::Language { op, values } => format!("language {} {}", set_op_summary(op), values.join(", ")),
+        FilterRule::ReadStatus { op, values } => {
+            let labels: Vec<&str> = values.iter().map(FilterReadStatus::label).collect();
+            format!("status {} {}", set_op_summary(op), labels.join(", "))
+        }
+        FilterRule::Rating { op, value } => format!("rating {} {value}", numeric_op_summary(op)),
+        FilterRule::DateAdded { op, value } => {
+            if matches!(op, DateOp::IsEmpty | DateOp::IsNotEmpty) {
+                format!("date added {}", date_op_summary(op))
+            } else if let Some(dt) = value {
+                format!("date added {} {}", date_op_summary(op), dt.format("%Y-%m-%d"))
+            } else {
+                format!("date added {}", date_op_summary(op))
+            }
+        }
+    }
+}
+
+fn entity_label_list(values: &[EntityRef]) -> String {
+    if values.is_empty() {
+        return String::from("(none)");
+    }
+    values.iter().map(|e| e.label.as_str()).collect::<Vec<_>>().join(", ")
+}
+
+fn text_op_summary(op: &TextOp) -> &'static str {
+    match op {
+        TextOp::Contains => "contains",
+        TextOp::DoesntContain => "doesn't contain",
+        TextOp::StartsWith => "starts with",
+        TextOp::EndsWith => "ends with",
+        TextOp::Equals => "is",
+        TextOp::NotEquals => "is not",
+        TextOp::IsEmpty => "is empty",
+        TextOp::IsNotEmpty => "is not empty",
+    }
+}
+
+fn set_op_summary(op: &SetOp) -> &'static str {
+    match op {
+        SetOp::IncludesAny => "is any of",
+        SetOp::IncludesAll => "includes all of",
+        SetOp::ExcludesAll => "excludes",
+        SetOp::IsEmpty => "is empty",
+        SetOp::IsNotEmpty => "is not empty",
+    }
+}
+
+fn numeric_op_summary(op: &NumericOp) -> &'static str {
+    match op {
+        NumericOp::Eq => "=",
+        NumericOp::NotEq => "≠",
+        NumericOp::Lt => "<",
+        NumericOp::Lte => "≤",
+        NumericOp::Gt => ">",
+        NumericOp::Gte => "≥",
+    }
+}
+
+fn date_op_summary(op: &DateOp) -> &'static str {
+    match op {
+        DateOp::Before => "before",
+        DateOp::After => "after",
+        DateOp::IsEmpty => "is empty",
+        DateOp::IsNotEmpty => "is not empty",
+    }
+}
+
 /// Default starting filter for a new smart shelf (AND group with one empty
 /// title rule).
 pub(crate) fn default_book_filter() -> BookFilter {

@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 
 use crate::{
     Route,
-    components::{DraggedBookToken, FilterBuilder, FilterEntityOptions, default_book_filter},
+    components::{BookFilter, DraggedBookToken, FilterBuilder, FilterEntityOptions, default_book_filter, filter_to_summary},
     routes::shelf_page::{ShelfSummary, add_book_to_shelf, create_shelf, create_smart_shelf, get_filter_entity_options},
 };
 
@@ -121,6 +121,11 @@ pub(crate) fn ShelfBar(
                         };
                         let stok = shelf.token.clone();
                         let is_smart = shelf.is_smart;
+                        let smart_title = if is_smart {
+                            shelf.filter_json.as_deref().and_then(|j| serde_json::from_str::<BookFilter>(j).ok()).map(|f| filter_to_summary(&f))
+                        } else {
+                            None
+                        };
                         rsx! {
                             div {
                                 class: if is_success {
@@ -128,6 +133,7 @@ pub(crate) fn ShelfBar(
                                 } else {
                                     pill_class.to_string()
                                 },
+                                title: smart_title.unwrap_or_default(),
                                 onclick: {
                                     let stok = stok.clone();
                                     move |_| { navigator.push(Route::ShelfPage { token: stok.clone() }); }

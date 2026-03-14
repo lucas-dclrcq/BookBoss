@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     Error, RepositoryError,
-    book::BookToken,
+    book::{Book, BookId, BookToken},
     filter::BookFilter,
     repository::RepositoryService,
     shelf::{BookShelf, Shelf, ShelfToken, ShelfType, ShelfVisibility},
@@ -69,6 +69,12 @@ pub trait ShelfService: Send + Sync {
     /// Only the owner may update. Returns an error if the shelf is not a smart
     /// shelf or the caller does not own it.
     async fn update_shelf_filter(&self, token: &ShelfToken, filter: BookFilter, user_id: UserId) -> Result<(), Error>;
+
+    /// Returns paginated books matching this smart shelf's filter.
+    ///
+    /// Only callable for smart shelves. Owners can access private shelves;
+    /// other users may only access public shelves.
+    async fn books_for_filter(&self, token: &ShelfToken, user_id: UserId, start_id: Option<BookId>, page_size: Option<u64>) -> Result<Vec<Book>, Error>;
 }
 
 pub(crate) struct ShelfServiceImpl {
@@ -362,6 +368,32 @@ impl ShelfService for ShelfServiceImpl {
             shelf_repository.update_shelf(tx, updated).await?;
 
             Ok(())
+        })
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    async fn books_for_filter(&self, token: &ShelfToken, user_id: UserId, start_id: Option<BookId>, page_size: Option<u64>) -> Result<Vec<Book>, Error> {
+        let token = *token;
+
+        with_read_only_transaction!(self, shelf_repository, |tx| {
+            let shelf = shelf_repository
+                .find_by_token(tx, &token)
+                .await?
+                .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
+
+            if shelf.visibility == ShelfVisibility::Private && shelf.owner_id != user_id {
+                return Err(Error::Validation("this shelf is private".to_string()));
+            }
+
+            if shelf.shelf_type != ShelfType::Smart {
+                return Err(Error::Validation("books_for_filter only works on smart shelves".to_string()));
+            }
+
+            let filter = shelf
+                .filter_criteria
+                .ok_or_else(|| Error::Validation("smart shelf has no filter criteria".to_string()))?;
+
+            shelf_repository.books_for_filter(tx, &filter, user_id, start_id, page_size).await
         })
     }
 
