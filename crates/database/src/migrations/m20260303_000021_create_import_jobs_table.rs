@@ -65,10 +65,23 @@ impl MigrationTrait for Migration {
                     .col(ImportJobs::FileHash)
                     .to_owned(),
             )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_import_jobs_candidate_book_id")
+                    .table(ImportJobs::Table)
+                    .col(ImportJobs::CandidateBookId)
+                    .to_owned(),
+            )
             .await
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .drop_index(Index::drop().name("idx_import_jobs_candidate_book_id").to_owned())
+            .await?;
         manager.drop_index(Index::drop().name("idx_import_jobs_file_hash").to_owned()).await?;
         manager.drop_index(Index::drop().name("idx_import_jobs_status").to_owned()).await?;
         manager.drop_table(Table::drop().table(ImportJobs::Table).to_owned()).await

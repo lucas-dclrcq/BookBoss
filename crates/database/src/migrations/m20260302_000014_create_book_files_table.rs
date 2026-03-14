@@ -28,10 +28,21 @@ impl MigrationTrait for Migration {
                     )
                     .to_owned(),
             )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_book_files_file_hash")
+                    .table(BookFiles::Table)
+                    .col(BookFiles::FileHash)
+                    .to_owned(),
+            )
             .await
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager.drop_index(Index::drop().name("idx_book_files_file_hash").to_owned()).await?;
         manager.drop_table(Table::drop().table(BookFiles::Table).to_owned()).await
     }
 }

@@ -44,10 +44,21 @@ impl MigrationTrait for Migration {
                     .col(Devices::OwnerId)
                     .to_owned(),
             )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_devices_name")
+                    .table(Devices::Table)
+                    .col(Devices::Name)
+                    .to_owned(),
+            )
             .await
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager.drop_index(Index::drop().name("idx_devices_name").to_owned()).await?;
         manager.drop_index(Index::drop().name("idx_devices_owner_id").to_owned()).await?;
         manager.drop_table(Table::drop().table(Devices::Table).to_owned()).await
     }

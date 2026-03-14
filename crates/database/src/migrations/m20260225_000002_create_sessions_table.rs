@@ -20,10 +20,21 @@ impl MigrationTrait for Migration {
                     .col(timestamp_with_time_zone(Sessions::CreatedAt))
                     .to_owned(),
             )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_sessions_expires_at")
+                    .table(Sessions::Table)
+                    .col(Sessions::ExpiresAt)
+                    .to_owned(),
+            )
             .await
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager.drop_index(Index::drop().name("idx_sessions_expires_at").to_owned()).await?;
         manager.drop_table(Table::drop().table(Sessions::Table).to_owned()).await
     }
 }

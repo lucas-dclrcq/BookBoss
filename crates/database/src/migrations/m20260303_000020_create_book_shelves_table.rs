@@ -37,19 +37,22 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        // Composite index covers both "all books in shelf X" and paginated "books in shelf X
+        // after book_id Y" queries, which are the dominant access patterns for this table.
         manager
             .create_index(
                 Index::create()
-                    .name("idx_book_shelves_shelf_id")
+                    .name("idx_book_shelves_shelf_book")
                     .table(BookShelves::Table)
                     .col(BookShelves::ShelfId)
+                    .col(BookShelves::BookId)
                     .to_owned(),
             )
             .await
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        manager.drop_index(Index::drop().name("idx_book_shelves_shelf_id").to_owned()).await?;
+        manager.drop_index(Index::drop().name("idx_book_shelves_shelf_book").to_owned()).await?;
         manager.drop_table(Table::drop().table(BookShelves::Table).to_owned()).await
     }
 }
