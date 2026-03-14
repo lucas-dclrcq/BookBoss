@@ -12,6 +12,12 @@ RUN rustup target add x86_64-unknown-linux-musl
 # Install protobuf-compiler
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    binutils \
+    build-essential \
+    curl \
+    mold \
+    musl-tools \
+    pkg-config \
     protobuf-compiler && \
     rm -rf /var/lib/apt/lists/*
 
