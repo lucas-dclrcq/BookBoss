@@ -2,7 +2,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use crate::{
     Error, RepositoryError,
-    book::{AuthorRole, BookStatus, BookToken, IdentifierType, MetadataSource, NewAuthor, NewBook, NewGenre, NewPublisher, NewSeries, NewTag},
+    book::{AuthorRole, BookStatus, BookToken, FileRole, IdentifierType, MetadataSource, NewAuthor, NewBook, NewGenre, NewPublisher, NewSeries, NewTag},
     import::{ImportJob, ImportJobToken, ImportSource, ImportStatus},
     pipeline::{
         MetadataExtractor, MetadataProvider,
@@ -418,7 +418,9 @@ impl PipelineService for PipelineServiceImpl {
                     .await?;
 
                 // Record the book file
-                book_repo.add_book_file(tx, book.id, file_format, file_size, file_hash).await?;
+                book_repo
+                    .add_book_file(tx, book.id, file_format, FileRole::Original, file_size, file_hash)
+                    .await?;
 
                 // Find or create each author, then link to book
                 for a in fm.authors.as_deref().unwrap_or(&[]) {

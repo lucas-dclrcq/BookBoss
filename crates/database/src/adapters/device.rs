@@ -20,6 +20,7 @@ use crate::{
 fn file_format_to_str(f: &FileFormat) -> &'static str {
     match f {
         FileFormat::Epub => "epub",
+        FileFormat::Kepub => "kepub",
         FileFormat::Mobi => "mobi",
         FileFormat::Azw3 => "azw3",
         FileFormat::Pdf => "pdf",

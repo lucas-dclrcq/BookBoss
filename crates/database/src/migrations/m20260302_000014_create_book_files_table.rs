@@ -16,9 +16,10 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(big_integer(BookFiles::BookId).not_null())
                     .col(string(BookFiles::Format).not_null())
+                    .col(string(BookFiles::FileRole).not_null())
                     .col(big_integer(BookFiles::FileSize))
                     .col(string(BookFiles::FileHash))
-                    .primary_key(Index::create().col(BookFiles::BookId).col(BookFiles::Format))
+                    .primary_key(Index::create().col(BookFiles::BookId).col(BookFiles::Format).col(BookFiles::FileRole))
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk_book_files_book_id")
@@ -52,6 +53,7 @@ enum BookFiles {
     Table,
     BookId,
     Format,
+    FileRole,
     FileSize,
     FileHash,
 }

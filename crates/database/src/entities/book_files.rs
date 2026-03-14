@@ -9,6 +9,8 @@ pub struct Model {
     pub book_id: i64,
     #[sea_orm(primary_key, auto_increment = false)]
     pub format: String,
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub file_role: String,
     pub file_size: i64,
     pub file_hash: String,
 }

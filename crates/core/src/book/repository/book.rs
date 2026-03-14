@@ -1,8 +1,8 @@
 use crate::{
     Error,
     book::{
-        AuthorId, AuthorRole, Book, BookAuthor, BookFile, BookId, BookIdentifier, BookQuery, BookToken, FileFormat, Genre, GenreId, IdentifierType, NewBook,
-        Tag, TagId,
+        AuthorId, AuthorRole, Book, BookAuthor, BookFile, BookId, BookIdentifier, BookQuery, BookToken, FileFormat, FileRole, Genre, GenreId, IdentifierType,
+        NewBook, Tag, TagId,
     },
     repository::Transaction,
 };
@@ -24,6 +24,7 @@ pub trait BookRepository: Send + Sync {
         transaction: &dyn Transaction,
         book_id: BookId,
         format: FileFormat,
+        file_role: FileRole,
         file_size: i64,
         file_hash: String,
     ) -> Result<BookFile, Error>;

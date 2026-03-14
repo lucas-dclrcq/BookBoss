@@ -25,6 +25,7 @@ impl LocalLibraryStore {
 fn format_ext(format: &FileFormat) -> &'static str {
     match format {
         FileFormat::Epub => "epub",
+        FileFormat::Kepub => "kepub.epub",
         FileFormat::Mobi => "mobi",
         FileFormat::Azw3 => "azw3",
         FileFormat::Pdf => "pdf",

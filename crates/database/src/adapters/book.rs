@@ -1,8 +1,8 @@
 use bb_core::{
     Error, RepositoryError,
     book::{
-        AuthorId, AuthorRole, Book, BookAuthor, BookFile, BookId, BookIdentifier, BookQuery, BookRepository, BookStatus, BookToken, FileFormat, Genre, GenreId,
-        IdentifierType, MetadataSource, NewBook, Tag, TagId,
+        AuthorId, AuthorRole, Book, BookAuthor, BookFile, BookId, BookIdentifier, BookQuery, BookRepository, BookStatus, BookToken, FileFormat, FileRole,
+        Genre, GenreId, IdentifierType, MetadataSource, NewBook, Tag, TagId,
     },
     repository::Transaction,
 };
@@ -67,10 +67,18 @@ fn author_role_to_str(role: &AuthorRole) -> &'static str {
 fn file_format_to_str(format: &FileFormat) -> &'static str {
     match format {
         FileFormat::Epub => "epub",
+        FileFormat::Kepub => "kepub",
         FileFormat::Mobi => "mobi",
         FileFormat::Azw3 => "azw3",
         FileFormat::Pdf => "pdf",
         FileFormat::Cbz => "cbz",
+    }
+}
+
+fn file_role_to_str(role: &FileRole) -> &'static str {
+    match role {
+        FileRole::Original => "original",
+        FileRole::Enriched => "enriched",
     }
 }
 
@@ -98,11 +106,20 @@ fn str_to_author_role(s: &str) -> Result<AuthorRole, Error> {
 fn str_to_file_format(s: &str) -> Result<FileFormat, Error> {
     match s {
         "epub" => Ok(FileFormat::Epub),
+        "kepub" => Ok(FileFormat::Kepub),
         "mobi" => Ok(FileFormat::Mobi),
         "azw3" => Ok(FileFormat::Azw3),
         "pdf" => Ok(FileFormat::Pdf),
         "cbz" => Ok(FileFormat::Cbz),
         _ => Err(Error::RepositoryError(RepositoryError::Database(format!("unknown file format: {s}")))),
+    }
+}
+
+fn str_to_file_role(s: &str) -> Result<FileRole, Error> {
+    match s {
+        "original" => Ok(FileRole::Original),
+        "enriched" => Ok(FileRole::Enriched),
+        _ => Err(Error::RepositoryError(RepositoryError::Database(format!("unknown file role: {s}")))),
     }
 }
 
@@ -348,6 +365,7 @@ impl BookRepository for BookRepositoryAdapter {
                 Ok(BookFile {
                     book_id: m.book_id as u64,
                     format: str_to_file_format(&m.format)?,
+                    file_role: str_to_file_role(&m.file_role)?,
                     file_size: m.file_size,
                     file_hash: m.file_hash,
                 })
@@ -391,6 +409,7 @@ impl BookRepository for BookRepositoryAdapter {
             Ok(BookFile {
                 book_id: m.book_id as u64,
                 format: str_to_file_format(&m.format)?,
+                file_role: str_to_file_role(&m.file_role)?,
                 file_size: m.file_size,
                 file_hash: m.file_hash,
             })
@@ -403,6 +422,7 @@ impl BookRepository for BookRepositoryAdapter {
         transaction: &dyn Transaction,
         book_id: BookId,
         format: FileFormat,
+        file_role: FileRole,
         file_size: i64,
         file_hash: String,
     ) -> Result<BookFile, Error> {
@@ -411,6 +431,7 @@ impl BookRepository for BookRepositoryAdapter {
         let model = book_files::ActiveModel {
             book_id: Set(book_id as i64),
             format: Set(file_format_to_str(&format).to_string()),
+            file_role: Set(file_role_to_str(&file_role).to_string()),
             file_size: Set(file_size),
             file_hash: Set(file_hash.clone()),
         };
@@ -420,6 +441,7 @@ impl BookRepository for BookRepositoryAdapter {
         Ok(BookFile {
             book_id,
             format,
+            file_role,
             file_size,
             file_hash,
         })
@@ -1182,6 +1204,7 @@ mod tests {
         book_files::ActiveModel {
             book_id: Set(book.id as i64),
             format: Set("epub".to_owned()),
+            file_role: Set("original".to_owned()),
             file_size: Set(1_024_000),
             file_hash: Set("abc123".to_owned()),
         }

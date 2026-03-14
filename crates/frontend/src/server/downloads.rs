@@ -123,6 +123,7 @@ fn sanitize_filename(s: &str) -> String {
 fn format_ext(format: &FileFormat) -> &'static str {
     match format {
         FileFormat::Epub => "epub",
+        FileFormat::Kepub => "kepub.epub",
         FileFormat::Mobi => "mobi",
         FileFormat::Azw3 => "azw3",
         FileFormat::Pdf => "pdf",
@@ -133,6 +134,7 @@ fn format_ext(format: &FileFormat) -> &'static str {
 fn content_type_for_format(format: &FileFormat) -> &'static str {
     match format {
         FileFormat::Epub => "application/epub+zip",
+        FileFormat::Kepub => "application/epub+zip",
         FileFormat::Mobi => "application/x-mobipocket-ebook",
         FileFormat::Azw3 => "application/vnd.amazon.mobi8-ebook",
         FileFormat::Pdf => "application/pdf",

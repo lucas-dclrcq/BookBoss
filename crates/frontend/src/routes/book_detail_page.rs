@@ -181,6 +181,7 @@ async fn get_book(token: String) -> Result<BookDetail, ServerFnError> {
         .map(|f| FileDetail {
             format: match &f.format {
                 FileFormat::Epub => "EPUB",
+                FileFormat::Kepub => "KEPUB",
                 FileFormat::Mobi => "MOBI",
                 FileFormat::Azw3 => "AZW3",
                 FileFormat::Pdf => "PDF",
