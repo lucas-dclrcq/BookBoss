@@ -158,6 +158,9 @@ pub(crate) fn ShelfBar(
                                 onanimationend: move |_| success_shelf.set(None),
                                 if is_smart { "✦ " }
                                 "{shelf.name}"
+                                if let Some(n) = shelf.count {
+                                    span { class: "ml-1 opacity-60", "· {n}" }
+                                }
                             }
                         }
                     }

@@ -75,6 +75,11 @@ pub trait ShelfService: Send + Sync {
     /// Only callable for smart shelves. Owners can access private shelves;
     /// other users may only access public shelves.
     async fn books_for_filter(&self, token: &ShelfToken, user_id: UserId, start_id: Option<BookId>, page_size: Option<u64>) -> Result<Vec<Book>, Error>;
+
+    /// Returns the total number of books matching this smart shelf's filter.
+    ///
+    /// Only callable for smart shelves the caller can access.
+    async fn count_for_filter(&self, token: &ShelfToken, user_id: UserId) -> Result<u64, Error>;
 }
 
 pub(crate) struct ShelfServiceImpl {
@@ -394,6 +399,32 @@ impl ShelfService for ShelfServiceImpl {
                 .ok_or_else(|| Error::Validation("smart shelf has no filter criteria".to_string()))?;
 
             shelf_repository.books_for_filter(tx, &filter, user_id, start_id, page_size).await
+        })
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    async fn count_for_filter(&self, token: &ShelfToken, user_id: UserId) -> Result<u64, Error> {
+        let token = *token;
+
+        with_read_only_transaction!(self, shelf_repository, |tx| {
+            let shelf = shelf_repository
+                .find_by_token(tx, &token)
+                .await?
+                .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
+
+            if shelf.visibility == ShelfVisibility::Private && shelf.owner_id != user_id {
+                return Err(Error::Validation("this shelf is private".to_string()));
+            }
+
+            if shelf.shelf_type != ShelfType::Smart {
+                return Err(Error::Validation("count_for_filter only works on smart shelves".to_string()));
+            }
+
+            let filter = shelf
+                .filter_criteria
+                .ok_or_else(|| Error::Validation("smart shelf has no filter criteria".to_string()))?;
+
+            shelf_repository.count_for_filter(tx, &filter, user_id).await
         })
     }
 

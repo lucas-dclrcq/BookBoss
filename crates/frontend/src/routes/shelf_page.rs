@@ -34,6 +34,8 @@ pub(crate) struct ShelfSummary {
     /// Serialized `BookFilter` JSON — present only for smart shelves owned by
     /// the current user.
     pub filter_json: Option<String>,
+    /// Matching book count — populated for own smart shelves only.
+    pub count: Option<u64>,
 }
 
 // ---------------------------------------------------------------------------
@@ -113,6 +115,7 @@ pub(crate) async fn list_my_shelves() -> Result<Vec<ShelfSummary>, ServerFnError
                 is_own: true,
                 is_smart,
                 filter_json,
+                count: None,
             }
         })
         .collect())
@@ -379,28 +382,34 @@ pub(crate) async fn list_all_accessible_shelves() -> Result<Vec<ShelfSummary>, S
 
     let shelf_service = &core_services.shelf_service;
 
-    let mut own = shelf_service
+    let own_shelves = shelf_service
         .list_shelves_for_user(user_id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
-        .into_iter()
-        .map(|s| {
-            let is_smart = s.shelf_type == ShelfType::Smart;
-            let filter_json = if is_smart {
-                s.filter_criteria.as_ref().and_then(|f| serde_json::to_string(f).ok())
-            } else {
-                None
-            };
-            ShelfSummary {
-                token: s.token.to_string(),
-                name: s.name.clone(),
-                visibility: visibility_str(&s.visibility).to_string(),
-                is_own: true,
-                is_smart,
-                filter_json,
-            }
-        })
-        .collect::<Vec<_>>();
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let mut own = Vec::with_capacity(own_shelves.len());
+    for s in own_shelves {
+        let is_smart = s.shelf_type == ShelfType::Smart;
+        let filter_json = if is_smart {
+            s.filter_criteria.as_ref().and_then(|f| serde_json::to_string(f).ok())
+        } else {
+            None
+        };
+        let count = if is_smart {
+            shelf_service.count_for_filter(&s.token, user_id).await.ok()
+        } else {
+            None
+        };
+        own.push(ShelfSummary {
+            token: s.token.to_string(),
+            name: s.name.clone(),
+            visibility: visibility_str(&s.visibility).to_string(),
+            is_own: true,
+            is_smart,
+            filter_json,
+            count,
+        });
+    }
 
     let others = shelf_service
         .list_public_shelves(user_id)
@@ -413,7 +422,8 @@ pub(crate) async fn list_all_accessible_shelves() -> Result<Vec<ShelfSummary>, S
             visibility: visibility_str(&s.visibility).to_string(),
             is_own: false,
             is_smart: s.shelf_type == ShelfType::Smart,
-            filter_json: None, // don't expose others' filter JSON
+            filter_json: None,
+            count: None,
         });
 
     own.extend(others);
