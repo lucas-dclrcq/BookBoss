@@ -37,19 +37,41 @@ async fn logout() -> Result<(), ServerFnError> {
     Ok(())
 }
 
+/// Renders the Incoming nav link with its pending-count badge.
+///
+/// Isolated into its own component so that `use_server_future` can suspend
+/// with `?` here without affecting the rest of `NavBar`. `NavBar` wraps this
+/// in a `SuspenseBoundary` so the link simply stays hidden until the count
+/// resolves, rather than leaving it permanently absent after a page refresh.
 #[component]
-pub(crate) fn NavBar() -> Element {
-    let navigator = use_navigator();
-    let mut user_menu_open = use_signal(|| false);
+fn IncomingBadge() -> Element {
     let incoming_refresh: Signal<u32> = use_context();
     let pending_count = use_server_future(move || {
         let _rev = incoming_refresh();
         get_pending_count()
-    });
-    let count_opt = match pending_count {
-        Ok(resource) => resource().and_then(|r: Result<Option<u32>, ServerFnError>| r.ok()).flatten(),
-        Err(_) => None,
-    };
+    })?;
+
+    let count_opt = pending_count().and_then(|r: Result<Option<u32>, ServerFnError>| r.ok()).flatten();
+
+    rsx! {
+        {count_opt.map(|count| rsx! {
+            Link { to: Route::IncomingPage {}, class: "relative text-sm hover:text-indigo-200 flex items-center gap-1.5",
+                "Incoming"
+                if count > 0 {
+                    span {
+                        class: "inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[0.6rem] font-bold leading-none",
+                        "{count}"
+                    }
+                }
+            }
+        })}
+    }
+}
+
+#[component]
+pub(crate) fn NavBar() -> Element {
+    let navigator = use_navigator();
+    let mut user_menu_open = use_signal(|| false);
 
     let on_logout = move |_| {
         user_menu_open.set(false);
@@ -70,18 +92,9 @@ pub(crate) fn NavBar() -> Element {
                 Link { to: Route::BooksPage {}, class: "text-sm hover:text-indigo-200",
                     "Library"
                 }
-                {
-                    count_opt.map(|count| rsx! {
-                        Link { to: Route::IncomingPage {}, class: "relative text-sm hover:text-indigo-200 flex items-center gap-1.5",
-                            "Incoming"
-                            if count > 0 {
-                                span {
-                                    class: "inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[0.6rem] font-bold leading-none",
-                                    "{count}"
-                                }
-                            }
-                        }
-                    })
+                SuspenseBoundary {
+                    fallback: |_| rsx! {},
+                    IncomingBadge {}
                 }
             }
             div { class: "flex items-center gap-4",

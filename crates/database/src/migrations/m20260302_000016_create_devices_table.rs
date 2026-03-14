@@ -47,13 +47,7 @@ impl MigrationTrait for Migration {
             .await?;
 
         manager
-            .create_index(
-                Index::create()
-                    .name("idx_devices_name")
-                    .table(Devices::Table)
-                    .col(Devices::Name)
-                    .to_owned(),
-            )
+            .create_index(Index::create().name("idx_devices_name").table(Devices::Table).col(Devices::Name).to_owned())
             .await
     }
 
