@@ -1,13 +1,18 @@
+mod devices_section;
+
+use devices_section::DevicesSectionContent;
 use dioxus::prelude::*;
 #[cfg(feature = "server")]
 use {
     crate::server::AuthSession,
     bb_core::{
         CoreServices,
+        device::{DeviceToken, OnRemovalAction},
         reading::{AUTO_READ_THRESHOLD_KEY, DEFAULT_AUTO_READ_THRESHOLD},
         types::EmailAddress,
         user::User,
     },
+    std::str::FromStr,
     std::sync::Arc,
 };
 
@@ -26,6 +31,17 @@ struct ProfileInfo {
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 struct ReadingSettings {
     auto_read_threshold_pct: u8,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+struct DeviceRow {
+    token: String,
+    name: String,
+    device_type: String,
+    on_removal_action: String,
+    sync_token_display: String,
+    companion_shelf_name: Option<String>,
+    companion_shelf_token: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -206,6 +222,174 @@ async fn change_password(current: String, new_password: String) -> Result<(), Se
 }
 
 // ---------------------------------------------------------------------------
+// Device server functions
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "server")]
+fn removal_action_to_str(a: &OnRemovalAction) -> &'static str {
+    match a {
+        OnRemovalAction::Nothing => "nothing",
+        OnRemovalAction::MarkRead => "mark_read",
+        OnRemovalAction::MarkDnf => "mark_dnf",
+    }
+}
+
+#[cfg(feature = "server")]
+fn parse_removal_action(s: &str) -> Result<OnRemovalAction, ServerFnError> {
+    match s {
+        "nothing" => Ok(OnRemovalAction::Nothing),
+        "mark_read" => Ok(OnRemovalAction::MarkRead),
+        "mark_dnf" => Ok(OnRemovalAction::MarkDnf),
+        _ => Err(ServerFnError::new("Invalid on_removal_action")),
+    }
+}
+
+#[get(
+    "/api/v1/profile/devices",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+async fn get_devices_for_profile() -> Result<Vec<DeviceRow>, ServerFnError> {
+    let user_id = auth_session
+        .current_user
+        .as_ref()
+        .filter(|u| !u.username.is_empty())
+        .ok_or_else(|| ServerFnError::new("Not authenticated"))?
+        .id();
+
+    let devices = core_services
+        .device_service
+        .list_devices_for_user(user_id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let mut rows = Vec::with_capacity(devices.len());
+    for device in devices {
+        let companion = core_services
+            .device_service
+            .get_companion_shelf(device.id)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        let sync_token_display = device.token.to_string().trim_start_matches("DV_").to_string();
+
+        rows.push(DeviceRow {
+            token: device.token.to_string(),
+            name: device.name,
+            device_type: device.device_type,
+            on_removal_action: removal_action_to_str(&device.on_removal_action).to_string(),
+            sync_token_display,
+            companion_shelf_name: companion.as_ref().map(|s| s.name.clone()),
+            companion_shelf_token: companion.as_ref().map(|s| s.token.to_string()),
+        });
+    }
+    Ok(rows)
+}
+
+#[get(
+    "/api/v1/profile/devices/default-name",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+async fn get_default_device_name() -> Result<String, ServerFnError> {
+    let user_id = auth_session
+        .current_user
+        .as_ref()
+        .filter(|u| !u.username.is_empty())
+        .ok_or_else(|| ServerFnError::new("Not authenticated"))?
+        .id();
+
+    core_services
+        .device_service
+        .default_device_name(user_id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))
+}
+
+#[post(
+    "/api/v1/profile/devices/create",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+async fn create_device_for_profile(name: String, device_type: String, on_removal_action: String) -> Result<(), ServerFnError> {
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return Err(ServerFnError::new("Device name must not be empty"));
+    }
+
+    let user_id = auth_session
+        .current_user
+        .as_ref()
+        .filter(|u| !u.username.is_empty())
+        .ok_or_else(|| ServerFnError::new("Not authenticated"))?
+        .id();
+
+    let action = parse_removal_action(&on_removal_action)?;
+
+    core_services
+        .device_service
+        .create_device(user_id, name, device_type, action)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(())
+}
+
+#[post(
+    "/api/v1/profile/devices/update",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+async fn update_device_for_profile(token: String, name: String, on_removal_action: String) -> Result<(), ServerFnError> {
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return Err(ServerFnError::new("Device name must not be empty"));
+    }
+
+    let user_id = auth_session
+        .current_user
+        .as_ref()
+        .filter(|u| !u.username.is_empty())
+        .ok_or_else(|| ServerFnError::new("Not authenticated"))?
+        .id();
+
+    let device_token = DeviceToken::from_str(&token).map_err(|e| ServerFnError::new(e.to_string()))?;
+    let action = parse_removal_action(&on_removal_action)?;
+
+    core_services
+        .device_service
+        .update_device(&device_token, name, action, user_id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(())
+}
+
+#[post(
+    "/api/v1/profile/devices/delete",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+async fn delete_device_for_profile(token: String, delete_shelf: bool) -> Result<(), ServerFnError> {
+    let user_id = auth_session
+        .current_user
+        .as_ref()
+        .filter(|u| !u.username.is_empty())
+        .ok_or_else(|| ServerFnError::new("Not authenticated"))?
+        .id();
+
+    let device_token = DeviceToken::from_str(&token).map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    core_services
+        .device_service
+        .delete_device(&device_token, delete_shelf, user_id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // ProfilePage
 // ---------------------------------------------------------------------------
 
@@ -242,8 +426,7 @@ pub(crate) fn ProfilePage() -> Element {
 
                 // ── My Devices ────────────────────────────────────────────
                 section {
-                    h2 { class: "text-lg font-semibold text-gray-900 mb-4", "My Devices" }
-                    p { class: "text-sm text-gray-500", "Device management coming soon." }
+                    DevicesSectionContent {}
                 }
             }
         }
