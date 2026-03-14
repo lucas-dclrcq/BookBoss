@@ -9,7 +9,7 @@ use axum::{
 };
 use bb_core::{
     CoreServices,
-    book::{AuthorToken, BookToken, FileFormat},
+    book::{AuthorToken, BookToken, FileFormat, book_slug},
 };
 
 use super::AuthSession;
@@ -75,10 +75,7 @@ pub(crate) async fn serve_book_file(
         None
     };
 
-    let slug = match &first_author_name {
-        Some(name) => format!("{}-{}", slugify(name), slugify(&book.title)),
-        None => slugify(&book.title),
-    };
+    let slug = book_slug(&book.title, first_author_name.as_deref());
 
     let ext = format_ext(&format);
     let path = core_services.library_store.book_file_path(&token, &slug, format.clone());
@@ -105,13 +102,6 @@ pub(crate) async fn serve_book_file(
         .header(header::CACHE_CONTROL, HeaderValue::from_static("private, no-cache"))
         .body(Body::from(data))
         .unwrap()
-}
-
-/// Mirrors the pipeline service slugify — filesystem-safe, lowercase,
-/// hyphenated.
-fn slugify(s: &str) -> String {
-    let raw: String = s.chars().map(|c| if c.is_alphanumeric() { c.to_ascii_lowercase() } else { '-' }).collect();
-    raw.split('-').filter(|p| !p.is_empty()).collect::<Vec<_>>().join("-")
 }
 
 /// Produces a safe filename fragment from a book title (keeps alphanumerics,

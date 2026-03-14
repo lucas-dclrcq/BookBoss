@@ -49,4 +49,11 @@ pub trait BookRepository: Send + Sync {
     async fn add_book_tag(&self, transaction: &dyn Transaction, book_id: BookId, tag_id: TagId) -> Result<(), Error>;
     async fn delete_book_genres(&self, transaction: &dyn Transaction, book_id: BookId) -> Result<(), Error>;
     async fn delete_book_tags(&self, transaction: &dyn Transaction, book_id: BookId) -> Result<(), Error>;
+    /// Deletes a specific file record for a book (identified by format + role).
+    /// No-op if the record does not exist.
+    async fn delete_book_file_by_role(&self, transaction: &dyn Transaction, book_id: BookId, format: FileFormat, role: FileRole) -> Result<(), Error>;
+    /// Returns the IDs of books that have an Original EPUB but no Enriched EPUB
+    /// in `book_files`. Used at startup to re-enqueue any enrichment jobs that
+    /// were lost due to a crash.
+    async fn find_book_ids_needing_enrichment(&self, transaction: &dyn Transaction) -> Result<Vec<BookId>, Error>;
 }

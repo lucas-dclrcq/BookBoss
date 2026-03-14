@@ -3,7 +3,70 @@ use chrono::{DateTime, Utc};
 use derive_builder::Builder;
 use rust_decimal::Decimal;
 
-use crate::book::{AuthorId, GenreId, MetadataSource, SeriesId, TagId};
+use crate::book::{AuthorId, FileFormat, GenreId, MetadataSource, SeriesId, TagId};
+
+// ── Slug / filename helpers
+// ───────────────────────────────────────────────────
+
+/// Converts a string to a filesystem-safe, lowercase, hyphenated slug.
+fn slugify(s: &str) -> String {
+    let raw: String = s.chars().map(|c| if c.is_alphanumeric() { c.to_ascii_lowercase() } else { '-' }).collect();
+    raw.split('-').filter(|p| !p.is_empty()).collect::<Vec<_>>().join("-")
+}
+
+/// Returns the slug portion of a book's filename: `{author}-{title}` if an
+/// author name is provided, or just `{title}` otherwise.
+pub fn book_slug(title: &str, first_author_name: Option<&str>) -> String {
+    match first_author_name {
+        Some(author) if !author.is_empty() => format!("{}-{}", slugify(author), slugify(title)),
+        _ => slugify(title),
+    }
+}
+
+/// Returns the full filename (`slug.ext`) for a book file, e.g.
+/// `"tolkien-j-r-r-the-fellowship-of-the-ring.epub"`.
+pub fn book_filename(title: &str, first_author_name: Option<&str>, format: &FileFormat) -> String {
+    let slug = book_slug(title, first_author_name);
+    let ext = match format {
+        FileFormat::Epub => "epub",
+        FileFormat::Kepub => "kepub.epub",
+        FileFormat::Mobi => "mobi",
+        FileFormat::Azw3 => "azw3",
+        FileFormat::Pdf => "pdf",
+        FileFormat::Cbz => "cbz",
+    };
+    format!("{slug}.{ext}")
+}
+
+#[cfg(test)]
+mod slug_tests {
+    use super::*;
+
+    #[test]
+    fn slug_title_only() {
+        assert_eq!(book_slug("The Hobbit", None), "the-hobbit");
+    }
+
+    #[test]
+    fn slug_with_author() {
+        assert_eq!(book_slug("The Hobbit", Some("Tolkien")), "tolkien-the-hobbit");
+    }
+
+    #[test]
+    fn slug_empty_author_falls_back_to_title() {
+        assert_eq!(book_slug("Dune", Some("")), "dune");
+    }
+
+    #[test]
+    fn filename_epub() {
+        assert_eq!(book_filename("Dune", Some("Herbert"), &FileFormat::Epub), "herbert-dune.epub");
+    }
+
+    #[test]
+    fn filename_kepub() {
+        assert_eq!(book_filename("Dune", None, &FileFormat::Kepub), "dune.kepub.epub");
+    }
+}
 
 define_token_prefix!(BookTokenPrefix, "BK_");
 pub type BookId = u64;

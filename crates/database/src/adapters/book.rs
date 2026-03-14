@@ -641,6 +641,46 @@ impl BookRepository for BookRepositoryAdapter {
 
         Ok(())
     }
+
+    async fn delete_book_file_by_role(&self, transaction: &dyn Transaction, book_id: BookId, format: FileFormat, role: FileRole) -> Result<(), Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        prelude::BookFiles::delete_many()
+            .filter(book_files::Column::BookId.eq(book_id as i64))
+            .filter(book_files::Column::Format.eq(file_format_to_str(&format)))
+            .filter(book_files::Column::FileRole.eq(file_role_to_str(&role)))
+            .exec(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(())
+    }
+
+    async fn find_book_ids_needing_enrichment(&self, transaction: &dyn Transaction) -> Result<Vec<BookId>, Error> {
+        use sea_orm::sea_query::Query;
+
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        // Books that have an Original epub but no Enriched epub.
+        let enriched_subq = {
+            let mut q = Query::select();
+            q.column(book_files::Column::BookId)
+                .from(book_files::Entity)
+                .and_where(book_files::Column::Format.eq("epub"))
+                .and_where(book_files::Column::FileRole.eq("enriched"));
+            q
+        };
+
+        let rows = prelude::BookFiles::find()
+            .filter(book_files::Column::Format.eq("epub"))
+            .filter(book_files::Column::FileRole.eq("original"))
+            .filter(book_files::Column::BookId.not_in_subquery(enriched_subq))
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(rows.into_iter().map(|m| m.book_id as u64).collect())
+    }
 }
 
 #[cfg(test)]

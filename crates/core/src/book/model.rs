@@ -9,7 +9,7 @@ pub mod series;
 pub mod tag;
 
 pub use author::{Author, AuthorId, AuthorRole, AuthorToken, BookAuthor, NewAuthor};
-pub use book::{Book, BookId, BookQuery, BookStatus, BookToken, NewBook};
+pub use book::{Book, BookId, BookQuery, BookStatus, BookToken, NewBook, book_filename, book_slug};
 pub use book_file::{BookFile, FileFormat, FileRole};
 pub use book_identifier::{BookIdentifier, IdentifierType};
 pub use genre::{Genre, GenreId, GenreToken, NewGenre};

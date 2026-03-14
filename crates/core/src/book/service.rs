@@ -620,6 +620,12 @@ mod tests {
         async fn delete_book_tags(&self, _: &dyn Transaction, _: BookId) -> Result<(), Error> {
             unimplemented!()
         }
+        async fn delete_book_file_by_role(&self, _: &dyn Transaction, _: BookId, _: FileFormat, _: FileRole) -> Result<(), Error> {
+            unimplemented!()
+        }
+        async fn find_book_ids_needing_enrichment(&self, _: &dyn Transaction) -> Result<Vec<BookId>, Error> {
+            unimplemented!()
+        }
     }
 
     struct MockJobRepository;

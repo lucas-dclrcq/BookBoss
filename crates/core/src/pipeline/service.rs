@@ -2,7 +2,9 @@ use std::{path::PathBuf, sync::Arc};
 
 use crate::{
     Error, RepositoryError,
-    book::{AuthorRole, BookStatus, BookToken, FileRole, IdentifierType, MetadataSource, NewAuthor, NewBook, NewGenre, NewPublisher, NewSeries, NewTag},
+    book::{
+        AuthorRole, BookStatus, BookToken, FileRole, IdentifierType, MetadataSource, NewAuthor, NewBook, NewGenre, NewPublisher, NewSeries, NewTag, book_slug,
+    },
     import::{ImportJob, ImportJobToken, ImportSource, ImportStatus},
     pipeline::{
         MetadataExtractor, MetadataProvider,
@@ -184,12 +186,6 @@ fn detect_cover_filename(data: &[u8]) -> &'static str {
 /// to a single space. Ensures "A  B" and "A B" resolve to the same author.
 fn normalize_name(s: &str) -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-/// Build a filesystem-safe slug from a title string.
-fn slugify(s: &str) -> String {
-    let raw: String = s.chars().map(|c| if c.is_alphanumeric() { c.to_ascii_lowercase() } else { '-' }).collect();
-    raw.split('-').filter(|p| !p.is_empty()).collect::<Vec<_>>().join("-")
 }
 
 #[async_trait::async_trait]
@@ -462,11 +458,8 @@ impl PipelineService for PipelineServiceImpl {
 
         // ── 12. Store book file (moves it into the library directory) ──────────
         let slug = {
-            let author_slug = final_meta.authors.as_deref().and_then(|a| a.first()).map(|a| slugify(&a.name));
-            match author_slug {
-                Some(a) => format!("{a}-{}", slugify(&book.title)),
-                None => slugify(&book.title),
-            }
+            let first_author = final_meta.authors.as_deref().and_then(|a| a.first()).map(|a| a.name.as_str());
+            book_slug(&book.title, first_author)
         };
         self.library_store
             .store_book_file(&book.token, &slug, updated_job.file_format.clone(), &path)
@@ -604,10 +597,7 @@ impl PipelineService for PipelineServiceImpl {
             None
         };
 
-        let old_slug = match &old_first_author_name {
-            Some(name) => format!("{}-{}", slugify(name), slugify(&book.title)),
-            None => slugify(&book.title),
-        };
+        let old_slug = book_slug(&book.title, old_first_author_name.as_deref());
 
         // ── 3. Read temp cover if requested ───────────────────────────────────
         let cover_data: Option<(Vec<u8>, String)> = if edit.use_fetched_cover {
@@ -770,12 +760,7 @@ impl PipelineService for PipelineServiceImpl {
 
         // ── 6. Rename book files if slug changed ──────────────────────────────
         let new_first_author = edit.authors.first().map(|a| normalize_name(a));
-        let new_slug = match &new_first_author {
-            Some(name) if !name.is_empty() => {
-                format!("{}-{}", slugify(name), slugify(&normalize_name(&edit.title)))
-            }
-            _ => slugify(&normalize_name(&edit.title)),
-        };
+        let new_slug = book_slug(&normalize_name(&edit.title), new_first_author.as_deref());
 
         if old_slug != new_slug {
             self.library_store.rename_book_files(&book.token, &old_slug, &new_slug).await?;
@@ -885,10 +870,7 @@ impl PipelineService for PipelineServiceImpl {
             None
         };
 
-        let old_slug = match &old_first_author_name {
-            Some(name) => format!("{}-{}", slugify(name), slugify(&book.title)),
-            None => slugify(&book.title),
-        };
+        let old_slug = book_slug(&book.title, old_first_author_name.as_deref());
 
         // ── 2. Read temp cover if requested ───────────────────────────────────
         let cover_data: Option<(Vec<u8>, String)> = if edit.use_fetched_cover {
@@ -1041,12 +1023,7 @@ impl PipelineService for PipelineServiceImpl {
 
         // ── 5. Rename book files if slug changed ──────────────────────────────
         let new_first_author = edit.authors.first().map(|a| normalize_name(a));
-        let new_slug = match &new_first_author {
-            Some(name) if !name.is_empty() => {
-                format!("{}-{}", slugify(name), slugify(&normalize_name(&edit.title)))
-            }
-            _ => slugify(&normalize_name(&edit.title)),
-        };
+        let new_slug = book_slug(&normalize_name(&edit.title), new_first_author.as_deref());
 
         if old_slug != new_slug {
             self.library_store.rename_book_files(&book.token, &old_slug, &new_slug).await?;

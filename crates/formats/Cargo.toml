@@ -11,12 +11,14 @@ repository = { workspace = true }
 
 [dependencies]
 bb-core.workspace = true
+bb-utils.workspace = true
 
 async-trait.workspace = true
 chrono.workspace = true
 quick-xml.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+tempfile.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
