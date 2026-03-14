@@ -19,6 +19,10 @@ pub(crate) fn ShelfBar(
     on_edit_shelf: EventHandler<()>,
     /// Called when the user clicks "Delete" on the current own shelf.
     on_delete_shelf: EventHandler<()>,
+    /// When `true` the delete button is disabled (shelf is managed by a
+    /// device).
+    #[props(default = false)]
+    is_device_shelf: bool,
 ) -> Element {
     let navigator = use_navigator();
 
@@ -235,9 +239,22 @@ pub(crate) fn ShelfBar(
                         "Edit"
                     }
                     button {
-                        class: "text-sm text-red-400 hover:text-red-600",
-                        title: "Delete shelf",
-                        onclick: move |_| on_delete_shelf.call(()),
+                        class: if is_device_shelf {
+                            "text-sm text-gray-300 cursor-not-allowed"
+                        } else {
+                            "text-sm text-red-400 hover:text-red-600"
+                        },
+                        title: if is_device_shelf {
+                            "Managed by device — delete the device from your Profile to remove this shelf"
+                        } else {
+                            "Delete shelf"
+                        },
+                        disabled: is_device_shelf,
+                        onclick: move |_| {
+                            if !is_device_shelf {
+                                on_delete_shelf.call(());
+                            }
+                        },
                         "Delete"
                     }
                 }

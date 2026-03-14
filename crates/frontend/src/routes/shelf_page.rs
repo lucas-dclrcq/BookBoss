@@ -31,6 +31,8 @@ pub(crate) struct ShelfSummary {
     pub is_own: bool,
     /// `true` if this is a smart (filter-based) shelf.
     pub is_smart: bool,
+    /// `true` if this shelf is managed by a device (delete is disabled).
+    pub is_device_shelf: bool,
     /// Serialized `BookFilter` JSON — present only for smart shelves owned by
     /// the current user.
     pub filter_json: Option<String>,
@@ -114,6 +116,7 @@ pub(crate) async fn list_my_shelves() -> Result<Vec<ShelfSummary>, ServerFnError
                 visibility: visibility_str(&s.visibility).to_string(),
                 is_own: true,
                 is_smart,
+                is_device_shelf: s.device_id.is_some(),
                 filter_json,
                 count: None,
             }
@@ -406,6 +409,7 @@ pub(crate) async fn list_all_accessible_shelves() -> Result<Vec<ShelfSummary>, S
             visibility: visibility_str(&s.visibility).to_string(),
             is_own: true,
             is_smart,
+            is_device_shelf: s.device_id.is_some(),
             filter_json,
             count,
         });
@@ -422,6 +426,7 @@ pub(crate) async fn list_all_accessible_shelves() -> Result<Vec<ShelfSummary>, S
             visibility: visibility_str(&s.visibility).to_string(),
             is_own: false,
             is_smart: s.shelf_type == ShelfType::Smart,
+            is_device_shelf: false,
             filter_json: None,
             count: None,
         });
@@ -672,6 +677,7 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                         show_edit.set(true);
                     }
                 },
+                is_device_shelf: current_shelf.as_ref().is_some_and(|s| s.is_device_shelf),
                 on_delete_shelf: move |()| show_delete.set(true),
             }
 
