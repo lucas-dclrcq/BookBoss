@@ -18,6 +18,7 @@ pub fn init_logging() -> Result<()> {
         .add_directive("hyper::proto=off".parse()?)
         .add_directive("hyper::client=off".parse()?)
         .add_directive("hyper_util::client=off".parse()?)
+        .add_directive("axum::serve=off".parse()?)
         .add_directive("axum_session::service=off".parse()?)
         .add_directive("axum_session_auth::service=off".parse()?)
         .add_directive("h2=off".parse()?)

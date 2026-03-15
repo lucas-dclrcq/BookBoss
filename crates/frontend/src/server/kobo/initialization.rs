@@ -4,13 +4,8 @@
 //! device settings and a `Resources` map that the Kobo uses to discover the
 //! exact URL for every subsequent API call.
 
-use axum::{
-    Json,
-    body::Bytes,
-    http::{HeaderName, HeaderValue},
-    response::IntoResponse,
-};
-use chrono::DateTime;
+use axum::{Json, body::Bytes, response::IntoResponse};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use super::KoboDevice;
@@ -85,7 +80,7 @@ pub struct KoboInitResponse {
 // ── Handler
 // ───────────────────────────────────────────────────────────────────
 
-pub async fn handle(kobo: KoboDevice, body: Bytes, base_url: String) -> impl IntoResponse {
+pub async fn handle(kobo: KoboDevice, body: Bytes, base_url: String) -> Json<KoboInitResponse> {
     // Accept both GET (no body) and POST (JSON body). Parse leniently.
     let req: KoboInitRequest = serde_json::from_slice(&body).unwrap_or_default();
 
@@ -100,11 +95,10 @@ pub async fn handle(kobo: KoboDevice, body: Bytes, base_url: String) -> impl Int
         "kobo initialization request"
     );
 
-    let bookmark_date = kobo
-        .device
-        .last_synced_at
-        .unwrap_or_else(|| DateTime::from_timestamp(0, 0).expect("epoch is valid"))
-        .to_rfc3339();
+    // Use now() when last_synced_at is None (never synced or reset) so the
+    // Kobo doesn't see epoch and abort. The library/sync handler enforces the
+    // full-resync via the device record independently of this field.
+    let bookmark_date = kobo.device.last_synced_at.unwrap_or_else(Utc::now).to_rfc3339();
 
     let base = base_url.trim_end_matches('/');
     let t = &kobo.sync_token;
@@ -120,7 +114,7 @@ pub async fn handle(kobo: KoboDevice, body: Bytes, base_url: String) -> impl Int
         auth_url: String::new(),
     };
 
-    let body = Json(KoboInitResponse {
+    Json(KoboInitResponse {
         bookmark_date,
         device_id: "00000000-0000-0000-0000-000000000000",
         user_key: "00000000000000000000000000000000",
@@ -130,17 +124,7 @@ pub async fn handle(kobo: KoboDevice, body: Bytes, base_url: String) -> impl Int
         is_checkout_enabled: false,
         is_subscription_enabled: false,
         library_sync: true,
-    });
-
-    // `x-kobo-apitoken: e30=` (base64 of `{}`) is required by the Kobo
-    // firmware to trust the initialization response. Calibre-Web always
-    // returns this header; without it the Kobo ignores parts of the response
-    // (notably the image URL templates for cover art).
-    let mut response = body.into_response();
-    response
-        .headers_mut()
-        .insert(HeaderName::from_static("x-kobo-apitoken"), HeaderValue::from_static("e30="));
-    response
+    })
 }
 
 #[cfg(test)]
