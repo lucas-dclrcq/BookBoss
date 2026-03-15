@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0](https://github.com/szinn/BookBoss/compare/v0.3.4..v0.4.0) - 2026-03-15
+
+### Features
+
+- _(core)_ Add find_device_by_token to DeviceService (M8.3.1) - ([1ba8b4f](https://github.com/szinn/BookBoss/commit/1ba8b4fbc7f56129303b382597083a41184a3186))
+- _(core)_ Implement apply_sync and compute_sync_diff tests (M8.2.5, M8.2.6) - ([2d63a93](https://github.com/szinn/BookBoss/commit/2d63a935738b9443210b90496a4adc023580890f))
+- _(core)_ Implement DeviceServiceImpl::compute_sync_diff (M8.2.4) - ([39279e7](https://github.com/szinn/BookBoss/commit/39279e7c96846eb680c2c8a34cb399cb89af280a))
+- _(core)_ M8.2.3 — add compute_sync_diff and apply_sync to DeviceService trait - ([8b5d5a2](https://github.com/szinn/BookBoss/commit/8b5d5a28550c9e4abc0101b904c4c9025974d770))
+- _(core)_ M8.2.2 — add SyncDiff and BookSyncEntry types - ([bcb305c](https://github.com/szinn/BookBoss/commit/bcb305cae081b130107b4adf9f7ae102a06678af))
+- _(database)_ M8.2.1 — replace device_books.book_file_id with file_role - ([35de3bd](https://github.com/szinn/BookBoss/commit/35de3bd86adfe44a340ac4dbfe6aabdfc8b5f0c2))
+- _(database)_ M8.1 — rework device_books schema for kobo sync - ([72bda7e](https://github.com/szinn/BookBoss/commit/72bda7ee10288105461bad27a0d25d4d51aea6d5))
+- _(frontend)_ Handle Kobo DELETE library and no-cache cover images - ([585efec](https://github.com/szinn/BookBoss/commit/585efec4acc9548f996195e772e2b743e53eae20))
+- _(frontend)_ M8.9 — device card last_synced_at and sync URL copy button - ([2a0495f](https://github.com/szinn/BookBoss/commit/2a0495f6b358ecbf34a8e881ff9393a91887f651))
+- _(frontend)_ M8.8 — Kobo ancillary endpoints and catch-all - ([82b1994](https://github.com/szinn/BookBoss/commit/82b19941deb46cf9d2d6d801076634759e21ba7c))
+- _(frontend)_ M8.7 — Kobo cover image endpoint - ([73870b9](https://github.com/szinn/BookBoss/commit/73870b99e70bf32f60acb8d035644e717e2830f0))
+- _(frontend)_ Implement Kobo book file download endpoint (M8.6) - ([4b2c9d5](https://github.com/szinn/BookBoss/commit/4b2c9d59ea5dcf7e44aa588b2cc26c8f9e8f8628))
+- _(frontend)_ Implement Kobo library sync endpoint (M8.5) - ([e5b9831](https://github.com/szinn/BookBoss/commit/e5b9831917b777a9f6d070a7da7269ab9d9de446))
+- _(frontend)_ Implement POST /kobo/{sync_token}/v1/initialization (M8.4) - ([75f2838](https://github.com/szinn/BookBoss/commit/75f2838fd248355d196cc2060e3a5c55dc12052d))
+- _(frontend)_ Add Kobo sync router, extractor, and cursor (M8.3.2-M8.3.4) - ([d52c5ea](https://github.com/szinn/BookBoss/commit/d52c5eae2ed159b3ff27a726f92edc97d8477f04))
+- _(frontend)_ Added base url for application - ([730e832](https://github.com/szinn/BookBoss/commit/730e8322dbf8f4acd3f0584172f0feeed8bf2da2))
+- _(storage)_ Resize and re-encode JPEG covers on import - ([04677bc](https://github.com/szinn/BookBoss/commit/04677bc6f475b813cc2d671175cf8ac9a7d99ff2))
+- _(storage)_ Strip EXIF from JPEG covers on import - ([ab1b025](https://github.com/szinn/BookBoss/commit/ab1b025f12e05a251e0801e150994b257158123d))
+
+### Bug Fixes
+
+- _(core,frontend)_ Use last_synced_at=None as full-sync override - ([99d56c9](https://github.com/szinn/BookBoss/commit/99d56c9f68517a81534cc30b5034c89aff74a765))
+- _(core,frontend,bookboss)_ Kobo delete entitlement + on-removal action + tracing - ([bc71562](https://github.com/szinn/BookBoss/commit/bc71562b27981923fb830e592b6856da32b7c5b3))
+- _(frontend)_ Hide delete modal synchronously on confirm - ([ce99ef6](https://github.com/szinn/BookBoss/commit/ce99ef6d6dbc471625b722a3aa94152d9bcaf13a))
+- _(frontend)_ Send current time as bookmark_date when last_synced_at is None - ([2aa43c6](https://github.com/szinn/BookBoss/commit/2aa43c6b1d7ad5cb41e23aa22f60e0a88b3e9fd5))
+- _(frontend)_ Replace reset button with last-synced-as-button - ([0ea7569](https://github.com/szinn/BookBoss/commit/0ea7569bd22dfc38682ad75eec2170714cf74cdd))
+- _(frontend)_ Fix clipboard copy and checkmark centering in device card - ([65217c0](https://github.com/szinn/BookBoss/commit/65217c0d4776782435cbc1df64c6593f07d07ccc))
+- _(frontend)_ Add x-kobo-apitoken header and GET support to initialization endpoint - ([5cb8fdf](https://github.com/szinn/BookBoss/commit/5cb8fdf10f113d56f5f92464b200d5d1554752e6))
+- _(frontend)_ Fix copy button hang in DeviceCard - ([71eebea](https://github.com/szinn/BookBoss/commit/71eebea4b385bb2ddbabe0d943338dfe12de99e7))
+
+### Refactor
+
+- _(core)_ M9.3 - LibraryStore trait: resolve() + M9.7 download handlers - ([f31d345](https://github.com/szinn/BookBoss/commit/f31d345f6b01599ee59aaae894c3801c579c156a))
+- _(core,database)_ Replace original_filename with path on BookFile - ([ad0053a](https://github.com/szinn/BookBoss/commit/ad0053af0253a4fcefbf2f7b84fc25cabb115261))
+- _(core,formats)_ M9.4/M9.5/M9.6 - wire BookFile.path through pipeline - ([53d7b04](https://github.com/szinn/BookBoss/commit/53d7b04bf652b799d03d9039890b994a3ebe6308))
+- _(database)_ Merge migrations 23+24 into create_device_books_table - ([fd3db3e](https://github.com/szinn/BookBoss/commit/fd3db3ec8f295b3c02b9abc0120e4f39e7c85aad))
+
+### Testing
+
+- _(core)_ Add component tests for JobRegistry and LibraryService - ([b3fd552](https://github.com/szinn/BookBoss/commit/b3fd552c66f0409bd3a8f03c261ec711809471ff))
+- _(integration)_ Add reading state, device integration tests and device DB adapter component tests - ([571e72e](https://github.com/szinn/BookBoss/commit/571e72e3c0b85fef560493a9e0e241433d1424c8))
+- _(integration)_ Add pipeline and shelf integration tests - ([141245c](https://github.com/szinn/BookBoss/commit/141245cb202074db8e2aee7b6b14051568b38257))
+
+### Miscellaneous Tasks
+
+- _(database)_ Replace original_filename with path in book_files schema - ([7c774c6](https://github.com/szinn/BookBoss/commit/7c774c6a2959a3a8f12959ef4afff2c9f708e9ce))
+
 ## [0.3.3](https://github.com/szinn/BookBoss/compare/v0.3.2..v0.3.3) - 2026-03-15
 
 ### Features
