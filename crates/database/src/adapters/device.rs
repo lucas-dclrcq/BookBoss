@@ -1,6 +1,6 @@
 use bb_core::{
     Error,
-    book::{BookId, FileFormat},
+    book::{BookId, FileFormat, FileRole},
     device::{Device, DeviceBook, DeviceId, DeviceRepository, DeviceSyncLog, DeviceToken, NewDevice, NewDeviceSyncLog, OnRemovalAction, SyncStatus},
     repository::Transaction,
     user::UserId,
@@ -54,6 +54,20 @@ fn str_to_removal_action(s: &str) -> OnRemovalAction {
     }
 }
 
+fn file_role_to_str(r: &FileRole) -> &'static str {
+    match r {
+        FileRole::Original => "original",
+        FileRole::Enriched => "enriched",
+    }
+}
+
+fn str_to_file_role(s: &str) -> FileRole {
+    match s {
+        "enriched" => FileRole::Enriched,
+        _ => FileRole::Original,
+    }
+}
+
 fn sync_status_to_str(s: &SyncStatus) -> &'static str {
     match s {
         SyncStatus::Running => "running",
@@ -98,7 +112,7 @@ impl From<device_books::Model> for DeviceBook {
             device_id: m.device_id as u64,
             book_id: m.book_id as u64,
             format: str_to_file_format(&m.format),
-            book_file_id: m.book_file_id,
+            file_role: str_to_file_role(&m.file_role),
             synced_at: m.synced_at.with_timezone(&Utc),
         }
     }
@@ -241,7 +255,7 @@ impl DeviceRepository for DeviceRepositoryAdapter {
             device_id: Set(book.device_id as i64),
             book_id: Set(book.book_id as i64),
             format: Set(file_format_to_str(&book.format).to_owned()),
-            book_file_id: Set(book.book_file_id),
+            file_role: Set(file_role_to_str(&book.file_role).to_owned()),
             synced_at: Set(now.into()),
         }
         .insert(transaction)
@@ -258,7 +272,7 @@ impl DeviceRepository for DeviceRepositoryAdapter {
         prelude::DeviceBooks::update_many()
             .set(device_books::ActiveModel {
                 format: Set(file_format_to_str(&book.format).to_owned()),
-                book_file_id: Set(book.book_file_id),
+                file_role: Set(file_role_to_str(&book.file_role).to_owned()),
                 synced_at: Set(now.into()),
                 ..Default::default()
             })
@@ -338,7 +352,7 @@ mod tests {
     use std::sync::Arc;
 
     use bb_core::{
-        book::{BookStatus, FileFormat, NewBook},
+        book::{BookStatus, FileFormat, FileRole, NewBook},
         device::{DeviceBook, NewDevice, NewDeviceSyncLog, OnRemovalAction, SyncStatus},
         repository::RepositoryService,
         types::Capabilities,
@@ -565,7 +579,7 @@ mod tests {
                     device_id: device.id,
                     book_id,
                     format: FileFormat::Epub,
-                    book_file_id: 1,
+                    file_role: FileRole::Original,
                     synced_at: Utc::now(),
                 },
             )
@@ -593,7 +607,7 @@ mod tests {
                     device_id: device.id,
                     book_id,
                     format: FileFormat::Epub,
-                    book_file_id: 1,
+                    file_role: FileRole::Original,
                     synced_at: Utc::now(),
                 },
             )

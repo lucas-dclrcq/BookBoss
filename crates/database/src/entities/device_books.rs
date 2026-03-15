@@ -10,7 +10,7 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub book_id: i64,
     pub format: String,
-    pub book_file_id: i64,
+    pub file_role: String,
     pub synced_at: DateTimeWithTimeZone,
 }
 
