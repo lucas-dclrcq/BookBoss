@@ -3,8 +3,25 @@
 //! Called by the Kobo device on first connection (and on reconnect). Returns
 //! device settings and a `Resources` map that the Kobo uses to discover the
 //! exact URL for every subsequent API call.
+//!
+//! # Protocol notes
+//!
+//! Calibre-Web (the reference implementation) returns the header
+//! `x-kobo-apitoken: e30=` on the initialization response. `e30=` is the
+//! base64 encoding of `{}`. Without this header the Kobo firmware does not
+//! consider the initialization successful.
+//!
+//! The Kobo looks up auth via the `device_auth` and `device_refresh` keys in
+//! `Resources` (not `auth_url`). We point both at our own auth endpoint so
+//! the device can refresh its `KoboAccessToken` without contacting the real
+//! Kobo store.
 
-use axum::{Json, body::Bytes};
+use axum::{
+    Json,
+    body::Bytes,
+    http::{HeaderMap, HeaderName, HeaderValue},
+    response::IntoResponse,
+};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
@@ -32,14 +49,15 @@ pub struct KoboInitRequest {
 
 /// Endpoint URLs returned to the Kobo so it knows where to call each function.
 ///
+/// Field names are serialised as-is (snake_case) to match the Kobo protocol.
 /// Template variables (e.g. `{ImageId}`, `{RevisionId}`) are filled in by the
 /// Kobo client before making each request.
 #[derive(Serialize)]
 pub struct KoboResources {
     /// Base host for image requests (the Kobo may use this separately).
     pub image_host: String,
-    /// Cover image URL template. `{ImageId}` = book UUID, `{width}`,
-    /// `{height}`, `{Quality}`, `{IsGreyscale}` filled by Kobo.
+    /// Cover image URL template. `{ImageId}` = book UUID, `{Width}`,
+    /// `{Height}`, `{Quality}`, `{IsGreyscale}` filled by Kobo.
     pub image_url_quality_template: String,
     /// Simplified cover image URL template (fixed quality/greyscale).
     pub image_url_template: String,
@@ -51,8 +69,13 @@ pub struct KoboResources {
     pub bookmark_url: String,
     /// Unused by BookBoss; empty string satisfies the Kobo schema.
     pub subscription_host: String,
-    /// Unused by BookBoss; empty string satisfies the Kobo schema.
-    pub auth_url: String,
+    /// Token acquisition endpoint. The Kobo calls this when it needs a new
+    /// `KoboAccessToken` (e.g. first connection). Replaces the legacy
+    /// `auth_url` key — Kobo firmware looks for `device_auth`.
+    pub device_auth: String,
+    /// Token refresh endpoint. The Kobo calls this when its `KoboAccessToken`
+    /// has expired. We point it at the same handler as `device_auth`.
+    pub device_refresh: String,
 }
 
 /// Settings returned to the Kobo after initialization.
@@ -86,7 +109,7 @@ pub struct KoboInitResponse {
         device_id = kobo.device.id,
     )
 )]
-pub async fn handle(kobo: KoboDevice, body: Bytes, base_url: String) -> Json<KoboInitResponse> {
+pub async fn handle(kobo: KoboDevice, body: Bytes, base_url: String) -> impl IntoResponse {
     // Accept both GET (no body) and POST (JSON body). Parse leniently.
     let req: KoboInitRequest = serde_json::from_slice(&body).unwrap_or_default();
 
@@ -108,6 +131,7 @@ pub async fn handle(kobo: KoboDevice, body: Bytes, base_url: String) -> Json<Kob
 
     let base = base_url.trim_end_matches('/');
     let t = &kobo.sync_token;
+    let auth_url = format!("{base}/kobo/{t}/v1/auth/device");
 
     let resources = KoboResources {
         image_host: base.to_string(),
@@ -117,10 +141,11 @@ pub async fn handle(kobo: KoboDevice, body: Bytes, base_url: String) -> Json<Kob
         library_sync_url: format!("{base}/kobo/{t}/v1/library/sync"),
         bookmark_url: format!("{base}/kobo/{t}/v1/library/{{RevisionId}}/bookmarks"),
         subscription_host: String::new(),
-        auth_url: format!("{base}/kobo/{t}/v1/auth/device"),
+        device_auth: auth_url.clone(),
+        device_refresh: auth_url,
     };
 
-    Json(KoboInitResponse {
+    let body = KoboInitResponse {
         bookmark_date,
         device_id: "00000000-0000-0000-0000-000000000000",
         user_key: kobo.sync_token.clone(),
@@ -130,7 +155,14 @@ pub async fn handle(kobo: KoboDevice, body: Bytes, base_url: String) -> Json<Kob
         is_checkout_enabled: false,
         is_subscription_enabled: false,
         library_sync: true,
-    })
+    };
+
+    // `x-kobo-apitoken: e30=` is required by the Kobo firmware to consider
+    // initialization successful. `e30=` is base64 for `{}`.
+    let mut headers = HeaderMap::new();
+    headers.insert(HeaderName::from_static("x-kobo-apitoken"), HeaderValue::from_static("e30="));
+
+    (headers, Json(body))
 }
 
 #[cfg(test)]
@@ -178,5 +210,13 @@ mod tests {
     fn bookmark_date_epoch_when_never_synced() {
         let date = DateTime::from_timestamp(0, 0).unwrap();
         assert_eq!(date.to_rfc3339(), "1970-01-01T00:00:00+00:00");
+    }
+
+    #[test]
+    fn device_auth_and_refresh_point_to_same_url() {
+        let base = base();
+        let t = token();
+        let expected = format!("{base}/kobo/{t}/v1/auth/device");
+        assert_eq!(expected, "https://example.com/kobo/MYTOKEN/v1/auth/device");
     }
 }
