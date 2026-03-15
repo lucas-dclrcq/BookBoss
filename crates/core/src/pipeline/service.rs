@@ -1178,35 +1178,66 @@ impl PipelineService for PipelineServiceImpl {
             return Err(Error::Validation(format!("cannot reject job with status {:?}", job.status)));
         }
 
-        // Clean up library files and book record if a candidate book was staged.
-        if let Some(book_id) = job.candidate_book_id {
+        // Collect cleanup targets, then delete DB records in one transaction.
+        let (book_token, original_filenames) = if let Some(book_id) = job.candidate_book_id {
             let book_repo = self.repository_service.book_repository().clone();
-            let book = read_only_transaction(&**self.repository_service.repository(), |tx| {
-                Box::pin(async move { book_repo.find_by_id(tx, book_id).await })
-            })
-            .await?;
+            let author_repo = self.repository_service.author_repository().clone();
 
-            if let Some(book) = book {
-                // Remove the library directory — idempotent if already missing.
-                self.library_store.delete_book(&book.token).await?;
+            transaction(&**self.repository_service.repository(), |tx| {
+                Box::pin(async move {
+                    let Some(book) = book_repo.find_by_id(tx, book_id).await? else {
+                        return Ok((None, vec![]));
+                    };
 
-                // Delete the book record (cascades to book_authors, book_files,
-                // book_identifiers).
-                let book_repo = self.repository_service.book_repository().clone();
-                transaction(&**self.repository_service.repository(), |tx| {
-                    Box::pin(async move { book_repo.delete_book(tx, book_id).await })
+                    let author_links = book_repo.authors_for_book(tx, book.id).await?;
+                    let author_ids: Vec<u64> = author_links.iter().map(|a| a.author_id).collect();
+
+                    // Collect original filenames before the records are deleted.
+                    let original_filenames: Vec<String> = book_repo
+                        .files_for_book(tx, book.id)
+                        .await?
+                        .into_iter()
+                        .filter(|f| f.file_role == FileRole::Original)
+                        .filter_map(|f| f.original_filename)
+                        .collect();
+
+                    book_repo.delete_book_genres(tx, book.id).await?;
+                    book_repo.delete_book_tags(tx, book.id).await?;
+                    book_repo.delete_book_authors(tx, book.id).await?;
+                    book_repo.delete_book_identifiers(tx, book.id).await?;
+                    book_repo.delete_book(tx, book.id).await?;
+
+                    // Orphan author cleanup.
+                    for author_id in author_ids {
+                        if book_repo.count_books_for_author(tx, author_id).await? == 0 {
+                            author_repo.delete_author(tx, author_id).await?;
+                        }
+                    }
+
+                    Ok((Some(book.token), original_filenames))
                 })
-                .await?;
-            }
-        }
+            })
+            .await?
+        } else {
+            (None, vec![])
+        };
 
-        // Delete the import job so the scanner can re-import the file if dropped again.
+        // Delete the import job — candidate_book_id was SET NULL by FK when the
+        // book record was deleted above, so the job is still findable by ID.
         let import_job_repo = self.repository_service.import_job_repository().clone();
         let job_id = job.id;
         transaction(&**self.repository_service.repository(), |tx| {
             Box::pin(async move { import_job_repo.delete_job(tx, job_id).await })
         })
         .await?;
+
+        // Delete library files after all DB work is done.
+        if let Some(token) = book_token {
+            self.library_store.delete_book(&token).await?;
+        }
+        for filename in original_filenames {
+            self.library_store.delete_original_file(&filename).await?;
+        }
 
         Ok(())
     }
