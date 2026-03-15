@@ -227,18 +227,23 @@ fn DeviceCard(device: DeviceRow, on_edit: EventHandler<()>, on_delete: EventHand
                     let token_display = device.sync_token_display.clone();
                     rsx! {
                         button {
-                            class: "font-mono text-gray-700 hover:text-indigo-600 transition-colors cursor-pointer",
+                            class: "font-mono text-gray-700 hover:text-indigo-600 transition-colors cursor-pointer min-w-[8ch] text-center",
                             title: "Copies URL for Kobo sync",
                             onclick: move |_| {
                                 let url = url.clone();
                                 spawn(async move {
-                                    // Clipboard write is fire-and-forget; do not await —
-                                    // awaiting eval blocks until JS calls dioxus.send(),
-                                    // which clipboard.writeText never does.
-                                    document::eval(&format!("navigator.clipboard.writeText('{url}')"));
+                                    // navigator.clipboard requires HTTPS or localhost;
+                                    // use execCommand fallback which works over plain HTTP.
+                                    document::eval(&format!(
+                                        "var t=document.createElement('textarea');\
+                                         t.value='{url}';\
+                                         t.style.cssText='position:fixed;opacity:0';\
+                                         document.body.appendChild(t);\
+                                         t.select();\
+                                         document.execCommand('copy');\
+                                         document.body.removeChild(t);"
+                                    ));
                                     copied.set(true);
-                                    // Use dioxus.send() from JS to signal when the delay
-                                    // is done so we can reset the checkmark.
                                     let mut timer = document::eval("setTimeout(() => dioxus.send(true), 1500)");
                                     let _ = timer.recv::<bool>().await;
                                     copied.set(false);
