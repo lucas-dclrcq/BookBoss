@@ -29,6 +29,11 @@ use super::KoboDevice;
 // ── Handler
 // ─────────────────────────────────────────────────────────────────
 
+#[tracing::instrument(level = "trace", skip(kobo, core_services),
+    fields(
+        device_id = kobo.device.id,
+    )
+)]
 pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>>, core_services: Arc<CoreServices>) -> Response {
     let Some(book_token_str) = params.get("book_token") else {
         return StatusCode::BAD_REQUEST.into_response();

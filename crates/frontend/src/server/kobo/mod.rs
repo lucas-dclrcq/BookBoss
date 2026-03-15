@@ -28,6 +28,7 @@ pub mod extractor;
 pub mod image;
 pub mod initialization;
 pub mod library_delete;
+pub mod library_state;
 pub mod library_sync;
 pub mod stubs;
 
@@ -85,11 +86,11 @@ pub fn kobo_router(base_url: String, core_services: Arc<CoreServices>) -> Router
         )
         // M8.8 — loyalty benefits
         .route("/kobo/{sync_token}/v1/user/loyalty/benefits", routing::get(stubs::loyalty_benefits))
-        // M8.8 — reading state (stub: accept without persisting)
-        .route(
-            "/kobo/{sync_token}/v1/library/{uuid}/state",
-            routing::get(stubs::library_state_get).put(stubs::library_state_put),
-        )
+        // M8.8 — reading state (GET stub; PUT handles DeleteEntitlement)
+        .route("/kobo/{sync_token}/v1/library/{uuid}/state", {
+            let core = core_services.clone();
+            routing::get(stubs::library_state_get).put(move |kobo: KoboDevice, params, body| library_state::handle(kobo, params, core.clone(), body))
+        })
         // M8.8 — book delete (Kobo removed book from device; drop DeviceBook so it re-syncs as New)
         .route("/kobo/{sync_token}/v1/library/{uuid}", {
             let core = core_services.clone();

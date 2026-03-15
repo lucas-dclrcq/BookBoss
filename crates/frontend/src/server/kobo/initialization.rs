@@ -80,6 +80,10 @@ pub struct KoboInitResponse {
 // ── Handler
 // ───────────────────────────────────────────────────────────────────
 
+#[tracing::instrument(level = "trace", skip(kobo),     fields(
+        device_id = kobo.device.id,
+    )
+)]
 pub async fn handle(kobo: KoboDevice, body: Bytes, base_url: String) -> Json<KoboInitResponse> {
     // Accept both GET (no body) and POST (JSON body). Parse leniently.
     let req: KoboInitRequest = serde_json::from_slice(&body).unwrap_or_default();

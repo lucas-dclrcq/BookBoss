@@ -10,6 +10,10 @@ use crate::{
     book::{BookFile, BookId, FileFormat, FileRole},
     device::{BookSyncEntry, Device, DeviceBook, DeviceId, DeviceToken, NewDevice, NewDeviceSyncLog, OnRemovalAction, SyncDiff, SyncStatus},
     filter::{BookFilter, FilterReadStatus, FilterRule, SetOp},
+    reading::{
+        ReadStatus,
+        service::{apply_transition, default_state},
+    },
     repository::RepositoryService,
     shelf::{NewShelf, Shelf, ShelfType, ShelfVisibility},
     user::UserId,
@@ -565,8 +569,28 @@ impl DeviceService for DeviceServiceImpl {
     }
 
     async fn remove_book_from_device(&self, device_id: DeviceId, book_id: BookId) -> Result<(), Error> {
-        with_transaction!(self, device_repository, |tx| {
-            device_repository.remove_device_book(tx, device_id, book_id).await
+        with_transaction!(self, device_repository, user_book_metadata_repository, |tx| {
+            let device = device_repository
+                .find_by_id(tx, device_id)
+                .await?
+                .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
+
+            device_repository.remove_device_book(tx, device_id, book_id).await?;
+
+            let target_status = match device.on_removal_action {
+                OnRemovalAction::Nothing => return Ok(()),
+                OnRemovalAction::MarkRead => ReadStatus::Read,
+                OnRemovalAction::MarkDnf => ReadStatus::Abandoned,
+            };
+
+            let current = user_book_metadata_repository
+                .find_by_user_and_book(tx, device.owner_id, book_id)
+                .await?
+                .unwrap_or_else(|| default_state(device.owner_id, book_id));
+            let next = apply_transition(current, target_status);
+            user_book_metadata_repository.upsert(tx, next).await?;
+
+            Ok(())
         })
     }
 }

@@ -32,6 +32,11 @@ use super::{
 // ── Handler
 // ─────────────────────────────────────────────────────────────────
 
+#[tracing::instrument(level = "trace", skip(kobo, core_services),
+    fields(
+        device_id = kobo.device.id,
+    )
+)]
 pub async fn handle(kobo: KoboDevice, req_headers: HeaderMap, core_services: Arc<CoreServices>, base_url: String) -> Result<impl IntoResponse, StatusCode> {
     // 1. Decode sync cursor from request header (absent = full sync from start).
     let raw_cursor = req_headers.get("x-kobo-synctoken").and_then(|v| v.to_str().ok()).unwrap_or("");

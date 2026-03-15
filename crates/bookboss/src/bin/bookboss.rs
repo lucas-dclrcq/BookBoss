@@ -2,9 +2,14 @@
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
-#[cfg(not(feature = "server"))]
+#[cfg(feature = "web")]
 fn main() {
     bb_frontend::web::launch_web_frontend();
+}
+
+#[cfg(not(any(feature = "server", feature = "web")))]
+fn main() {
+    eprintln!("No feature selected. Build with --features server or --features web.");
 }
 
 #[cfg(feature = "server")]

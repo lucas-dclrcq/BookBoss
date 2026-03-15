@@ -25,6 +25,7 @@ use super::KoboDevice;
 // ── Handler
 // ─────────────────────────────────────────────────────────────────
 
+#[tracing::instrument(level = "trace", skip(_kobo, core_services))]
 pub async fn handle(_kobo: KoboDevice, Path(params): Path<HashMap<String, String>>, core_services: Arc<CoreServices>) -> impl IntoResponse {
     let Some(book_token_str) = params.get("book_token") else {
         return StatusCode::BAD_REQUEST.into_response();

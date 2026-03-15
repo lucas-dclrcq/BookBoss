@@ -85,7 +85,7 @@ impl ReadingServiceImpl {
 
 /// Returns a blank `UserBookMetadata` row representing the default `Unread`
 /// state.
-fn default_state(user_id: UserId, book_id: BookId) -> UserBookMetadata {
+pub(crate) fn default_state(user_id: UserId, book_id: BookId) -> UserBookMetadata {
     UserBookMetadata {
         user_id,
         book_id,
@@ -104,7 +104,7 @@ fn default_state(user_id: UserId, book_id: BookId) -> UserBookMetadata {
 
 /// Applies the requested status to `current`, updating timestamps and
 /// `times_read` as appropriate.
-fn apply_transition(mut current: UserBookMetadata, target: ReadStatus) -> UserBookMetadata {
+pub(crate) fn apply_transition(mut current: UserBookMetadata, target: ReadStatus) -> UserBookMetadata {
     let now = Utc::now();
 
     match &target {

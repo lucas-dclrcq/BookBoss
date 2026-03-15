@@ -22,6 +22,11 @@ use super::{KoboDevice, dto};
 // ── Handler
 // ─────────────────────────────────────────────────────────────────
 
+#[tracing::instrument(level = "trace", skip(kobo, core_services),
+    fields(
+        device_id = kobo.device.id,
+    )
+)]
 pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>>, core_services: Arc<CoreServices>, base_url: String) -> Response {
     let Some(uuid) = params.get("uuid") else {
         return StatusCode::BAD_REQUEST.into_response();
