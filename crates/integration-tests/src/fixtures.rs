@@ -25,10 +25,7 @@ pub struct SilentLibraryStore;
 
 #[async_trait]
 impl LibraryStore for SilentLibraryStore {
-    fn original_file_path(&self, _original_filename: &str) -> PathBuf {
-        PathBuf::new()
-    }
-    fn book_file_path(&self, _token: &BookToken, _slug: &str, _format: FileFormat) -> PathBuf {
+    fn resolve(&self, _relative_path: &str) -> PathBuf {
         PathBuf::new()
     }
     fn cover_path(&self, _token: &BookToken, _filename: &str) -> PathBuf {
@@ -37,11 +34,11 @@ impl LibraryStore for SilentLibraryStore {
     fn metadata_path(&self, _token: &BookToken) -> PathBuf {
         PathBuf::new()
     }
-    async fn store_original_file(&self, _source_hash: &str, _original_filename: &str, _source: &Path) -> Result<String, Error> {
-        Ok(_original_filename.to_string())
+    async fn store_original_file(&self, _source_hash: &str, original_filename: &str, _source: &Path) -> Result<String, Error> {
+        Ok(format!("Originals/{original_filename}"))
     }
-    async fn store_book_file(&self, _token: &BookToken, _slug: &str, _format: FileFormat, _source: &Path) -> Result<(), Error> {
-        Ok(())
+    async fn store_book_file(&self, token: &BookToken, slug: &str, _format: FileFormat, _source: &Path) -> Result<String, Error> {
+        Ok(format!("{token}/{slug}.epub"))
     }
     async fn store_cover(&self, _token: &BookToken, _filename: &str, _data: &[u8]) -> Result<(), Error> {
         Ok(())
@@ -55,7 +52,7 @@ impl LibraryStore for SilentLibraryStore {
     async fn delete_book(&self, _token: &BookToken) -> Result<(), Error> {
         Ok(())
     }
-    async fn delete_original_file(&self, _original_filename: &str) -> Result<(), Error> {
+    async fn delete_original_file(&self, _relative_path: &str) -> Result<(), Error> {
         Ok(())
     }
 }

@@ -9,7 +9,7 @@ use axum::{
 };
 use bb_core::{
     CoreServices,
-    book::{AuthorToken, BookToken, FileFormat, FileRole, book_slug},
+    book::{BookToken, FileFormat, FileRole},
 };
 
 use super::AuthSession;
@@ -18,9 +18,9 @@ use super::AuthSession;
 ///
 /// Route: `GET /api/v1/books/:book_token/download/:format`
 ///
-/// Requires authentication. Resolves the book file path using the same slug
-/// logic as the pipeline service, then streams the file with a
-/// `Content-Disposition: attachment` header.
+/// Requires authentication. Resolves the book file path from the stored
+/// `BookFile.path` field via `LibraryStore::resolve`, then streams the file
+/// with a `Content-Disposition: attachment` header.
 pub(crate) async fn serve_book_file(
     Path((book_token_str, format_str)): Path<(String, String)>,
     auth_session: AuthSession,
@@ -62,60 +62,38 @@ pub(crate) async fn serve_book_file(
         return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap();
     }
 
-    // Compute slug: same logic as pipeline service — first author (by sort_order) +
-    // title.
-    let Ok(mut authors) = core_services.book_service.authors_for_book(book.id).await else {
-        return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap();
-    };
-    authors.sort_by_key(|a| a.sort_order);
-
-    let first_author_name = if let Some(ba) = authors.first() {
-        match core_services.book_service.find_author_by_token(&AuthorToken::new(ba.author_id)).await {
-            Ok(Some(a)) => Some(a.name),
-            _ => None,
-        }
-    } else {
-        None
-    };
-
-    let slug = book_slug(&book.title, first_author_name.as_deref());
-
     let ext = format_ext(&format);
 
     // Try the enriched file first; fall back to the original if not yet on disk.
-    let data = if enriched_file.is_some() {
-        let enriched_path = core_services.library_store.book_file_path(&token, &slug, format.clone());
+    let data = if let Some(enriched) = enriched_file {
+        let enriched_path = core_services.library_store.resolve(&enriched.path);
         match tokio::fs::read(&enriched_path).await {
             Ok(d) => d,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 // Enriched record exists but file not on disk yet — fall back to original.
-                match original_file.and_then(|f| Some(f.path.as_str())) {
-                    Some(orig_filename) => {
-                        let orig_path = core_services.library_store.original_file_path(orig_filename);
-                        match tokio::fs::read(&orig_path).await {
-                            Ok(d) => d,
-                            Err(_) => return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap(),
-                        }
-                    }
-                    None => return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap(),
+                let Some(original) = original_file else {
+                    return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap();
+                };
+                let orig_path = core_services.library_store.resolve(&original.path);
+                match tokio::fs::read(&orig_path).await {
+                    Ok(d) => d,
+                    Err(_) => return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap(),
                 }
             }
             Err(_) => return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap(),
         }
     } else {
         // No enriched record — serve the original directly.
-        match original_file.and_then(|f| Some(f.path.as_str())) {
-            Some(orig_filename) => {
-                let orig_path = core_services.library_store.original_file_path(orig_filename);
-                match tokio::fs::read(&orig_path).await {
-                    Ok(d) => d,
-                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                        return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap();
-                    }
-                    Err(_) => return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap(),
-                }
+        let Some(original) = original_file else {
+            return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap();
+        };
+        let orig_path = core_services.library_store.resolve(&original.path);
+        match tokio::fs::read(&orig_path).await {
+            Ok(d) => d,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap();
             }
-            None => return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap(),
+            Err(_) => return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap(),
         }
     };
 

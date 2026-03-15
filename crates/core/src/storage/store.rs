@@ -10,15 +10,11 @@ use crate::{
 
 #[async_trait]
 pub trait LibraryStore: Send + Sync {
-    // ── Path derivation (sync, no I/O) ──────────────────────────────────────
+    // ── Path resolution (sync, no I/O) ──────────────────────────────────────
 
-    /// Returns the path for an original file in the flat Originals directory:
-    /// `{library}/Originals/{original_filename}`.
-    fn original_file_path(&self, original_filename: &str) -> PathBuf;
-
-    /// Returns the full path to a book's enriched file:
-    /// `{library}/BK_{token}/{slug}.{ext}`.
-    fn book_file_path(&self, token: &BookToken, slug: &str, format: FileFormat) -> PathBuf;
+    /// Resolves a library-root-relative path to an absolute path.
+    /// Use this to open files whose relative path is stored in `BookFile.path`.
+    fn resolve(&self, relative_path: &str) -> PathBuf;
 
     /// Returns the path to a book's cover image:
     /// `{library}/BK_{token}/{filename}`.
@@ -34,12 +30,15 @@ pub trait LibraryStore: Send + Sync {
     /// needed. Tries `original_filename` first; if a file already exists there
     /// with a different hash, falls back to `{stem}_{source_hash_prefix}.{ext}`
     /// using the first 8 chars of `source_hash`.
-    /// Returns the filename actually used (may differ from `original_filename`
-    /// on collision).
+    /// Returns the library-root-relative path actually used
+    /// (e.g. `"Originals/Black Ice.epub"` or `"Originals/Black
+    /// Ice_1a2b3c4d.epub"`).
     async fn store_original_file(&self, source_hash: &str, original_filename: &str, source: &Path) -> Result<String, Error>;
 
     /// Moves or copies the source file into the book's enriched directory.
-    async fn store_book_file(&self, token: &BookToken, slug: &str, format: FileFormat, source: &Path) -> Result<(), Error>;
+    /// Returns the library-root-relative path of the stored file
+    /// (e.g. `"BK_XXXXX/black-ice-brad-thor.epub"`).
+    async fn store_book_file(&self, token: &BookToken, slug: &str, format: FileFormat, source: &Path) -> Result<String, Error>;
 
     /// Writes raw bytes as the book's cover image. `filename` determines the
     /// file name within the book's directory (e.g. `"cover.jpg"`).
@@ -56,7 +55,7 @@ pub trait LibraryStore: Send + Sync {
     /// Removes the book's entire directory and all its contents.
     async fn delete_book(&self, token: &BookToken) -> Result<(), Error>;
 
-    /// Removes a file from the flat `Originals/` directory. No-op if the file
+    /// Removes a file by its library-root-relative path. No-op if the file
     /// does not exist.
-    async fn delete_original_file(&self, original_filename: &str) -> Result<(), Error>;
+    async fn delete_original_file(&self, relative_path: &str) -> Result<(), Error>;
 }

@@ -38,10 +38,7 @@ pub struct NopLibraryStore;
 
 #[async_trait]
 impl LibraryStore for NopLibraryStore {
-    fn original_file_path(&self, _original_filename: &str) -> PathBuf {
-        unimplemented!("NopLibraryStore")
-    }
-    fn book_file_path(&self, _token: &BookToken, _slug: &str, _format: FileFormat) -> PathBuf {
+    fn resolve(&self, _relative_path: &str) -> PathBuf {
         unimplemented!("NopLibraryStore")
     }
     fn cover_path(&self, _token: &BookToken, _filename: &str) -> PathBuf {
@@ -53,7 +50,7 @@ impl LibraryStore for NopLibraryStore {
     async fn store_original_file(&self, _source_hash: &str, _original_filename: &str, _source: &Path) -> Result<String, Error> {
         unimplemented!("NopLibraryStore")
     }
-    async fn store_book_file(&self, _token: &BookToken, _slug: &str, _format: FileFormat, _source: &Path) -> Result<(), Error> {
+    async fn store_book_file(&self, _token: &BookToken, _slug: &str, _format: FileFormat, _source: &Path) -> Result<String, Error> {
         unimplemented!("NopLibraryStore")
     }
     async fn store_cover(&self, _token: &BookToken, _filename: &str, _data: &[u8]) -> Result<(), Error> {
@@ -68,7 +65,7 @@ impl LibraryStore for NopLibraryStore {
     async fn delete_book(&self, _token: &BookToken) -> Result<(), Error> {
         unimplemented!("NopLibraryStore")
     }
-    async fn delete_original_file(&self, _original_filename: &str) -> Result<(), Error> {
+    async fn delete_original_file(&self, _relative_path: &str) -> Result<(), Error> {
         unimplemented!("NopLibraryStore")
     }
 }

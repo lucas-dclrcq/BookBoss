@@ -26,6 +26,16 @@ impl LocalLibraryStore {
     fn book_dir(&self, token: BookToken) -> PathBuf {
         self.library_path.join(token.to_string())
     }
+
+    fn book_file_path(&self, token: &BookToken, slug: &str, format: &FileFormat) -> PathBuf {
+        self.book_dir(*token).join(format!("{slug}.{}", format_ext(format)))
+    }
+
+    /// Returns the library-root-relative path for a book file
+    /// (e.g. `"BK_XXXXX/slug.epub"`).
+    fn book_file_rel_path(&self, token: &BookToken, slug: &str, format: &FileFormat) -> String {
+        format!("{}/{}.{}", token, slug, format_ext(format))
+    }
 }
 
 fn format_ext(format: &FileFormat) -> &'static str {
@@ -78,12 +88,8 @@ fn normalize_jpeg(data: &[u8]) -> Vec<u8> {
 
 #[async_trait]
 impl LibraryStore for LocalLibraryStore {
-    fn original_file_path(&self, original_filename: &str) -> PathBuf {
-        self.originals_dir().join(original_filename)
-    }
-
-    fn book_file_path(&self, token: &BookToken, slug: &str, format: FileFormat) -> PathBuf {
-        self.book_dir(*token).join(format!("{slug}.{}", format_ext(&format)))
+    fn resolve(&self, relative_path: &str) -> PathBuf {
+        self.library_path.join(relative_path)
     }
 
     fn cover_path(&self, token: &BookToken, filename: &str) -> PathBuf {
@@ -105,7 +111,7 @@ impl LibraryStore for LocalLibraryStore {
             let existing_hash = hash_file(&preferred).await.map_err(|e| io_err(e.to_string()))?;
             if existing_hash == source_hash {
                 // Same content already stored — idempotent, nothing to do.
-                return Ok(original_filename.to_string());
+                return Ok(format!("Originals/{original_filename}"));
             }
             // Different content: fall back to a hash-prefixed name.
             let hash_prefix = &source_hash[..8.min(source_hash.len())];
@@ -120,25 +126,25 @@ impl LibraryStore for LocalLibraryStore {
             };
             let dest = originals_dir.join(&filename);
             tokio::fs::copy(source, &dest).await.map_err(io_err)?;
-            return Ok(filename);
+            return Ok(format!("Originals/{filename}"));
         }
 
         // No collision — copy to the preferred path.
         tokio::fs::copy(source, &preferred).await.map_err(io_err)?;
-        Ok(original_filename.to_string())
+        Ok(format!("Originals/{original_filename}"))
     }
 
-    async fn store_book_file(&self, token: &BookToken, slug: &str, format: FileFormat, source: &Path) -> Result<(), Error> {
+    async fn store_book_file(&self, token: &BookToken, slug: &str, format: FileFormat, source: &Path) -> Result<String, Error> {
         let book_dir = self.book_dir(*token);
         tokio::fs::create_dir_all(&book_dir).await.map_err(io_err)?;
-        let dest = book_dir.join(format!("{slug}.{}", format_ext(&format)));
+        let dest = self.book_file_path(token, slug, &format);
         // Try rename first (fast, same filesystem)
         if tokio::fs::rename(source, &dest).await.is_err() {
             // Fall back to copy then remove source
             tokio::fs::copy(source, &dest).await.map_err(io_err)?;
             let _ = tokio::fs::remove_file(source).await;
         }
-        Ok(())
+        Ok(self.book_file_rel_path(token, slug, &format))
     }
 
     async fn store_cover(&self, token: &BookToken, filename: &str, data: &[u8]) -> Result<(), Error> {
@@ -193,8 +199,8 @@ impl LibraryStore for LocalLibraryStore {
         }
     }
 
-    async fn delete_original_file(&self, original_filename: &str) -> Result<(), Error> {
-        let path = self.original_file_path(original_filename);
+    async fn delete_original_file(&self, relative_path: &str) -> Result<(), Error> {
+        let path = self.resolve(relative_path);
         match tokio::fs::remove_file(&path).await {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -250,12 +256,40 @@ mod tests {
         let source = dir.path().join("source.epub");
         tokio::fs::write(&source, b"epub content").await.unwrap();
 
-        store.store_book_file(&token, "my-book", FileFormat::Epub, &source).await.unwrap();
+        let rel_path = store.store_book_file(&token, "my-book", FileFormat::Epub, &source).await.unwrap();
 
-        let expected = store.book_file_path(&token, "my-book", FileFormat::Epub);
+        let expected = store.resolve(&rel_path);
         assert!(expected.exists(), "book file should exist at {expected:?}");
         let contents = tokio::fs::read(&expected).await.unwrap();
         assert_eq!(contents, b"epub content");
+    }
+
+    #[tokio::test]
+    async fn store_book_file_returns_correct_relative_path() {
+        let dir = tempdir().unwrap();
+        let store = test_store(dir.path().to_path_buf());
+        let token = test_token();
+
+        let source = dir.path().join("source.epub");
+        tokio::fs::write(&source, b"epub content").await.unwrap();
+
+        let rel_path = store.store_book_file(&token, "my-book", FileFormat::Epub, &source).await.unwrap();
+
+        assert_eq!(rel_path, format!("{}/my-book.epub", token));
+    }
+
+    #[tokio::test]
+    async fn store_original_file_returns_relative_path() {
+        let dir = tempdir().unwrap();
+        let store = test_store(dir.path().to_path_buf());
+
+        let source = dir.path().join("original.epub");
+        tokio::fs::write(&source, b"epub content").await.unwrap();
+
+        let rel_path = store.store_original_file("fakehash", "original.epub", &source).await.unwrap();
+
+        assert_eq!(rel_path, "Originals/original.epub");
+        assert!(store.resolve(&rel_path).exists());
     }
 
     #[tokio::test]

@@ -19,7 +19,7 @@ use axum::{
 };
 use bb_core::{
     CoreServices,
-    book::{AuthorToken, BookToken, FileFormat, FileRole, book_slug},
+    book::{BookToken, FileFormat, FileRole},
 };
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
@@ -76,51 +76,21 @@ pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>
         return StatusCode::NOT_FOUND.into_response();
     }
 
-    // 5. Compute slug — same logic as the pipeline: first author (by sort_order) +
-    //    title.
-    let mut author_links = match core_services.book_service.authors_for_book(book.id).await {
-        Ok(a) => a,
-        Err(e) => {
-            tracing::error!(error = ?e, "authors_for_book failed");
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
-    };
-    author_links.sort_by_key(|a| a.sort_order);
-
-    let first_author_name = if let Some(ba) = author_links.first() {
-        match core_services.book_service.find_author_by_token(&AuthorToken::new(ba.author_id)).await {
-            Ok(Some(a)) => Some(a.name),
-            _ => None,
-        }
-    } else {
-        None
-    };
-
-    let slug = book_slug(&book.title, first_author_name.as_deref());
-
-    // 6. Resolve the file path; if enriched isn't on disk yet fall back to the
+    // 5. Resolve the file path; if enriched isn't on disk yet fall back to the
     //    original in the flat Originals/ directory.
-    let (file_size, fs_file) = if enriched.is_some() {
-        let enriched_path = core_services.library_store.book_file_path(&token, &slug, format.clone());
+    let (file_size, fs_file) = if let Some(enriched_file) = enriched {
+        let enriched_path = core_services.library_store.resolve(&enriched_file.path);
         match File::open(&enriched_path).await {
-            Ok(f) => {
-                let size = enriched.map(|e| e.file_size).unwrap_or(0);
-                (size, f)
-            }
+            Ok(f) => (enriched_file.file_size, f),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 // Enriched record exists but file not on disk — fall back to original.
-                match original.and_then(|f| Some(f.path.as_str())) {
-                    Some(orig_filename) => {
-                        let orig_path = core_services.library_store.original_file_path(orig_filename);
-                        match File::open(&orig_path).await {
-                            Ok(f) => {
-                                let size = original.map(|o| o.file_size).unwrap_or(0);
-                                (size, f)
-                            }
-                            Err(_) => return StatusCode::NOT_FOUND.into_response(),
-                        }
-                    }
-                    None => return StatusCode::NOT_FOUND.into_response(),
+                let Some(orig_file) = original else {
+                    return StatusCode::NOT_FOUND.into_response();
+                };
+                let orig_path = core_services.library_store.resolve(&orig_file.path);
+                match File::open(&orig_path).await {
+                    Ok(f) => (orig_file.file_size, f),
+                    Err(_) => return StatusCode::NOT_FOUND.into_response(),
                 }
             }
             Err(e) => {
@@ -130,24 +100,19 @@ pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>
         }
     } else {
         // No enriched record — serve the original directly.
-        match original.and_then(|f| Some(f.path.as_str())) {
-            Some(orig_filename) => {
-                let orig_path = core_services.library_store.original_file_path(orig_filename);
-                match File::open(&orig_path).await {
-                    Ok(f) => {
-                        let size = original.map(|o| o.file_size).unwrap_or(0);
-                        (size, f)
-                    }
-                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                        return StatusCode::NOT_FOUND.into_response();
-                    }
-                    Err(e) => {
-                        tracing::error!(error = ?e, "failed to open original file");
-                        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-                    }
-                }
+        let Some(orig_file) = original else {
+            return StatusCode::NOT_FOUND.into_response();
+        };
+        let orig_path = core_services.library_store.resolve(&orig_file.path);
+        match File::open(&orig_path).await {
+            Ok(f) => (orig_file.file_size, f),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return StatusCode::NOT_FOUND.into_response();
             }
-            None => return StatusCode::NOT_FOUND.into_response(),
+            Err(e) => {
+                tracing::error!(error = ?e, "failed to open original file");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
         }
     };
 
@@ -158,17 +123,22 @@ pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>
         "kobo download"
     );
 
-    // 7. Build Content-Disposition filename. Kepub must have .kepub.epub extension
+    // 6. Build Content-Disposition filename. Kepub must have .kepub.epub extension
     //    so the Kobo recognises it.
     let ext = match format {
         FileFormat::Epub => "epub",
         FileFormat::Kepub => "kepub.epub",
         _ => "epub",
     };
-    let filename = format!("{slug}.{ext}");
+    let safe_title: String = book
+        .title
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' { c } else { '_' })
+        .collect();
+    let filename = format!("{safe_title}.{ext}");
     let content_disposition = format!("attachment; filename=\"{filename}\"");
 
-    // 8. Stream the file.
+    // 7. Stream the file.
     let stream = ReaderStream::new(fs_file);
     let body = Body::from_stream(stream);
 

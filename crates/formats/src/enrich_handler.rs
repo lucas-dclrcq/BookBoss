@@ -86,9 +86,7 @@ impl JobHandler for EnrichEpubHandler {
             .find(|f| f.file_role == FileRole::Original && f.format == FileFormat::Epub)
             .ok_or_else(|| Error::Infrastructure(format!("book {book_id}: no original epub file record")))?;
 
-        // path stores the library-relative location of the original file.
-        // original_file_path() will be replaced by resolve() in M9.3.
-        let source_path = self.library_store.original_file_path(&original_file.path);
+        let source_path = self.library_store.resolve(&original_file.path);
 
         // ── 3. Load cover bytes (non-fatal if missing) ────────────────────────
         let cover_bytes: Option<Vec<u8>> = if let Some(cover_filename) = &book.cover_path {

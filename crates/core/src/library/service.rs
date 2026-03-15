@@ -758,10 +758,7 @@ mod tests {
 
     #[async_trait::async_trait]
     impl LibraryStore for MockLibraryStore {
-        fn original_file_path(&self, _: &str) -> PathBuf {
-            unimplemented!()
-        }
-        fn book_file_path(&self, _: &BookToken, _: &str, _: FileFormat) -> PathBuf {
+        fn resolve(&self, _: &str) -> PathBuf {
             unimplemented!()
         }
         fn cover_path(&self, _: &BookToken, _: &str) -> PathBuf {
@@ -773,7 +770,7 @@ mod tests {
         async fn store_original_file(&self, _: &str, _: &str, _: &std::path::Path) -> Result<String, Error> {
             unimplemented!()
         }
-        async fn store_book_file(&self, _: &BookToken, _: &str, _: FileFormat, _: &std::path::Path) -> Result<(), Error> {
+        async fn store_book_file(&self, _: &BookToken, _: &str, _: FileFormat, _: &std::path::Path) -> Result<String, Error> {
             unimplemented!()
         }
         async fn store_cover(&self, _: &BookToken, _: &str, _: &[u8]) -> Result<(), Error> {
@@ -788,8 +785,8 @@ mod tests {
         async fn delete_book(&self, _: &BookToken) -> Result<(), Error> {
             Ok(())
         }
-        async fn delete_original_file(&self, filename: &str) -> Result<(), Error> {
-            self.deleted_original_files.lock().unwrap().push(filename.to_owned());
+        async fn delete_original_file(&self, relative_path: &str) -> Result<(), Error> {
+            self.deleted_original_files.lock().unwrap().push(relative_path.to_owned());
             Ok(())
         }
     }
