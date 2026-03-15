@@ -522,14 +522,16 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                                             let bk = book.token.clone();
                                             move |_| {
                                                 let bk = bk.clone();
+                                                // Hide the modal and start deleting synchronously so
+                                                // the modal closes immediately on confirm regardless
+                                                // of when the async task's render cycle runs.
+                                                show_confirm.set(false);
                                                 deleting.set(true);
                                                 spawn(async move {
                                                     if let Ok(()) = delete_library_book(bk).await {
-                                                        show_confirm.set(false);
                                                         let _ = nav.push(Route::BooksPage {});
                                                     } else {
                                                         deleting.set(false);
-                                                        show_confirm.set(false);
                                                     }
                                                 });
                                             }
