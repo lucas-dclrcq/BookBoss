@@ -1,0 +1,61 @@
+//! `GET /kobo/{sync_token}/v1/library/{uuid}/metadata`
+//!
+//! Returns a single-element JSON array of book metadata in the Kobo wire
+//! format. The Kobo device calls this to refresh a book's details outside of
+//! the main library sync flow.
+//!
+//! Sources consulted: Komga (`KoboController.kt`, `KoboBookMetadataDto.kt`)
+//! and Calibre-Web (`kobo.py :: HandleMetadataRequest`).
+
+use std::{collections::HashMap, str::FromStr, sync::Arc};
+
+use axum::{
+    Json,
+    extract::Path,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
+use bb_core::{CoreServices, book::BookToken};
+
+use super::{KoboDevice, dto};
+
+// ── Handler
+// ─────────────────────────────────────────────────────────────────
+
+pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>>, core_services: Arc<CoreServices>, base_url: String) -> Response {
+    let Some(uuid) = params.get("uuid") else {
+        return StatusCode::BAD_REQUEST.into_response();
+    };
+
+    // Reconstruct the full BookToken by prepending the `BK_` prefix.
+    let full_token = format!("BK_{uuid}");
+    let token = match BookToken::from_str(&full_token) {
+        Ok(t) => t,
+        Err(_) => return Json(Vec::<dto::KoboBookMetadata>::new()).into_response(),
+    };
+
+    // Look up the book — return empty array if not found (matches Komga behaviour).
+    let book = match core_services.book_service.find_book_by_token(&token).await {
+        Ok(Some(b)) => b,
+        Ok(None) => return Json(Vec::<dto::KoboBookMetadata>::new()).into_response(),
+        Err(e) => {
+            tracing::error!(error = ?e, "find_book_by_token failed");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    // Load files and pick the best one for the download URL.
+    let files = match core_services.book_service.files_for_book(book.id).await {
+        Ok(f) => f,
+        Err(e) => {
+            tracing::error!(error = ?e, "files_for_book failed");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+    let best_file = dto::select_best_file(&files);
+
+    let base = base_url.trim_end_matches('/');
+    let metadata = dto::build_book_metadata(&book, best_file, &kobo.sync_token, base);
+
+    Json(vec![metadata]).into_response()
+}

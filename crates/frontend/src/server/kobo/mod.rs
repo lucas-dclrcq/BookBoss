@@ -6,34 +6,40 @@
 //!
 //! # Endpoint map
 //!
-//! | Method | Path                                         | Milestone |
-//! |--------|----------------------------------------------|-----------|
-//! | POST   | `/kobo/:t/v1/initialization`                 | M8.4      |
-//! | GET    | `/kobo/:t/v1/library/sync`                   | M8.5      |
-//! | GET    | `/kobo/:t/v1/download/:book_token/:format`   | M8.6      |
-//! | GET    | `/kobo/:t/v1/image/:book_token/...`          | M8.7      |
-//! | POST   | `/kobo/:t/v1/analytics/event`                | M8.8      |
-//! | GET    | `/kobo/:t/v1/products/list`                  | M8.8      |
-//! | GET    | `/kobo/:t/v1/library/:uuid/metadata`         | M8.8      |
+//! | Method    | Path                                                  | Milestone |
+//! |-----------|-------------------------------------------------------|-----------|
+//! | POST      | `/kobo/:t/v1/initialization`                          | M8.4      |
+//! | GET       | `/kobo/:t/v1/library/sync`                            | M8.5      |
+//! | GET       | `/kobo/:t/v1/download/:book_token/:format`            | M8.6      |
+//! | GET       | `/kobo/:t/v1/image/:book_token/...`                   | M8.7      |
+//! | GET       | `/kobo/:t/v1/library/:uuid/metadata`                  | M8.8      |
+//! | GET/POST  | `/kobo/:t/v1/analytics/gettests`                      | M8.8      |
+//! | GET       | `/kobo/:t/v1/user/loyalty/benefits`                   | M8.8      |
+//! | GET       | `/kobo/:t/v1/library/:uuid/state`                     | M8.8 stub |
+//! | PUT       | `/kobo/:t/v1/library/:uuid/state`                     | M8.8 stub |
+//! | `{*path}` | `/kobo/:t/{*path}`                                    | M8.8 catch-all |
 
+pub mod book_metadata;
 pub mod cursor;
 pub mod download;
+pub mod dto;
 pub mod extractor;
 pub mod image;
 pub mod initialization;
 pub mod library_sync;
+pub mod stubs;
 
 use std::sync::Arc;
 
-use axum::{Router, http::StatusCode, routing};
+use axum::{Router, routing};
 use bb_core::CoreServices;
 pub use extractor::KoboDevice;
 
 /// Builds the Kobo sync router.
 ///
-/// Registers all Kobo protocol endpoints. Handlers for M8.4–M8.8 are
-/// implemented in their own milestones; the remaining analytical/ancillary
-/// endpoints (M8.8) are stubbed with `501 Not Implemented` until then.
+/// Registers all Kobo protocol endpoints. Specific handlers cover the core
+/// sync flow and known ancillary endpoints; a catch-all absorbs any remaining
+/// firmware requests and logs them at INFO level.
 pub fn kobo_router(base_url: String, core_services: Arc<CoreServices>) -> Router {
     Router::new()
         // M8.4 — device initialization
@@ -61,12 +67,24 @@ pub fn kobo_router(base_url: String, core_services: Arc<CoreServices>) -> Router
             let core = core_services.clone();
             routing::get(move |kobo: KoboDevice, params| image::handle(kobo, params, core.clone()))
         })
-        // M8.8 — ancillary / analytical stubs
-        .route("/kobo/{sync_token}/v1/analytics/event", routing::post(not_implemented))
-        .route("/kobo/{sync_token}/v1/products/list", routing::get(not_implemented))
-        .route("/kobo/{sync_token}/v1/library/{uuid}/metadata", routing::get(not_implemented))
-}
-
-async fn not_implemented() -> StatusCode {
-    StatusCode::NOT_IMPLEMENTED
+        // M8.8 — per-book metadata
+        .route("/kobo/{sync_token}/v1/library/{uuid}/metadata", {
+            let core = core_services.clone();
+            let base = base_url.clone();
+            routing::get(move |kobo: KoboDevice, params| book_metadata::handle(kobo, params, core.clone(), base.clone()))
+        })
+        // M8.8 — analytics A/B test config
+        .route(
+            "/kobo/{sync_token}/v1/analytics/gettests",
+            routing::get(stubs::analytics_gettests).post(stubs::analytics_gettests),
+        )
+        // M8.8 — loyalty benefits
+        .route("/kobo/{sync_token}/v1/user/loyalty/benefits", routing::get(stubs::loyalty_benefits))
+        // M8.8 — reading state (stub: accept without persisting)
+        .route(
+            "/kobo/{sync_token}/v1/library/{uuid}/state",
+            routing::get(stubs::library_state_get).put(stubs::library_state_put),
+        )
+        // M8.8 — catch-all: log and return {} for any unrecognised Kobo path
+        .route("/kobo/{sync_token}/{*path}", routing::any(stubs::catch_all))
 }
