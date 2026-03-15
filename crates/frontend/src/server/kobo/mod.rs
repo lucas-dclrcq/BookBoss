@@ -19,6 +19,7 @@
 pub mod cursor;
 pub mod download;
 pub mod extractor;
+pub mod image;
 pub mod initialization;
 pub mod library_sync;
 
@@ -30,7 +31,7 @@ pub use extractor::KoboDevice;
 
 /// Builds the Kobo sync router.
 ///
-/// Registers all Kobo protocol endpoints. Handlers for M8.4–M8.7 are
+/// Registers all Kobo protocol endpoints. Handlers for M8.4–M8.8 are
 /// implemented in their own milestones; the remaining analytical/ancillary
 /// endpoints (M8.8) are stubbed with `501 Not Implemented` until then.
 pub fn kobo_router(base_url: String, core_services: Arc<CoreServices>) -> Router {
@@ -51,11 +52,15 @@ pub fn kobo_router(base_url: String, core_services: Arc<CoreServices>) -> Router
             let core = core_services.clone();
             routing::get(move |kobo: KoboDevice, params| download::handle(kobo, params, core.clone()))
         })
-        // M8.7 — cover image
-        .route(
-            "/kobo/{sync_token}/v1/image/{book_token}/{width}/{height}/{quality}/{grey}",
-            routing::get(not_implemented),
-        )
+        // M8.7 — cover image (two variants: with and without quality segment)
+        .route("/kobo/{sync_token}/v1/image/{book_token}/{width}/{height}/{quality}/{grey}/image.jpg", {
+            let core = core_services.clone();
+            routing::get(move |kobo: KoboDevice, params| image::handle(kobo, params, core.clone()))
+        })
+        .route("/kobo/{sync_token}/v1/image/{book_token}/{width}/{height}/{grey}/image.jpg", {
+            let core = core_services.clone();
+            routing::get(move |kobo: KoboDevice, params| image::handle(kobo, params, core.clone()))
+        })
         // M8.8 — ancillary / analytical stubs
         .route("/kobo/{sync_token}/v1/analytics/event", routing::post(not_implemented))
         .route("/kobo/{sync_token}/v1/products/list", routing::get(not_implemented))
