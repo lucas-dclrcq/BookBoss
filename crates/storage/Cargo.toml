@@ -14,6 +14,7 @@ bb-core.workspace = true
 bb-formats.workspace = true
 bb-utils.workspace = true
 async-trait.workspace = true
+img-parts.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true

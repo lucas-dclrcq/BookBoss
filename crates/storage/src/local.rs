@@ -7,6 +7,7 @@ use bb_core::{
     storage::{BookSidecar, LibraryStore},
 };
 use bb_utils::hash::hash_file;
+use img_parts::{ImageEXIF, jpeg::Jpeg};
 
 pub struct LocalLibraryStore {
     library_path: PathBuf,
@@ -41,6 +42,20 @@ fn format_ext(format: &FileFormat) -> &'static str {
 #[allow(clippy::needless_pass_by_value, reason = "owned error needed for map_err ergonomics")]
 fn io_err(e: impl ToString) -> Error {
     Error::Infrastructure(e.to_string())
+}
+
+/// Returns the JPEG bytes with the EXIF (APP1) segment removed.
+///
+/// Some publisher cover images embed conflicting EXIF dimension metadata that
+/// differs from the actual JPEG dimensions, causing Kobo firmware to hang when
+/// fetching the cover. Stripping the segment fixes this without re-encoding.
+/// Falls back to the original bytes if parsing fails (not a valid JPEG).
+fn strip_jpeg_exif(data: &[u8]) -> Vec<u8> {
+    let Ok(mut jpeg) = Jpeg::from_bytes(img_parts::Bytes::copy_from_slice(data)) else {
+        return data.to_vec();
+    };
+    jpeg.set_exif(None);
+    jpeg.encoder().bytes().to_vec()
 }
 
 #[async_trait]
@@ -112,7 +127,17 @@ impl LibraryStore for LocalLibraryStore {
         let book_dir = self.book_dir(*token);
         tokio::fs::create_dir_all(&book_dir).await.map_err(io_err)?;
         let cover_path = self.cover_path(token, filename);
-        tokio::fs::write(cover_path, data).await.map_err(io_err)?;
+
+        // Strip EXIF from JPEG covers. Mismatched EXIF dimensions (e.g. from
+        // high-res publisher images saved with Photoshop) can cause Kobo
+        // firmware to hang when downloading the cover.
+        let bytes = if filename.ends_with(".jpg") || filename.ends_with(".jpeg") {
+            strip_jpeg_exif(data)
+        } else {
+            data.to_vec()
+        };
+
+        tokio::fs::write(cover_path, bytes).await.map_err(io_err)?;
         Ok(())
     }
 

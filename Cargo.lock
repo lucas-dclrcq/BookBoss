@@ -800,6 +800,7 @@ dependencies = [
  "bb-core",
  "bb-formats",
  "bb-utils",
+ "img-parts",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
@@ -3316,6 +3317,17 @@ checksum = "3acae9609540aa318d1bc588455225fb2085b9ed0c4f6bd0d9d5bcd86f1a0344"
 dependencies = [
  "icu_normalizer",
  "icu_properties",
+]
+
+[[package]]
+name = "img-parts"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19734e3c43b2a850f5889c077056e47c874095f2d87e853c7c41214ae67375f0"
+dependencies = [
+ "bytes",
+ "crc32fast",
+ "miniz_oxide",
 ]
 
 [[package]]
