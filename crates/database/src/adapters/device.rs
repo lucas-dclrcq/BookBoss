@@ -310,3 +310,347 @@ impl DeviceRepository for DeviceRepositoryAdapter {
         Ok(query.all(transaction).await.map_err(handle_dberr)?.into_iter().map(Into::into).collect())
     }
 }
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use bb_core::{
+        book::{BookStatus, FileFormat, NewBook},
+        device::{DeviceBook, NewDevice, NewDeviceSyncLog, OnRemovalAction, SyncStatus},
+        repository::RepositoryService,
+        types::Capabilities,
+        user::NewUser,
+    };
+    use chrono::Utc;
+    use sea_orm::Database;
+
+    use crate::create_repository_service;
+
+    async fn setup() -> Arc<RepositoryService> {
+        let db = Database::connect("sqlite::memory:").await.unwrap();
+        create_repository_service(db).await.unwrap()
+    }
+
+    async fn new_user(svc: &RepositoryService, username: &str) -> u64 {
+        let tx = svc.repository().begin().await.unwrap();
+        let user = svc
+            .user_repository()
+            .add_user(
+                &*tx,
+                NewUser::new(
+                    username,
+                    "password",
+                    format!("{username}@example.com"),
+                    Capabilities::default(),
+                    "Test User",
+                    false,
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+        user.id
+    }
+
+    async fn new_book(svc: &RepositoryService, title: &str) -> u64 {
+        let tx = svc.repository().begin().await.unwrap();
+        let book = svc
+            .book_repository()
+            .add_book(
+                &*tx,
+                NewBook {
+                    title: title.to_owned(),
+                    status: BookStatus::Available,
+                    description: None,
+                    published_date: None,
+                    language: None,
+                    series_id: None,
+                    series_number: None,
+                    publisher_id: None,
+                    page_count: None,
+                    rating: None,
+                    metadata_source: None,
+                    cover_path: None,
+                },
+            )
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+        book.id
+    }
+
+    fn new_device(owner_id: u64, name: &str) -> NewDevice {
+        NewDevice {
+            owner_id,
+            name: name.to_owned(),
+            device_type: "kobo".to_owned(),
+            preferred_format: Some(FileFormat::Epub),
+            on_removal_action: OnRemovalAction::Nothing,
+        }
+    }
+
+    // ── add_device / find ─────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn add_device_and_find_by_token() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let device = svc.device_repository().add_device(&*tx, new_device(user_id, "My Kobo")).await.unwrap();
+        tx.commit().await.unwrap();
+
+        let tx = svc.repository().begin_read_only().await.unwrap();
+        let found = svc.device_repository().find_by_token(&*tx, &device.token).await.unwrap();
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().name, "My Kobo");
+    }
+
+    #[tokio::test]
+    async fn add_device_and_find_by_id() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let device = svc.device_repository().add_device(&*tx, new_device(user_id, "Kindle")).await.unwrap();
+        tx.commit().await.unwrap();
+
+        let tx = svc.repository().begin_read_only().await.unwrap();
+        let found = svc.device_repository().find_by_id(&*tx, device.id).await.unwrap();
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().device_type, "kobo");
+    }
+
+    #[tokio::test]
+    async fn find_by_token_returns_none_for_unknown() {
+        let svc = setup().await;
+        let tx = svc.repository().begin_read_only().await.unwrap();
+        let ghost = bb_core::device::DeviceToken::new(999_999);
+
+        let found = svc.device_repository().find_by_token(&*tx, &ghost).await.unwrap();
+
+        assert!(found.is_none());
+    }
+
+    // ── list_for_user ─────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn list_for_user_empty_initially() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "bob").await;
+        let tx = svc.repository().begin_read_only().await.unwrap();
+
+        let devices = svc.device_repository().list_for_user(&*tx, user_id).await.unwrap();
+
+        assert!(devices.is_empty());
+    }
+
+    #[tokio::test]
+    async fn list_for_user_returns_own_devices_only() {
+        let svc = setup().await;
+        let alice = new_user(&svc, "alice").await;
+        let bob = new_user(&svc, "bob").await;
+        let tx = svc.repository().begin().await.unwrap();
+        svc.device_repository().add_device(&*tx, new_device(alice, "Alice's Kobo")).await.unwrap();
+        svc.device_repository().add_device(&*tx, new_device(bob, "Bob's Kindle")).await.unwrap();
+        tx.commit().await.unwrap();
+
+        let tx = svc.repository().begin_read_only().await.unwrap();
+        let alice_devices = svc.device_repository().list_for_user(&*tx, alice).await.unwrap();
+
+        assert_eq!(alice_devices.len(), 1);
+        assert_eq!(alice_devices[0].name, "Alice's Kobo");
+    }
+
+    // ── update_device ─────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn update_device_changes_name_and_removal_action() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        let tx = svc.repository().begin().await.unwrap();
+        let mut device = svc.device_repository().add_device(&*tx, new_device(user_id, "Old Name")).await.unwrap();
+        tx.commit().await.unwrap();
+
+        device.name = "New Name".to_string();
+        device.on_removal_action = OnRemovalAction::MarkRead;
+        let tx = svc.repository().begin().await.unwrap();
+        let updated = svc.device_repository().update_device(&*tx, device).await.unwrap();
+        tx.commit().await.unwrap();
+
+        assert_eq!(updated.name, "New Name");
+        assert_eq!(updated.on_removal_action, OnRemovalAction::MarkRead);
+    }
+
+    // ── delete_device ─────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn delete_device_removes_record() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        let tx = svc.repository().begin().await.unwrap();
+        let device = svc.device_repository().add_device(&*tx, new_device(user_id, "To Delete")).await.unwrap();
+        tx.commit().await.unwrap();
+
+        let tx = svc.repository().begin().await.unwrap();
+        svc.device_repository().delete_device(&*tx, device.clone()).await.unwrap();
+        tx.commit().await.unwrap();
+
+        let tx = svc.repository().begin_read_only().await.unwrap();
+        let found = svc.device_repository().find_by_id(&*tx, device.id).await.unwrap();
+        assert!(found.is_none());
+    }
+
+    // ── count_with_name_prefix ────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn count_with_name_prefix_matches_prefix() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        let tx = svc.repository().begin().await.unwrap();
+        svc.device_repository().add_device(&*tx, new_device(user_id, "Alice's Device")).await.unwrap();
+        svc.device_repository()
+            .add_device(&*tx, new_device(user_id, "Alice's Device (2)"))
+            .await
+            .unwrap();
+        svc.device_repository().add_device(&*tx, new_device(user_id, "Other")).await.unwrap();
+        tx.commit().await.unwrap();
+
+        let tx = svc.repository().begin_read_only().await.unwrap();
+        let count = svc.device_repository().count_with_name_prefix(&*tx, user_id, "Alice's Device").await.unwrap();
+
+        assert_eq!(count, 2);
+    }
+
+    // ── add_device_book / books_for_device / remove_device_book ──────────────
+
+    #[tokio::test]
+    async fn add_device_book_and_retrieve() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        let book_id = new_book(&svc, "Dune").await;
+        let tx = svc.repository().begin().await.unwrap();
+        let device = svc.device_repository().add_device(&*tx, new_device(user_id, "Kobo")).await.unwrap();
+        tx.commit().await.unwrap();
+
+        let tx = svc.repository().begin().await.unwrap();
+        svc.device_repository()
+            .add_device_book(
+                &*tx,
+                DeviceBook {
+                    device_id: device.id,
+                    book_id,
+                    format: FileFormat::Epub,
+                    synced_at: Utc::now(),
+                    removed_at: None,
+                },
+            )
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+
+        let tx = svc.repository().begin_read_only().await.unwrap();
+        let books = svc.device_repository().books_for_device(&*tx, device.id).await.unwrap();
+        assert_eq!(books.len(), 1);
+        assert_eq!(books[0].book_id, book_id);
+    }
+
+    #[tokio::test]
+    async fn remove_device_book_removes_entry() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        let book_id = new_book(&svc, "Foundation").await;
+        let tx = svc.repository().begin().await.unwrap();
+        let device = svc.device_repository().add_device(&*tx, new_device(user_id, "Kobo")).await.unwrap();
+        svc.device_repository()
+            .add_device_book(
+                &*tx,
+                DeviceBook {
+                    device_id: device.id,
+                    book_id,
+                    format: FileFormat::Epub,
+                    synced_at: Utc::now(),
+                    removed_at: None,
+                },
+            )
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+
+        let tx = svc.repository().begin().await.unwrap();
+        svc.device_repository().remove_device_book(&*tx, device.id, book_id).await.unwrap();
+        tx.commit().await.unwrap();
+
+        let tx = svc.repository().begin_read_only().await.unwrap();
+        let books = svc.device_repository().books_for_device(&*tx, device.id).await.unwrap();
+        assert!(books.is_empty());
+    }
+
+    // ── sync log ──────────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn add_sync_log_and_list() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        let tx = svc.repository().begin().await.unwrap();
+        let device = svc.device_repository().add_device(&*tx, new_device(user_id, "Kobo")).await.unwrap();
+        tx.commit().await.unwrap();
+
+        let tx = svc.repository().begin().await.unwrap();
+        svc.device_repository()
+            .add_sync_log(
+                &*tx,
+                NewDeviceSyncLog {
+                    device_id: device.id,
+                    status: SyncStatus::Completed,
+                    books_added: 3,
+                    books_removed: 1,
+                    started_at: Utc::now(),
+                    completed_at: Some(Utc::now()),
+                },
+            )
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+
+        let tx = svc.repository().begin_read_only().await.unwrap();
+        let logs = svc.device_repository().list_sync_logs_for_device(&*tx, device.id, None).await.unwrap();
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0].status, SyncStatus::Completed);
+        assert_eq!(logs[0].books_added, 3);
+        assert_eq!(logs[0].books_removed, 1);
+    }
+
+    #[tokio::test]
+    async fn list_sync_logs_respects_page_size() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        let tx = svc.repository().begin().await.unwrap();
+        let device = svc.device_repository().add_device(&*tx, new_device(user_id, "Kobo")).await.unwrap();
+        for _ in 0..5 {
+            svc.device_repository()
+                .add_sync_log(
+                    &*tx,
+                    NewDeviceSyncLog {
+                        device_id: device.id,
+                        status: SyncStatus::Completed,
+                        books_added: 0,
+                        books_removed: 0,
+                        started_at: Utc::now(),
+                        completed_at: None,
+                    },
+                )
+                .await
+                .unwrap();
+        }
+        tx.commit().await.unwrap();
+
+        let tx = svc.repository().begin_read_only().await.unwrap();
+        let limited = svc.device_repository().list_sync_logs_for_device(&*tx, device.id, Some(3)).await.unwrap();
+        assert_eq!(limited.len(), 3);
+    }
+}

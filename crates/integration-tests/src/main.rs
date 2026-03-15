@@ -1,9 +1,11 @@
 mod book;
 mod context;
+mod device;
 mod fixtures;
 mod import_job;
 mod library;
 mod pipeline;
+mod reading;
 mod shelf;
 
 #[cfg(feature = "postgres")]

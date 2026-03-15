@@ -13,6 +13,7 @@
 - Postgres integration tests: `just postgres-integration-tests`
 - SQLite integration tests: `just sqlite-integration-tests`
 - MySQL integration tests: `just mysql-integration-tests`
+- MariaDB integration tests: `just mariadb-integration-tests`
 - Insta tests: `just insta`
 - Start colima (for integration/all tests): `colima start`
 - Stop colima: `colima stop`
