@@ -35,7 +35,17 @@ use super::{
 pub async fn handle(kobo: KoboDevice, req_headers: HeaderMap, core_services: Arc<CoreServices>, base_url: String) -> Result<impl IntoResponse, StatusCode> {
     // 1. Decode sync cursor from request header (absent = full sync from start).
     let raw_cursor = req_headers.get("x-kobo-synctoken").and_then(|v| v.to_str().ok()).unwrap_or("");
-    let (since, after_book_id) = cursor::decode(raw_cursor);
+    let (cursor_since, cursor_after_book_id) = cursor::decode(raw_cursor);
+
+    // If last_synced_at is None the device sync was reset server-side; ignore
+    // the Kobo's cursor so the next sync is treated as a full sync regardless
+    // of what cursor the device echoes back.
+    let (since, after_book_id) = if kobo.device.last_synced_at.is_none() {
+        tracing::info!(device_id = kobo.device.id, "last_synced_at is None — forcing full sync");
+        (None, None)
+    } else {
+        (cursor_since, cursor_after_book_id)
+    };
 
     // 2. Compute which books to add / remove.
     let diff = core_services

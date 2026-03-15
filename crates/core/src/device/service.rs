@@ -541,8 +541,11 @@ impl DeviceService for DeviceServiceImpl {
                 .filter(|d| d.owner_id == user_id)
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
-            device_repository.clear_device_books(tx, device.id).await?;
-
+            // Resetting last_synced_at to None is enough: the library sync
+            // handler treats None as a server-side override that ignores the
+            // Kobo's cursor and forces a full re-classification on the next sync.
+            // DeviceBook records are preserved so re-sent books are classified
+            // as Refreshed (existing) or New (not yet sent) rather than all New.
             let updated = Device {
                 last_synced_at: None,
                 ..device
