@@ -15,6 +15,11 @@ pub struct FrontendConfig {
     /// e.g. 8080
     /// Environment variable: `BOOKBOSS__FRONTEND__LISTEN_PORT`
     pub listen_port: u16,
+
+    /// Base URL where the application is running.
+    /// e.g. https://bookboss.example.com
+    /// Environment variable: `BOOKBOSS__FRONTEND__BASE_URL`
+    pub base_url: String,
 }
 
 impl Default for FrontendConfig {

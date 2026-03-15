@@ -41,6 +41,14 @@ run:
     just tailwindcss
     dx serve --web --package bookboss --args server
 
+[doc('Bundle the web and server components')]
+bundle:
+    dx bundle --web --package bookboss
+
+[doc('Run the bundld application as a binary')]
+run-bundle:
+    ./target/dx/bookboss/debug/web/bookboss
+
 [doc('Create a release')]
 release VERSION:
     ./scripts/release.sh {{ VERSION }}
