@@ -12,9 +12,9 @@
 //! consider the initialization successful.
 //!
 //! The Kobo looks up auth via the `device_auth` and `device_refresh` keys in
-//! `Resources` (not `auth_url`). We point both at our own auth endpoint so
-//! the device can refresh its `KoboAccessToken` without contacting the real
-//! Kobo store.
+//! `Resources` (not `auth_url`). Like Calibre-Web and Komga we point these at
+//! the real Kobo store (`storeapi.kobo.com`) so Kobo infrastructure manages
+//! the `KoboAccessToken` lifecycle — the device already has Kobo credentials.
 
 use axum::{
     Json,
@@ -69,12 +69,9 @@ pub struct KoboResources {
     pub bookmark_url: String,
     /// Unused by BookBoss; empty string satisfies the Kobo schema.
     pub subscription_host: String,
-    /// Token acquisition endpoint. The Kobo calls this when it needs a new
-    /// `KoboAccessToken` (e.g. first connection). Replaces the legacy
-    /// `auth_url` key — Kobo firmware looks for `device_auth`.
+    /// Token acquisition endpoint — points at the real Kobo store.
     pub device_auth: String,
-    /// Token refresh endpoint. The Kobo calls this when its `KoboAccessToken`
-    /// has expired. We point it at the same handler as `device_auth`.
+    /// Token refresh endpoint — points at the real Kobo store.
     pub device_refresh: String,
 }
 
@@ -131,7 +128,6 @@ pub async fn handle(kobo: KoboDevice, body: Bytes, base_url: String) -> impl Int
 
     let base = base_url.trim_end_matches('/');
     let t = &kobo.sync_token;
-    let auth_url = format!("{base}/kobo/{t}/v1/auth/device");
 
     let resources = KoboResources {
         image_host: base.to_string(),
@@ -141,8 +137,11 @@ pub async fn handle(kobo: KoboDevice, body: Bytes, base_url: String) -> impl Int
         library_sync_url: format!("{base}/kobo/{t}/v1/library/sync"),
         bookmark_url: format!("{base}/kobo/{t}/v1/library/{{RevisionId}}/bookmarks"),
         subscription_host: String::new(),
-        device_auth: auth_url.clone(),
-        device_refresh: auth_url,
+        // Delegate auth to the real Kobo store — same as Calibre-Web and Komga.
+        // The device already has Kobo credentials; let Kobo infrastructure manage
+        // the KoboAccessToken lifecycle rather than handling it ourselves.
+        device_auth: "https://storeapi.kobo.com/v1/auth/device".to_string(),
+        device_refresh: "https://storeapi.kobo.com/v1/auth/refresh".to_string(),
     };
 
     let body = KoboInitResponse {
@@ -210,13 +209,5 @@ mod tests {
     fn bookmark_date_epoch_when_never_synced() {
         let date = DateTime::from_timestamp(0, 0).unwrap();
         assert_eq!(date.to_rfc3339(), "1970-01-01T00:00:00+00:00");
-    }
-
-    #[test]
-    fn device_auth_and_refresh_point_to_same_url() {
-        let base = base();
-        let t = token();
-        let expected = format!("{base}/kobo/{t}/v1/auth/device");
-        assert_eq!(expected, "https://example.com/kobo/MYTOKEN/v1/auth/device");
     }
 }
