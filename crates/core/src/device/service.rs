@@ -1,9 +1,11 @@
 use std::sync::Arc;
 
+use chrono::{DateTime, Utc};
+
 use crate::{
     Error, RepositoryError,
-    book::FileFormat,
-    device::{Device, DeviceId, DeviceToken, NewDevice, OnRemovalAction},
+    book::{BookId, FileFormat},
+    device::{Device, DeviceId, DeviceToken, NewDevice, OnRemovalAction, SyncDiff},
     filter::{BookFilter, FilterReadStatus, FilterRule, SetOp},
     repository::RepositoryService,
     shelf::{NewShelf, Shelf, ShelfType, ShelfVisibility},
@@ -53,6 +55,32 @@ pub trait DeviceService: Send + Sync {
     /// to build `"{first}'s Device"`. Appends `" (N)"` when that name is
     /// already taken.
     async fn default_device_name(&self, owner_id: UserId) -> Result<String, Error>;
+
+    /// Computes which books need to be added, upgraded, refreshed, or removed
+    /// for a device sync page.
+    ///
+    /// Loads all books from the device's companion shelf and all current
+    /// `DeviceBook` records, classifies each book, sorts by `book_id`, then
+    /// applies the keyset cursor (`after_book_id`) to return at most
+    /// `page_size` entries. Removals are included only on the first page
+    /// (`after_book_id` is `None`).
+    ///
+    /// `since` should be `device.last_synced_at` for incremental syncs, or
+    /// `None` for a full initial sync.
+    async fn compute_sync_diff(
+        &self,
+        device_id: DeviceId,
+        owner_id: UserId,
+        since: Option<DateTime<Utc>>,
+        after_book_id: Option<BookId>,
+        page_size: u64,
+    ) -> Result<SyncDiff, Error>;
+
+    /// Applies a sync diff page: upserts `DeviceBook` records for new and
+    /// upgraded books, deletes records for removed books, and writes a
+    /// `DeviceSyncLog` entry. Updates `Device.last_synced_at` only on the
+    /// final page (`!diff.has_more`).
+    async fn apply_sync(&self, device_id: DeviceId, diff: &SyncDiff) -> Result<(), Error>;
 }
 
 // ── Implementation
@@ -236,6 +264,21 @@ impl DeviceService for DeviceServiceImpl {
             if count == 0 { Ok(base) } else { Ok(format!("{base} ({})", count + 1)) }
         })
     }
+
+    async fn compute_sync_diff(
+        &self,
+        _device_id: DeviceId,
+        _owner_id: UserId,
+        _since: Option<DateTime<Utc>>,
+        _after_book_id: Option<BookId>,
+        _page_size: u64,
+    ) -> Result<SyncDiff, Error> {
+        unimplemented!("implemented in M8.2.4")
+    }
+
+    async fn apply_sync(&self, _device_id: DeviceId, _diff: &SyncDiff) -> Result<(), Error> {
+        unimplemented!("implemented in M8.2.5")
+    }
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
@@ -244,15 +287,13 @@ impl DeviceService for DeviceServiceImpl {
 mod tests {
     use std::sync::Mutex;
 
-    use chrono::Utc;
-
     use super::*;
     use crate::{
         auth::{NewSession, Session, SessionRepository},
         book::{
-            Author, AuthorId, AuthorRepository, AuthorRole, AuthorToken, Book, BookAuthor, BookFile, BookId, BookIdentifier, BookQuery, BookRepository,
-            BookToken, FileRole, Genre, GenreId, GenreRepository, GenreToken, IdentifierType, NewAuthor, NewBook, NewGenre, NewPublisher, NewSeries, NewTag,
-            Publisher, PublisherId, PublisherRepository, PublisherToken, Series, SeriesId, SeriesRepository, SeriesToken, Tag, TagId, TagRepository, TagToken,
+            Author, AuthorId, AuthorRepository, AuthorRole, AuthorToken, Book, BookAuthor, BookFile, BookIdentifier, BookQuery, BookRepository, BookToken,
+            FileRole, Genre, GenreId, GenreRepository, GenreToken, IdentifierType, NewAuthor, NewBook, NewGenre, NewPublisher, NewSeries, NewTag, Publisher,
+            PublisherId, PublisherRepository, PublisherToken, Series, SeriesId, SeriesRepository, SeriesToken, Tag, TagId, TagRepository, TagToken,
         },
         device::{DeviceBook, DeviceRepository, DeviceSyncLog, NewDeviceSyncLog},
         import::{ImportJob, ImportJobId, ImportJobRepository, ImportJobToken, ImportStatus, NewImportJob},
