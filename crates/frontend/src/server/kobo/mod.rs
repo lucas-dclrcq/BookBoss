@@ -44,10 +44,12 @@ pub use extractor::KoboDevice;
 /// firmware requests and logs them at INFO level.
 pub fn kobo_router(base_url: String, core_services: Arc<CoreServices>) -> Router {
     Router::new()
-        // M8.4 — device initialization
+        // M8.4 — device initialization (GET per Calibre-Web/native protocol; POST also accepted)
         .route("/kobo/{sync_token}/v1/initialization", {
             let base_url = base_url.clone();
-            routing::post(move |kobo: KoboDevice, body| initialization::handle(kobo, body, base_url.clone()))
+            let base_url2 = base_url.clone();
+            routing::get(move |kobo: KoboDevice, body| initialization::handle(kobo, body, base_url.clone()))
+                .post(move |kobo: KoboDevice, body| initialization::handle(kobo, body, base_url2.clone()))
         })
         // M8.5 — incremental library sync
         .route("/kobo/{sync_token}/v1/library/sync", {

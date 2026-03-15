@@ -1,10 +1,15 @@
-//! `POST /kobo/{sync_token}/v1/initialization`
+//! `GET /kobo/{sync_token}/v1/initialization` (also accepts POST)
 //!
 //! Called by the Kobo device on first connection (and on reconnect). Returns
 //! device settings and a `Resources` map that the Kobo uses to discover the
 //! exact URL for every subsequent API call.
 
-use axum::{Json, extract};
+use axum::{
+    Json,
+    body::Bytes,
+    http::{HeaderName, HeaderValue},
+    response::IntoResponse,
+};
 use chrono::DateTime;
 use serde::{Deserialize, Serialize};
 
@@ -80,7 +85,10 @@ pub struct KoboInitResponse {
 // ── Handler
 // ───────────────────────────────────────────────────────────────────
 
-pub async fn handle(kobo: KoboDevice, extract::Json(req): extract::Json<KoboInitRequest>, base_url: String) -> Json<KoboInitResponse> {
+pub async fn handle(kobo: KoboDevice, body: Bytes, base_url: String) -> impl IntoResponse {
+    // Accept both GET (no body) and POST (JSON body). Parse leniently.
+    let req: KoboInitRequest = serde_json::from_slice(&body).unwrap_or_default();
+
     tracing::debug!(
         device_id = kobo.device.id,
         sync_token = %kobo.sync_token,
@@ -112,7 +120,7 @@ pub async fn handle(kobo: KoboDevice, extract::Json(req): extract::Json<KoboInit
         auth_url: String::new(),
     };
 
-    Json(KoboInitResponse {
+    let body = Json(KoboInitResponse {
         bookmark_date,
         device_id: "00000000-0000-0000-0000-000000000000",
         user_key: "00000000000000000000000000000000",
@@ -122,7 +130,17 @@ pub async fn handle(kobo: KoboDevice, extract::Json(req): extract::Json<KoboInit
         is_checkout_enabled: false,
         is_subscription_enabled: false,
         library_sync: true,
-    })
+    });
+
+    // `x-kobo-apitoken: e30=` (base64 of `{}`) is required by the Kobo
+    // firmware to trust the initialization response. Calibre-Web always
+    // returns this header; without it the Kobo ignores parts of the response
+    // (notably the image URL templates for cover art).
+    let mut response = body.into_response();
+    response
+        .headers_mut()
+        .insert(HeaderName::from_static("x-kobo-apitoken"), HeaderValue::from_static("e30="));
+    response
 }
 
 #[cfg(test)]
