@@ -44,10 +44,10 @@ COPY . .
 RUN tailwindcss -i ./crates/frontend/assets/input.css -o ./crates/frontend/assets/tailwind.css
 
 # Build web component
-RUN /usr/local/cargo/bin/dx bundle --web --platform web --package bookboss --release
+RUN /usr/local/cargo/bin/dx build --platform web --package bookboss --release
 
 # Build server
-RUN /usr/local/cargo/bin/dx bundle --server --platform server --package bookboss --release --target x86_64-unknown-linux-musl
+RUN /usr/local/cargo/bin/dx build --platform server --package bookboss --release --target x86_64-unknown-linux-musl
 
 # Sanity check: should say "not a dynamic executable"
 RUN ldd target/dx/bookboss/release/web/bookboss || true
