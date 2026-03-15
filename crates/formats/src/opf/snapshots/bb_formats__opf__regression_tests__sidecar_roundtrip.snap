@@ -60,9 +60,6 @@ BookSidecar {
     page_count: Some(
         1007,
     ),
-    rating: Some(
-        5,
-    ),
     status: Available,
     metadata_source: Some(
         Hardcover,

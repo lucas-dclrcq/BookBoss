@@ -46,8 +46,6 @@ struct BbMeta<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     page_count: Option<i32>,
     author_sort_orders: Vec<AuthorSortOrder>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    rating: Option<i16>,
     status: &'a BookStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
     metadata_source: Option<&'a MetadataSource>,
@@ -149,7 +147,6 @@ pub(crate) fn write_metadata_xml(sidecar: &BookSidecar) -> Result<Vec<u8>, Error
                 sort_order: a.sort_order,
             })
             .collect(),
-        rating: sidecar.rating,
         status: &sidecar.status,
         metadata_source: sidecar.metadata_source.as_ref(),
         files: &sidecar.files,
@@ -225,7 +222,6 @@ pub(crate) mod tests {
             genres: vec!["Fantasy".to_string(), "Epic Fantasy".to_string()],
             tags: vec!["magic-system".to_string()],
             page_count: Some(1007),
-            rating: Some(5),
             status: BookStatus::Available,
             metadata_source: Some(MetadataSource::Hardcover),
             files: vec![SidecarFile {
@@ -256,7 +252,6 @@ pub(crate) mod tests {
         assert_eq!(parsed.series.as_ref().and_then(|s| s.number), original.series.as_ref().and_then(|s| s.number));
         assert_eq!(parsed.genres, original.genres, "genres must survive write → parse");
         assert_eq!(parsed.tags, original.tags, "tags must survive write → parse");
-        assert_eq!(parsed.rating, original.rating);
         assert_eq!(parsed.status, original.status);
         assert_eq!(parsed.metadata_source, original.metadata_source);
         assert_eq!(parsed.files.len(), original.files.len());
@@ -302,7 +297,6 @@ pub(crate) mod tests {
         assert_eq!(parsed.series.as_ref().and_then(|s| s.number), original.series.as_ref().and_then(|s| s.number));
         assert_eq!(parsed.genres, original.genres);
         assert_eq!(parsed.tags, original.tags);
-        assert_eq!(parsed.rating, original.rating);
         assert_eq!(parsed.status, original.status);
         assert_eq!(parsed.metadata_source, original.metadata_source);
         assert_eq!(parsed.files.len(), original.files.len());
@@ -324,7 +318,6 @@ pub(crate) mod tests {
             genres: vec![],
             tags: vec![],
             page_count: None,
-            rating: None,
             status: BookStatus::Incoming,
             metadata_source: None,
             files: vec![],
@@ -342,7 +335,6 @@ pub(crate) mod tests {
         assert!(parsed.series.is_none());
         assert!(parsed.genres.is_empty());
         assert!(parsed.tags.is_empty());
-        assert_eq!(parsed.rating, None);
         assert_eq!(parsed.status, BookStatus::Incoming);
         assert_eq!(parsed.metadata_source, None);
         assert!(parsed.files.is_empty());
@@ -381,7 +373,6 @@ pub(crate) mod tests {
             genres: vec![],
             tags: vec![],
             page_count: None,
-            rating: None,
             status: BookStatus::Available,
             metadata_source: None,
             files: vec![],

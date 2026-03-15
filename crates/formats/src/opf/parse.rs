@@ -93,8 +93,6 @@ struct BbMetaJson {
     page_count: Option<i32>,
     #[serde(default)]
     author_sort_orders: Vec<AuthorSortOrderJson>,
-    #[serde(default)]
-    rating: Option<i16>,
     status: BookStatus,
     #[serde(default)]
     metadata_source: Option<MetadataSource>,
@@ -426,7 +424,6 @@ pub fn parse_sidecar(xml: &[u8]) -> Result<BookSidecar, Error> {
         genres: if bb.genres.is_empty() { fields.subjects } else { bb.genres },
         tags: bb.tags,
         page_count: bb.page_count,
-        rating: bb.rating,
         status: bb.status,
         metadata_source: bb.metadata_source,
         files: bb.files,
@@ -471,16 +468,16 @@ pub fn extract_metadata(xml: &[u8]) -> Result<ExtractedMetadata, Error> {
         .collect();
 
     // Pull spinnaker:metadata fields when the blob is present.
-    let (genres, tags, series_name, series_number) = if let Some(json) = &fields.bb_meta_content {
+    let (genres, tags, page_count, series_name, series_number) = if let Some(json) = &fields.bb_meta_content {
         if let Ok(bb) = serde_json::from_str::<BbMetaJson>(json) {
             let genres = if bb.genres.is_empty() { fields.subjects.clone() } else { bb.genres };
             let (sname, snumber) = bb.series.map_or((None, None), |s| (Some(s.name), s.number));
-            (genres, bb.tags, sname, snumber)
+            (genres, bb.tags, bb.page_count, sname, snumber)
         } else {
-            (fields.subjects.clone(), vec![], None, None)
+            (fields.subjects.clone(), vec![], None, None, None)
         }
     } else {
-        (fields.subjects.clone(), vec![], None, None)
+        (fields.subjects.clone(), vec![], None, None, None)
     };
 
     Ok(ExtractedMetadata {
@@ -495,6 +492,7 @@ pub fn extract_metadata(xml: &[u8]) -> Result<ExtractedMetadata, Error> {
         series_number,
         genres,
         tags,
+        page_count,
         has_spinnaker_metadata: fields.bb_meta_content.is_some(),
         cover_bytes: None,
     })

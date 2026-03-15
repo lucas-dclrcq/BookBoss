@@ -131,6 +131,7 @@ impl GoogleBooksAdapter {
             series_number: None,
             genres: info.categories.clone().unwrap_or_default(),
             tags: vec![],
+            page_count: None,
             has_spinnaker_metadata: false,
             cover_bytes: None,
         }

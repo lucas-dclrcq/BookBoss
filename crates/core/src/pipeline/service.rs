@@ -269,7 +269,9 @@ impl PipelineService for PipelineServiceImpl {
             let skip_providers = extracted.has_spinnaker_metadata;
 
             for provider in &self.providers {
-                if skip_providers { break; }
+                if skip_providers {
+                    break;
+                }
                 let cover_good_enough = best_min_side >= GOOD_COVER_MIN_SIDE;
                 if meta.is_some() && cover_good_enough {
                     break;
@@ -312,6 +314,9 @@ impl PipelineService for PipelineServiceImpl {
                     }
                     if metadata.tags.is_empty() {
                         metadata.tags.clone_from(&extracted.tags);
+                    }
+                    if metadata.page_count.is_none() {
+                        metadata.page_count = extracted.page_count;
                     }
                     (metadata, best_cover, source)
                 }
@@ -437,7 +442,7 @@ impl PipelineService for PipelineServiceImpl {
                             series_id,
                             series_number,
                             publisher_id,
-                            page_count: None,
+                            page_count: fm.page_count,
                             rating: None,
                             metadata_source: bms,
                             cover_path: cover_fn,
@@ -472,7 +477,9 @@ impl PipelineService for PipelineServiceImpl {
                 // Add genres
                 for name in &fm.genres {
                     let name = normalize_name(name);
-                    if name.is_empty() { continue; }
+                    if name.is_empty() {
+                        continue;
+                    }
                     let genre = match genre_repo.find_by_name(tx, &name).await? {
                         Some(g) => g,
                         None => genre_repo.add_genre(tx, NewGenre { name }).await?,
@@ -483,7 +490,9 @@ impl PipelineService for PipelineServiceImpl {
                 // Add tags
                 for name in &fm.tags {
                     let name = normalize_name(name);
-                    if name.is_empty() { continue; }
+                    if name.is_empty() {
+                        continue;
+                    }
                     let tag = match tag_repo.find_by_name(tx, &name).await? {
                         Some(t) => t,
                         None => tag_repo.add_tag(tx, NewTag { name }).await?,
@@ -531,8 +540,7 @@ impl PipelineService for PipelineServiceImpl {
             }),
             genres: final_meta.genres.clone(),
             tags: final_meta.tags.clone(),
-            page_count: None,
-            rating: None,
+            page_count: final_meta.page_count,
             status: BookStatus::Incoming,
             metadata_source: book_metadata_source,
             files: vec![SidecarFile {
@@ -872,7 +880,6 @@ impl PipelineService for PipelineServiceImpl {
             genres: edit.genres.iter().map(|g| g.trim().to_string()).filter(|g| !g.is_empty()).collect(),
             tags: edit.tags.iter().map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).collect(),
             page_count: edit.page_count,
-            rating: None,
             status: BookStatus::Available,
             metadata_source: None,
             files: book_file
@@ -1139,7 +1146,6 @@ impl PipelineService for PipelineServiceImpl {
             genres: edit.genres.iter().map(|g| g.trim().to_string()).filter(|g| !g.is_empty()).collect(),
             tags: edit.tags.iter().map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).collect(),
             page_count: edit.page_count,
-            rating: None,
             status: BookStatus::Available,
             metadata_source: None,
             files: book_file

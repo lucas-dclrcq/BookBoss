@@ -129,6 +129,7 @@ impl OpenLibraryAdapter {
             series_number: None,
             genres: data.subjects.as_deref().unwrap_or(&[]).iter().map(|s| s.name.clone()).collect(),
             tags: vec![],
+            page_count: None,
             has_spinnaker_metadata: false,
             cover_bytes: None,
         }

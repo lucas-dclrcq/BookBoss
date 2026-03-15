@@ -58,7 +58,6 @@ async fn cmd_dump_epub(file: std::path::PathBuf) -> anyhow::Result<()> {
         println!("genres:       {:?}", sidecar.genres);
         println!("tags:         {:?}", sidecar.tags);
         println!("page_count:   {:?}", sidecar.page_count);
-        println!("rating:       {:?}", sidecar.rating);
         println!("status:       {:?}", sidecar.status);
         println!("series:       {:?}", sidecar.series);
         println!("metadata_src: {:?}", sidecar.metadata_source);

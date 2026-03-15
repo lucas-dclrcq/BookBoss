@@ -63,10 +63,13 @@ pub struct ExtractedMetadata {
     pub identifiers: Option<Vec<ExtractedIdentifier>>,
     pub series_name: Option<String>,
     pub series_number: Option<Decimal>,
-    /// Genres extracted from `dc:subject` elements or the `spinnaker:metadata` metadata blob.
+    /// Genres extracted from `dc:subject` elements or the `spinnaker:metadata`
+    /// metadata blob.
     pub genres: Vec<String>,
     /// Tags extracted from the `spinnaker:metadata` metadata blob.
     pub tags: Vec<String>,
+    /// Page count extracted from the `spinnaker:metadata` metadata blob.
+    pub page_count: Option<i32>,
     /// `true` when a `spinnaker:metadata` blob was found in the OPF.
     ///
     /// Used by the pipeline to skip external metadata providers — if the file

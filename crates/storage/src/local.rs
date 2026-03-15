@@ -190,7 +190,6 @@ mod tests {
             genres: vec![],
             tags: vec![],
             page_count: None,
-            rating: None,
             status: BookStatus::Incoming,
             metadata_source: None,
             files: vec![],
