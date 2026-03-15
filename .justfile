@@ -39,7 +39,7 @@ build:
 [doc('Run BookBoss')]
 run:
     just tailwindcss
-    dx serve --web --package bookboss --args server
+    dx serve --addr 0.0.0.0 --web --package bookboss --args server
 
 [doc('Bundle the web and server components')]
 bundle:

@@ -16,9 +16,9 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(big_integer(DeviceBooks::DeviceId).not_null())
                     .col(big_integer(DeviceBooks::BookId).not_null())
-                    .col(string(DeviceBooks::Format))
-                    .col(timestamp_with_time_zone(DeviceBooks::SyncedAt))
-                    .col(timestamp_with_time_zone(DeviceBooks::RemovedAt).null())
+                    .col(string(DeviceBooks::FileRole).not_null())
+                    .col(string(DeviceBooks::Format).not_null())
+                    .col(timestamp_with_time_zone(DeviceBooks::SyncedAt).not_null())
                     .primary_key(Index::create().col(DeviceBooks::DeviceId).col(DeviceBooks::BookId))
                     .foreign_key(
                         ForeignKey::create()
@@ -62,7 +62,7 @@ enum DeviceBooks {
     BookId,
     Format,
     SyncedAt,
-    RemovedAt,
+    FileRole,
 }
 
 #[derive(DeriveIden)]
