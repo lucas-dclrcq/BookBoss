@@ -21,6 +21,7 @@ use crate::{BookBossFrontend, FrontendConfig};
 
 pub(crate) mod covers;
 pub(crate) mod downloads;
+pub(crate) mod kobo;
 pub(crate) mod session_pool;
 
 pub(crate) use session_pool::{AuthSession, BackendSessionPool};
@@ -69,10 +70,13 @@ impl IntoSubsystem<anyhow::Error> for FrontendSubsystem {
             .layer(SessionLayer::new(session_store))
             .layer(AuthSessionLayer::<AuthUser, UserId, BackendSessionPool, BackendSessionPool>::new(Some(backend_pool)).with_config(auth_config));
 
+        let kobo = kobo::kobo_router(self.config.base_url.clone(), core_services.clone());
+
         let app_router = axum::Router::new()
             .route("/api/v1/covers/{book_token}", axum::routing::get(covers::serve_cover))
             .route("/api/v1/books/{book_token}/download/{format}", axum::routing::get(downloads::serve_book_file))
             .serve_dioxus_application(dioxus_server::ServeConfig::new(), BookBossFrontend)
+            .merge(kobo)
             .layer(Extension(core_services))
             .layer(middleware);
 
