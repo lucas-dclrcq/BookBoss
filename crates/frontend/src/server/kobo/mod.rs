@@ -13,12 +13,14 @@
 //! | GET       | `/kobo/:t/v1/download/:book_token/:format`            | M8.6      |
 //! | GET       | `/kobo/:t/v1/image/:book_token/...`                   | M8.7      |
 //! | GET       | `/kobo/:t/v1/library/:uuid/metadata`                  | M8.8      |
+//! | POST      | `/kobo/:t/v1/auth/device`                             | M8.8      |
 //! | GET/POST  | `/kobo/:t/v1/analytics/gettests`                      | M8.8      |
 //! | GET       | `/kobo/:t/v1/user/loyalty/benefits`                   | M8.8      |
 //! | GET       | `/kobo/:t/v1/library/:uuid/state`                     | M8.8 stub |
 //! | PUT       | `/kobo/:t/v1/library/:uuid/state`                     | M8.8 stub |
 //! | `{*path}` | `/kobo/:t/{*path}`                                    | M8.8 catch-all |
 
+pub mod auth;
 pub mod book_metadata;
 pub mod config;
 pub mod cursor;
@@ -96,6 +98,8 @@ pub fn kobo_router(base_url: String, core_services: Arc<CoreServices>) -> Router
             let core = core_services.clone();
             routing::delete(move |kobo: KoboDevice, params| library_delete::handle(kobo, params, core.clone()))
         })
+        // Token refresh — called by the Kobo when KoboAccessToken expires
+        .route("/kobo/{sync_token}/v1/auth/device", routing::post(auth::handle))
         // M8.8 — catch-all: log and return {} for any unrecognised Kobo path
         .route("/kobo/{sync_token}/{*path}", routing::any(stubs::catch_all))
 }

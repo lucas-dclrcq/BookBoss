@@ -4,8 +4,8 @@
 //! device settings and a `Resources` map that the Kobo uses to discover the
 //! exact URL for every subsequent API call.
 
-use axum::{Json, body::Bytes, response::IntoResponse};
-use chrono::{DateTime, Utc};
+use axum::{Json, body::Bytes};
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
 use super::KoboDevice;
@@ -64,8 +64,10 @@ pub struct KoboInitResponse {
     pub bookmark_date: String,
     /// Opaque device identifier (unused by BookBoss; zeros satisfy the Kobo).
     pub device_id: &'static str,
-    /// Opaque user key (unused by BookBoss; zeros satisfy the Kobo).
-    pub user_key: &'static str,
+    /// User key echoed back to the Kobo as `KoboAccessToken`. Must be the
+    /// same token used in the URL path so the device's bearer token matches
+    /// what we accept on subsequent requests.
+    pub user_key: String,
     /// Endpoint resource map — the Kobo uses these to discover all API URLs.
     #[serde(rename = "Resources")]
     pub resources: KoboResources,
@@ -115,13 +117,13 @@ pub async fn handle(kobo: KoboDevice, body: Bytes, base_url: String) -> Json<Kob
         library_sync_url: format!("{base}/kobo/{t}/v1/library/sync"),
         bookmark_url: format!("{base}/kobo/{t}/v1/library/{{RevisionId}}/bookmarks"),
         subscription_host: String::new(),
-        auth_url: String::new(),
+        auth_url: format!("{base}/kobo/{t}/v1/auth/device"),
     };
 
     Json(KoboInitResponse {
         bookmark_date,
         device_id: "00000000-0000-0000-0000-000000000000",
-        user_key: "00000000000000000000000000000000",
+        user_key: kobo.sync_token.clone(),
         resources,
         booklist_sync_delta_enabled: false,
         content_accessibility_enabled: false,
@@ -133,6 +135,8 @@ pub async fn handle(kobo: KoboDevice, body: Bytes, base_url: String) -> Json<Kob
 
 #[cfg(test)]
 mod tests {
+    use chrono::DateTime;
+
     use super::*;
 
     fn base() -> &'static str {
