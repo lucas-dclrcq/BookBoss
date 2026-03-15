@@ -167,12 +167,12 @@ fn device_shelf_filter() -> BookFilter {
 
 #[async_trait::async_trait]
 impl DeviceService for DeviceServiceImpl {
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn list_devices_for_user(&self, user_id: UserId) -> Result<Vec<Device>, Error> {
         with_read_only_transaction!(self, device_repository, |tx| device_repository.list_for_user(tx, user_id).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn get_device(&self, token: &DeviceToken, user_id: UserId) -> Result<Device, Error> {
         let token = *token;
 
@@ -190,7 +190,7 @@ impl DeviceService for DeviceServiceImpl {
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn create_device(&self, owner_id: UserId, name: String, device_type: String, on_removal_action: OnRemovalAction) -> Result<DeviceToken, Error> {
         if name.trim().is_empty() {
             return Err(Error::Validation("device name must not be empty".to_string()));
@@ -230,7 +230,7 @@ impl DeviceService for DeviceServiceImpl {
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn update_device(&self, token: &DeviceToken, name: String, on_removal_action: OnRemovalAction, user_id: UserId) -> Result<(), Error> {
         if name.trim().is_empty() {
             return Err(Error::Validation("device name must not be empty".to_string()));
@@ -268,7 +268,7 @@ impl DeviceService for DeviceServiceImpl {
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn delete_device(&self, token: &DeviceToken, delete_companion_shelf: bool, user_id: UserId) -> Result<(), Error> {
         let token = *token;
 
@@ -292,12 +292,12 @@ impl DeviceService for DeviceServiceImpl {
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn get_companion_shelf(&self, device_id: DeviceId) -> Result<Option<Shelf>, Error> {
         with_read_only_transaction!(self, shelf_repository, |tx| shelf_repository.find_by_device_id(tx, device_id).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn default_device_name(&self, owner_id: UserId) -> Result<String, Error> {
         with_read_only_transaction!(self, user_repository, device_repository, |tx| {
             let user = user_repository
@@ -315,7 +315,7 @@ impl DeviceService for DeviceServiceImpl {
         })
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    // #[tracing::instrument(level = "debug", skip(self))]
     async fn compute_sync_diff(
         &self,
         device_id: DeviceId,
@@ -432,7 +432,7 @@ impl DeviceService for DeviceServiceImpl {
         })
     }
 
-    #[tracing::instrument(level = "debug", skip(self, diff))]
+    // #[tracing::instrument(level = "debug", skip(self, diff))]
     async fn apply_sync(&self, device_id: DeviceId, diff: &SyncDiff) -> Result<(), Error> {
         let now = Utc::now();
 
@@ -534,7 +534,7 @@ impl DeviceService for DeviceServiceImpl {
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn find_device_by_token(&self, token: &DeviceToken) -> Result<Option<Device>, Error> {
         let token = *token;
         with_read_only_transaction!(self, device_repository, |tx| device_repository.find_by_token(tx, &token).await)

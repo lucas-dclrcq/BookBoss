@@ -105,7 +105,7 @@ impl ShelfServiceImpl {
 
 #[async_trait::async_trait]
 impl ShelfService for ShelfServiceImpl {
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn create_manual_shelf(&self, owner_id: UserId, name: String, visibility: ShelfVisibility) -> Result<ShelfToken, Error> {
         if name.trim().is_empty() {
             return Err(Error::Validation("shelf name must not be empty".to_string()));
@@ -137,7 +137,7 @@ impl ShelfService for ShelfServiceImpl {
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn rename_shelf(&self, token: &ShelfToken, new_name: String, user_id: UserId) -> Result<(), Error> {
         if new_name.trim().is_empty() {
             return Err(Error::Validation("shelf name must not be empty".to_string()));
@@ -178,7 +178,7 @@ impl ShelfService for ShelfServiceImpl {
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn delete_shelf(&self, token: &ShelfToken, user_id: UserId) -> Result<(), Error> {
         let token = *token;
 
@@ -196,7 +196,7 @@ impl ShelfService for ShelfServiceImpl {
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn add_book_to_shelf(&self, shelf_token: &ShelfToken, book_token: &BookToken, user_id: UserId) -> Result<(), Error> {
         let shelf_token = *shelf_token;
         let book_token = *book_token;
@@ -232,7 +232,7 @@ impl ShelfService for ShelfServiceImpl {
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn remove_book_from_shelf(&self, shelf_token: &ShelfToken, book_token: &BookToken, user_id: UserId) -> Result<(), Error> {
         let shelf_token = *shelf_token;
         let book_token = *book_token;
@@ -256,7 +256,7 @@ impl ShelfService for ShelfServiceImpl {
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn books_for_shelf(&self, token: &ShelfToken, user_id: UserId, start_id: Option<u64>, page_size: Option<u64>) -> Result<Vec<BookShelf>, Error> {
         let token = *token;
 
@@ -274,17 +274,17 @@ impl ShelfService for ShelfServiceImpl {
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn list_shelves_for_user(&self, user_id: UserId) -> Result<Vec<Shelf>, Error> {
         with_read_only_transaction!(self, shelf_repository, |tx| shelf_repository.list_for_user(tx, user_id).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn list_public_shelves(&self, user_id: UserId) -> Result<Vec<Shelf>, Error> {
         with_read_only_transaction!(self, shelf_repository, |tx| shelf_repository.list_public_shelves(tx, user_id).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn get_shelf(&self, token: &ShelfToken, user_id: UserId) -> Result<Shelf, Error> {
         let token = *token;
 
@@ -302,7 +302,7 @@ impl ShelfService for ShelfServiceImpl {
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn update_shelf(&self, token: &ShelfToken, new_name: String, visibility: ShelfVisibility, user_id: UserId) -> Result<(), Error> {
         if new_name.trim().is_empty() {
             return Err(Error::Validation("shelf name must not be empty".to_string()));
@@ -344,7 +344,7 @@ impl ShelfService for ShelfServiceImpl {
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn create_smart_shelf(&self, owner_id: UserId, name: String, visibility: ShelfVisibility, filter: BookFilter) -> Result<ShelfToken, Error> {
         if name.trim().is_empty() {
             return Err(Error::Validation("shelf name must not be empty".to_string()));
@@ -376,7 +376,7 @@ impl ShelfService for ShelfServiceImpl {
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn update_shelf_filter(&self, token: &ShelfToken, filter: BookFilter, user_id: UserId) -> Result<(), Error> {
         let token = *token;
 
@@ -404,7 +404,7 @@ impl ShelfService for ShelfServiceImpl {
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn books_for_filter(&self, token: &ShelfToken, user_id: UserId, start_id: Option<BookId>, page_size: Option<u64>) -> Result<Vec<Book>, Error> {
         let token = *token;
 
@@ -430,7 +430,7 @@ impl ShelfService for ShelfServiceImpl {
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn count_for_filter(&self, token: &ShelfToken, user_id: UserId) -> Result<u64, Error> {
         let token = *token;
 
@@ -456,7 +456,7 @@ impl ShelfService for ShelfServiceImpl {
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn set_visibility(&self, token: &ShelfToken, visibility: ShelfVisibility, user_id: UserId) -> Result<(), Error> {
         let token = *token;
 
@@ -477,7 +477,7 @@ impl ShelfService for ShelfServiceImpl {
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn create_device_shelf(&self, device_id: DeviceId, owner_id: UserId, name: String) -> Result<ShelfToken, Error> {
         use crate::filter::{BookFilter, FilterReadStatus, FilterRule, SetOp};
 
@@ -504,7 +504,7 @@ impl ShelfService for ShelfServiceImpl {
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn find_device_shelf(&self, device_id: DeviceId) -> Result<Option<Shelf>, Error> {
         with_read_only_transaction!(self, shelf_repository, |tx| shelf_repository.find_by_device_id(tx, device_id).await)
     }
