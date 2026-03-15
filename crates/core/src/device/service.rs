@@ -84,6 +84,13 @@ pub trait DeviceService: Send + Sync {
     /// `DeviceSyncLog` entry. Updates `Device.last_synced_at` only on the
     /// final page (`!diff.has_more`).
     async fn apply_sync(&self, device_id: DeviceId, diff: &SyncDiff) -> Result<(), Error>;
+
+    /// Looks up a device by its token without verifying ownership.
+    ///
+    /// Used by the Kobo sync extractor where the token itself is the
+    /// authentication credential. Returns `None` if no device with that token
+    /// exists.
+    async fn find_device_by_token(&self, token: &DeviceToken) -> Result<Option<Device>, Error>;
 }
 
 // ── Implementation
@@ -507,6 +514,12 @@ impl DeviceService for DeviceServiceImpl {
 
             Ok(())
         })
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    async fn find_device_by_token(&self, token: &DeviceToken) -> Result<Option<Device>, Error> {
+        let token = *token;
+        with_read_only_transaction!(self, device_repository, |tx| { device_repository.find_by_token(tx, &token).await })
     }
 }
 
