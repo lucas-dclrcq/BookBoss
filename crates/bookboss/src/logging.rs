@@ -14,6 +14,7 @@ pub fn init_logging() -> Result<()> {
         .add_directive("sea_orm=off".parse()?)
         .add_directive("dioxus_core=off".parse()?)
         .add_directive("dioxus_signals::signal=off".parse()?)
+        .add_directive("dioxus_hooks::use_resource=off".parse()?)
         .add_directive("warnings::warnings=off".parse()?)
         .add_directive("hyper::proto=off".parse()?)
         .add_directive("hyper::client=off".parse()?)

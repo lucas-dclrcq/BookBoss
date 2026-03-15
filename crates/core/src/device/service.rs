@@ -98,6 +98,14 @@ pub trait DeviceService: Send + Sync {
     /// Returns `NotFound` if the token does not exist or belongs to another
     /// user.
     async fn reset_device_sync(&self, token: &DeviceToken, user_id: UserId) -> Result<(), Error>;
+
+    /// Removes a single `DeviceBook` record for the given device and book.
+    ///
+    /// Called when the Kobo sends `DELETE /v1/library/{uuid}` to signal that
+    /// the user removed the book from the device. Removing the record ensures
+    /// the book is re-delivered as `New` on the next sync. Idempotent — returns
+    /// `Ok(())` if the record did not exist.
+    async fn remove_book_from_device(&self, device_id: DeviceId, book_id: BookId) -> Result<(), Error>;
 }
 
 // ── Implementation
@@ -553,6 +561,12 @@ impl DeviceService for DeviceServiceImpl {
             device_repository.update_device(tx, updated).await?;
 
             Ok(())
+        })
+    }
+
+    async fn remove_book_from_device(&self, device_id: DeviceId, book_id: BookId) -> Result<(), Error> {
+        with_transaction!(self, device_repository, |tx| {
+            device_repository.remove_device_book(tx, device_id, book_id).await
         })
     }
 }

@@ -27,6 +27,7 @@ pub mod dto;
 pub mod extractor;
 pub mod image;
 pub mod initialization;
+pub mod library_delete;
 pub mod library_sync;
 pub mod stubs;
 
@@ -89,6 +90,11 @@ pub fn kobo_router(base_url: String, core_services: Arc<CoreServices>) -> Router
             "/kobo/{sync_token}/v1/library/{uuid}/state",
             routing::get(stubs::library_state_get).put(stubs::library_state_put),
         )
+        // M8.8 — book delete (Kobo removed book from device; drop DeviceBook so it re-syncs as New)
+        .route("/kobo/{sync_token}/v1/library/{uuid}", {
+            let core = core_services.clone();
+            routing::delete(move |kobo: KoboDevice, params| library_delete::handle(kobo, params, core.clone()))
+        })
         // M8.8 — catch-all: log and return {} for any unrecognised Kobo path
         .route("/kobo/{sync_token}/{*path}", routing::any(stubs::catch_all))
 }

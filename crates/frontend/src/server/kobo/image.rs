@@ -14,10 +14,9 @@
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use axum::{
-    body::Body,
     extract::Path,
     http::{StatusCode, header},
-    response::{IntoResponse, Response},
+    response::IntoResponse,
 };
 use bb_core::{CoreServices, book::BookToken};
 
@@ -26,7 +25,7 @@ use super::KoboDevice;
 // ── Handler
 // ─────────────────────────────────────────────────────────────────
 
-pub async fn handle(_kobo: KoboDevice, Path(params): Path<HashMap<String, String>>, core_services: Arc<CoreServices>) -> Response {
+pub async fn handle(_kobo: KoboDevice, Path(params): Path<HashMap<String, String>>, core_services: Arc<CoreServices>) -> impl IntoResponse {
     let Some(book_token_str) = params.get("book_token") else {
         return StatusCode::BAD_REQUEST.into_response();
     };
@@ -68,11 +67,10 @@ pub async fn handle(_kobo: KoboDevice, Path(params): Path<HashMap<String, String
         }
     };
 
-    let len = bytes.len();
-    Response::builder()
-        .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, "image/jpeg")
-        .header(header::CONTENT_LENGTH, len)
-        .body(Body::from(bytes))
-        .unwrap()
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "image/jpeg"), (header::CACHE_CONTROL, "no-cache")],
+        bytes,
+    )
+        .into_response()
 }
