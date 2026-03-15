@@ -3,6 +3,8 @@ mod context;
 mod fixtures;
 mod import_job;
 mod library;
+mod pipeline;
+mod shelf;
 
 #[cfg(feature = "postgres")]
 mod postgres;

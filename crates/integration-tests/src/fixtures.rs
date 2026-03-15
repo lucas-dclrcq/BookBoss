@@ -7,7 +7,9 @@ use async_trait::async_trait;
 use bb_core::{
     Error,
     book::{Author, AuthorId, AuthorRole, Book, BookId, BookStatus, BookToken, FileFormat, NewAuthor, NewBook},
+    conversion::ConversionService,
     import::{ImportJob, ImportJobId, ImportStatus, NewImportJob},
+    pipeline::{ExtractedMetadata, MetadataExtractor, PipelineServiceImpl},
     repository::{RepositoryService, transaction},
     storage::{BookSidecar, LibraryStore},
     user::{NewUser, User},
@@ -60,6 +62,62 @@ impl LibraryStore for SilentLibraryStore {
 
 pub fn silent_library_store() -> Arc<dyn LibraryStore> {
     Arc::new(SilentLibraryStore)
+}
+
+// ── Silent conversion service
+// ─────────────────────────────────────────────────
+
+/// A `ConversionService` that silently succeeds all operations.
+pub struct SilentConversionService;
+
+#[async_trait]
+impl ConversionService for SilentConversionService {
+    async fn queue_enrich_epub(&self, _book_id: BookId) -> Result<(), Error> {
+        Ok(())
+    }
+    async fn count_pending(&self) -> Result<u32, Error> {
+        Ok(0)
+    }
+}
+
+pub fn silent_conversion_service() -> Arc<dyn ConversionService> {
+    Arc::new(SilentConversionService)
+}
+
+// ── Stub metadata extractor
+// ──────────────────────────────────────────────────
+
+/// A `MetadataExtractor` that returns a fixed `ExtractedMetadata` without
+/// reading the file. Used to test the pipeline without real e-book files.
+pub struct StubMetadataExtractor {
+    pub metadata: ExtractedMetadata,
+}
+
+#[async_trait]
+impl MetadataExtractor for StubMetadataExtractor {
+    async fn extract(&self, _path: &Path, _format: FileFormat) -> Result<ExtractedMetadata, Error> {
+        Ok(self.metadata.clone())
+    }
+}
+
+// ── Pipeline service factory
+// ──────────────────────────────────────────────────
+
+/// Builds a `CoreServices` backed by a real `PipelineServiceImpl` using:
+/// - The provided stub extractor
+/// - `SilentLibraryStore` (no real file I/O)
+/// - `SilentConversionService` (no-op enqueue)
+/// - No metadata providers (extracted metadata is used as-is)
+pub fn pipeline_services(ctx: &crate::context::TestContext, metadata: ExtractedMetadata) -> Arc<bb_core::CoreServices> {
+    let extractor = Arc::new(StubMetadataExtractor { metadata });
+    let pipeline = Arc::new(PipelineServiceImpl::new(
+        ctx.repos.clone(),
+        silent_library_store(),
+        extractor,
+        vec![],
+        silent_conversion_service(),
+    ));
+    bb_core::create_services(ctx.repos.clone(), silent_library_store(), pipeline, silent_conversion_service()).unwrap()
 }
 
 // ── Fixture helpers
