@@ -89,7 +89,7 @@ pub(crate) async fn serve_book_file(
             Ok(d) => d,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 // Enriched record exists but file not on disk yet — fall back to original.
-                match original_file.and_then(|f| f.original_filename.as_deref()) {
+                match original_file.and_then(|f| Some(f.path.as_str())) {
                     Some(orig_filename) => {
                         let orig_path = core_services.library_store.original_file_path(orig_filename);
                         match tokio::fs::read(&orig_path).await {
@@ -104,7 +104,7 @@ pub(crate) async fn serve_book_file(
         }
     } else {
         // No enriched record — serve the original directly.
-        match original_file.and_then(|f| f.original_filename.as_deref()) {
+        match original_file.and_then(|f| Some(f.path.as_str())) {
             Some(orig_filename) => {
                 let orig_path = core_services.library_store.original_file_path(orig_filename);
                 match tokio::fs::read(&orig_path).await {

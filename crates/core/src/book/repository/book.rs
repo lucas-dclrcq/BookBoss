@@ -25,10 +25,14 @@ pub trait BookRepository: Send + Sync {
         book_id: BookId,
         format: FileFormat,
         file_role: FileRole,
-        original_filename: Option<String>,
+        path: String,
         file_size: i64,
         file_hash: String,
     ) -> Result<BookFile, Error>;
+    /// Updates the `path` field of all Enriched `book_files` records for a book
+    /// whose path starts with `old_slug` to use `new_slug` instead.
+    /// Called after a filesystem rename to keep DB and disk in sync.
+    async fn update_enriched_paths(&self, transaction: &dyn Transaction, book_id: BookId, old_slug: &str, new_slug: &str) -> Result<(), Error>;
     async fn add_book_author(
         &self,
         transaction: &dyn Transaction,

@@ -450,9 +450,10 @@ impl PipelineService for PipelineServiceImpl {
                     )
                     .await?;
 
-                // Record the book file
+                // Record the book file — path set to the library-relative location
+                // returned by store_original_file (updated to full relative path in M9.3).
                 book_repo
-                    .add_book_file(tx, book.id, file_format, FileRole::Original, Some(original_filename), file_size, file_hash)
+                    .add_book_file(tx, book.id, file_format, FileRole::Original, original_filename, file_size, file_hash)
                     .await?;
 
                 // Find or create each author, then link to book
@@ -1192,13 +1193,13 @@ impl PipelineService for PipelineServiceImpl {
                     let author_links = book_repo.authors_for_book(tx, book.id).await?;
                     let author_ids: Vec<u64> = author_links.iter().map(|a| a.author_id).collect();
 
-                    // Collect original filenames before the records are deleted.
+                    // Collect original file paths before the records are deleted.
                     let original_filenames: Vec<String> = book_repo
                         .files_for_book(tx, book.id)
                         .await?
                         .into_iter()
                         .filter(|f| f.file_role == FileRole::Original)
-                        .filter_map(|f| f.original_filename)
+                        .map(|f| f.path)
                         .collect();
 
                     book_repo.delete_book_genres(tx, book.id).await?;

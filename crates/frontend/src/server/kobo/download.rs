@@ -109,7 +109,7 @@ pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 // Enriched record exists but file not on disk — fall back to original.
-                match original.and_then(|f| f.original_filename.as_deref()) {
+                match original.and_then(|f| Some(f.path.as_str())) {
                     Some(orig_filename) => {
                         let orig_path = core_services.library_store.original_file_path(orig_filename);
                         match File::open(&orig_path).await {
@@ -130,7 +130,7 @@ pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>
         }
     } else {
         // No enriched record — serve the original directly.
-        match original.and_then(|f| f.original_filename.as_deref()) {
+        match original.and_then(|f| Some(f.path.as_str())) {
             Some(orig_filename) => {
                 let orig_path = core_services.library_store.original_file_path(orig_filename);
                 match File::open(&orig_path).await {

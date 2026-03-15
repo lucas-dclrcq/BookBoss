@@ -366,7 +366,7 @@ impl BookRepository for BookRepositoryAdapter {
                     book_id: m.book_id as u64,
                     format: str_to_file_format(&m.format)?,
                     file_role: str_to_file_role(&m.file_role)?,
-                    original_filename: m.original_filename,
+                    path: m.path,
                     file_size: m.file_size,
                     file_hash: m.file_hash,
                 })
@@ -411,7 +411,7 @@ impl BookRepository for BookRepositoryAdapter {
                 book_id: m.book_id as u64,
                 format: str_to_file_format(&m.format)?,
                 file_role: str_to_file_role(&m.file_role)?,
-                original_filename: m.original_filename,
+                path: m.path,
                 file_size: m.file_size,
                 file_hash: m.file_hash,
             })
@@ -425,7 +425,7 @@ impl BookRepository for BookRepositoryAdapter {
         book_id: BookId,
         format: FileFormat,
         file_role: FileRole,
-        original_filename: Option<String>,
+        path: String,
         file_size: i64,
         file_hash: String,
     ) -> Result<BookFile, Error> {
@@ -435,7 +435,7 @@ impl BookRepository for BookRepositoryAdapter {
             book_id: Set(book_id as i64),
             format: Set(file_format_to_str(&format).to_string()),
             file_role: Set(file_role_to_str(&file_role).to_string()),
-            original_filename: Set(original_filename.clone()),
+            path: Set(path.clone()),
             file_size: Set(file_size),
             file_hash: Set(file_hash.clone()),
         };
@@ -446,10 +446,26 @@ impl BookRepository for BookRepositoryAdapter {
             book_id,
             format,
             file_role,
-            original_filename,
+            path,
             file_size,
             file_hash,
         })
+    }
+
+    async fn update_enriched_paths(&self, transaction: &dyn Transaction, book_id: BookId, old_slug: &str, new_slug: &str) -> Result<(), Error> {
+        use sea_orm::sea_query::Expr;
+
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        book_files::Entity::update_many()
+            .col_expr(book_files::Column::Path, Expr::cust_with_values("REPLACE(path, ?, ?)", [old_slug, new_slug]))
+            .filter(book_files::Column::BookId.eq(book_id as i64))
+            .filter(book_files::Column::FileRole.eq(file_role_to_str(&FileRole::Enriched)))
+            .exec(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(())
     }
 
     async fn add_book_author(
@@ -1250,7 +1266,7 @@ mod tests {
             book_id: Set(book.id as i64),
             format: Set("epub".to_owned()),
             file_role: Set("original".to_owned()),
-            original_filename: Set(Some("dune.epub".to_owned())),
+            path: Set("Originals/dune.epub".to_owned()),
             file_size: Set(1_024_000),
             file_hash: Set("abc123".to_owned()),
         }

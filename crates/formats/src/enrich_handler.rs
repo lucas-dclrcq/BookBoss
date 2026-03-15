@@ -86,12 +86,9 @@ impl JobHandler for EnrichEpubHandler {
             .find(|f| f.file_role == FileRole::Original && f.format == FileFormat::Epub)
             .ok_or_else(|| Error::Infrastructure(format!("book {book_id}: no original epub file record")))?;
 
-        let original_filename = original_file
-            .original_filename
-            .as_deref()
-            .ok_or_else(|| Error::Infrastructure(format!("book {book_id}: original epub file record has no filename")))?;
-
-        let source_path = self.library_store.original_file_path(original_filename);
+        // path stores the library-relative location of the original file.
+        // original_file_path() will be replaced by resolve() in M9.3.
+        let source_path = self.library_store.original_file_path(&original_file.path);
 
         // ── 3. Load cover bytes (non-fatal if missing) ────────────────────────
         let cover_bytes: Option<Vec<u8>> = if let Some(cover_filename) = &book.cover_path {
@@ -182,8 +179,10 @@ impl JobHandler for EnrichEpubHandler {
             let file_hash = file_hash.clone();
             Box::pin(async move {
                 book_repo.delete_book_file_by_role(tx, book_id, FileFormat::Epub, FileRole::Enriched).await?;
+                // Enriched path will be set to the library-relative path returned by
+                // store_book_file once that method returns a String (M9.5).
                 book_repo
-                    .add_book_file(tx, book_id, FileFormat::Epub, FileRole::Enriched, None, file_size, file_hash)
+                    .add_book_file(tx, book_id, FileFormat::Epub, FileRole::Enriched, String::new(), file_size, file_hash)
                     .await?;
                 Ok(())
             })

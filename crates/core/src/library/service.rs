@@ -71,13 +71,13 @@ impl LibraryService for LibraryServiceImpl {
                 let author_links = br.authors_for_book(tx, book.id).await?;
                 let author_ids: Vec<u64> = author_links.iter().map(|a| a.author_id).collect();
 
-                // Collect original filenames before deleting records.
+                // Collect original file paths before deleting records.
                 let original_filenames: Vec<String> = br
                     .files_for_book(tx, book.id)
                     .await?
                     .into_iter()
                     .filter(|f| f.file_role == FileRole::Original)
-                    .filter_map(|f| f.original_filename)
+                    .map(|f| f.path)
                     .collect();
 
                 // Delete the originating import job so the file can be re-imported.
@@ -582,16 +582,7 @@ mod tests {
         async fn find_file_by_hash(&self, _: &dyn Transaction, _: &str) -> Result<Option<BookFile>, Error> {
             unimplemented!()
         }
-        async fn add_book_file(
-            &self,
-            _: &dyn Transaction,
-            _: BookId,
-            _: FileFormat,
-            _: FileRole,
-            _: Option<String>,
-            _: i64,
-            _: String,
-        ) -> Result<BookFile, Error> {
+        async fn add_book_file(&self, _: &dyn Transaction, _: BookId, _: FileFormat, _: FileRole, _: String, _: i64, _: String) -> Result<BookFile, Error> {
             unimplemented!()
         }
         async fn add_book_author(&self, _: &dyn Transaction, _: BookId, _: AuthorId, _: AuthorRole, _: i32) -> Result<(), Error> {
@@ -622,6 +613,9 @@ mod tests {
             unimplemented!()
         }
         async fn find_book_ids_needing_enrichment(&self, _: &dyn Transaction) -> Result<Vec<BookId>, Error> {
+            unimplemented!()
+        }
+        async fn update_enriched_paths(&self, _: &dyn Transaction, _: BookId, _: &str, _: &str) -> Result<(), Error> {
             unimplemented!()
         }
     }
@@ -999,7 +993,7 @@ mod tests {
         let book_id: BookId = 1;
         let (store, deleted_files) = MockLibraryStore::tracking();
         let mut file = BookFile::fake(book_id, "epub");
-        file.original_filename = Some("test.epub".to_owned());
+        file.path = "Originals/test.epub".to_owned();
         let svc = create_service(
             MockBookRepository::default()
                 .with_find_by_token(Ok(Some(fake_book_with_id(book_id))))
@@ -1013,6 +1007,10 @@ mod tests {
 
         svc.delete_book(&token).await.unwrap();
 
-        assert_eq!(*deleted_files.lock().unwrap(), vec!["test.epub"], "original file must be removed from store");
+        assert_eq!(
+            *deleted_files.lock().unwrap(),
+            vec!["Originals/test.epub"],
+            "original file must be removed from store"
+        );
     }
 }

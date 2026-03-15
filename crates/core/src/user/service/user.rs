@@ -461,16 +461,7 @@ mod tests {
         async fn find_file_by_hash(&self, _: &dyn Transaction, _: &str) -> Result<Option<BookFile>, Error> {
             unimplemented!()
         }
-        async fn add_book_file(
-            &self,
-            _: &dyn Transaction,
-            _: BookId,
-            _: FileFormat,
-            _: FileRole,
-            _: Option<String>,
-            _: i64,
-            _: String,
-        ) -> Result<BookFile, Error> {
+        async fn add_book_file(&self, _: &dyn Transaction, _: BookId, _: FileFormat, _: FileRole, _: String, _: i64, _: String) -> Result<BookFile, Error> {
             unimplemented!()
         }
         async fn add_book_author(&self, _: &dyn Transaction, _: BookId, _: AuthorId, _: AuthorRole, _: i32) -> Result<(), Error> {
@@ -516,6 +507,9 @@ mod tests {
             unimplemented!()
         }
         async fn find_book_ids_needing_enrichment(&self, _: &dyn Transaction) -> Result<Vec<BookId>, Error> {
+            unimplemented!()
+        }
+        async fn update_enriched_paths(&self, _: &dyn Transaction, _: BookId, _: &str, _: &str) -> Result<(), Error> {
             unimplemented!()
         }
     }
