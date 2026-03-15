@@ -27,6 +27,7 @@ impl Default for FrontendConfig {
         Self {
             listen_ip: "0.0.0.0".to_string(),
             listen_port: 8080,
+            base_url: "http://0.0.0.0:8080".to_string(),
         }
     }
 }
