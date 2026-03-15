@@ -17,6 +17,7 @@
 //! | GET    | `/kobo/:t/v1/library/:uuid/metadata`         | M8.8      |
 
 pub mod cursor;
+pub mod download;
 pub mod extractor;
 pub mod initialization;
 pub mod library_sync;
@@ -46,7 +47,10 @@ pub fn kobo_router(base_url: String, core_services: Arc<CoreServices>) -> Router
             routing::get(move |kobo: KoboDevice, headers| library_sync::handle(kobo, headers, core.clone(), base.clone()))
         })
         // M8.6 — book file download
-        .route("/kobo/{sync_token}/v1/download/{book_token}/{format}", routing::get(not_implemented))
+        .route("/kobo/{sync_token}/v1/download/{book_token}/{format}", {
+            let core = core_services.clone();
+            routing::get(move |kobo: KoboDevice, params| download::handle(kobo, params, core.clone()))
+        })
         // M8.7 — cover image
         .route(
             "/kobo/{sync_token}/v1/image/{book_token}/{width}/{height}/{quality}/{grey}",
