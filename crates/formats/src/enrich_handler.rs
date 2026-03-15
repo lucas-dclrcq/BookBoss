@@ -168,19 +168,18 @@ impl JobHandler for EnrichEpubHandler {
             .len() as i64;
 
         // ── 8. Move enriched file into the library ────────────────────────────
-        self.library_store.store_book_file(&book.token, &slug, FileFormat::Epub, &temp_path).await?;
+        let enriched_path = self.library_store.store_book_file(&book.token, &slug, FileFormat::Epub, &temp_path).await?;
 
         // ── 9. Upsert the Enriched book_file record ───────────────────────────
         let book_repo = self.repository_service.book_repository().clone();
         transaction(&**self.repository_service.repository(), |tx| {
             let book_repo = book_repo.clone();
             let file_hash = file_hash.clone();
+            let enriched_path = enriched_path.clone();
             Box::pin(async move {
                 book_repo.delete_book_file_by_role(tx, book_id, FileFormat::Epub, FileRole::Enriched).await?;
-                // Enriched path will be set to the library-relative path returned by
-                // store_book_file once that method returns a String (M9.5).
                 book_repo
-                    .add_book_file(tx, book_id, FileFormat::Epub, FileRole::Enriched, String::new(), file_size, file_hash)
+                    .add_book_file(tx, book_id, FileFormat::Epub, FileRole::Enriched, enriched_path, file_size, file_hash)
                     .await?;
                 Ok(())
             })

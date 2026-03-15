@@ -820,6 +820,18 @@ impl PipelineService for PipelineServiceImpl {
 
         if old_slug != new_slug {
             self.library_store.rename_book_files(&book.token, &old_slug, &new_slug).await?;
+
+            // Update DB paths for enriched files to match the new slug.
+            let book_repo_rename = self.repository_service.book_repository().clone();
+            let old_slug_c = old_slug.clone();
+            let new_slug_c = new_slug.clone();
+            transaction(&**self.repository_service.repository(), |tx| {
+                let br = book_repo_rename.clone();
+                let old = old_slug_c.clone();
+                let new = new_slug_c.clone();
+                Box::pin(async move { br.update_enriched_paths(tx, book_id, &old, &new).await })
+            })
+            .await?;
         }
 
         // ── 7. Rewrite metadata sidecar ───────────────────────────────────────
@@ -1086,6 +1098,18 @@ impl PipelineService for PipelineServiceImpl {
 
         if old_slug != new_slug {
             self.library_store.rename_book_files(&book.token, &old_slug, &new_slug).await?;
+
+            // Update DB paths for enriched files to match the new slug.
+            let book_repo_rename = self.repository_service.book_repository().clone();
+            let old_slug_c = old_slug.clone();
+            let new_slug_c = new_slug.clone();
+            transaction(&**self.repository_service.repository(), |tx| {
+                let br = book_repo_rename.clone();
+                let old = old_slug_c.clone();
+                let new = new_slug_c.clone();
+                Box::pin(async move { br.update_enriched_paths(tx, book_id, &old, &new).await })
+            })
+            .await?;
         }
 
         // ── 6. Rewrite metadata sidecar ───────────────────────────────────────
