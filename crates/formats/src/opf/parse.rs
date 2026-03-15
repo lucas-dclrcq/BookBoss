@@ -259,16 +259,13 @@ fn parse_dc(xml: &[u8]) -> Result<DcFields, Error> {
                 }
             }
             (_, Event::Empty(ref e)) if e.local_name().as_ref() == b"meta" => {
-                let mut is_bb = false;
-                let mut content = None;
+                let mut meta_name = None::<String>;
+                let mut content = None::<String>;
                 for attr in e.attributes() {
                     let attr = attr.map_err(quick_xml::Error::from)?;
                     match attr.key.as_ref() {
                         b"name" => {
-                            let val = attr.decode_and_unescape_value(reader.decoder())?;
-                            if val.as_ref() == "spinnaker:metadata" {
-                                is_bb = true;
-                            }
+                            meta_name = Some(attr.decode_and_unescape_value(reader.decoder())?.into_owned());
                         }
                         b"content" => {
                             content = Some(attr.decode_and_unescape_value(reader.decoder())?.into_owned());
@@ -276,7 +273,7 @@ fn parse_dc(xml: &[u8]) -> Result<DcFields, Error> {
                         _ => {}
                     }
                 }
-                if is_bb {
+                if meta_name.as_deref() == Some("spinnaker:metadata") {
                     fields.bb_meta_content = content;
                 }
             }
@@ -473,16 +470,17 @@ pub fn extract_metadata(xml: &[u8]) -> Result<ExtractedMetadata, Error> {
         })
         .collect();
 
-    // Genres: prefer spinnaker:metadata JSON if present, fall back to dc:subject.
-    let (genres, tags) = if let Some(json) = &fields.bb_meta_content {
+    // Pull spinnaker:metadata fields when the blob is present.
+    let (genres, tags, series_name, series_number) = if let Some(json) = &fields.bb_meta_content {
         if let Ok(bb) = serde_json::from_str::<BbMetaJson>(json) {
             let genres = if bb.genres.is_empty() { fields.subjects.clone() } else { bb.genres };
-            (genres, bb.tags)
+            let (sname, snumber) = bb.series.map_or((None, None), |s| (Some(s.name), s.number));
+            (genres, bb.tags, sname, snumber)
         } else {
-            (fields.subjects.clone(), vec![])
+            (fields.subjects.clone(), vec![], None, None)
         }
     } else {
-        (fields.subjects.clone(), vec![])
+        (fields.subjects.clone(), vec![], None, None)
     };
 
     Ok(ExtractedMetadata {
@@ -493,8 +491,8 @@ pub fn extract_metadata(xml: &[u8]) -> Result<ExtractedMetadata, Error> {
         published_date: fields.published_date.as_deref().and_then(parse_year),
         language: fields.language,
         identifiers: if identifiers.is_empty() { None } else { Some(identifiers) },
-        series_name: None,
-        series_number: None,
+        series_name,
+        series_number,
         genres,
         tags,
         has_spinnaker_metadata: fields.bb_meta_content.is_some(),

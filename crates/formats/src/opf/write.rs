@@ -122,6 +122,20 @@ pub(crate) fn write_metadata_xml(sidecar: &BookSidecar) -> Result<Vec<u8>, Error
         writer.write_event(Event::End(BytesEnd::new("dc:identifier")))?;
     }
 
+    if let Some(series) = &sidecar.series {
+        let mut meta_series = BytesStart::new("meta");
+        meta_series.push_attribute(("name", "calibre:series"));
+        meta_series.push_attribute(("content", series.name.as_str()));
+        writer.write_event(Event::Empty(meta_series))?;
+
+        if let Some(number) = series.number {
+            let mut meta_index = BytesStart::new("meta");
+            meta_index.push_attribute(("name", "calibre:series_index"));
+            meta_index.push_attribute(("content", number.to_string().as_str()));
+            writer.write_event(Event::Empty(meta_index))?;
+        }
+    }
+
     // spinnaker:metadata JSON blob
     let bb_meta = BbMeta {
         series: sidecar.series.as_ref(),
