@@ -18,6 +18,7 @@
 
 pub mod cursor;
 pub mod extractor;
+pub mod initialization;
 
 use std::sync::Arc;
 
@@ -31,11 +32,14 @@ pub use extractor::KoboDevice;
 /// implemented in their own milestones; the remaining analytical/ancillary
 /// endpoints (M8.8) are stubbed with `501 Not Implemented` until then.
 pub fn kobo_router(base_url: String, core_services: Arc<CoreServices>) -> Router {
-    let _ = (base_url, core_services); // used by handlers added in M8.4–M8.8
+    let _ = core_services; // used by handlers added in M8.5+
 
     Router::new()
         // M8.4 — device initialization
-        .route("/kobo/{sync_token}/v1/initialization", routing::post(not_implemented))
+        .route("/kobo/{sync_token}/v1/initialization", {
+            let base_url = base_url.clone();
+            routing::post(move |kobo: KoboDevice, body| initialization::handle(kobo, body, base_url.clone()))
+        })
         // M8.5 — incremental library sync
         .route("/kobo/{sync_token}/v1/library/sync", routing::get(not_implemented))
         // M8.6 — book file download
