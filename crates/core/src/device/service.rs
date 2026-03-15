@@ -1,11 +1,14 @@
-use std::sync::Arc;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use chrono::{DateTime, Utc};
 
 use crate::{
     Error, RepositoryError,
-    book::{BookId, FileFormat},
-    device::{Device, DeviceId, DeviceToken, NewDevice, OnRemovalAction, SyncDiff},
+    book::{BookFile, BookId, FileFormat, FileRole},
+    device::{BookSyncEntry, Device, DeviceBook, DeviceId, DeviceToken, NewDevice, OnRemovalAction, SyncDiff},
     filter::{BookFilter, FilterReadStatus, FilterRule, SetOp},
     repository::RepositoryService,
     shelf::{NewShelf, Shelf, ShelfType, ShelfVisibility},
@@ -85,6 +88,31 @@ pub trait DeviceService: Send + Sync {
 
 // ── Implementation
 // ─────────────────────────────────────────────────────────────
+
+/// Classification of a shelf book during sync diff computation.
+enum EntryKind {
+    New,
+    Upgraded,
+    Refreshed,
+}
+
+/// Selects the best file to send to a Kobo device from a book's available
+/// files. Priority: Enriched Kepub → Enriched Epub → Original Kepub →
+/// Original Epub. Returns `None` if no suitable file is available.
+fn select_best_file(files: &[BookFile]) -> Option<BookFile> {
+    let candidates = [
+        (FileFormat::Kepub, FileRole::Enriched),
+        (FileFormat::Epub, FileRole::Enriched),
+        (FileFormat::Kepub, FileRole::Original),
+        (FileFormat::Epub, FileRole::Original),
+    ];
+    for (format, role) in &candidates {
+        if let Some(f) = files.iter().find(|f| &f.format == format && &f.file_role == role) {
+            return Some(f.clone());
+        }
+    }
+    None
+}
 
 pub(crate) struct DeviceServiceImpl {
     repository_service: Arc<RepositoryService>,
@@ -265,15 +293,118 @@ impl DeviceService for DeviceServiceImpl {
         })
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
     async fn compute_sync_diff(
         &self,
-        _device_id: DeviceId,
-        _owner_id: UserId,
-        _since: Option<DateTime<Utc>>,
-        _after_book_id: Option<BookId>,
-        _page_size: u64,
+        device_id: DeviceId,
+        owner_id: UserId,
+        since: Option<DateTime<Utc>>,
+        after_book_id: Option<BookId>,
+        page_size: u64,
     ) -> Result<SyncDiff, Error> {
-        unimplemented!("implemented in M8.2.4")
+        with_read_only_transaction!(self, shelf_repository, book_repository, device_repository, |tx| {
+            // 1. Find companion shelf — no shelf means nothing to sync
+            let Some(shelf) = shelf_repository.find_by_device_id(tx, device_id).await? else {
+                tracing::debug!(device_id, "no companion shelf found, returning empty diff");
+                return Ok(SyncDiff::empty());
+            };
+            let Some(ref filter) = shelf.filter_criteria else {
+                tracing::warn!(device_id, shelf_id = shelf.id, "companion shelf has no filter criteria");
+                return Ok(SyncDiff::empty());
+            };
+
+            // 2. Load all shelf books with no page limit, then sort by book_id for
+            //    deterministic keyset pagination
+            let mut shelf_books = shelf_repository.books_for_filter(tx, filter, owner_id, None, None).await?;
+            shelf_books.sort_by_key(|b| b.id);
+
+            // 3. Load all DeviceBook records for quick lookup
+            let device_books = device_repository.books_for_device(tx, device_id).await?;
+            let device_book_map: HashMap<BookId, DeviceBook> = device_books.iter().map(|db| (db.book_id, db.clone())).collect();
+
+            // 4. Detect removals: books in DeviceBook that are no longer on the shelf. Only
+            //    included on the first page to avoid duplicating them across pages.
+            let shelf_id_set: HashSet<BookId> = shelf_books.iter().map(|b| b.id).collect();
+            let removed_book_ids = if after_book_id.is_none() {
+                device_books
+                    .iter()
+                    .filter(|db| !shelf_id_set.contains(&db.book_id))
+                    .map(|db| db.book_id)
+                    .collect()
+            } else {
+                vec![]
+            };
+
+            // 5. Classify each shelf book — N+1 files query accepted; fast indexed lookups
+            //    on a personal library are negligible
+            let mut classified: Vec<(EntryKind, BookSyncEntry)> = Vec::new();
+            for book in &shelf_books {
+                let files = book_repository.files_for_book(tx, book.id).await?;
+                let Some(best) = select_best_file(&files) else {
+                    tracing::debug!(
+                        book_id = book.id,
+                        title = %book.title,
+                        "no suitable file available, skipping"
+                    );
+                    continue;
+                };
+
+                let kind = match device_book_map.get(&book.id) {
+                    None => EntryKind::New,
+                    Some(db) if db.format != best.format || db.file_role != best.file_role => EntryKind::Upgraded,
+                    Some(_) if since.is_some_and(|s| book.updated_at > s) => EntryKind::Refreshed,
+                    Some(_) => continue, // unchanged — skip
+                };
+
+                tracing::info!(
+                    book_id = book.id,
+                    title = %book.title,
+                    format = ?best.format,
+                    file_role = ?best.file_role,
+                    kind = match &kind {
+                        EntryKind::New => "new",
+                        EntryKind::Upgraded => "upgraded",
+                        EntryKind::Refreshed => "refreshed",
+                    },
+                    "preparing book for kobo sync"
+                );
+                classified.push((
+                    kind,
+                    BookSyncEntry {
+                        book: book.clone(),
+                        file: best,
+                    },
+                ));
+            }
+
+            // 6. Apply keyset cursor and extract page
+            let start = match after_book_id {
+                None => 0,
+                Some(id) => classified.partition_point(|(_, e)| e.book.id <= id),
+            };
+            let end = (start + page_size as usize).min(classified.len());
+            let has_more = end < classified.len();
+
+            // 7. Distribute page entries into their categories
+            let mut new_books = Vec::new();
+            let mut upgraded_books = Vec::new();
+            let mut refreshed_books = Vec::new();
+            for (kind, entry) in classified.drain(start..end) {
+                match kind {
+                    EntryKind::New => new_books.push(entry),
+                    EntryKind::Upgraded => upgraded_books.push(entry),
+                    EntryKind::Refreshed => refreshed_books.push(entry),
+                }
+            }
+
+            Ok(SyncDiff {
+                new_books,
+                upgraded_books,
+                refreshed_books,
+                removed_book_ids,
+                has_more,
+            })
+        })
     }
 
     async fn apply_sync(&self, _device_id: DeviceId, _diff: &SyncDiff) -> Result<(), Error> {
@@ -291,11 +422,11 @@ mod tests {
     use crate::{
         auth::{NewSession, Session, SessionRepository},
         book::{
-            Author, AuthorId, AuthorRepository, AuthorRole, AuthorToken, Book, BookAuthor, BookFile, BookIdentifier, BookQuery, BookRepository, BookToken,
-            FileRole, Genre, GenreId, GenreRepository, GenreToken, IdentifierType, NewAuthor, NewBook, NewGenre, NewPublisher, NewSeries, NewTag, Publisher,
-            PublisherId, PublisherRepository, PublisherToken, Series, SeriesId, SeriesRepository, SeriesToken, Tag, TagId, TagRepository, TagToken,
+            Author, AuthorId, AuthorRepository, AuthorRole, AuthorToken, Book, BookAuthor, BookIdentifier, BookQuery, BookRepository, BookToken, Genre,
+            GenreId, GenreRepository, GenreToken, IdentifierType, NewAuthor, NewBook, NewGenre, NewPublisher, NewSeries, NewTag, Publisher, PublisherId,
+            PublisherRepository, PublisherToken, Series, SeriesId, SeriesRepository, SeriesToken, Tag, TagId, TagRepository, TagToken,
         },
-        device::{DeviceBook, DeviceRepository, DeviceSyncLog, NewDeviceSyncLog},
+        device::{DeviceRepository, DeviceSyncLog, NewDeviceSyncLog},
         import::{ImportJob, ImportJobId, ImportJobRepository, ImportJobToken, ImportStatus, NewImportJob},
         jobs::{Job, JobRepository},
         reading::{ReadStatus, UserBookMetadata, UserBookMetadataRepository},
