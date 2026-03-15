@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3](https://github.com/szinn/BookBoss/compare/v0.3.2..v0.3.3) - 2026-03-15
+
+### Features
+
+- _(core)_ Trigger EPUB enrichment after approve_job and edit_book (M7.8) - ([f3b0763](https://github.com/szinn/BookBoss/commit/f3b07634cd8625bbab1d8c61498d249f22ff70f8))
+- _(core)_ M7.1 — add file_role and Kepub to book file model - ([1bdf59a](https://github.com/szinn/BookBoss/commit/1bdf59a34e20523193930e4e48f76dcf3a54f7e0))
+- _(formats)_ Write calibre:series/series_index meta elements; read series from spinnaker blob - ([c063f59](https://github.com/szinn/BookBoss/commit/c063f59a0d674726b94c82ff9edb6bac81fb1c03))
+- _(formats)_ Skip metadata providers when spinnaker:metadata is present in EPUB - ([4479705](https://github.com/szinn/BookBoss/commit/447970566586c87677df7e411805b631e07f8cca))
+- _(formats)_ M7.7 EnrichEpubHandler + book_slug centralisation - ([71b53cc](https://github.com/szinn/BookBoss/commit/71b53cc8c48071a038a39c66774766e4dbb5cdc4))
+- _(formats)_ M7.6 ConversionService port + EnrichEpubPayload - ([6a4a2ae](https://github.com/szinn/BookBoss/commit/6a4a2ae28eff0b6893cb9d84ab14d77887f038fd))
+- _(formats)_ Implement M7.5 EPUB enrichment - ([f940cf9](https://github.com/szinn/BookBoss/commit/f940cf95fadeb502bca6787a0ca328eebc4973a9))
+- _(frontend)_ ConversionBadge in NavBar showing pending enrichment job count (M7.10) - ([5d0f68e](https://github.com/szinn/BookBoss/commit/5d0f68e999b66ee0f14b01385f1a4004a9e589c9))
+- _(frontend)_ Serve enriched files with original fallback, deduplicate format badges (M7.9) - ([2aa2de6](https://github.com/szinn/BookBoss/commit/2aa2de62b80b0ded40ece5269e1783ca46eaf365))
+- _(storage)_ Implement M7.2 Originals/ directory layout - ([c707d3a](https://github.com/szinn/BookBoss/commit/c707d3a04fe59484a0e03bd51edcad469e0b5fd5))
+
+### Bug Fixes
+
+- _(core)_ Delete original file when rejecting an import job - ([87bdf10](https://github.com/szinn/BookBoss/commit/87bdf101d671a78f2525bedc1bc4342cb28de1c5))
+- _(core)_ Remove rating from spinnaker blob; flow page_count through pipeline - ([c4d5c60](https://github.com/szinn/BookBoss/commit/c4d5c60e6e45ab7df094d3e1f669f3ebbdde091a))
+- _(core)_ Delete original file from Originals/ when a book is deleted - ([bcf82d8](https://github.com/szinn/BookBoss/commit/bcf82d8c7ef910f4a83ab6570ec722bb55699e03))
+- _(formats)_ Extract genres/tags/publisher/language from EPUB on import - ([70f3566](https://github.com/szinn/BookBoss/commit/70f3566f641f40f7882afadd5c04fcb50494fec9))
+- _(formats)_ Parse dc:subject elements as genres; print genres in dump-epub - ([780f3a0](https://github.com/szinn/BookBoss/commit/780f3a0b0151cd9bacfccc19bb22085c9686b9bd))
+- _(frontend)_ Fix stale cover images not refreshing after update - ([659a179](https://github.com/szinn/BookBoss/commit/659a179fdb9a1396affe85cba9ac4bc90321b054))
+
+### Testing
+
+- _(formats)_ Add dc:subject and full-field roundtrip tests for OPF and EPUB enrich - ([a42d5fd](https://github.com/szinn/BookBoss/commit/a42d5fd8fcc1ffb0ec0d33c15a29de829a9fff8e))
+
 ## [0.3.2](https://github.com/szinn/BookBoss/compare/v0.3.1..v0.3.2) - 2026-03-14
 
 ### Bug Fixes
