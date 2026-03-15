@@ -5,7 +5,7 @@
 //! exact URL for every subsequent API call.
 
 use axum::{Json, extract};
-use chrono::{DateTime, Utc};
+use chrono::DateTime;
 use serde::{Deserialize, Serialize};
 
 use super::KoboDevice;
@@ -166,7 +166,7 @@ mod tests {
 
     #[test]
     fn bookmark_date_epoch_when_never_synced() {
-        let date: DateTime<Utc> = DateTime::from_timestamp(0, 0).unwrap();
+        let date = DateTime::from_timestamp(0, 0).unwrap();
         assert_eq!(date.to_rfc3339(), "1970-01-01T00:00:00+00:00");
     }
 }
