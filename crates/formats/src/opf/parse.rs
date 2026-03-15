@@ -90,6 +90,8 @@ struct BbMetaJson {
     #[serde(default)]
     tags: Vec<String>,
     #[serde(default)]
+    page_count: Option<i32>,
+    #[serde(default)]
     author_sort_orders: Vec<AuthorSortOrderJson>,
     #[serde(default)]
     rating: Option<i16>,
@@ -426,6 +428,7 @@ pub fn parse_sidecar(xml: &[u8]) -> Result<BookSidecar, Error> {
         series: bb.series,
         genres: if bb.genres.is_empty() { fields.subjects } else { bb.genres },
         tags: bb.tags,
+        page_count: bb.page_count,
         rating: bb.rating,
         status: bb.status,
         metadata_source: bb.metadata_source,
@@ -494,6 +497,7 @@ pub fn extract_metadata(xml: &[u8]) -> Result<ExtractedMetadata, Error> {
         series_number: None,
         genres,
         tags,
+        has_spinnaker_metadata: fields.bb_meta_content.is_some(),
         cover_bytes: None,
     })
 }

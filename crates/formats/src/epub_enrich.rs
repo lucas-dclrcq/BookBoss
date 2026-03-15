@@ -223,6 +223,7 @@ mod tests {
             series: None,
             genres: vec![],
             tags: vec![],
+            page_count: None,
             rating: None,
             status: BookStatus::Available,
             metadata_source: None,

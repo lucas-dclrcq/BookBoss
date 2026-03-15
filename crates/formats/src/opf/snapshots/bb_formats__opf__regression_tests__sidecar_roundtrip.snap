@@ -57,6 +57,9 @@ BookSidecar {
     tags: [
         "magic-system",
     ],
+    page_count: Some(
+        1007,
+    ),
     rating: Some(
         5,
     ),

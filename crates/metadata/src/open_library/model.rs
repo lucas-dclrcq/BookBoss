@@ -32,4 +32,10 @@ pub(super) struct OlBookData {
     pub publish_date: Option<String>,
     pub cover: Option<OlCover>,
     pub identifiers: Option<OlIdentifiers>,
+    pub subjects: Option<Vec<OlSubject>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(super) struct OlSubject {
+    pub name: String,
 }

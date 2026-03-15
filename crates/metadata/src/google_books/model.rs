@@ -23,6 +23,7 @@ pub struct VolumeInfo {
     #[serde(rename = "industryIdentifiers")]
     pub industry_identifiers: Option<Vec<IndustryIdentifier>>,
     pub language: Option<String>,
+    pub categories: Option<Vec<String>>,
     #[serde(rename = "imageLinks")]
     pub image_links: Option<ImageLinks>,
 }

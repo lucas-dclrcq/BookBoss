@@ -263,7 +263,13 @@ impl PipelineService for PipelineServiceImpl {
             let mut best_cover: Option<Vec<u8>> = extracted.cover_bytes.clone();
             let mut best_min_side: u32 = best_cover.as_deref().map_or(0, cover_min_side);
 
+            // If the file already contains spinnaker:metadata it was previously
+            // enriched by BookBoss. Treat the embedded metadata as authoritative
+            // and skip all external providers.
+            let skip_providers = extracted.has_spinnaker_metadata;
+
             for provider in &self.providers {
+                if skip_providers { break; }
                 let cover_good_enough = best_min_side >= GOOD_COVER_MIN_SIDE;
                 if meta.is_some() && cover_good_enough {
                     break;
@@ -377,6 +383,8 @@ impl PipelineService for PipelineServiceImpl {
         let author_repo = self.repository_service.author_repository().clone();
         let series_repo = self.repository_service.series_repository().clone();
         let publisher_repo = self.repository_service.publisher_repository().clone();
+        let genre_repo = self.repository_service.genre_repository().clone();
+        let tag_repo = self.repository_service.tag_repository().clone();
         let import_job_repo = self.repository_service.import_job_repository().clone();
 
         let fm = final_meta.clone();
@@ -461,6 +469,28 @@ impl PipelineService for PipelineServiceImpl {
                     }
                 }
 
+                // Add genres
+                for name in &fm.genres {
+                    let name = normalize_name(name);
+                    if name.is_empty() { continue; }
+                    let genre = match genre_repo.find_by_name(tx, &name).await? {
+                        Some(g) => g,
+                        None => genre_repo.add_genre(tx, NewGenre { name }).await?,
+                    };
+                    book_repo.add_book_genre(tx, book.id, genre.id).await?;
+                }
+
+                // Add tags
+                for name in &fm.tags {
+                    let name = normalize_name(name);
+                    if name.is_empty() { continue; }
+                    let tag = match tag_repo.find_by_name(tx, &name).await? {
+                        Some(t) => t,
+                        None => tag_repo.add_tag(tx, NewTag { name }).await?,
+                    };
+                    book_repo.add_book_tag(tx, book.id, tag.id).await?;
+                }
+
                 // Advance import job to NeedsReview with candidate book linked
                 job_c.status = ImportStatus::NeedsReview;
                 job_c.candidate_book_id = Some(book.id);
@@ -501,6 +531,7 @@ impl PipelineService for PipelineServiceImpl {
             }),
             genres: final_meta.genres.clone(),
             tags: final_meta.tags.clone(),
+            page_count: None,
             rating: None,
             status: BookStatus::Incoming,
             metadata_source: book_metadata_source,
@@ -840,6 +871,7 @@ impl PipelineService for PipelineServiceImpl {
             }),
             genres: edit.genres.iter().map(|g| g.trim().to_string()).filter(|g| !g.is_empty()).collect(),
             tags: edit.tags.iter().map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).collect(),
+            page_count: edit.page_count,
             rating: None,
             status: BookStatus::Available,
             metadata_source: None,
@@ -1106,6 +1138,7 @@ impl PipelineService for PipelineServiceImpl {
             }),
             genres: edit.genres.iter().map(|g| g.trim().to_string()).filter(|g| !g.is_empty()).collect(),
             tags: edit.tags.iter().map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).collect(),
+            page_count: edit.page_count,
             rating: None,
             status: BookStatus::Available,
             metadata_source: None,

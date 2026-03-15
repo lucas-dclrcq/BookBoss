@@ -47,6 +47,7 @@ pub struct BookSidecar {
     pub series: Option<SidecarSeries>,
     pub genres: Vec<String>,
     pub tags: Vec<String>,
+    pub page_count: Option<i32>,
     pub rating: Option<i16>,
     pub status: BookStatus,
     pub metadata_source: Option<MetadataSource>,

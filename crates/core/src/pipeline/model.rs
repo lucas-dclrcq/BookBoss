@@ -67,6 +67,11 @@ pub struct ExtractedMetadata {
     pub genres: Vec<String>,
     /// Tags extracted from the `spinnaker:metadata` metadata blob.
     pub tags: Vec<String>,
+    /// `true` when a `spinnaker:metadata` blob was found in the OPF.
+    ///
+    /// Used by the pipeline to skip external metadata providers — if the file
+    /// was already enriched by BookBoss the embedded metadata is authoritative.
+    pub has_spinnaker_metadata: bool,
     /// Cover image bytes extracted directly from the e-book file, if present.
     pub cover_bytes: Option<Vec<u8>>,
 }

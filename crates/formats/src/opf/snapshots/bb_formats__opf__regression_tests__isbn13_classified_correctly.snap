@@ -23,5 +23,6 @@ ExtractedMetadata {
     series_number: None,
     genres: [],
     tags: [],
+    has_spinnaker_metadata: false,
     cover_bytes: None,
 }

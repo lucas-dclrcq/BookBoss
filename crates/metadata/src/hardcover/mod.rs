@@ -149,6 +149,7 @@ impl HardcoverAdapter {
             series_number,
             genres: vec![],
             tags: vec![],
+            has_spinnaker_metadata: false,
             cover_bytes: None,
         }
     }

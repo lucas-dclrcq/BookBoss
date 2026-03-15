@@ -141,6 +141,7 @@ impl JobHandler for EnrichEpubHandler {
             }),
             genres: genres.iter().map(|g| g.name.clone()).collect(),
             tags: tags.iter().map(|t| t.name.clone()).collect(),
+            page_count: book.page_count,
             rating: book.rating,
             status: book.status.clone(),
             metadata_source: book.metadata_source.clone(),

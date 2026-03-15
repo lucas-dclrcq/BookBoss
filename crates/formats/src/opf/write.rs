@@ -43,6 +43,8 @@ struct BbMeta<'a> {
     series: Option<&'a SidecarSeries>,
     genres: &'a Vec<String>,
     tags: &'a Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    page_count: Option<i32>,
     author_sort_orders: Vec<AuthorSortOrder>,
     #[serde(skip_serializing_if = "Option::is_none")]
     rating: Option<i16>,
@@ -125,6 +127,7 @@ pub(crate) fn write_metadata_xml(sidecar: &BookSidecar) -> Result<Vec<u8>, Error
         series: sidecar.series.as_ref(),
         genres: &sidecar.genres,
         tags: &sidecar.tags,
+        page_count: sidecar.page_count,
         author_sort_orders: sorted_authors
             .iter()
             .map(|a| AuthorSortOrder {
@@ -207,6 +210,7 @@ pub(crate) mod tests {
             }),
             genres: vec!["Fantasy".to_string(), "Epic Fantasy".to_string()],
             tags: vec!["magic-system".to_string()],
+            page_count: Some(1007),
             rating: Some(5),
             status: BookStatus::Available,
             metadata_source: Some(MetadataSource::Hardcover),
@@ -305,6 +309,7 @@ pub(crate) mod tests {
             series: None,
             genres: vec![],
             tags: vec![],
+            page_count: None,
             rating: None,
             status: BookStatus::Incoming,
             metadata_source: None,
@@ -361,6 +366,7 @@ pub(crate) mod tests {
             series: None,
             genres: vec![],
             tags: vec![],
+            page_count: None,
             rating: None,
             status: BookStatus::Available,
             metadata_source: None,
