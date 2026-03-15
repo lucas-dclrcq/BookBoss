@@ -33,7 +33,7 @@ FROM chef AS planner
 COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
-FROM chef AS builder
+FROM chef AS builder-web
 COPY --from=planner /app/recipe.json recipe.json
 
 # Build deps layer (cached)
@@ -43,11 +43,21 @@ COPY . .
 
 RUN tailwindcss -i ./crates/frontend/assets/input.css -o ./crates/frontend/assets/tailwind.css
 
-# Build web component
-RUN /usr/local/cargo/bin/dx build --platform web --package bookboss --release
+# Build web client
+RUN /usr/local/cargo/bin/dx bundle --web --package bookboss --release
 
-# Build server
-RUN /usr/local/cargo/bin/dx build --platform server --package bookboss --release --target x86_64-unknown-linux-musl
+FROM chef AS builder-server
+COPY --from=planner /app/recipe.json recipe.json
+
+# Build deps layer (cached)
+RUN cargo chef cook --release --target x86_64-unknown-linux-musl --recipe-path recipe.json
+
+COPY . .
+
+RUN tailwindcss -i ./crates/frontend/assets/input.css -o ./crates/frontend/assets/tailwind.css
+
+# Build actual binary
+RUN /usr/local/cargo/bin/dx bundle --server --package bookboss --release --target x86_64-unknown-linux-musl
 
 # Sanity check: should say "not a dynamic executable"
 RUN ldd target/dx/bookboss/release/web/bookboss || true
@@ -62,9 +72,9 @@ FROM scratch
 COPY --from=certs /etc/passwd /etc/passwd
 COPY --from=certs /etc/group /etc/group
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY --from=builder /app/target/dx/bookboss/release/web /app
-# COPY --from=builder /app/target/dx/bookboss/release/web/.manifest.json /app
-# COPY --from=builder /app/target/dx/bookboss/release/web/bookboss /app
+COPY --from=builder-web /app/target/dx/bookboss/release/web/public /app/public
+COPY --from=builder-web /app/target/dx/bookboss/release/web/.manifest.json /app
+COPY --from=builder-server /app/target/dx/bookboss/release/web/bookboss /app
 
 # LABEL tech.zinn.image.target_platform=$TARGETPLATFORM
 # LABEL tech.zinn.image.target_architecture=$TARGETARCH
