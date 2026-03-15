@@ -7,7 +7,7 @@ use bb_core::{
     storage::{BookSidecar, LibraryStore},
 };
 use bb_utils::hash::hash_file;
-use img_parts::{ImageEXIF, jpeg::Jpeg};
+use image::{ImageReader, codecs::jpeg::JpegEncoder, imageops::FilterType};
 
 pub struct LocalLibraryStore {
     library_path: PathBuf,
@@ -44,18 +44,36 @@ fn io_err(e: impl ToString) -> Error {
     Error::Infrastructure(e.to_string())
 }
 
-/// Returns the JPEG bytes with the EXIF (APP1) segment removed.
+/// Resizes a JPEG cover to fit within 1024×1536 and re-encodes at quality 85.
 ///
-/// Some publisher cover images embed conflicting EXIF dimension metadata that
-/// differs from the actual JPEG dimensions, causing Kobo firmware to hang when
-/// fetching the cover. Stripping the segment fixes this without re-encoding.
-/// Falls back to the original bytes if parsing fails (not a valid JPEG).
-fn strip_jpeg_exif(data: &[u8]) -> Vec<u8> {
-    let Ok(mut jpeg) = Jpeg::from_bytes(img_parts::Bytes::copy_from_slice(data)) else {
-        return data.to_vec();
+/// Re-encoding strips all embedded metadata (EXIF, XMP, IPTC, ICC profiles)
+/// and keeps covers small enough for Kobo firmware to decode reliably.
+/// Falls back to the original bytes if decoding fails.
+fn normalize_jpeg(data: &[u8]) -> Vec<u8> {
+    const MAX_W: u32 = 1024;
+    const MAX_H: u32 = 1536;
+    const QUALITY: u8 = 85;
+
+    let reader = match ImageReader::new(std::io::Cursor::new(data)).with_guessed_format() {
+        Ok(r) => r,
+        Err(_) => return data.to_vec(),
     };
-    jpeg.set_exif(None);
-    jpeg.encoder().bytes().to_vec()
+    let img = match reader.decode() {
+        Ok(i) => i,
+        Err(_) => return data.to_vec(),
+    };
+
+    let img = if img.width() > MAX_W || img.height() > MAX_H {
+        img.resize(MAX_W, MAX_H, FilterType::Lanczos3)
+    } else {
+        img
+    };
+
+    let mut out = Vec::new();
+    if JpegEncoder::new_with_quality(&mut out, QUALITY).encode_image(&img).is_err() {
+        return data.to_vec();
+    }
+    out
 }
 
 #[async_trait]
@@ -128,11 +146,12 @@ impl LibraryStore for LocalLibraryStore {
         tokio::fs::create_dir_all(&book_dir).await.map_err(io_err)?;
         let cover_path = self.cover_path(token, filename);
 
-        // Strip EXIF from JPEG covers. Mismatched EXIF dimensions (e.g. from
-        // high-res publisher images saved with Photoshop) can cause Kobo
-        // firmware to hang when downloading the cover.
+        // Normalise JPEG covers: resize to fit within 1024×1536 and re-encode
+        // at quality 85. This strips all metadata (EXIF, XMP, IPTC, ICC) and
+        // keeps file size small enough for Kobo firmware to decode without
+        // hanging. Falls back to the original bytes on any decode error.
         let bytes = if filename.ends_with(".jpg") || filename.ends_with(".jpeg") {
-            strip_jpeg_exif(data)
+            normalize_jpeg(data)
         } else {
             data.to_vec()
         };

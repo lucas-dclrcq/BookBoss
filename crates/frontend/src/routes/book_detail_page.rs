@@ -525,6 +525,7 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                                                 deleting.set(true);
                                                 spawn(async move {
                                                     if let Ok(()) = delete_library_book(bk).await {
+                                                        show_confirm.set(false);
                                                         let _ = nav.push(Route::BooksPage {});
                                                     } else {
                                                         deleting.set(false);
