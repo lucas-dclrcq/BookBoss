@@ -98,8 +98,8 @@ impl From<device_books::Model> for DeviceBook {
             device_id: m.device_id as u64,
             book_id: m.book_id as u64,
             format: str_to_file_format(&m.format),
+            book_file_id: m.book_file_id,
             synced_at: m.synced_at.with_timezone(&Utc),
-            removed_at: m.removed_at.map(|t| t.with_timezone(&Utc)),
         }
     }
 }
@@ -241,14 +241,34 @@ impl DeviceRepository for DeviceRepositoryAdapter {
             device_id: Set(book.device_id as i64),
             book_id: Set(book.book_id as i64),
             format: Set(file_format_to_str(&book.format).to_owned()),
+            book_file_id: Set(book.book_file_id),
             synced_at: Set(now.into()),
-            removed_at: Set(None),
         }
         .insert(transaction)
         .await
         .map_err(handle_dberr)?;
 
         Ok(model.into())
+    }
+
+    async fn update_device_book(&self, transaction: &dyn Transaction, book: DeviceBook) -> Result<DeviceBook, Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        let now = Utc::now();
+        prelude::DeviceBooks::update_many()
+            .set(device_books::ActiveModel {
+                format: Set(file_format_to_str(&book.format).to_owned()),
+                book_file_id: Set(book.book_file_id),
+                synced_at: Set(now.into()),
+                ..Default::default()
+            })
+            .filter(device_books::Column::DeviceId.eq(book.device_id as i64))
+            .filter(device_books::Column::BookId.eq(book.book_id as i64))
+            .exec(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(DeviceBook { synced_at: now, ..book })
     }
 
     async fn remove_device_book(&self, transaction: &dyn Transaction, device_id: DeviceId, book_id: BookId) -> Result<(), Error> {
@@ -545,8 +565,8 @@ mod tests {
                     device_id: device.id,
                     book_id,
                     format: FileFormat::Epub,
+                    book_file_id: 1,
                     synced_at: Utc::now(),
-                    removed_at: None,
                 },
             )
             .await
@@ -573,8 +593,8 @@ mod tests {
                     device_id: device.id,
                     book_id,
                     format: FileFormat::Epub,
+                    book_file_id: 1,
                     synced_at: Utc::now(),
-                    removed_at: None,
                 },
             )
             .await

@@ -739,6 +739,9 @@ mod tests {
         async fn remove_device_book(&self, _: &dyn Transaction, _: DeviceId, _: BookId) -> Result<(), Error> {
             unimplemented!()
         }
+        async fn update_device_book(&self, _: &dyn Transaction, _: DeviceBook) -> Result<DeviceBook, Error> {
+            unimplemented!()
+        }
         async fn books_for_device(&self, _: &dyn Transaction, _: DeviceId) -> Result<Vec<DeviceBook>, Error> {
             unimplemented!()
         }

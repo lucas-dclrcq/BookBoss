@@ -1,5 +1,3 @@
-#![allow(dead_code, reason = "device sync not yet implemented; entities reserved for future use")]
-
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -12,8 +10,8 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub book_id: i64,
     pub format: String,
+    pub book_file_id: i64,
     pub synced_at: DateTimeWithTimeZone,
-    pub removed_at: Option<DateTimeWithTimeZone>,
 }
 
 #[async_trait::async_trait]
