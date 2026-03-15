@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use crate::{
     Error, RepositoryError,
     book::{BookFile, BookId, FileFormat, FileRole},
-    device::{BookSyncEntry, Device, DeviceBook, DeviceId, DeviceToken, NewDevice, OnRemovalAction, SyncDiff},
+    device::{BookSyncEntry, Device, DeviceBook, DeviceId, DeviceToken, NewDevice, NewDeviceSyncLog, OnRemovalAction, SyncDiff, SyncStatus},
     filter::{BookFilter, FilterReadStatus, FilterRule, SetOp},
     repository::RepositoryService,
     shelf::{NewShelf, Shelf, ShelfType, ShelfVisibility},
@@ -407,8 +407,106 @@ impl DeviceService for DeviceServiceImpl {
         })
     }
 
-    async fn apply_sync(&self, _device_id: DeviceId, _diff: &SyncDiff) -> Result<(), Error> {
-        unimplemented!("implemented in M8.2.5")
+    #[tracing::instrument(level = "debug", skip(self, diff))]
+    async fn apply_sync(&self, device_id: DeviceId, diff: &SyncDiff) -> Result<(), Error> {
+        let now = Utc::now();
+
+        let new_count = diff.new_books.len();
+        let upgraded_count = diff.upgraded_books.len();
+        let refreshed_count = diff.refreshed_books.len();
+        let removed_count = diff.removed_book_ids.len();
+        let books_added = (new_count + upgraded_count + refreshed_count) as i32;
+        let books_removed = removed_count as i32;
+        let has_more = diff.has_more;
+
+        // Clone entries for the async move closure (diff is a borrowed reference)
+        let new_books = diff.new_books.clone();
+        let upgraded_books = diff.upgraded_books.clone();
+        let removed_book_ids = diff.removed_book_ids.clone();
+
+        with_transaction!(self, device_repository, |tx| {
+            // Add new DeviceBook records
+            for entry in &new_books {
+                device_repository
+                    .add_device_book(
+                        tx,
+                        DeviceBook {
+                            device_id,
+                            book_id: entry.book.id,
+                            format: entry.file.format.clone(),
+                            file_role: entry.file.file_role.clone(),
+                            synced_at: now,
+                        },
+                    )
+                    .await?;
+            }
+
+            // Update DeviceBook records for upgraded books (different file)
+            for entry in &upgraded_books {
+                device_repository
+                    .update_device_book(
+                        tx,
+                        DeviceBook {
+                            device_id,
+                            book_id: entry.book.id,
+                            format: entry.file.format.clone(),
+                            file_role: entry.file.file_role.clone(),
+                            synced_at: now,
+                        },
+                    )
+                    .await?;
+            }
+
+            // Remove DeviceBook records for books no longer on the companion shelf
+            for book_id in &removed_book_ids {
+                device_repository.remove_device_book(tx, device_id, *book_id).await?;
+            }
+
+            // Write a sync log entry for this page
+            device_repository
+                .add_sync_log(
+                    tx,
+                    NewDeviceSyncLog {
+                        device_id,
+                        status: SyncStatus::Completed,
+                        books_added,
+                        books_removed,
+                        started_at: now,
+                        completed_at: Some(now),
+                    },
+                )
+                .await?;
+
+            // On the final page, update the device's last_synced_at
+            if !has_more {
+                let device = device_repository
+                    .find_by_id(tx, device_id)
+                    .await?
+                    .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
+
+                device_repository
+                    .update_device(
+                        tx,
+                        Device {
+                            last_synced_at: Some(now),
+                            ..device
+                        },
+                    )
+                    .await?;
+            }
+
+            tracing::info!(
+                device_id,
+                new = new_count,
+                upgraded = upgraded_count,
+                refreshed = refreshed_count,
+                removed = removed_count,
+                has_more,
+                "kobo sync page applied"
+            );
+
+            Ok(())
+        })
     }
 }
 
@@ -422,11 +520,11 @@ mod tests {
     use crate::{
         auth::{NewSession, Session, SessionRepository},
         book::{
-            Author, AuthorId, AuthorRepository, AuthorRole, AuthorToken, Book, BookAuthor, BookIdentifier, BookQuery, BookRepository, BookToken, Genre,
-            GenreId, GenreRepository, GenreToken, IdentifierType, NewAuthor, NewBook, NewGenre, NewPublisher, NewSeries, NewTag, Publisher, PublisherId,
+            Author, AuthorId, AuthorRepository, AuthorRole, AuthorToken, Book, BookAuthor, BookIdentifier, BookQuery, BookRepository, BookStatus, BookToken,
+            Genre, GenreId, GenreRepository, GenreToken, IdentifierType, NewAuthor, NewBook, NewGenre, NewPublisher, NewSeries, NewTag, Publisher, PublisherId,
             PublisherRepository, PublisherToken, Series, SeriesId, SeriesRepository, SeriesToken, Tag, TagId, TagRepository, TagToken,
         },
-        device::{DeviceRepository, DeviceSyncLog, NewDeviceSyncLog},
+        device::{DeviceRepository, DeviceSyncLog},
         import::{ImportJob, ImportJobId, ImportJobRepository, ImportJobToken, ImportStatus, NewImportJob},
         jobs::{Job, JobRepository},
         reading::{ReadStatus, UserBookMetadata, UserBookMetadataRepository},
@@ -474,9 +572,15 @@ mod tests {
         add_device_result: Mutex<Option<Result<Device, Error>>>,
         update_device_result: Mutex<Option<Result<Device, Error>>>,
         delete_device_called: Mutex<bool>,
+        find_by_id_result: Mutex<Option<Result<Option<Device>, Error>>>,
         find_by_token_result: Mutex<Option<Result<Option<Device>, Error>>>,
         list_for_user_result: Mutex<Option<Result<Vec<Device>, Error>>>,
         count_with_name_prefix_result: Mutex<Option<Result<u64, Error>>>,
+        books_for_device_result: Mutex<Option<Result<Vec<DeviceBook>, Error>>>,
+        added_device_books: Mutex<Vec<DeviceBook>>,
+        updated_device_books: Mutex<Vec<DeviceBook>>,
+        removed_device_books: Mutex<Vec<(DeviceId, BookId)>>,
+        sync_logs: Mutex<Vec<NewDeviceSyncLog>>,
     }
 
     impl MockDeviceRepository {
@@ -486,6 +590,10 @@ mod tests {
         }
         fn with_update_device(self, result: Result<Device, Error>) -> Self {
             *self.update_device_result.lock().unwrap() = Some(result);
+            self
+        }
+        fn with_find_by_id(self, result: Result<Option<Device>, Error>) -> Self {
+            *self.find_by_id_result.lock().unwrap() = Some(result);
             self
         }
         fn with_find_by_token(self, result: Result<Option<Device>, Error>) -> Self {
@@ -498,6 +606,10 @@ mod tests {
         }
         fn with_count_with_name_prefix(self, result: Result<u64, Error>) -> Self {
             *self.count_with_name_prefix_result.lock().unwrap() = Some(result);
+            self
+        }
+        fn with_books_for_device(self, result: Result<Vec<DeviceBook>, Error>) -> Self {
+            *self.books_for_device_result.lock().unwrap() = Some(result);
             self
         }
     }
@@ -523,7 +635,11 @@ mod tests {
             Ok(())
         }
         async fn find_by_id(&self, _: &dyn Transaction, _: DeviceId) -> Result<Option<Device>, Error> {
-            unimplemented!()
+            self.find_by_id_result
+                .lock()
+                .unwrap()
+                .clone()
+                .unwrap_or_else(|| Err(Error::MockNotConfigured("find_by_id")))
         }
         async fn find_by_token(&self, _: &dyn Transaction, _: &DeviceToken) -> Result<Option<Device>, Error> {
             self.find_by_token_result
@@ -542,20 +658,35 @@ mod tests {
                 .clone()
                 .unwrap_or_else(|| Err(Error::MockNotConfigured("count_with_name_prefix")))
         }
-        async fn add_device_book(&self, _: &dyn Transaction, _: DeviceBook) -> Result<DeviceBook, Error> {
-            unimplemented!()
+        async fn add_device_book(&self, _: &dyn Transaction, book: DeviceBook) -> Result<DeviceBook, Error> {
+            let clone = book.clone();
+            self.added_device_books.lock().unwrap().push(book);
+            Ok(clone)
         }
-        async fn remove_device_book(&self, _: &dyn Transaction, _: DeviceId, _: BookId) -> Result<(), Error> {
-            unimplemented!()
+        async fn remove_device_book(&self, _: &dyn Transaction, device_id: DeviceId, book_id: BookId) -> Result<(), Error> {
+            self.removed_device_books.lock().unwrap().push((device_id, book_id));
+            Ok(())
         }
-        async fn update_device_book(&self, _: &dyn Transaction, _: DeviceBook) -> Result<DeviceBook, Error> {
-            unimplemented!()
+        async fn update_device_book(&self, _: &dyn Transaction, book: DeviceBook) -> Result<DeviceBook, Error> {
+            let clone = book.clone();
+            self.updated_device_books.lock().unwrap().push(book);
+            Ok(clone)
         }
         async fn books_for_device(&self, _: &dyn Transaction, _: DeviceId) -> Result<Vec<DeviceBook>, Error> {
-            unimplemented!()
+            self.books_for_device_result.lock().unwrap().clone().unwrap_or(Ok(vec![]))
         }
-        async fn add_sync_log(&self, _: &dyn Transaction, _: NewDeviceSyncLog) -> Result<DeviceSyncLog, Error> {
-            unimplemented!()
+        async fn add_sync_log(&self, _: &dyn Transaction, log: NewDeviceSyncLog) -> Result<DeviceSyncLog, Error> {
+            let result = DeviceSyncLog {
+                id: 1,
+                device_id: log.device_id,
+                status: log.status.clone(),
+                books_added: log.books_added,
+                books_removed: log.books_removed,
+                started_at: log.started_at,
+                completed_at: log.completed_at,
+            };
+            self.sync_logs.lock().unwrap().push(log);
+            Ok(result)
         }
         async fn list_sync_logs_for_device(&self, _: &dyn Transaction, _: DeviceId, _: Option<u64>) -> Result<Vec<DeviceSyncLog>, Error> {
             unimplemented!()
@@ -570,6 +701,7 @@ mod tests {
         update_shelf_result: Mutex<Option<Result<Shelf, Error>>>,
         delete_shelf_called: Mutex<bool>,
         find_by_device_id_result: Mutex<Option<Result<Option<Shelf>, Error>>>,
+        books_for_filter_result: Mutex<Option<Result<Vec<Book>, Error>>>,
     }
 
     impl MockShelfRepository {
@@ -583,6 +715,10 @@ mod tests {
         }
         fn with_find_by_device_id(self, result: Result<Option<Shelf>, Error>) -> Self {
             *self.find_by_device_id_result.lock().unwrap() = Some(result);
+            self
+        }
+        fn with_books_for_filter(self, result: Result<Vec<Book>, Error>) -> Self {
+            *self.books_for_filter_result.lock().unwrap() = Some(result);
             self
         }
     }
@@ -629,7 +765,7 @@ mod tests {
             unimplemented!()
         }
         async fn books_for_filter(&self, _: &dyn Transaction, _: &BookFilter, _: UserId, _: Option<BookId>, _: Option<u64>) -> Result<Vec<Book>, Error> {
-            unimplemented!()
+            self.books_for_filter_result.lock().unwrap().clone().unwrap_or(Ok(vec![]))
         }
         async fn count_for_filter(&self, _: &dyn Transaction, _: &BookFilter, _: UserId) -> Result<u64, Error> {
             unimplemented!()
@@ -957,7 +1093,7 @@ mod tests {
                 .publisher_repository(Arc::new(MockPublisherRepository) as Arc<dyn PublisherRepository>)
                 .genre_repository(Arc::new(MockGenreRepository) as Arc<dyn GenreRepository>)
                 .tag_repository(Arc::new(MockTagRepository) as Arc<dyn TagRepository>)
-                .book_repository(Arc::new(MockBookRepository) as Arc<dyn BookRepository>)
+                .book_repository(Arc::new(MockBookRepository::default()) as Arc<dyn BookRepository>)
                 .import_job_repository(Arc::new(MockImportJobRepository) as Arc<dyn ImportJobRepository>)
                 .job_repository(Arc::new(MockJobRepository) as Arc<dyn JobRepository>)
                 .shelf_repository(Arc::new(shelf_repo) as Arc<dyn ShelfRepository>)
@@ -969,7 +1105,18 @@ mod tests {
         DeviceServiceImpl::new(repository_service)
     }
 
-    struct MockBookRepository;
+    #[derive(Default)]
+    struct MockBookRepository {
+        files_for_book_results: Mutex<HashMap<BookId, Vec<BookFile>>>,
+    }
+
+    impl MockBookRepository {
+        fn with_files(self, book_id: BookId, files: Vec<BookFile>) -> Self {
+            self.files_for_book_results.lock().unwrap().insert(book_id, files);
+            self
+        }
+    }
+
     #[async_trait::async_trait]
     impl BookRepository for MockBookRepository {
         async fn add_book(&self, _: &dyn Transaction, _: NewBook) -> Result<Book, Error> {
@@ -1026,8 +1173,8 @@ mod tests {
         ) -> Result<BookFile, Error> {
             unimplemented!()
         }
-        async fn files_for_book(&self, _: &dyn Transaction, _: BookId) -> Result<Vec<BookFile>, Error> {
-            unimplemented!()
+        async fn files_for_book(&self, _: &dyn Transaction, book_id: BookId) -> Result<Vec<BookFile>, Error> {
+            Ok(self.files_for_book_results.lock().unwrap().get(&book_id).cloned().unwrap_or_default())
         }
         async fn find_file_by_hash(&self, _: &dyn Transaction, _: &str) -> Result<Option<BookFile>, Error> {
             unimplemented!()
@@ -1103,6 +1250,51 @@ mod tests {
             change_password_on_login: false,
             created_at: Utc::now(),
             updated_at: Utc::now(),
+        }
+    }
+
+    fn create_sync_service(device_repo: MockDeviceRepository, shelf_repo: MockShelfRepository, book_repo: MockBookRepository) -> DeviceServiceImpl {
+        let repository_service = Arc::new(
+            RepositoryServiceBuilder::default()
+                .repository(Arc::new(MockRepository) as Arc<dyn Repository>)
+                .session_repository(Arc::new(MockSessionRepository) as Arc<dyn SessionRepository>)
+                .user_repository(Arc::new(MockUserRepository::default()) as Arc<dyn UserRepository>)
+                .user_setting_repository(Arc::new(MockUserSettingRepository) as Arc<dyn UserSettingRepository>)
+                .author_repository(Arc::new(MockAuthorRepository) as Arc<dyn AuthorRepository>)
+                .series_repository(Arc::new(MockSeriesRepository) as Arc<dyn SeriesRepository>)
+                .publisher_repository(Arc::new(MockPublisherRepository) as Arc<dyn PublisherRepository>)
+                .genre_repository(Arc::new(MockGenreRepository) as Arc<dyn GenreRepository>)
+                .tag_repository(Arc::new(MockTagRepository) as Arc<dyn TagRepository>)
+                .book_repository(Arc::new(book_repo) as Arc<dyn BookRepository>)
+                .import_job_repository(Arc::new(MockImportJobRepository) as Arc<dyn ImportJobRepository>)
+                .job_repository(Arc::new(MockJobRepository) as Arc<dyn JobRepository>)
+                .shelf_repository(Arc::new(shelf_repo) as Arc<dyn ShelfRepository>)
+                .user_book_metadata_repository(Arc::new(MockUserBookMetadataRepository) as Arc<dyn UserBookMetadataRepository>)
+                .device_repository(Arc::new(device_repo) as Arc<dyn DeviceRepository>)
+                .build()
+                .expect("all fields provided"),
+        );
+        DeviceServiceImpl::new(repository_service)
+    }
+
+    fn fake_book_file(book_id: BookId, format: FileFormat, file_role: FileRole) -> BookFile {
+        BookFile {
+            book_id,
+            format,
+            file_role,
+            original_filename: None,
+            file_size: 0,
+            file_hash: String::new(),
+        }
+    }
+
+    fn fake_device_book(device_id: DeviceId, book_id: BookId, format: FileFormat, file_role: FileRole) -> DeviceBook {
+        DeviceBook {
+            device_id,
+            book_id,
+            format,
+            file_role,
+            synced_at: Utc::now(),
         }
     }
 
@@ -1370,5 +1562,236 @@ mod tests {
         let name = svc.default_device_name(1).await.unwrap();
 
         assert_eq!(name, "My's Device");
+    }
+
+    // ─── compute_sync_diff ────────────────────────────────────────────────────
+
+    fn sync_shelf() -> Shelf {
+        fake_shelf(1, Some(1))
+    }
+
+    #[tokio::test]
+    async fn test_sync_diff_empty_shelf_returns_empty_diff() {
+        let svc = create_sync_service(
+            MockDeviceRepository::default().with_books_for_device(Ok(vec![])),
+            MockShelfRepository::default()
+                .with_find_by_device_id(Ok(Some(sync_shelf())))
+                .with_books_for_filter(Ok(vec![])),
+            MockBookRepository::default(),
+        );
+
+        let diff = svc.compute_sync_diff(1, 1, None, None, 100).await.unwrap();
+
+        assert!(diff.is_empty());
+        assert!(!diff.has_more);
+    }
+
+    #[tokio::test]
+    async fn test_sync_diff_no_companion_shelf_returns_empty() {
+        let svc = create_sync_service(
+            MockDeviceRepository::default(),
+            MockShelfRepository::default().with_find_by_device_id(Ok(None)),
+            MockBookRepository::default(),
+        );
+
+        let diff = svc.compute_sync_diff(1, 1, None, None, 100).await.unwrap();
+
+        assert!(diff.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_sync_diff_book_without_files_is_skipped() {
+        let book = Book::fake(1, "No Files", BookStatus::Available);
+        let svc = create_sync_service(
+            MockDeviceRepository::default().with_books_for_device(Ok(vec![])),
+            MockShelfRepository::default()
+                .with_find_by_device_id(Ok(Some(sync_shelf())))
+                .with_books_for_filter(Ok(vec![book])),
+            MockBookRepository::default(), // no files configured → returns empty
+        );
+
+        let diff = svc.compute_sync_diff(1, 1, None, None, 100).await.unwrap();
+
+        assert!(diff.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_sync_diff_new_books_sorted_by_id() {
+        // Shelf returns books out of order; diff must be sorted by book_id
+        let books = vec![
+            Book::fake(3, "C", BookStatus::Available),
+            Book::fake(1, "A", BookStatus::Available),
+            Book::fake(2, "B", BookStatus::Available),
+        ];
+        let svc = create_sync_service(
+            MockDeviceRepository::default().with_books_for_device(Ok(vec![])),
+            MockShelfRepository::default()
+                .with_find_by_device_id(Ok(Some(sync_shelf())))
+                .with_books_for_filter(Ok(books)),
+            MockBookRepository::default()
+                .with_files(1, vec![fake_book_file(1, FileFormat::Epub, FileRole::Original)])
+                .with_files(2, vec![fake_book_file(2, FileFormat::Epub, FileRole::Original)])
+                .with_files(3, vec![fake_book_file(3, FileFormat::Epub, FileRole::Original)]),
+        );
+
+        let diff = svc.compute_sync_diff(1, 1, None, None, 100).await.unwrap();
+
+        assert_eq!(diff.new_books.len(), 3);
+        assert_eq!(diff.new_books[0].book.id, 1);
+        assert_eq!(diff.new_books[1].book.id, 2);
+        assert_eq!(diff.new_books[2].book.id, 3);
+        assert!(diff.upgraded_books.is_empty());
+        assert!(diff.refreshed_books.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_sync_diff_best_file_selection_prefers_enriched_kepub() {
+        let book = Book::fake(1, "Book", BookStatus::Available);
+        let svc = create_sync_service(
+            MockDeviceRepository::default().with_books_for_device(Ok(vec![])),
+            MockShelfRepository::default()
+                .with_find_by_device_id(Ok(Some(sync_shelf())))
+                .with_books_for_filter(Ok(vec![book])),
+            MockBookRepository::default().with_files(
+                1,
+                vec![
+                    fake_book_file(1, FileFormat::Epub, FileRole::Original),
+                    fake_book_file(1, FileFormat::Epub, FileRole::Enriched),
+                    fake_book_file(1, FileFormat::Kepub, FileRole::Enriched),
+                ],
+            ),
+        );
+
+        let diff = svc.compute_sync_diff(1, 1, None, None, 100).await.unwrap();
+
+        assert_eq!(diff.new_books.len(), 1);
+        assert_eq!(diff.new_books[0].file.format, FileFormat::Kepub);
+        assert_eq!(diff.new_books[0].file.file_role, FileRole::Enriched);
+    }
+
+    #[tokio::test]
+    async fn test_sync_diff_upgraded_book_when_better_file_available() {
+        let book = Book::fake(1, "Book", BookStatus::Available);
+        // Device has Original Epub; now Enriched Epub is available → upgraded
+        let device_book = fake_device_book(1, 1, FileFormat::Epub, FileRole::Original);
+        let svc = create_sync_service(
+            MockDeviceRepository::default().with_books_for_device(Ok(vec![device_book])),
+            MockShelfRepository::default()
+                .with_find_by_device_id(Ok(Some(sync_shelf())))
+                .with_books_for_filter(Ok(vec![book])),
+            MockBookRepository::default().with_files(
+                1,
+                vec![
+                    fake_book_file(1, FileFormat::Epub, FileRole::Original),
+                    fake_book_file(1, FileFormat::Epub, FileRole::Enriched),
+                ],
+            ),
+        );
+
+        let diff = svc.compute_sync_diff(1, 1, None, None, 100).await.unwrap();
+
+        assert!(diff.new_books.is_empty());
+        assert_eq!(diff.upgraded_books.len(), 1);
+        assert_eq!(diff.upgraded_books[0].file.file_role, FileRole::Enriched);
+    }
+
+    #[tokio::test]
+    async fn test_sync_diff_refreshed_book_when_metadata_updated() {
+        let updated_at = DateTime::from_timestamp(1000, 0).unwrap();
+        let since = DateTime::from_timestamp(500, 0).unwrap();
+        let book = Book {
+            updated_at,
+            ..Book::fake(1, "Book", BookStatus::Available)
+        };
+        // Device has same file, but book.updated_at > since → refreshed
+        let device_book = fake_device_book(1, 1, FileFormat::Epub, FileRole::Original);
+        let svc = create_sync_service(
+            MockDeviceRepository::default().with_books_for_device(Ok(vec![device_book])),
+            MockShelfRepository::default()
+                .with_find_by_device_id(Ok(Some(sync_shelf())))
+                .with_books_for_filter(Ok(vec![book])),
+            MockBookRepository::default().with_files(1, vec![fake_book_file(1, FileFormat::Epub, FileRole::Original)]),
+        );
+
+        let diff = svc.compute_sync_diff(1, 1, Some(since), None, 100).await.unwrap();
+
+        assert!(diff.new_books.is_empty());
+        assert!(diff.upgraded_books.is_empty());
+        assert_eq!(diff.refreshed_books.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_sync_diff_unchanged_book_is_skipped() {
+        let updated_at = DateTime::from_timestamp(500, 0).unwrap();
+        let since = DateTime::from_timestamp(1000, 0).unwrap();
+        let book = Book {
+            updated_at,
+            ..Book::fake(1, "Book", BookStatus::Available)
+        };
+        let device_book = fake_device_book(1, 1, FileFormat::Epub, FileRole::Original);
+        let svc = create_sync_service(
+            MockDeviceRepository::default().with_books_for_device(Ok(vec![device_book])),
+            MockShelfRepository::default()
+                .with_find_by_device_id(Ok(Some(sync_shelf())))
+                .with_books_for_filter(Ok(vec![book])),
+            MockBookRepository::default().with_files(1, vec![fake_book_file(1, FileFormat::Epub, FileRole::Original)]),
+        );
+
+        let diff = svc.compute_sync_diff(1, 1, Some(since), None, 100).await.unwrap();
+
+        assert!(diff.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_sync_diff_removals_only_on_first_page() {
+        let book = Book::fake(1, "On Shelf", BookStatus::Available);
+        // DeviceBook for book_id=2 is no longer on the shelf → should appear as removal
+        let stale_book = fake_device_book(1, 2, FileFormat::Epub, FileRole::Original);
+        let svc = create_sync_service(
+            MockDeviceRepository::default().with_books_for_device(Ok(vec![stale_book.clone()])),
+            MockShelfRepository::default()
+                .with_find_by_device_id(Ok(Some(sync_shelf())))
+                .with_books_for_filter(Ok(vec![book])),
+            MockBookRepository::default().with_files(1, vec![fake_book_file(1, FileFormat::Epub, FileRole::Original)]),
+        );
+
+        // First page (after_book_id = None): removals included
+        let diff_first = svc.compute_sync_diff(1, 1, None, None, 100).await.unwrap();
+        assert_eq!(diff_first.removed_book_ids, vec![2]);
+
+        // Subsequent page (after_book_id = Some(...)): no removals
+        let diff_second = svc.compute_sync_diff(1, 1, None, Some(0), 100).await.unwrap();
+        assert!(diff_second.removed_book_ids.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_sync_diff_paging_150_books_has_more_on_first_page() {
+        // 150 books (ids 1-150), all new, page_size=100
+        let books: Vec<Book> = (1u64..=150).map(|i| Book::fake(i, format!("Book {i}"), BookStatus::Available)).collect();
+        let mut book_repo = MockBookRepository::default();
+        for i in 1u64..=150 {
+            book_repo = book_repo.with_files(i, vec![fake_book_file(i, FileFormat::Epub, FileRole::Original)]);
+        }
+        let svc = create_sync_service(
+            MockDeviceRepository::default().with_books_for_device(Ok(vec![])),
+            MockShelfRepository::default()
+                .with_find_by_device_id(Ok(Some(sync_shelf())))
+                .with_books_for_filter(Ok(books)),
+            book_repo,
+        );
+
+        // First page
+        let diff = svc.compute_sync_diff(1, 1, None, None, 100).await.unwrap();
+        assert_eq!(diff.new_books.len(), 100);
+        assert!(diff.has_more);
+        assert_eq!(diff.new_books.first().unwrap().book.id, 1);
+        assert_eq!(diff.new_books.last().unwrap().book.id, 100);
+
+        // Second page
+        let diff2 = svc.compute_sync_diff(1, 1, None, Some(100), 100).await.unwrap();
+        assert_eq!(diff2.new_books.len(), 50);
+        assert!(!diff2.has_more);
+        assert_eq!(diff2.new_books.first().unwrap().book.id, 101);
+        assert_eq!(diff2.new_books.last().unwrap().book.id, 150);
     }
 }
