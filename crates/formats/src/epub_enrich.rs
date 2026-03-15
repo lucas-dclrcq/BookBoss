@@ -445,7 +445,7 @@ mod tests {
     }
 
     /// Verify that genres in the sidecar appear as `dc:subject` elements in
-    /// the enriched EPUB's OPF. Genres stored only in `bookboss:metadata`
+    /// the enriched EPUB's OPF. Genres stored only in the `spinnaker:metadata` blob
     /// would be invisible to e-readers.
     #[test]
     fn genres_written_as_dc_subject_in_enriched_epub() {

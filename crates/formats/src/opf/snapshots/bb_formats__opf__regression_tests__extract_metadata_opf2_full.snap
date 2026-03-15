@@ -39,5 +39,7 @@ ExtractedMetadata {
     ),
     series_name: None,
     series_number: None,
+    genres: [],
+    tags: [],
     cover_bytes: None,
 }

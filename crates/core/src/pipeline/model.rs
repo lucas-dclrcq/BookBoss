@@ -63,6 +63,10 @@ pub struct ExtractedMetadata {
     pub identifiers: Option<Vec<ExtractedIdentifier>>,
     pub series_name: Option<String>,
     pub series_number: Option<Decimal>,
+    /// Genres extracted from `dc:subject` elements or the `spinnaker:metadata` metadata blob.
+    pub genres: Vec<String>,
+    /// Tags extracted from the `spinnaker:metadata` metadata blob.
+    pub tags: Vec<String>,
     /// Cover image bytes extracted directly from the e-book file, if present.
     pub cover_bytes: Option<Vec<u8>>,
 }

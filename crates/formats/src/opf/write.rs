@@ -120,7 +120,7 @@ pub(crate) fn write_metadata_xml(sidecar: &BookSidecar) -> Result<Vec<u8>, Error
         writer.write_event(Event::End(BytesEnd::new("dc:identifier")))?;
     }
 
-    // bookboss:metadata JSON blob
+    // spinnaker:metadata JSON blob
     let bb_meta = BbMeta {
         series: sidecar.series.as_ref(),
         genres: &sidecar.genres,
@@ -139,7 +139,7 @@ pub(crate) fn write_metadata_xml(sidecar: &BookSidecar) -> Result<Vec<u8>, Error
     };
     let json = serde_json::to_string(&bb_meta)?;
     let mut meta_bb = BytesStart::new("meta");
-    meta_bb.push_attribute(("name", "bookboss:metadata"));
+    meta_bb.push_attribute(("name", "spinnaker:metadata"));
     meta_bb.push_attribute(("content", json.as_str()));
     writer.write_event(Event::Empty(meta_bb))?;
 
@@ -246,7 +246,7 @@ pub(crate) mod tests {
 
     /// Verify that genres are emitted as `dc:subject` elements so e-readers
     /// (e.g. Kobo) can display them. Genres stored only in the private
-    /// `bookboss:metadata` blob would not be caught by a roundtrip test alone.
+    /// `spinnaker:metadata` blob would not be caught by a roundtrip test alone.
     #[test]
     fn genres_written_as_dc_subject() {
         let sidecar = full_test_sidecar();

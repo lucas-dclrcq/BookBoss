@@ -127,6 +127,8 @@ impl OpenLibraryAdapter {
             identifiers: Some(identifiers),
             series_name: None,
             series_number: None,
+            genres: vec![],
+            tags: vec![],
             cover_bytes: None,
         }
     }

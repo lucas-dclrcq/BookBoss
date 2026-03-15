@@ -32,8 +32,8 @@ pub struct SidecarFile {
 /// Typed representation of a `metadata.opf` sidecar file.
 ///
 /// Standard Dublin Core fields are stored directly on this struct.
-/// BookBoss-specific extensions (series, genres, tags, etc.) are serialised
-/// into the single `bookboss:metadata` JSON meta element in the OPF output.
+/// App-specific extensions (series, genres, tags, etc.) are serialised
+/// into the single `spinnaker:metadata` JSON meta element in the OPF output.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BookSidecar {
     pub title: String,

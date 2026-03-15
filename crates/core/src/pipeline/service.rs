@@ -285,7 +285,7 @@ impl PipelineService for PipelineServiceImpl {
 
             match meta {
                 Some((mut metadata, source)) => {
-                    // Preserve file-embedded identifiers not returned by the provider.
+                    // Preserve file-embedded fields not returned by the provider.
                     if let Some(extracted_ids) = &extracted.identifiers {
                         let provider_ids = metadata.identifiers.get_or_insert_with(Vec::new);
                         let existing_types: std::collections::HashSet<IdentifierType> = provider_ids.iter().map(|id| id.identifier_type.clone()).collect();
@@ -294,6 +294,18 @@ impl PipelineService for PipelineServiceImpl {
                                 provider_ids.push(id.clone());
                             }
                         }
+                    }
+                    if metadata.publisher.is_none() {
+                        metadata.publisher.clone_from(&extracted.publisher);
+                    }
+                    if metadata.language.is_none() {
+                        metadata.language.clone_from(&extracted.language);
+                    }
+                    if metadata.genres.is_empty() {
+                        metadata.genres.clone_from(&extracted.genres);
+                    }
+                    if metadata.tags.is_empty() {
+                        metadata.tags.clone_from(&extracted.tags);
                     }
                     (metadata, best_cover, source)
                 }
@@ -487,8 +499,8 @@ impl PipelineService for PipelineServiceImpl {
                 name,
                 number: final_meta.series_number,
             }),
-            genres: vec![],
-            tags: vec![],
+            genres: final_meta.genres.clone(),
+            tags: final_meta.tags.clone(),
             rating: None,
             status: BookStatus::Incoming,
             metadata_source: book_metadata_source,

@@ -72,7 +72,7 @@ enum ParseState {
     },
 }
 
-// ── bookboss:metadata JSON structs
+// ── spinnaker:metadata JSON structs
 // ────────────────────────────────────────────
 
 #[derive(Deserialize)]
@@ -264,7 +264,7 @@ fn parse_dc(xml: &[u8]) -> Result<DcFields, Error> {
                     match attr.key.as_ref() {
                         b"name" => {
                             let val = attr.decode_and_unescape_value(reader.decoder())?;
-                            if val.as_ref() == "bookboss:metadata" {
+                            if val.as_ref() == "spinnaker:metadata" {
                                 is_bb = true;
                             }
                         }
@@ -377,7 +377,7 @@ pub fn parse_sidecar(xml: &[u8]) -> Result<BookSidecar, Error> {
         .as_deref()
         .map(serde_json::from_str)
         .transpose()?
-        .ok_or(Error::MissingField("bookboss:metadata"))?;
+        .ok_or(Error::MissingField("spinnaker:metadata"))?;
 
     // Build a name → sort_order lookup from the JSON blob.
     let sort_order_map: HashMap<&str, i32> = bb.author_sort_orders.iter().map(|a| (a.name.as_str(), a.sort_order)).collect();
@@ -435,7 +435,7 @@ pub fn parse_sidecar(xml: &[u8]) -> Result<BookSidecar, Error> {
 
 /// Extract metadata from an OPF document (e.g. embedded in an EPUB).
 ///
-/// Only reads Dublin Core fields; ignores the `bookboss:metadata` extension.
+/// Only reads Dublin Core fields; ignores the `spinnaker:metadata` extension.
 pub fn extract_metadata(xml: &[u8]) -> Result<ExtractedMetadata, Error> {
     let fields = parse_dc(xml)?;
 
@@ -470,6 +470,18 @@ pub fn extract_metadata(xml: &[u8]) -> Result<ExtractedMetadata, Error> {
         })
         .collect();
 
+    // Genres: prefer spinnaker:metadata JSON if present, fall back to dc:subject.
+    let (genres, tags) = if let Some(json) = &fields.bb_meta_content {
+        if let Ok(bb) = serde_json::from_str::<BbMetaJson>(json) {
+            let genres = if bb.genres.is_empty() { fields.subjects.clone() } else { bb.genres };
+            (genres, bb.tags)
+        } else {
+            (fields.subjects.clone(), vec![])
+        }
+    } else {
+        (fields.subjects.clone(), vec![])
+    };
+
     Ok(ExtractedMetadata {
         title: fields.title,
         authors: if authors.is_empty() { None } else { Some(authors) },
@@ -480,6 +492,8 @@ pub fn extract_metadata(xml: &[u8]) -> Result<ExtractedMetadata, Error> {
         identifiers: if identifiers.is_empty() { None } else { Some(identifiers) },
         series_name: None,
         series_number: None,
+        genres,
+        tags,
         cover_bytes: None,
     })
 }
