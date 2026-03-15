@@ -1,6 +1,9 @@
 use dioxus::prelude::*;
 
-use super::{DeviceRow, create_device_for_profile, delete_device_for_profile, get_default_device_name, get_devices_for_profile, update_device_for_profile};
+use super::{
+    DeviceRow, create_device_for_profile, delete_device_for_profile, get_default_device_name, get_devices_for_profile, reset_device_sync_for_profile,
+    update_device_for_profile,
+};
 use crate::Route;
 
 // ---------------------------------------------------------------------------
@@ -41,6 +44,9 @@ pub(super) fn DevicesSectionContent() -> Element {
     let mut delete_shelf_checked = use_signal(|| false);
     let mut delete_saving = use_signal(|| false);
     let mut delete_error: Signal<Option<String>> = use_signal(|| None);
+    let mut reset_target: Signal<Option<DeviceRow>> = use_signal(|| None);
+    let mut reset_saving = use_signal(|| false);
+    let mut reset_error: Signal<Option<String>> = use_signal(|| None);
 
     let device_list = devices().and_then(|r| r.ok()).unwrap_or_default();
 
@@ -65,6 +71,7 @@ pub(super) fn DevicesSectionContent() -> Element {
                     let d = device.clone();
                     let d_edit = device.clone();
                     let d_delete = device.clone();
+                    let d_reset = device.clone();
                     rsx! {
                         DeviceCard {
                             device: d,
@@ -73,6 +80,10 @@ pub(super) fn DevicesSectionContent() -> Element {
                                 delete_shelf_checked.set(false);
                                 delete_error.set(None);
                                 delete_target.set(Some(d_delete.clone()));
+                            },
+                            on_reset: move |_| {
+                                reset_error.set(None);
+                                reset_target.set(Some(d_reset.clone()));
                             },
                         }
                     }
@@ -89,6 +100,52 @@ pub(super) fn DevicesSectionContent() -> Element {
                     modal.set(None);
                     devices.restart();
                 },
+            }
+        }
+
+        // ── Force-resync confirmation dialog ──────────────────────────────
+        if let Some(target) = reset_target() {
+            div { class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+                div { class: "bg-white rounded-2xl shadow-xl w-full max-w-sm p-6",
+                    h3 { class: "text-base font-semibold text-gray-900 mb-2",
+                        "Force resync \"{target.name}\"?"
+                    }
+                    p { class: "text-sm text-gray-500 mb-4",
+                        "Clears the sync state so all books re-download on the next Kobo sync. \
+                         Trigger a sync on your Kobo after confirming."
+                    }
+                    if let Some(err) = reset_error() {
+                        p { class: "text-xs text-red-600 mb-3", "{err}" }
+                    }
+                    div { class: "flex justify-end gap-3",
+                        button {
+                            class: "px-3 py-1.5 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50",
+                            disabled: reset_saving(),
+                            onclick: move |_| reset_target.set(None),
+                            "Cancel"
+                        }
+                        button {
+                            class: "px-3 py-1.5 text-sm font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50",
+                            disabled: reset_saving(),
+                            onclick: move |_| {
+                                let tok = target.token.clone();
+                                reset_saving.set(true);
+                                reset_error.set(None);
+                                spawn(async move {
+                                    match reset_device_sync_for_profile(tok).await {
+                                        Ok(()) => {
+                                            reset_target.set(None);
+                                            devices.restart();
+                                        }
+                                        Err(e) => reset_error.set(Some(e.to_string())),
+                                    }
+                                    reset_saving.set(false);
+                                });
+                            },
+                            if reset_saving() { "Resetting…" } else { "Force Resync" }
+                        }
+                    }
+                }
             }
         }
 
@@ -162,7 +219,7 @@ pub(super) fn DevicesSectionContent() -> Element {
 // ---------------------------------------------------------------------------
 
 #[component]
-fn DeviceCard(device: DeviceRow, on_edit: EventHandler<()>, on_delete: EventHandler<()>) -> Element {
+fn DeviceCard(device: DeviceRow, on_edit: EventHandler<()>, on_delete: EventHandler<()>, on_reset: EventHandler<()>) -> Element {
     let shelf_token = device.companion_shelf_token.clone();
     let mut copied = use_signal(|| false);
 
@@ -217,9 +274,24 @@ fn DeviceCard(device: DeviceRow, on_edit: EventHandler<()>, on_delete: EventHand
                     span { class: "text-gray-700", { removal_label(&device.on_removal_action) } }
                 }
                 span { "·" }
-                span {
-                    span { "Last synced: " }
-                    span { class: "text-gray-700", "{device.last_synced_at}" }
+                {
+                    let synced = device.last_synced_at.clone();
+                    if synced == "Never" {
+                        rsx! {
+                            span { "Last synced: " }
+                            span { class: "text-gray-700", "Never" }
+                        }
+                    } else {
+                        rsx! {
+                            span { "Last synced: " }
+                            button {
+                                class: "text-gray-700 hover:text-indigo-600 transition-colors cursor-pointer",
+                                title: "Reset sync — clears sync state so all books re-download on next Kobo sync",
+                                onclick: move |_| on_reset(()),
+                                "{synced}"
+                            }
+                        }
+                    }
                 }
                 span { "·" }
                 {

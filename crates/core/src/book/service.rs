@@ -44,50 +44,50 @@ impl BookServiceImpl {
 
 #[async_trait::async_trait]
 impl BookService for BookServiceImpl {
-    #[tracing::instrument(level = "trace", skip(self, filter))]
+    // #[tracing::instrument(level = "trace", skip(self, filter))]
     async fn list_books(&self, filter: &BookQuery, start_id: Option<BookId>, page_size: Option<u64>) -> Result<Vec<Book>, Error> {
         let filter = filter.clone();
         with_read_only_transaction!(self, book_repository, |tx| book_repository.list_books(tx, &filter, start_id, page_size).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self, token))]
+    // #[tracing::instrument(level = "trace", skip(self, token))]
     async fn find_book_by_token(&self, token: &BookToken) -> Result<Option<Book>, Error> {
         let token = *token;
         with_read_only_transaction!(self, book_repository, |tx| book_repository.find_by_token(tx, &token).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn authors_for_book(&self, book_id: BookId) -> Result<Vec<BookAuthor>, Error> {
         with_read_only_transaction!(self, book_repository, |tx| book_repository.authors_for_book(tx, book_id).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn files_for_book(&self, book_id: BookId) -> Result<Vec<BookFile>, Error> {
         with_read_only_transaction!(self, book_repository, |tx| book_repository.files_for_book(tx, book_id).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn identifiers_for_book(&self, book_id: BookId) -> Result<Vec<BookIdentifier>, Error> {
         with_read_only_transaction!(self, book_repository, |tx| book_repository.identifiers_for_book(tx, book_id).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn list_authors(&self, start_id: Option<AuthorId>, page_size: Option<u64>) -> Result<Vec<Author>, Error> {
         with_read_only_transaction!(self, author_repository, |tx| author_repository.list_authors(tx, start_id, page_size).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self, token))]
+    // #[tracing::instrument(level = "trace", skip(self, token))]
     async fn find_author_by_token(&self, token: &AuthorToken) -> Result<Option<Author>, Error> {
         let token = *token;
         with_read_only_transaction!(self, author_repository, |tx| author_repository.find_by_token(tx, &token).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn list_series(&self, start_id: Option<SeriesId>, page_size: Option<u64>) -> Result<Vec<Series>, Error> {
         with_read_only_transaction!(self, series_repository, |tx| series_repository.list_series(tx, start_id, page_size).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self, token))]
+    // #[tracing::instrument(level = "trace", skip(self, token))]
     async fn find_series_by_token(&self, token: &SeriesToken) -> Result<Option<Series>, Error> {
         let token = *token;
         with_read_only_transaction!(self, series_repository, |tx| series_repository.find_by_token(tx, &token).await)
@@ -98,42 +98,42 @@ impl BookService for BookServiceImpl {
         with_read_only_transaction!(self, publisher_repository, |tx| publisher_repository.find_by_token(tx, &token).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn genres_for_book(&self, book_id: BookId) -> Result<Vec<Genre>, Error> {
         with_read_only_transaction!(self, book_repository, |tx| book_repository.genres_for_book(tx, book_id).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn tags_for_book(&self, book_id: BookId) -> Result<Vec<Tag>, Error> {
         with_read_only_transaction!(self, book_repository, |tx| book_repository.tags_for_book(tx, book_id).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn list_all_genres(&self) -> Result<Vec<Genre>, Error> {
         with_read_only_transaction!(self, genre_repository, |tx| genre_repository.list_all_genres(tx).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn list_all_tags(&self) -> Result<Vec<Tag>, Error> {
         with_read_only_transaction!(self, tag_repository, |tx| tag_repository.list_all_tags(tx).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn list_all_series(&self) -> Result<Vec<Series>, Error> {
         with_read_only_transaction!(self, series_repository, |tx| series_repository.list_all_series(tx).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn list_all_authors(&self) -> Result<Vec<Author>, Error> {
         with_read_only_transaction!(self, author_repository, |tx| author_repository.list_all_authors(tx).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     async fn list_all_publishers(&self) -> Result<Vec<Publisher>, Error> {
         with_read_only_transaction!(self, publisher_repository, |tx| publisher_repository.list_all_publishers(tx).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self, series_name))]
+    // #[tracing::instrument(level = "trace", skip(self, series_name))]
     async fn series_next_number(&self, series_name: &str) -> Result<u32, Error> {
         let name = series_name.to_string();
         let series = with_read_only_transaction!(self, series_repository, |tx| series_repository.find_by_name(tx, &name).await)?;
@@ -792,6 +792,9 @@ mod tests {
             unimplemented!()
         }
         async fn remove_device_book(&self, _: &dyn Transaction, _: DeviceId, _: BookId) -> Result<(), Error> {
+            unimplemented!()
+        }
+        async fn clear_device_books(&self, _: &dyn Transaction, _: DeviceId) -> Result<(), Error> {
             unimplemented!()
         }
         async fn update_device_book(&self, _: &dyn Transaction, _: DeviceBook) -> Result<DeviceBook, Error> {

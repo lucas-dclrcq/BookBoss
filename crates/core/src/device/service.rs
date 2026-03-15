@@ -91,6 +91,13 @@ pub trait DeviceService: Send + Sync {
     /// authentication credential. Returns `None` if no device with that token
     /// exists.
     async fn find_device_by_token(&self, token: &DeviceToken) -> Result<Option<Device>, Error>;
+
+    /// Clears all `DeviceBook` records for a device, forcing a full resync on
+    /// the next Kobo library sync. Also resets `last_synced_at` to `None`.
+    ///
+    /// Returns `NotFound` if the token does not exist or belongs to another
+    /// user.
+    async fn reset_device_sync(&self, token: &DeviceToken, user_id: UserId) -> Result<(), Error>;
 }
 
 // ── Implementation
@@ -359,7 +366,10 @@ impl DeviceService for DeviceServiceImpl {
                 let kind = match device_book_map.get(&book.id) {
                     None => EntryKind::New,
                     Some(db) if db.format != best.format || db.file_role != best.file_role => EntryKind::Upgraded,
-                    Some(_) if since.is_some_and(|s| book.updated_at > s) => EntryKind::Refreshed,
+                    // No cursor (since = None) means full sync from scratch — re-deliver all
+                    // existing books as Refreshed so nothing is skipped. Also re-deliver any
+                    // book whose metadata has changed since the last sync.
+                    Some(_) if since.is_none() || since.is_some_and(|s| book.updated_at > s) => EntryKind::Refreshed,
                     Some(_) => continue, // unchanged — skip
                 };
 
@@ -519,7 +529,28 @@ impl DeviceService for DeviceServiceImpl {
     #[tracing::instrument(level = "trace", skip(self))]
     async fn find_device_by_token(&self, token: &DeviceToken) -> Result<Option<Device>, Error> {
         let token = *token;
-        with_read_only_transaction!(self, device_repository, |tx| { device_repository.find_by_token(tx, &token).await })
+        with_read_only_transaction!(self, device_repository, |tx| device_repository.find_by_token(tx, &token).await)
+    }
+
+    async fn reset_device_sync(&self, token: &DeviceToken, user_id: UserId) -> Result<(), Error> {
+        let token = *token;
+        with_transaction!(self, device_repository, |tx| {
+            let device = device_repository
+                .find_by_token(tx, &token)
+                .await?
+                .filter(|d| d.owner_id == user_id)
+                .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
+
+            device_repository.clear_device_books(tx, device.id).await?;
+
+            let updated = Device {
+                last_synced_at: None,
+                ..device
+            };
+            device_repository.update_device(tx, updated).await?;
+
+            Ok(())
+        })
     }
 }
 
@@ -678,6 +709,9 @@ mod tests {
         }
         async fn remove_device_book(&self, _: &dyn Transaction, device_id: DeviceId, book_id: BookId) -> Result<(), Error> {
             self.removed_device_books.lock().unwrap().push((device_id, book_id));
+            Ok(())
+        }
+        async fn clear_device_books(&self, _: &dyn Transaction, _: DeviceId) -> Result<(), Error> {
             Ok(())
         }
         async fn update_device_book(&self, _: &dyn Transaction, book: DeviceBook) -> Result<DeviceBook, Error> {

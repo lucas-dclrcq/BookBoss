@@ -21,6 +21,7 @@ pub trait DeviceRepository: Send + Sync {
     async fn add_device_book(&self, transaction: &dyn Transaction, book: DeviceBook) -> Result<DeviceBook, Error>;
     async fn update_device_book(&self, transaction: &dyn Transaction, book: DeviceBook) -> Result<DeviceBook, Error>;
     async fn remove_device_book(&self, transaction: &dyn Transaction, device_id: DeviceId, book_id: BookId) -> Result<(), Error>;
+    async fn clear_device_books(&self, transaction: &dyn Transaction, device_id: DeviceId) -> Result<(), Error>;
     async fn books_for_device(&self, transaction: &dyn Transaction, device_id: DeviceId) -> Result<Vec<DeviceBook>, Error>;
 
     // Sync log

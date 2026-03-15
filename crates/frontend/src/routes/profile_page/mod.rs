@@ -410,6 +410,30 @@ async fn delete_device_for_profile(token: String, delete_shelf: bool) -> Result<
     Ok(())
 }
 
+#[post(
+    "/api/v1/profile/devices/reset-sync",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+async fn reset_device_sync_for_profile(token: String) -> Result<(), ServerFnError> {
+    let user_id = auth_session
+        .current_user
+        .as_ref()
+        .filter(|u| !u.username.is_empty())
+        .ok_or_else(|| ServerFnError::new("Not authenticated"))?
+        .id();
+
+    let device_token = DeviceToken::from_str(&token).map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    core_services
+        .device_service
+        .reset_device_sync(&device_token, user_id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // ProfilePage
 // ---------------------------------------------------------------------------

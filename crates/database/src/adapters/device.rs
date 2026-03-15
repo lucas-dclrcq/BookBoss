@@ -298,6 +298,18 @@ impl DeviceRepository for DeviceRepositoryAdapter {
         Ok(())
     }
 
+    async fn clear_device_books(&self, transaction: &dyn Transaction, device_id: DeviceId) -> Result<(), Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        prelude::DeviceBooks::delete_many()
+            .filter(device_books::Column::DeviceId.eq(device_id as i64))
+            .exec(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(())
+    }
+
     async fn books_for_device(&self, transaction: &dyn Transaction, device_id: DeviceId) -> Result<Vec<DeviceBook>, Error> {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
