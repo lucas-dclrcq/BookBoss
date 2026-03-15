@@ -232,10 +232,15 @@ fn DeviceCard(device: DeviceRow, on_edit: EventHandler<()>, on_delete: EventHand
                             onclick: move |_| {
                                 let url = url.clone();
                                 spawn(async move {
-                                    let js = format!("navigator.clipboard.writeText('{url}')");
-                                    let _ = document::eval(&js).await;
+                                    // Clipboard write is fire-and-forget; do not await —
+                                    // awaiting eval blocks until JS calls dioxus.send(),
+                                    // which clipboard.writeText never does.
+                                    document::eval(&format!("navigator.clipboard.writeText('{url}')"));
                                     copied.set(true);
-                                    let _ = document::eval("new Promise(r => setTimeout(r, 1500))").await;
+                                    // Use dioxus.send() from JS to signal when the delay
+                                    // is done so we can reset the checkmark.
+                                    let mut timer = document::eval("setTimeout(() => dioxus.send(true), 1500)");
+                                    let _ = timer.recv::<bool>().await;
                                     copied.set(false);
                                 });
                             },
