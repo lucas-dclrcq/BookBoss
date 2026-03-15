@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2](https://github.com/szinn/BookBoss/compare/v0.4.1..v0.4.2) - 2026-03-15
+
+### Bug Fixes
+
+- _(frontend)_ Kobo auth — use Kobo store for device_auth/refresh, add init header - ([1f1e20b](https://github.com/szinn/BookBoss/commit/1f1e20b92d7ce42b280b5dfd329f61adc198daae))
+- _(frontend)_ Fix Kobo auth flow — correct resource keys, response format, and init header - ([33d1da6](https://github.com/szinn/BookBoss/commit/33d1da66dd0d523d0a3d2144ed978892c3b8e526))
+- _(frontend)_ Return real sync token as UserKey + add auth/device refresh endpoint - ([2795328](https://github.com/szinn/BookBoss/commit/27953280790cc801d418d961f150e1bc96788b89))
+
 ## [0.4.0](https://github.com/szinn/BookBoss/compare/v0.3.4..v0.4.0) - 2026-03-15
 
 ### Features
