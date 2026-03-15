@@ -70,6 +70,7 @@ impl IntoSubsystem<anyhow::Error> for FrontendSubsystem {
             .layer(SessionLayer::new(session_store))
             .layer(AuthSessionLayer::<AuthUser, UserId, BackendSessionPool, BackendSessionPool>::new(Some(backend_pool)).with_config(auth_config));
 
+        let kobo_config = kobo::KoboConfig::new(self.config.base_url.clone());
         let kobo = kobo::kobo_router(self.config.base_url.clone(), core_services.clone());
 
         let app_router = axum::Router::new()
@@ -78,6 +79,7 @@ impl IntoSubsystem<anyhow::Error> for FrontendSubsystem {
             .serve_dioxus_application(dioxus_server::ServeConfig::new(), BookBossFrontend)
             .merge(kobo)
             .layer(Extension(core_services))
+            .layer(Extension(kobo_config))
             .layer(middleware);
 
         let health_handler = || async { axum::http::StatusCode::OK };

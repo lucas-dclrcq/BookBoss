@@ -164,6 +164,7 @@ pub(super) fn DevicesSectionContent() -> Element {
 #[component]
 fn DeviceCard(device: DeviceRow, on_edit: EventHandler<()>, on_delete: EventHandler<()>) -> Element {
     let shelf_token = device.companion_shelf_token.clone();
+    let mut copied = use_signal(|| false);
 
     rsx! {
         div { class: "rounded-lg border border-gray-200 bg-white px-4 py-3 flex flex-col gap-2",
@@ -209,7 +210,7 @@ fn DeviceCard(device: DeviceRow, on_edit: EventHandler<()>, on_delete: EventHand
                 }
             }
 
-            // Row 3: on removal · sync token
+            // Row 3: on removal · last synced · sync token (click to copy URL)
             div { class: "flex items-center gap-4 text-xs text-gray-500",
                 span {
                     span { "On removal: " }
@@ -217,8 +218,30 @@ fn DeviceCard(device: DeviceRow, on_edit: EventHandler<()>, on_delete: EventHand
                 }
                 span { "·" }
                 span {
-                    span { "Sync token: " }
-                    span { class: "font-mono text-gray-700 select-all", "{device.sync_token_display}" }
+                    span { "Last synced: " }
+                    span { class: "text-gray-700", "{device.last_synced_at}" }
+                }
+                span { "·" }
+                {
+                    let url = device.sync_url.clone();
+                    let token_display = device.sync_token_display.clone();
+                    rsx! {
+                        button {
+                            class: "font-mono text-gray-700 hover:text-indigo-600 transition-colors cursor-pointer",
+                            title: "Copies URL for Kobo sync",
+                            onclick: move |_| {
+                                let url = url.clone();
+                                spawn(async move {
+                                    let js = format!("navigator.clipboard.writeText('{url}')");
+                                    let _ = document::eval(&js).await;
+                                    copied.set(true);
+                                    let _ = document::eval("new Promise(r => setTimeout(r, 1500))").await;
+                                    copied.set(false);
+                                });
+                            },
+                            if copied() { "✓" } else { "{token_display}" }
+                        }
+                    }
                 }
             }
         }

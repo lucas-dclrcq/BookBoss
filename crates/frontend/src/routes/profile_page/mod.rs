@@ -4,7 +4,7 @@ use devices_section::DevicesSectionContent;
 use dioxus::prelude::*;
 #[cfg(feature = "server")]
 use {
-    crate::server::AuthSession,
+    crate::server::{AuthSession, kobo::KoboConfig},
     bb_core::{
         CoreServices,
         device::{DeviceToken, OnRemovalAction},
@@ -12,6 +12,7 @@ use {
         types::EmailAddress,
         user::User,
     },
+    chrono::{DateTime, Utc},
     std::str::FromStr,
     std::sync::Arc,
 };
@@ -40,6 +41,8 @@ struct DeviceRow {
     device_type: String,
     on_removal_action: String,
     sync_token_display: String,
+    sync_url: String,
+    last_synced_at: String,
     companion_shelf_name: Option<String>,
     companion_shelf_token: Option<String>,
 }
@@ -247,7 +250,8 @@ fn parse_removal_action(s: &str) -> Result<OnRemovalAction, ServerFnError> {
 #[get(
     "/api/v1/profile/devices",
     auth_session: axum::Extension<AuthSession>,
-    core_services: axum::Extension<Arc<CoreServices>>
+    core_services: axum::Extension<Arc<CoreServices>>,
+    kobo_config: axum::Extension<Arc<KoboConfig>>
 )]
 async fn get_devices_for_profile() -> Result<Vec<DeviceRow>, ServerFnError> {
     let user_id = auth_session
@@ -272,6 +276,8 @@ async fn get_devices_for_profile() -> Result<Vec<DeviceRow>, ServerFnError> {
             .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let sync_token_display = device.token.to_string().trim_start_matches("DV_").to_string();
+        let sync_url = kobo_config.sync_url(&sync_token_display);
+        let last_synced_at = humanize_synced_at(device.last_synced_at);
 
         rows.push(DeviceRow {
             token: device.token.to_string(),
@@ -279,11 +285,26 @@ async fn get_devices_for_profile() -> Result<Vec<DeviceRow>, ServerFnError> {
             device_type: device.device_type,
             on_removal_action: removal_action_to_str(&device.on_removal_action).to_string(),
             sync_token_display,
+            sync_url,
+            last_synced_at,
             companion_shelf_name: companion.as_ref().map(|s| s.name.clone()),
             companion_shelf_token: companion.as_ref().map(|s| s.token.to_string()),
         });
     }
     Ok(rows)
+}
+
+#[cfg(feature = "server")]
+fn humanize_synced_at(ts: Option<DateTime<Utc>>) -> String {
+    let Some(ts) = ts else { return "Never".to_string() };
+    let secs = (Utc::now() - ts).num_seconds().max(0);
+    match secs {
+        s if s < 60 => "Just now".to_string(),
+        s if s < 3600 => format!("{} min ago", s / 60),
+        s if s < 86400 => format!("{} hr ago", s / 3600),
+        s if s < 604_800 => format!("{} days ago", s / 86400),
+        _ => ts.format("%Y-%m-%d").to_string(),
+    }
 }
 
 #[get(
