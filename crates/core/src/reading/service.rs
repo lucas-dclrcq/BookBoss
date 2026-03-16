@@ -826,6 +826,10 @@ mod tests {
         ) -> Result<Vec<UserBookMetadata>, Error> {
             self.list_result.lock().unwrap().clone().unwrap_or(Ok(vec![]))
         }
+
+        async fn list_for_user_and_books(&self, _: &dyn Transaction, _: UserId, _: &[BookId]) -> Result<Vec<UserBookMetadata>, Error> {
+            Ok(vec![])
+        }
     }
 
     // ─── Mock DeviceRepository ───────────────────────────────────────────────

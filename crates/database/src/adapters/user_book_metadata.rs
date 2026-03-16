@@ -89,8 +89,11 @@ impl UserBookMetadataRepository for UserBookMetadataRepositoryAdapter {
             let mut active: user_book_metadata::ActiveModel = existing.into();
             active.read_status = Set(read_status_to_str(metadata.read_status).to_owned());
             active.progress_percentage = Set(metadata.progress_percentage.map(|v| v as i16));
+            active.position_type = Set(metadata.position_type);
             active.position_token = Set(metadata.position_token);
             active.last_progress_at = Set(metadata.last_progress_at.map(Into::into));
+            active.spent_reading_minutes = Set(metadata.spent_reading_minutes);
+            active.remaining_time_minutes = Set(metadata.remaining_time_minutes);
             active.personal_rating = Set(metadata.personal_rating.map(i16::from));
             active.times_read = Set(metadata.times_read as i32);
             active.date_started = Set(metadata.date_started.map(Into::into));
@@ -104,8 +107,11 @@ impl UserBookMetadataRepository for UserBookMetadataRepositoryAdapter {
                 book_id: Set(metadata.book_id as i64),
                 read_status: Set(read_status_to_str(metadata.read_status).to_owned()),
                 progress_percentage: Set(metadata.progress_percentage.map(|v| v as i16)),
+                position_type: Set(metadata.position_type),
                 position_token: Set(metadata.position_token),
                 last_progress_at: Set(metadata.last_progress_at.map(Into::into)),
+                spent_reading_minutes: Set(metadata.spent_reading_minutes),
+                remaining_time_minutes: Set(metadata.remaining_time_minutes),
                 personal_rating: Set(metadata.personal_rating.map(i16::from)),
                 times_read: Set(metadata.times_read as i32),
                 date_started: Set(metadata.date_started.map(Into::into)),
@@ -162,6 +168,24 @@ impl UserBookMetadataRepository for UserBookMetadataRepositoryAdapter {
 
         let limit = page_size.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE);
         let rows = query.limit(limit).all(tx).await.map_err(handle_dberr)?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn list_for_user_and_books(&self, transaction: &dyn Transaction, user_id: UserId, book_ids: &[BookId]) -> Result<Vec<UserBookMetadata>, Error> {
+        if book_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let tx = TransactionImpl::get_db_transaction(transaction)?;
+
+        let ids: Vec<i64> = book_ids.iter().map(|&id| id as i64).collect();
+        let rows = prelude::UserBookMetadata::find()
+            .filter(user_book_metadata::Column::UserId.eq(user_id as i64))
+            .filter(user_book_metadata::Column::BookId.is_in(ids))
+            .all(tx)
+            .await
+            .map_err(handle_dberr)?;
 
         Ok(rows.into_iter().map(Into::into).collect())
     }

@@ -18,4 +18,9 @@ pub trait UserBookMetadataRepository: Send + Sync {
         start_book_id: Option<BookId>,
         page_size: Option<u64>,
     ) -> Result<Vec<UserBookMetadata>, Error>;
+
+    /// Returns reading state rows for the given user restricted to the
+    /// specified book IDs. Rows that do not exist are simply absent from the
+    /// result (no row ≡ Unread).
+    async fn list_for_user_and_books(&self, transaction: &dyn Transaction, user_id: UserId, book_ids: &[BookId]) -> Result<Vec<UserBookMetadata>, Error>;
 }

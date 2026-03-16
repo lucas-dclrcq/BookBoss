@@ -1165,6 +1165,9 @@ mod tests {
         ) -> Result<Vec<UserBookMetadata>, Error> {
             unimplemented!()
         }
+        async fn list_for_user_and_books(&self, _: &dyn Transaction, _: UserId, _: &[BookId]) -> Result<Vec<UserBookMetadata>, Error> {
+            unimplemented!()
+        }
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
