@@ -17,6 +17,8 @@ pub(crate) fn word_match(candidate: &str, query: &str) -> bool {
 /// - Chips whose value is not found in `options` (case-insensitive) display a
 ///   **new** badge in green, giving the user a visual cue that the entry will
 ///   be created in the database on save.
+/// - Focusing an empty input immediately shows up to 8 options, signalling that
+///   a pick-list is available even before any typing.
 /// - `max_chips`: when set, the text input is hidden once the limit is reached,
 ///   preventing additional entries (useful for single-value fields like
 ///   Publisher).
@@ -29,8 +31,18 @@ pub(crate) fn ChipInput(mut values: Signal<Vec<String>>, options: Vec<String>, p
     let current = values.read().clone();
     let at_limit = max_chips.is_some_and(|max| current.len() >= max);
 
+    let show = *show_dropdown.read();
     let filtered: Vec<String> = if query.is_empty() {
-        vec![]
+        if show {
+            options
+                .iter()
+                .filter(|opt| !current.iter().any(|v| v.eq_ignore_ascii_case(opt)))
+                .take(8)
+                .cloned()
+                .collect()
+        } else {
+            vec![]
+        }
     } else {
         options
             .iter()
@@ -111,6 +123,9 @@ pub(crate) fn ChipInput(mut values: Signal<Vec<String>>, options: Vec<String>, p
                             }
                             _ => {}
                         }
+                    },
+                    onfocus: move |_| {
+                        show_dropdown.set(true);
                     },
                     onfocusout: move |_| {
                         show_dropdown.set(false);
