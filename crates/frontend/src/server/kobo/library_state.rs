@@ -4,8 +4,8 @@
 //! Handles per-book reading state sync with the Kobo device.
 //!
 //! # PUT
-//! The body is a JSON array of state items. Each item may carry reading
-//! progress (position, percent, time stats, status). If any item carries
+//! The body is a single JSON state object carrying reading progress
+//! (position, percent, time stats, status). If the object carries
 //! `"DeleteEntitlement": true` the book is removed from the device's sync
 //! list instead (same effect as the DELETE endpoint).
 //!
@@ -28,7 +28,7 @@
 
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 
-use axum::{Json, extract::Path, http::StatusCode, response::IntoResponse};
+use axum::{Json, body::Bytes, extract::Path, http::StatusCode, response::IntoResponse};
 use bb_core::{CoreServices, book::BookToken, reading::ReadStatus};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
@@ -41,7 +41,7 @@ use super::KoboDevice;
 
 #[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "PascalCase", default)]
-pub(super) struct KoboLocation {
+struct KoboLocation {
     #[serde(rename = "Type")]
     kind: String,
     value: String,
@@ -49,28 +49,28 @@ pub(super) struct KoboLocation {
 
 #[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "PascalCase", default)]
-pub(super) struct KoboBookmark {
+struct KoboBookmark {
     location: Option<KoboLocation>,
     progress_percent: f64,
 }
 
 #[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "PascalCase", default)]
-pub(super) struct KoboStatistics {
+struct KoboStatistics {
     spent_reading_minutes: Option<i32>,
     remaining_time_minutes: Option<i32>,
 }
 
 #[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "PascalCase", default)]
-pub(super) struct KoboStatusInfo {
+struct KoboStatusInfo {
     status: String,
     last_modified: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "PascalCase", default)]
-pub(super) struct StateItem {
+struct StateItem {
     delete_entitlement: bool,
     current_bookmark: Option<KoboBookmark>,
     statistics: Option<KoboStatistics>,
@@ -99,14 +99,13 @@ fn read_status_to_kobo_status(s: ReadStatus) -> &'static str {
 // ── GET handler
 // ────────────────────────────────────────────────────────────
 
-pub async fn handle_get(kobo: KoboDevice, Path(params): Path<HashMap<String, String>>, core_services: Arc<CoreServices>) -> impl IntoResponse {
+pub(super) async fn handle_get(kobo: KoboDevice, Path(params): Path<HashMap<String, String>>, core_services: Arc<CoreServices>) -> impl IntoResponse {
     let Some(uuid) = params.get("uuid") else {
         return StatusCode::BAD_REQUEST.into_response();
     };
 
-    let token = match BookToken::from_str(&format!("BK_{uuid}")) {
-        Ok(t) => t,
-        Err(_) => return Json(json!([])).into_response(),
+    let Ok(token) = BookToken::from_str(&format!("BK_{uuid}")) else {
+        return Json(json!([])).into_response();
     };
 
     tracing::debug!(device_id = kobo.device.id, book_token = %token, "Retrieve book state");
@@ -139,12 +138,19 @@ pub async fn handle_get(kobo: KoboDevice, Path(params): Path<HashMap<String, Str
 // ── PUT handler
 // ────────────────────────────────────────────────────────────
 
-pub async fn handle_put(
+pub(super) async fn handle_put(
     kobo: KoboDevice,
     Path(params): Path<HashMap<String, String>>,
     core_services: Arc<CoreServices>,
-    Json(item): Json<StateItem>,
+    body: Bytes,
 ) -> impl IntoResponse {
+    let item: StateItem = match serde_json::from_slice(&body) {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!(error = ?e, "failed to parse state PUT body");
+            return Json(json!({ "RequestResult": "Success", "UpdateResults": [] })).into_response();
+        }
+    };
     let Some(uuid) = params.get("uuid") else {
         return StatusCode::BAD_REQUEST.into_response();
     };
@@ -153,7 +159,7 @@ pub async fn handle_put(
         return StatusCode::OK.into_response();
     };
 
-    tracing::debug!(device_id = kobo.device.id, book_token = %token, "set book state");
+    tracing::debug!(device_id = kobo.device.id, book_token = %token, state_info = ?item, "set book state");
 
     let book = match core_services.book_service.find_book_by_token(&token).await {
         Ok(Some(b)) => b,
@@ -202,6 +208,18 @@ pub async fn handle_put(
     };
 
     let stats = item.statistics.unwrap_or_default();
+
+    tracing::debug!(
+        device_id = kobo.device.id,
+        book_token = %token,
+        status = ?new_status,
+        progress_bps = progress_bps,
+        position_type = position_type,
+        position_token = position_token,
+        stats = ?stats,
+        last_modified = ?status_info.last_modified,
+        "Updating book status"
+    );
 
     if let Err(e) = core_services
         .reading_service
