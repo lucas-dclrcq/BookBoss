@@ -42,6 +42,7 @@ use super::KoboDevice;
 #[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "PascalCase", default)]
 struct KoboLocation {
+    source: String,
     #[serde(rename = "Type")]
     kind: String,
     value: String,
@@ -144,10 +145,21 @@ pub(super) async fn handle_put(
     core_services: Arc<CoreServices>,
     body: Bytes,
 ) -> impl IntoResponse {
-    let item: StateItem = match serde_json::from_slice(&body) {
-        Ok(v) => v,
+    // The Kobo sends { "ReadingStates": [ { ...state... } ] }; unwrap to the
+    // first element before deserializing into StateItem.
+    #[derive(Deserialize, Default)]
+    #[serde(rename_all = "PascalCase", default)]
+    struct ReadingStatesWrapper {
+        reading_states: Vec<StateItem>,
+    }
+    let item: StateItem = match serde_json::from_slice::<ReadingStatesWrapper>(&body) {
+        Ok(mut w) if !w.reading_states.is_empty() => w.reading_states.swap_remove(0),
+        Ok(_) => {
+            tracing::warn!("kobo state PUT body had empty ReadingStates array");
+            return Json(json!({ "RequestResult": "Success", "UpdateResults": [] })).into_response();
+        }
         Err(e) => {
-            tracing::warn!(error = ?e, "failed to parse state PUT body");
+            tracing::warn!(error = ?e, body = %String::from_utf8_lossy(&body), "failed to parse state PUT body");
             return Json(json!({ "RequestResult": "Success", "UpdateResults": [] })).into_response();
         }
     };
@@ -196,7 +208,7 @@ pub(super) async fn handle_put(
     let (progress_bps, position_type, position_token) = if finished {
         (Some(10000u16), None, None)
     } else if let Some(bm) = item.current_bookmark {
-        let progress_bps = (bm.progress_percent * 10000.0).round() as u16;
+        let progress_bps = (bm.progress_percent * 100.0).round() as u16;
         let (pt, pv) = bm
             .location
             .filter(|l| !l.kind.is_empty() && !l.value.is_empty())
@@ -252,10 +264,10 @@ pub(super) fn build_kobo_state(state: &bb_core::reading::UserBookMetadata) -> se
     let last_modified = state.last_progress_at.unwrap_or_else(Utc::now).to_rfc3339();
 
     let (progress, location) = match state.read_status {
-        ReadStatus::Read => (1.0f64, None),
+        ReadStatus::Read => (100.0f64, None),
         ReadStatus::Unread => (0.0f64, None),
         _ => {
-            let p = state.progress_percentage.map(|v| v as f64 / 10000.0).unwrap_or(0.0);
+            let p = state.progress_percentage.map(|v| v as f64 / 100.0).unwrap_or(0.0);
             let loc = match (&state.position_type, &state.position_token) {
                 (Some(t), Some(v)) if !t.is_empty() && !v.is_empty() => Some(json!({
                     "Type": t,

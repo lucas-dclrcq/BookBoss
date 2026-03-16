@@ -258,6 +258,24 @@ pub(super) fn build_new_entitlement(entry: &BookSyncEntry, sync_token: &str, bas
     })
 }
 
+/// Builds a `ChangedEntitlement` for a book that the device already has but
+/// whose file or metadata has changed (upgrade to KEPUB, metadata edit, etc.).
+pub(super) fn build_changed_entitlement(entry: &BookSyncEntry, sync_token: &str, base: &str, reading_state: Option<&UserBookMetadata>) -> KoboSyncItem {
+    let book = &entry.book;
+    let uuid = book_uuid_from_token(&book.token);
+    let created = book.created_at.to_rfc3339();
+    let last_modified = book.updated_at.to_rfc3339();
+
+    let entitlement = build_entitlement(&uuid, false, &created, &last_modified);
+    let metadata = build_book_metadata(book, Some(&entry.file), sync_token, base);
+
+    KoboSyncItem::ChangedEntitlement(KoboEntitlementContainer {
+        book_entitlement: entitlement,
+        book_metadata: metadata,
+        reading_state: reading_state.map(super::library_state::build_kobo_state),
+    })
+}
+
 pub(super) fn build_removed_entitlement(book_id: BookId) -> KoboSyncItem {
     use chrono::Utc;
     let uuid = book_uuid_from_id(book_id);

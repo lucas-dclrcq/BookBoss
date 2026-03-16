@@ -93,11 +93,17 @@ pub async fn handle(kobo: KoboDevice, req_headers: HeaderMap, core_services: Arc
         items.push(dto::build_removed_entitlement(book_id));
     }
 
-    // New, upgraded, and refreshed books → NewEntitlement (with reading state if
-    // available).
-    for entry in diff.new_books.iter().chain(diff.upgraded_books.iter()).chain(diff.refreshed_books.iter()) {
+    // New books → NewEntitlement.
+    for entry in diff.new_books.iter() {
         let rs = state_map.get(&entry.book.id);
         items.push(dto::build_new_entitlement(entry, t, base, rs));
+    }
+
+    // Upgraded (format changed) and refreshed (metadata changed) books →
+    // ChangedEntitlement so the device replaces its existing copy.
+    for entry in diff.upgraded_books.iter().chain(diff.refreshed_books.iter()) {
+        let rs = state_map.get(&entry.book.id);
+        items.push(dto::build_changed_entitlement(entry, t, base, rs));
     }
 
     // 6. Compute cursor for next request.

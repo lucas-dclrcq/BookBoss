@@ -29,11 +29,6 @@ use super::KoboDevice;
 // ── Handler
 // ─────────────────────────────────────────────────────────────────
 
-#[tracing::instrument(level = "trace", skip(kobo, core_services),
-    fields(
-        device_id = kobo.device.id,
-    )
-)]
 pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>>, core_services: Arc<CoreServices>) -> Response {
     let Some(book_token_str) = params.get("book_token") else {
         return StatusCode::BAD_REQUEST.into_response();
@@ -54,6 +49,8 @@ pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>
     let Ok(token) = BookToken::from_str(&full_token) else {
         return StatusCode::NOT_FOUND.into_response();
     };
+
+    tracing::debug!(device_id = kobo.device.id, book_token = %full_token, format = ?format, "Download book requested");
 
     // 3. Look up the book.
     let book = match core_services.book_service.find_book_by_token(&token).await {
