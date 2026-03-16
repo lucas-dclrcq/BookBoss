@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3](https://github.com/szinn/BookBoss/compare/v0.4.2..v0.4.3) - 2026-03-16
+
+### Features
+
+- _(frontend)_ Series field pill display with new badge + focus dropdown - ([eb7e35c](https://github.com/szinn/BookBoss/commit/eb7e35c125929f7361e2ea2d706011fa94d136c7))
+- _(frontend)_ ChipInput shows dropdown on focus when empty - ([7f2924c](https://github.com/szinn/BookBoss/commit/7f2924c8ac0050313d311de62a9ce0721acad4f8))
+- _(frontend)_ Publisher pill input with autocomplete + new badge - ([67f2caa](https://github.com/szinn/BookBoss/commit/67f2caa2e944bddab7a6d52598de443d29df59a2))
+- _(frontend)_ About modal on logo + admin-only settings icon - ([5974c6e](https://github.com/szinn/BookBoss/commit/5974c6eba5b06c17c4500f2ced43fbb976d8b7e4))
+
+### Bug Fixes
+
+- _(frontend)_ ChipInput re-shows dropdown when input is cleared - ([f571191](https://github.com/szinn/BookBoss/commit/f571191eca84b91e1a60fd913372e59c7b8a4d7c))
+- _(frontend)_ Kobo auth + transparent store proxy - ([fc29ef3](https://github.com/szinn/BookBoss/commit/fc29ef353b4cb6a32014fbeb9e38ea4c5c9908f6))
+
 ## [0.4.2](https://github.com/szinn/BookBoss/compare/v0.4.1..v0.4.2) - 2026-03-15
 
 ### Bug Fixes
