@@ -72,6 +72,9 @@ impl ConversionService for SilentConversionService {
     async fn queue_enrich_epub(&self, _book_id: BookId) -> Result<(), Error> {
         Ok(())
     }
+    async fn queue_convert_kepub(&self, _book_id: BookId) -> Result<(), Error> {
+        Ok(())
+    }
     async fn count_pending(&self) -> Result<u32, Error> {
         Ok(0)
     }
