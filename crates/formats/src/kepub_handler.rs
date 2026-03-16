@@ -76,11 +76,11 @@ impl JobHandler for ConvertKepubHandler {
             .len() as i64;
 
         // ── 5. Derive slug from enriched EPUB path ────────────────────────────
-        // The enriched EPUB path is e.g. "BK_X/{slug}-enriched.epub"; strip the
-        // directory prefix and the "-enriched.epub" suffix to recover the slug.
+        // The enriched EPUB path is e.g. "BK_X/{slug}.epub"; strip the
+        // directory prefix and the ".epub" extension to recover the slug.
         let slug = {
-            let filename = enriched_epub.path.rsplit('/').next().unwrap_or("").trim_end_matches("-enriched.epub");
-            filename.to_string()
+            let filename = enriched_epub.path.rsplit('/').next().unwrap_or("");
+            filename.trim_end_matches(".epub").to_string()
         };
 
         // ── 6. Move converted file into the library ───────────────────────────
