@@ -26,6 +26,7 @@ pub(crate) fn word_match(candidate: &str, query: &str) -> bool {
 pub(crate) fn ChipInput(mut values: Signal<Vec<String>>, options: Vec<String>, placeholder: String, #[props(default)] max_chips: Option<usize>) -> Element {
     let mut input_text = use_signal(String::new);
     let mut show_dropdown = use_signal(|| false);
+    let mut focus_on_mount = use_signal(|| false);
 
     let query = input_text.read().clone();
     let current = values.read().clone();
@@ -78,6 +79,9 @@ pub(crate) fn ChipInput(mut values: Signal<Vec<String>>, options: Vec<String>, p
                                     class: "ml-0.5 text-gray-400 hover:text-gray-700 cursor-pointer leading-none",
                                     onclick: move |_| {
                                         values.write().remove(i);
+                                        if max_chips.is_some() {
+                                            focus_on_mount.set(true);
+                                        }
                                     },
                                     "×"
                                 }
@@ -90,11 +94,15 @@ pub(crate) fn ChipInput(mut values: Signal<Vec<String>>, options: Vec<String>, p
                     class: "flex-1 min-w-[120px] text-sm outline-none bg-transparent py-0.5",
                     value: "{input_text}",
                     placeholder: "{ph}",
+                    onmounted: move |e| {
+                        if focus_on_mount() {
+                            focus_on_mount.set(false);
+                            spawn(async move { let _ = e.set_focus(true).await; });
+                        }
+                    },
                     oninput: move |e| {
-                        let v = e.value();
-                        let nonempty = !v.is_empty();
-                        input_text.set(v);
-                        show_dropdown.set(nonempty);
+                        input_text.set(e.value());
+                        show_dropdown.set(true);
                     },
                     onkeydown: move |e| {
                         match e.key() {
