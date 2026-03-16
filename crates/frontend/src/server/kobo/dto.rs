@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use bb_core::{
     book::{Book, BookFile, BookId, BookToken, FileFormat, FileRole},
     device::BookSyncEntry,
+    reading::UserBookMetadata,
 };
 use serde::Serialize;
 
@@ -119,6 +120,8 @@ pub(super) struct KoboBookMetadata {
 pub(super) struct KoboEntitlementContainer {
     pub book_entitlement: KoboBookEntitlement,
     pub book_metadata: KoboBookMetadata,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reading_state: Option<serde_json::Value>,
 }
 
 /// Top-level item in the library sync response array.
@@ -239,7 +242,7 @@ pub(super) fn build_book_metadata(book: &Book, file: Option<&BookFile>, sync_tok
     }
 }
 
-pub(super) fn build_new_entitlement(entry: &BookSyncEntry, sync_token: &str, base: &str) -> KoboSyncItem {
+pub(super) fn build_new_entitlement(entry: &BookSyncEntry, sync_token: &str, base: &str, reading_state: Option<&UserBookMetadata>) -> KoboSyncItem {
     let book = &entry.book;
     let uuid = book_uuid_from_token(&book.token);
     let created = book.created_at.to_rfc3339();
@@ -251,6 +254,7 @@ pub(super) fn build_new_entitlement(entry: &BookSyncEntry, sync_token: &str, bas
     KoboSyncItem::NewEntitlement(KoboEntitlementContainer {
         book_entitlement: entitlement,
         book_metadata: metadata,
+        reading_state: reading_state.map(super::library_state::build_kobo_state),
     })
 }
 
@@ -299,5 +303,6 @@ pub(super) fn build_removed_entitlement(book_id: BookId) -> KoboSyncItem {
     KoboSyncItem::ChangedEntitlement(KoboEntitlementContainer {
         book_entitlement: entitlement,
         book_metadata: metadata,
+        reading_state: None,
     })
 }

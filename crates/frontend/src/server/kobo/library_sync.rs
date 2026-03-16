@@ -78,7 +78,16 @@ pub async fn handle(kobo: KoboDevice, req_headers: HeaderMap, core_services: Arc
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    // 4. Build response body.
+    // 4. Fetch reading state for all books on this sync page. Pages are capped
+    //    at 100 entries so the individual reads are acceptable here.
+    let mut state_map = std::collections::HashMap::new();
+    for entry in diff.new_books.iter().chain(diff.upgraded_books.iter()).chain(diff.refreshed_books.iter()) {
+        if let Ok(Some(s)) = core_services.reading_service.get_reading_state(kobo.device.owner_id, entry.book.id).await {
+            state_map.insert(entry.book.id, s);
+        }
+    }
+
+    // 5. Build response body.
     let base = base_url.trim_end_matches('/');
     let t = &kobo.sync_token;
     let mut items: Vec<KoboSyncItem> =
@@ -89,12 +98,13 @@ pub async fn handle(kobo: KoboDevice, req_headers: HeaderMap, core_services: Arc
         items.push(dto::build_removed_entitlement(book_id));
     }
 
-    // New, upgraded, and refreshed books → NewEntitlement.
+    // New, upgraded, and refreshed books → NewEntitlement (with reading state if available).
     for entry in diff.new_books.iter().chain(diff.upgraded_books.iter()).chain(diff.refreshed_books.iter()) {
-        items.push(dto::build_new_entitlement(entry, t, base));
+        let rs = state_map.get(&entry.book.id);
+        items.push(dto::build_new_entitlement(entry, t, base, rs));
     }
 
-    // 5. Compute cursor for next request.
+    // 6. Compute cursor for next request.
     //    - Mid-pagination: preserve `since`, advance keyset bookmark.
     //    - Final page: advance `since` to now so next sync is incremental.
     let last_book_id = [diff.new_books.last(), diff.upgraded_books.last(), diff.refreshed_books.last()]
@@ -109,7 +119,7 @@ pub async fn handle(kobo: KoboDevice, req_headers: HeaderMap, core_services: Arc
         cursor::encode(Some(Utc::now()), None)
     };
 
-    // 6. Build response headers. x-kobo-synctoken: always present (cursor for next
+    // 7. Build response headers. x-kobo-synctoken: always present (cursor for next
     //    call). x-kobo-sync:      "continue" only when more pages remain; absent
     //    when done.
     let next_cursor_hv = HeaderValue::try_from(next_cursor).expect("cursor contains only ASCII digits and colons");
