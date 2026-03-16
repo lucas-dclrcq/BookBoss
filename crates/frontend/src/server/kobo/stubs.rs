@@ -63,6 +63,7 @@ pub async fn catch_all(
     Path(params): Path<HashMap<String, String>>,
     body: Bytes,
 ) -> Response {
+    let _ = params;
     // Strip the /kobo/{token} prefix to get the bare store path.
     let path = uri.path();
     let prefix = format!("/kobo/{}", kobo.sync_token);
