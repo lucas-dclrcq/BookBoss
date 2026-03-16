@@ -3,6 +3,7 @@ pub mod enrich_handler;
 pub mod epub;
 pub mod epub_enrich;
 mod error;
+pub mod kepub_convert;
 pub mod opf;
 
 pub use conversion::{ConversionServiceImpl, EnrichEpubPayload};
