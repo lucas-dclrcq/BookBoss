@@ -73,8 +73,8 @@ pub async fn handle(kobo: KoboDevice, req_headers: HeaderMap, core_services: Arc
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    // 4. Fetch reading state for all books on this sync page. Pages are capped
-    //    at 100 entries so the individual reads are acceptable here.
+    // 4. Fetch reading state for all books on this sync page. Pages are capped at
+    //    100 entries so the individual reads are acceptable here.
     let mut state_map = std::collections::HashMap::new();
     for entry in diff.new_books.iter().chain(diff.upgraded_books.iter()).chain(diff.refreshed_books.iter()) {
         if let Ok(Some(s)) = core_services.reading_service.get_reading_state(kobo.device.owner_id, entry.book.id).await {
@@ -93,7 +93,8 @@ pub async fn handle(kobo: KoboDevice, req_headers: HeaderMap, core_services: Arc
         items.push(dto::build_removed_entitlement(book_id));
     }
 
-    // New, upgraded, and refreshed books → NewEntitlement (with reading state if available).
+    // New, upgraded, and refreshed books → NewEntitlement (with reading state if
+    // available).
     for entry in diff.new_books.iter().chain(diff.upgraded_books.iter()).chain(diff.refreshed_books.iter()) {
         let rs = state_map.get(&entry.book.id);
         items.push(dto::build_new_entitlement(entry, t, base, rs));

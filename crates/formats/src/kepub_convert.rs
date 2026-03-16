@@ -5,8 +5,8 @@
 //! 1. Every non-whitespace text node inside `<body>` (excluding `<pre>`) is
 //!    wrapped in `<span class="koboSpan" id="kobo.{chapter}.{span}">`.
 //! 2. A minimal Kobo CSS `<style>` block is injected before `</head>`.
-//! 3. All XHTML content documents in the ZIP are processed in order; all
-//!    other entries are copied verbatim.
+//! 3. All XHTML content documents in the ZIP are processed in order; all other
+//!    entries are copied verbatim.
 //! 4. `mimetype` is always written first, uncompressed, as the EPUB spec
 //!    requires.
 //!

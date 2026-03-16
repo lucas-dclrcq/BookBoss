@@ -60,8 +60,8 @@ pub trait BookRepository: Send + Sync {
     /// in `book_files`. Used at startup to re-enqueue any enrichment jobs that
     /// were lost due to a crash.
     async fn find_book_ids_needing_enrichment(&self, transaction: &dyn Transaction) -> Result<Vec<BookId>, Error>;
-    /// Returns the IDs of books that have an Enriched EPUB but no Enriched KEPUB
-    /// in `book_files`. Used at startup to re-enqueue any KEPUB conversion jobs
-    /// that were lost due to a crash.
+    /// Returns the IDs of books that have an Enriched EPUB but no Enriched
+    /// KEPUB in `book_files`. Used at startup to re-enqueue any KEPUB
+    /// conversion jobs that were lost due to a crash.
     async fn find_book_ids_needing_kepub_conversion(&self, transaction: &dyn Transaction) -> Result<Vec<BookId>, Error>;
 }

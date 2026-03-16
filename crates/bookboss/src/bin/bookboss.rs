@@ -178,7 +178,9 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     registry.register(ConvertKepubHandler::new(repository_service.clone(), core_services.library_store.clone()));
 
     recover_enrichments(&repository_service).await.context("Couldn't recover pending enrichments")?;
-    recover_kepub_conversions(&repository_service).await.context("Couldn't recover pending KEPUB conversions")?;
+    recover_kepub_conversions(&repository_service)
+        .await
+        .context("Couldn't recover pending KEPUB conversions")?;
 
     let api_subsystem = create_api_subsystem(&config.api, core_services.clone());
     let core_subsystem = create_core_subsystem(registry, repository_service.clone(), worker_poll_interval);
