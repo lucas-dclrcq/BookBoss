@@ -18,8 +18,11 @@ impl MigrationTrait for Migration {
                     .col(big_integer(UserBookMetadata::BookId).not_null())
                     .col(string(UserBookMetadata::ReadStatus))
                     .col(small_integer(UserBookMetadata::ProgressPercentage).null())
+                    .col(string(UserBookMetadata::PositionType).null())
                     .col(string(UserBookMetadata::PositionToken).null())
                     .col(timestamp_with_time_zone(UserBookMetadata::LastProgressAt).null())
+                    .col(integer(UserBookMetadata::SpentReadingMinutes).null())
+                    .col(integer(UserBookMetadata::RemainingTimeMinutes).null())
                     .col(small_integer(UserBookMetadata::PersonalRating).null())
                     .col(integer(UserBookMetadata::TimesRead))
                     .col(timestamp_with_time_zone(UserBookMetadata::DateStarted).null())
@@ -69,8 +72,11 @@ enum UserBookMetadata {
     BookId,
     ReadStatus,
     ProgressPercentage,
+    PositionType,
     PositionToken,
     LastProgressAt,
+    SpentReadingMinutes,
+    RemainingTimeMinutes,
     PersonalRating,
     TimesRead,
     DateStarted,
