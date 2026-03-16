@@ -93,7 +93,7 @@ features = ["filters"]
 [workspace.dependencies.reqwest]
 version = "0.13.2"
 default-features = false
-features = ["json", "rustls"]
+features = ["json", "rustls", "gzip"]
 
 [workspace.dependencies.rust_decimal]
 version = "1.40.0"

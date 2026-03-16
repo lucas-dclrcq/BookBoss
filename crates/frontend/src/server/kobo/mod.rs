@@ -30,6 +30,7 @@ pub mod initialization;
 pub mod library_delete;
 pub mod library_state;
 pub mod library_sync;
+pub mod proxy;
 pub mod stubs;
 
 use std::sync::Arc;
@@ -46,12 +47,12 @@ pub use extractor::KoboDevice;
 /// firmware requests and logs them at INFO level.
 pub fn kobo_router(base_url: String, core_services: Arc<CoreServices>) -> Router {
     Router::new()
-        // M8.4 — device initialization (GET per Calibre-Web/native protocol; POST also accepted)
+        // M8.4 — device initialization: proxy to Kobo store, patch our resource URLs
         .route("/kobo/{sync_token}/v1/initialization", {
             let base_url = base_url.clone();
             let base_url2 = base_url.clone();
-            routing::get(move |kobo: KoboDevice, body| initialization::handle(kobo, body, base_url.clone()))
-                .post(move |kobo: KoboDevice, body| initialization::handle(kobo, body, base_url2.clone()))
+            routing::get(move |kobo: KoboDevice, method, headers, body| initialization::handle(kobo, method, headers, body, base_url.clone()))
+                .post(move |kobo: KoboDevice, method, headers, body| initialization::handle(kobo, method, headers, body, base_url2.clone()))
         })
         // M8.5 — incremental library sync
         .route("/kobo/{sync_token}/v1/library/sync", {
@@ -96,6 +97,6 @@ pub fn kobo_router(base_url: String, core_services: Arc<CoreServices>) -> Router
             let core = core_services.clone();
             routing::delete(move |kobo: KoboDevice, params| library_delete::handle(kobo, params, core.clone()))
         })
-        // M8.8 — catch-all: log and return {} for any unrecognised Kobo path
+        // Catch-all: proxy unrecognised paths to storeapi.kobo.com (auth, profile, etc.)
         .route("/kobo/{sync_token}/{*path}", routing::any(stubs::catch_all))
 }

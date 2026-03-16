@@ -11,13 +11,14 @@ use std::collections::HashMap;
 
 use axum::{
     Json,
+    body::Bytes,
     extract::Path,
-    http::{Method, StatusCode, Uri, header},
+    http::{HeaderMap, Method, StatusCode, Uri, header},
     response::{IntoResponse, Response},
 };
-use serde_json::{Value, json};
+use serde_json::json;
 
-use super::KoboDevice;
+use super::{KoboDevice, proxy};
 
 // ── Simple stubs
 // ─────────────────────────────────────────────────────────────────
@@ -69,19 +70,39 @@ pub async fn library_state_put(_kobo: KoboDevice, Path(_params): Path<HashMap<St
 
 /// Catch-all for any Kobo path not matched by a specific route.
 ///
-/// Returns `200 {}` so the firmware does not enter an error state.
-/// Every call is logged at `INFO` level so unrecognised paths show up in
-/// traces and can be promoted to explicit handlers when needed.
+/// Proxies the request transparently to `storeapi.kobo.com`, forwarding
+/// request headers and returning response headers. This covers auth, user
+/// profile, analytics, and any other store endpoint the firmware needs.
+///
+/// Falls back to `200 {}` if the store is unreachable.
 #[tracing::instrument(
     level = "info",
-    skip(kobo),
+    skip(kobo, req_headers, body),
     fields(
         device_id = kobo.device.id,
         kobo_path = %uri.path(),
         http_method = %method,
     )
 )]
-pub async fn catch_all(kobo: KoboDevice, method: Method, uri: Uri, Path(_params): Path<HashMap<String, String>>) -> Response {
-    tracing::info!("unhandled Kobo request");
-    (StatusCode::OK, [(header::CONTENT_TYPE, "application/json")], "{}").into_response()
+pub async fn catch_all(
+    kobo: KoboDevice,
+    method: Method,
+    uri: Uri,
+    req_headers: HeaderMap,
+    Path(_params): Path<HashMap<String, String>>,
+    body: Bytes,
+) -> Response {
+    // Strip the /kobo/{token} prefix to get the bare store path.
+    let path = uri.path();
+    let prefix = format!("/kobo/{}", kobo.sync_token);
+    let store_path = path.strip_prefix(&prefix).unwrap_or(path);
+    let store_path_with_query = match uri.query() {
+        Some(q) => format!("{store_path}?{q}"),
+        None => store_path.to_string(),
+    };
+
+    tracing::info!(store_path = %store_path_with_query, "proxying unhandled Kobo request to store");
+
+    let result = proxy::proxy_to_store(&store_path_with_query, method, &req_headers, body).await;
+    proxy::into_fallback_response(result)
 }
