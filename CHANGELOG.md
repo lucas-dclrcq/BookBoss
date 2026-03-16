@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.4](https://github.com/szinn/BookBoss/compare/v0.4.3..v0.4.4) - 2026-03-16
+
+### Features
+
+- _(core)_ Add Kobo reading state fields to UserBookMetadata - ([acb6020](https://github.com/szinn/BookBoss/commit/acb602071465dd0b21d8f4945c855c05343f6710))
+- _(database)_ Update SeaORM entity and adapter for Kobo reading state fields - ([e57ccd3](https://github.com/szinn/BookBoss/commit/e57ccd3486901c64b15fded8ed631351a7cb00af))
+- _(database)_ Add position_type, spent/remaining_reading_minutes columns to user_book_metadata - ([5465307](https://github.com/szinn/BookBoss/commit/5465307d9eeb7e108bd246b3bf05346024f0d071))
+- _(formats)_ Wire ConvertKepubHandler into server startup - ([ccff46e](https://github.com/szinn/BookBoss/commit/ccff46ea798a99e2051cc5bd2c4f555f0fb49daa))
+- _(formats)_ Chain EnrichEpubHandler → ConvertKepubJob - ([3480466](https://github.com/szinn/BookBoss/commit/34804660b6678422611befab0aa8dcf280058848))
+- _(formats)_ Add ConvertKepubHandler and recovery - ([3842c9b](https://github.com/szinn/BookBoss/commit/3842c9b60018b145212c210dab39e61dfa027b21))
+- _(formats)_ Implement in-house EPUB→KEPUB conversion - ([ccbcb00](https://github.com/szinn/BookBoss/commit/ccbcb00540ae2cdcf114177feea102627116ea50))
+- _(formats)_ Add ConvertKepubPayload and queue_convert_kepub to ConversionService - ([75be0d9](https://github.com/szinn/BookBoss/commit/75be0d9b7447c66203522704e2282cc51ab8ed27))
+- _(frontend)_ Embed ReadingState in Kobo library sync responses - ([3d918bf](https://github.com/szinn/BookBoss/commit/3d918bfefd10af88d6fb5ccb3026c6ded1d8031c))
+- _(frontend)_ Implement Kobo reading state GET and PUT endpoints - ([45b5d37](https://github.com/szinn/BookBoss/commit/45b5d37e4f324f8d5b064ed004a47e7e1e012908))
+
+### Bug Fixes
+
+- _(formats)_ Correct KEPUB filename — strip .epub not -enriched.epub - ([e4d5a33](https://github.com/szinn/BookBoss/commit/e4d5a333b188c89143b97923be04b8e8dfb9daf9))
+- _(frontend)_ Kobo state PUT/GET and library sync correctness - ([8814336](https://github.com/szinn/BookBoss/commit/8814336e73770664a3c4806974e7ada6eb738a24))
+- _(frontend)_ Use fallback resources when Kobo store init returns non-Resources JSON - ([88be1eb](https://github.com/szinn/BookBoss/commit/88be1ebd8218fd96fde8e7692d7962d707bef0ea))
+- _(frontend)_ Accept single JSON object for Kobo state PUT body - ([f709b26](https://github.com/szinn/BookBoss/commit/f709b26046ff8ecce043f5a34fa510a60c0c185a))
+- _(frontend)_ Accept single JSON object for Kobo state PUT body - ([e2b1d48](https://github.com/szinn/BookBoss/commit/e2b1d4839c18c1d230f8e2d16d74b38f8bbd9bd3))
+- _(frontend)_ Resolve book once at top of Kobo state PUT handler - ([6c05de5](https://github.com/szinn/BookBoss/commit/6c05de570985f43c93a3271720221798169b79d9))
+
+### Miscellaneous Tasks
+
+- Update scratchpad — M11 and M12 complete - ([765681e](https://github.com/szinn/BookBoss/commit/765681eb3a159461438caa04eb9ad1c7ba32ccf1))
+
 ## [0.4.3](https://github.com/szinn/BookBoss/compare/v0.4.2..v0.4.3) - 2026-03-16
 
 ### Features
