@@ -17,13 +17,17 @@ pub(crate) fn word_match(candidate: &str, query: &str) -> bool {
 /// - Chips whose value is not found in `options` (case-insensitive) display a
 ///   **new** badge in green, giving the user a visual cue that the entry will
 ///   be created in the database on save.
+/// - `max_chips`: when set, the text input is hidden once the limit is reached,
+///   preventing additional entries (useful for single-value fields like
+///   Publisher).
 #[component]
-pub(crate) fn ChipInput(mut values: Signal<Vec<String>>, options: Vec<String>, placeholder: String) -> Element {
+pub(crate) fn ChipInput(mut values: Signal<Vec<String>>, options: Vec<String>, placeholder: String, #[props(default)] max_chips: Option<usize>) -> Element {
     let mut input_text = use_signal(String::new);
     let mut show_dropdown = use_signal(|| false);
 
     let query = input_text.read().clone();
     let current = values.read().clone();
+    let at_limit = max_chips.is_some_and(|max| current.len() >= max);
 
     let filtered: Vec<String> = if query.is_empty() {
         vec![]
@@ -69,6 +73,7 @@ pub(crate) fn ChipInput(mut values: Signal<Vec<String>>, options: Vec<String>, p
                         }
                     }
                 }
+                if !at_limit {
                 input {
                     class: "flex-1 min-w-[120px] text-sm outline-none bg-transparent py-0.5",
                     value: "{input_text}",
@@ -111,6 +116,7 @@ pub(crate) fn ChipInput(mut values: Signal<Vec<String>>, options: Vec<String>, p
                         show_dropdown.set(false);
                     },
                 }
+                } // end if !at_limit
             }
             // ── Dropdown ───────────────────────────────────────────────────────
             if *show_dropdown.read() && !filtered.is_empty() {

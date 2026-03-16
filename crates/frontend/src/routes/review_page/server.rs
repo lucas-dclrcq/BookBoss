@@ -695,10 +695,19 @@ pub(crate) async fn get_picklist_data((): ()) -> Result<PicklistData, ServerFnEr
         });
     }
 
+    let publishers = book_service
+        .list_all_publishers()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .into_iter()
+        .map(|p| p.name)
+        .collect();
+
     Ok(PicklistData {
         authors,
         genres,
         tags,
         series: series_options,
+        publishers,
     })
 }

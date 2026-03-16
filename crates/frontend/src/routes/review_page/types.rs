@@ -82,4 +82,5 @@ pub(crate) struct PicklistData {
     pub genres: Vec<String>,
     pub tags: Vec<String>,
     pub series: Vec<SeriesOption>,
+    pub publishers: Vec<String>,
 }

@@ -6,6 +6,12 @@ use super::{
 };
 use crate::components::{AutocompleteInput, ChipInput};
 
+/// ISO 639-1 language codes — North American / European subset.
+const LANGUAGE_CODES: &[&str] = &[
+    "af", "be", "bg", "ca", "cs", "cy", "da", "de", "el", "en", "es", "et", "fi", "fr", "ga", "hr", "hu", "is", "it", "lv", "lt", "mk", "nl", "no", "pl", "pt",
+    "ro", "ru", "sk", "sl", "sq", "sr", "sv", "tr", "uk",
+];
+
 const ALL_IDENTIFIER_TYPES: &[(&str, &str)] = &[
     ("Isbn13", "ISBN-13"),
     ("Isbn10", "ISBN-10"),
@@ -24,10 +30,16 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
     let mut title = use_signal(|| data.title.clone());
     let mut description = use_signal(|| data.description.clone());
     let mut published_date = use_signal(|| data.published_date.clone());
-    let mut language = use_signal(|| data.language.clone());
+    let mut language = use_signal(|| if data.language.is_empty() { vec![] } else { vec![data.language.clone()] });
     let mut series_name = use_signal(|| data.series_name.clone());
     let mut series_number = use_signal(|| data.series_number.clone());
-    let mut publisher_name = use_signal(|| data.publisher_name.clone());
+    let mut publisher = use_signal(|| {
+        if data.publisher_name.is_empty() {
+            vec![]
+        } else {
+            vec![data.publisher_name.clone()]
+        }
+    });
     let mut page_count = use_signal(|| data.page_count.clone());
     let mut authors = use_signal(|| data.authors.clone());
     let genres = use_signal(|| data.genres.clone());
@@ -136,10 +148,10 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                         title: title.read().clone(),
                                         description: description.read().clone(),
                                         published_date: published_date.read().clone(),
-                                        language: language.read().clone(),
+                                        language: language.read().first().cloned().unwrap_or_default(),
                                         series_name: series_name.read().clone(),
                                         series_number: series_number.read().clone(),
-                                        publisher_name: publisher_name.read().clone(),
+                                        publisher_name: publisher.read().first().cloned().unwrap_or_default(),
                                         page_count: page_count.read().clone(),
                                         authors: authors.read().clone(),
                                         genres: genres.read().clone(),
@@ -376,10 +388,21 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                         tr {
                             td { class: "py-2 pr-4 text-gray-500 font-medium whitespace-nowrap", "Publisher" }
                             td { class: "py-2 pr-4",
-                                input {
-                                    class: "w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400",
-                                    value: "{publisher_name}",
-                                    oninput: move |e| publisher_name.set(e.value()),
+                                {
+                                    let picklist_ref = picklist.read();
+                                    let publisher_options = picklist_ref
+                                        .as_ref()
+                                        .and_then(|r| r.as_ref().ok())
+                                        .map(|p| p.publishers.clone())
+                                        .unwrap_or_default();
+                                    rsx! {
+                                        ChipInput {
+                                            values: publisher,
+                                            options: publisher_options,
+                                            placeholder: "Add publisher…".to_string(),
+                                            max_chips: Some(1),
+                                        }
+                                    }
                                 }
                             }
                             td { class: "py-2 pr-4 text-center",
@@ -390,7 +413,13 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                             button {
                                                 class: "text-indigo-500 hover:text-indigo-700 cursor-pointer text-xs font-bold",
                                                 title: "Copy from provider",
-                                                onclick: move |_| publisher_name.set(pv.clone()),
+                                                onclick: move |_| {
+                                                    let name = pv.trim().to_string();
+                                                    if !name.is_empty() {
+                                                        publisher.write().clear();
+                                                        publisher.write().push(name);
+                                                    }
+                                                },
                                                 "←"
                                             }
                                         }
@@ -442,11 +471,11 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                         tr {
                             td { class: "py-2 pr-4 text-gray-500 font-medium whitespace-nowrap", "Language" }
                             td { class: "py-2 pr-4",
-                                input {
-                                    class: "w-40 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400",
-                                    value: "{language}",
-                                    placeholder: "e.g. en",
-                                    oninput: move |e| language.set(e.value()),
+                                ChipInput {
+                                    values: language,
+                                    options: LANGUAGE_CODES.iter().map(|s| s.to_string()).collect(),
+                                    placeholder: "Add language…".to_string(),
+                                    max_chips: Some(1),
                                 }
                             }
                             td { class: "py-2 pr-4 text-center",
@@ -457,7 +486,13 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                             button {
                                                 class: "text-indigo-500 hover:text-indigo-700 cursor-pointer text-xs font-bold",
                                                 title: "Copy from provider",
-                                                onclick: move |_| language.set(pv.clone()),
+                                                onclick: move |_| {
+                                                    let code = pv.trim().to_string();
+                                                    if !code.is_empty() {
+                                                        language.write().clear();
+                                                        language.write().push(code);
+                                                    }
+                                                },
                                                 "←"
                                             }
                                         }
