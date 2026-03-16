@@ -10,8 +10,8 @@
 //! Everything else — including `device_auth` and `device_refresh` — stays
 //! pointing at the real Kobo store so the device manages its own auth.
 //!
-//! If the store is unreachable we fall back to a minimal self-built response
-//! so the device can still sync books.
+//! If the store is unreachable we fall back to the native resource map captured
+//! from a real handshake so the device can still sync books.
 //!
 //! The `x-kobo-apitoken: e30=` header (`e30=` = base64 of `{}`) is required
 //! by the Kobo firmware to consider initialization successful.
@@ -22,8 +22,7 @@ use axum::{
     http::{HeaderMap, HeaderName, HeaderValue, Method},
     response::IntoResponse,
 };
-use chrono::Utc;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{KoboDevice, proxy};
@@ -41,30 +40,12 @@ pub struct KoboInitRequest {
     pub user_agent: Option<String>,
 }
 
-// ── Fallback response shape (used when store is unreachable)
-// ──────────────────────────────────────────────────────────────────
-
-#[derive(Serialize)]
-#[serde(rename_all = "PascalCase")]
-struct FallbackInitResponse {
-    bookmark_date: String,
-    device_id: &'static str,
-    user_key: String,
-    #[serde(rename = "Resources")]
-    resources: Value,
-    booklist_sync_delta_enabled: bool,
-    content_accessibility_enabled: bool,
-    is_checkout_enabled: bool,
-    is_subscription_enabled: bool,
-    library_sync: bool,
-}
-
 // ── Handler
 // ───────────────────────────────────────────────────────────────────
 
 #[tracing::instrument(
     level = "trace",
-    skip(kobo, req_headers, body),
+    skip(kobo, req_headers, body, base_url),
     fields(device_id = kobo.device.id)
 )]
 pub async fn handle(kobo: KoboDevice, method: Method, req_headers: HeaderMap, body: Bytes, base_url: String) -> impl IntoResponse {
@@ -82,13 +63,12 @@ pub async fn handle(kobo: KoboDevice, method: Method, req_headers: HeaderMap, bo
 
     let base = base_url.trim_end_matches('/');
     let t = &kobo.sync_token;
-    let bookmark_date = kobo.device.last_synced_at.unwrap_or_else(Utc::now).to_rfc3339();
 
     // 1. Proxy to the real Kobo store.
     let store_result = proxy::proxy_to_store("/v1/initialization", method, &req_headers, body).await;
 
     // 2. Build the response JSON.
-    let response_json = build_response_json(store_result, base, t, &bookmark_date, &kobo.sync_token);
+    let response_json = build_response_json(store_result, base, t);
 
     // 4. x-kobo-apitoken header is required by the Kobo firmware.
     let mut headers = HeaderMap::new();
@@ -102,7 +82,7 @@ pub async fn handle(kobo: KoboDevice, method: Method, req_headers: HeaderMap, bo
 /// If the store returned a parseable response, patch `Resources` in-place
 /// and return the store's full JSON (preserving any extra fields). Otherwise
 /// fall back to our own minimal response shape.
-fn build_response_json(store_result: Option<(axum::http::StatusCode, HeaderMap, Bytes)>, base: &str, t: &str, bookmark_date: &str, user_key: &str) -> Value {
+fn build_response_json(store_result: Option<(axum::http::StatusCode, HeaderMap, Bytes)>, base: &str, t: &str) -> Value {
     if let Some((_, _, ref store_bytes)) = store_result {
         if let Ok(mut store_json) = serde_json::from_slice::<Value>(store_bytes) {
             patch_resources(&mut store_json, base, t);
@@ -113,7 +93,7 @@ fn build_response_json(store_result: Option<(axum::http::StatusCode, HeaderMap, 
         tracing::warn!("Kobo store unreachable for initialization; using fallback resources");
     }
 
-    fallback_response(base, t, bookmark_date, user_key)
+    fallback_response(base, t)
 }
 
 /// Overwrite the resource entries that BookBoss serves into the store JSON.
@@ -147,29 +127,14 @@ const NATIVE_KOBO_RESOURCES_JSON: &str = include_str!("native_kobo_resources.jso
 ///
 /// Uses the full native resources as the base (so all standard Kobo store
 /// features are present), then patches our own entries on top.
-fn fallback_response(base: &str, t: &str, bookmark_date: &str, user_key: &str) -> Value {
+fn fallback_response(base: &str, t: &str) -> Value {
     let mut native: Value = serde_json::from_str(NATIVE_KOBO_RESOURCES_JSON).unwrap_or_else(|_| json!({}));
     patch_resources(&mut native, base, t);
-    let resources = native;
-
-    let fallback = FallbackInitResponse {
-        bookmark_date: bookmark_date.to_string(),
-        device_id: "00000000-0000-0000-0000-000000000000",
-        user_key: user_key.to_string(),
-        resources,
-        booklist_sync_delta_enabled: false,
-        content_accessibility_enabled: false,
-        is_checkout_enabled: false,
-        is_subscription_enabled: false,
-        library_sync: true,
-    };
-
-    serde_json::to_value(fallback).expect("FallbackInitResponse serializes cleanly")
+    native
 }
 
 #[cfg(test)]
 mod tests {
-    use chrono::DateTime;
 
     #[test]
     fn resources_library_sync_url() {
@@ -199,11 +164,5 @@ mod tests {
         let base = "https://example.com/".trim_end_matches('/');
         let url = format!("{base}/kobo/{}/v1/library/sync", "MYTOKEN");
         assert_eq!(url, "https://example.com/kobo/MYTOKEN/v1/library/sync");
-    }
-
-    #[test]
-    fn bookmark_date_epoch_when_never_synced() {
-        let date = DateTime::from_timestamp(0, 0).unwrap();
-        assert_eq!(date.to_rfc3339(), "1970-01-01T00:00:00+00:00");
     }
 }

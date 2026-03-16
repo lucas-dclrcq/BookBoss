@@ -32,7 +32,7 @@ use super::{
 // ── Handler
 // ─────────────────────────────────────────────────────────────────
 
-#[tracing::instrument(level = "trace", skip(kobo, core_services),
+#[tracing::instrument(level = "trace", skip(kobo, req_headers, core_services, base_url),
     fields(
         device_id = kobo.device.id,
     )

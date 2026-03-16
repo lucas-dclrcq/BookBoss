@@ -51,9 +51,8 @@ pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>
 
     // 2. Reconstruct the full BookToken by prepending the `BK_` prefix.
     let full_token = format!("BK_{book_token_str}");
-    let token = match BookToken::from_str(&full_token) {
-        Ok(t) => t,
-        Err(_) => return StatusCode::NOT_FOUND.into_response(),
+    let Ok(token) = BookToken::from_str(&full_token) else {
+        return StatusCode::NOT_FOUND.into_response();
     };
 
     // 3. Look up the book.
@@ -131,8 +130,8 @@ pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>
     // 6. Build Content-Disposition filename. Kepub must have .kepub.epub extension
     //    so the Kobo recognises it.
     let ext = match format {
-        FileFormat::Epub => "epub",
         FileFormat::Kepub => "kepub.epub",
+        // FileFormat::Epub => "epub",
         _ => "epub",
     };
     let safe_title: String = book

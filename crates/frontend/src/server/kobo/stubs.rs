@@ -13,7 +13,7 @@ use axum::{
     Json,
     body::Bytes,
     extract::Path,
-    http::{HeaderMap, Method, StatusCode, Uri, header},
+    http::{HeaderMap, Method, Uri},
     response::{IntoResponse, Response},
 };
 use serde_json::json;
@@ -89,7 +89,7 @@ pub async fn catch_all(
     method: Method,
     uri: Uri,
     req_headers: HeaderMap,
-    Path(_params): Path<HashMap<String, String>>,
+    Path(params): Path<HashMap<String, String>>,
     body: Bytes,
 ) -> Response {
     // Strip the /kobo/{token} prefix to get the bare store path.

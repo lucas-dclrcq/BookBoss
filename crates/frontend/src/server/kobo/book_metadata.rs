@@ -22,7 +22,7 @@ use super::{KoboDevice, dto};
 // ── Handler
 // ─────────────────────────────────────────────────────────────────
 
-#[tracing::instrument(level = "trace", skip(kobo, core_services),
+#[tracing::instrument(level = "trace", skip(kobo, core_services, base_url),
     fields(
         device_id = kobo.device.id,
     )
@@ -34,9 +34,8 @@ pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>
 
     // Reconstruct the full BookToken by prepending the `BK_` prefix.
     let full_token = format!("BK_{uuid}");
-    let token = match BookToken::from_str(&full_token) {
-        Ok(t) => t,
-        Err(_) => return Json(Vec::<dto::KoboBookMetadata>::new()).into_response(),
+    let Ok(token) = BookToken::from_str(&full_token) else {
+        return Json(Vec::<dto::KoboBookMetadata>::new()).into_response();
     };
 
     // Look up the book — return empty array if not found (matches Komga behaviour).
