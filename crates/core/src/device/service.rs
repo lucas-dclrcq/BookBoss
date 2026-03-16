@@ -1285,6 +1285,11 @@ mod tests {
         async fn find_book_ids_needing_enrichment(&self, _: &dyn Transaction) -> Result<Vec<BookId>, Error> {
             unimplemented!()
         }
+
+        async fn find_book_ids_needing_kepub_conversion(&self, _: &dyn Transaction) -> Result<Vec<BookId>, Error> {
+            unimplemented!()
+        }
+
         async fn update_enriched_paths(&self, _: &dyn Transaction, _: BookId, _: &str, _: &str) -> Result<(), Error> {
             unimplemented!()
         }

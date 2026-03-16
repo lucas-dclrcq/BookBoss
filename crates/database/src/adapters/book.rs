@@ -697,6 +697,32 @@ impl BookRepository for BookRepositoryAdapter {
 
         Ok(rows.into_iter().map(|m| m.book_id as u64).collect())
     }
+
+    async fn find_book_ids_needing_kepub_conversion(&self, transaction: &dyn Transaction) -> Result<Vec<BookId>, Error> {
+        use sea_orm::sea_query::Query;
+
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        // Books that have an Enriched EPUB but no Enriched KEPUB.
+        let kepub_subq = {
+            let mut q = Query::select();
+            q.column(book_files::Column::BookId)
+                .from(book_files::Entity)
+                .and_where(book_files::Column::Format.eq("kepub"))
+                .and_where(book_files::Column::FileRole.eq("enriched"));
+            q
+        };
+
+        let rows = prelude::BookFiles::find()
+            .filter(book_files::Column::Format.eq("epub"))
+            .filter(book_files::Column::FileRole.eq("enriched"))
+            .filter(book_files::Column::BookId.not_in_subquery(kepub_subq))
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(rows.into_iter().map(|m| m.book_id as u64).collect())
+    }
 }
 
 #[cfg(test)]
