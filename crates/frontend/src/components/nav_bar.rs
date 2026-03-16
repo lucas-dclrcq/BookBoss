@@ -39,12 +39,53 @@ async fn get_conversion_pending_count() -> Result<u32, ServerFnError> {
         .map_err(|e| ServerFnError::new(e.to_string()))
 }
 
+#[get("/api/v1/user/is_admin", auth_session: axum::Extension<AuthSession>)]
+async fn get_is_admin() -> Result<bool, ServerFnError> {
+    let Some(user) = auth_session.current_user.as_ref().filter(|u| !u.username.is_empty()) else {
+        return Ok(false);
+    };
+    let is_super_admin = user.permissions.contains("SuperAdmin");
+    Ok(is_super_admin || user.permissions.contains("Admin"))
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct LibraryStats {
+    pub books: u64,
+    pub authors: u64,
+}
+
+#[get(
+    "/api/v1/library/stats",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+async fn get_library_stats() -> Result<LibraryStats, ServerFnError> {
+    auth_session
+        .current_user
+        .as_ref()
+        .filter(|u| !u.username.is_empty())
+        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+
+    let stats = core_services
+        .library_service
+        .library_stats()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(LibraryStats {
+        books: stats.books,
+        authors: stats.authors,
+    })
+}
+
 #[put("/api/v1/logout", auth_session: axum::Extension<AuthSession>)]
 async fn logout() -> Result<(), ServerFnError> {
     auth_session.logout_user();
-
     Ok(())
 }
+
+// ── Badge / button sub-components
+// ─────────────────────────────────────────────────────────────────────────────
 
 /// Renders the Incoming nav link with its pending-count badge.
 ///
@@ -117,10 +158,135 @@ fn ConversionBadge() -> Element {
     }
 }
 
+/// Settings gear icon — only rendered for admin / super-admin users.
+///
+/// Uses the same `SuspenseBoundary` isolation pattern as `IncomingBadge` so
+/// the icon is simply absent for non-admins without affecting NavBar layout.
+#[component]
+fn AdminSettingsButton() -> Element {
+    let navigator = use_navigator();
+    let is_admin = use_server_future(move || get_is_admin())?;
+    let admin = is_admin().and_then(|r: Result<bool, ServerFnError>| r.ok()).unwrap_or(false);
+
+    if !admin {
+        return rsx! {};
+    }
+
+    rsx! {
+        button {
+            class: "flex items-center hover:text-indigo-200 ml-4 cursor-pointer",
+            title: "Settings",
+            onclick: move |_| { navigator.push(Route::SettingsPage {}); },
+            svg {
+                class: "w-5 h-5",
+                fill: "none",
+                view_box: "0 0 24 24",
+                stroke_width: "1.5",
+                stroke: "currentColor",
+                path {
+                    stroke_linecap: "round",
+                    stroke_linejoin: "round",
+                    d: "M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z",
+                }
+                path {
+                    stroke_linecap: "round",
+                    stroke_linejoin: "round",
+                    d: "M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z",
+                }
+            }
+        }
+    }
+}
+
+// ── About modal
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Modal showing app version and library statistics.
+///
+/// Stats are fetched when the modal mounts and fill in asynchronously;
+/// the modal itself appears immediately without waiting for the response.
+#[component]
+fn AboutModal(on_close: EventHandler<()>) -> Element {
+    let stats_res = use_server_future(get_library_stats);
+    let stats = match stats_res {
+        Ok(ref r) => r().and_then(|r: Result<LibraryStats, ServerFnError>| r.ok()),
+        Err(_) => None,
+    };
+
+    rsx! {
+        div {
+            class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+            onclick: move |_| on_close(()),
+            div {
+                class: "bg-white rounded-xl shadow-xl w-full max-w-md mx-4",
+                onclick: |e| e.stop_propagation(),
+                // Header
+                div { class: "flex items-center justify-between px-6 pt-5 pb-2",
+                    h2 { class: "text-lg font-semibold text-gray-900", "About" }
+                    button {
+                        class: "text-gray-400 hover:text-gray-600 cursor-pointer",
+                        onclick: move |_| on_close(()),
+                        svg {
+                            class: "w-5 h-5",
+                            fill: "none",
+                            view_box: "0 0 24 24",
+                            stroke_width: "1.5",
+                            stroke: "currentColor",
+                            path {
+                                stroke_linecap: "round",
+                                stroke_linejoin: "round",
+                                d: "M6 18 18 6M6 6l12 12",
+                            }
+                        }
+                    }
+                }
+                // Body
+                div { class: "px-6 pb-6",
+                    img {
+                        src: asset!("/assets/BookBoss-Banner.png"),
+                        alt: "BookBoss",
+                        class: "w-full mb-2",
+                    }
+                    p { class: "text-sm text-gray-500 mb-6 text-center",
+                        { format!("Version: {}", clap::crate_version!()) }
+                    }
+                    h3 { class: "text-sm font-semibold text-gray-900 mb-3", "Library Statistics" }
+                    dl { class: "divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white",
+                        AboutStatRow {
+                            label: "Books",
+                            value: stats.as_ref().map(|s| s.books.to_string()),
+                        }
+                        AboutStatRow {
+                            label: "Authors",
+                            value: stats.as_ref().map(|s| s.authors.to_string()),
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn AboutStatRow(label: &'static str, value: Option<String>) -> Element {
+    rsx! {
+        div { class: "flex justify-between px-4 py-3",
+            dt { class: "text-sm text-gray-500", { label } }
+            dd { class: "text-sm font-medium text-gray-900",
+                { value.as_deref().unwrap_or("—") }
+            }
+        }
+    }
+}
+
+// ── NavBar
+// ─────────────────────────────────────────────────────────────────────────────
+
 #[component]
 pub(crate) fn NavBar() -> Element {
     let navigator = use_navigator();
     let mut user_menu_open = use_signal(|| false);
+    let mut show_about = use_signal(|| false);
 
     let on_logout = move |_| {
         user_menu_open.set(false);
@@ -133,10 +299,15 @@ pub(crate) fn NavBar() -> Element {
     rsx! {
         nav { class: "bg-indigo-700 text-white px-6 py-3 flex items-center justify-between shadow-sm",
             div { class: "flex items-center gap-6",
-                img {
-                    src: asset!("/assets/BookBoss-Title.png"),
-                    alt: "BookBoss",
-                    class: "h-8 w-auto",
+                button {
+                    class: "flex items-center cursor-pointer hover:opacity-80",
+                    title: "About",
+                    onclick: move |_| show_about.set(true),
+                    img {
+                        src: asset!("/assets/BookBoss-Title.png"),
+                        alt: "BookBoss",
+                        class: "h-8 w-auto",
+                    }
                 }
                 Link { to: Route::BooksPage {}, class: "text-sm hover:text-indigo-200",
                     "Library"
@@ -151,27 +322,9 @@ pub(crate) fn NavBar() -> Element {
                 }
             }
             div { class: "flex items-center gap-4",
-                button {
-                    class: "flex items-center hover:text-indigo-200 ml-4 cursor-pointer",
-                    title: "Settings",
-                    onclick: move |_| { navigator.push(Route::SettingsPage {}); },
-                    svg {
-                        class: "w-5 h-5",
-                        fill: "none",
-                        view_box: "0 0 24 24",
-                        stroke_width: "1.5",
-                        stroke: "currentColor",
-                        path {
-                            stroke_linecap: "round",
-                            stroke_linejoin: "round",
-                            d: "M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z",
-                        }
-                        path {
-                            stroke_linecap: "round",
-                            stroke_linejoin: "round",
-                            d: "M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z",
-                        }
-                    }
+                SuspenseBoundary {
+                    fallback: |_| rsx! {},
+                    AdminSettingsButton {}
                 }
                 div { class: "relative",
                     button {
@@ -214,6 +367,9 @@ pub(crate) fn NavBar() -> Element {
                     }
                 }
             }
+        }
+        if show_about() {
+            AboutModal { on_close: move |_| show_about.set(false) }
         }
     }
 }

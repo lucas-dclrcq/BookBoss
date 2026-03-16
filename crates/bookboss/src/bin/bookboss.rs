@@ -2,7 +2,7 @@
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
-#[cfg(feature = "web")]
+#[cfg(not(feature = "server"))]
 fn main() {
     bb_frontend::web::launch_web_frontend();
 }
