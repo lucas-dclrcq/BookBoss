@@ -55,15 +55,6 @@ pub async fn loyalty_benefits(_kobo: KoboDevice) -> impl IntoResponse {
 /// profile, analytics, and any other store endpoint the firmware needs.
 ///
 /// Falls back to `200 {}` if the store is unreachable.
-#[tracing::instrument(
-    level = "info",
-    skip(kobo, req_headers, body),
-    fields(
-        device_id = kobo.device.id,
-        kobo_path = %uri.path(),
-        http_method = %method,
-    )
-)]
 pub async fn catch_all(
     kobo: KoboDevice,
     method: Method,

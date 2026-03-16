@@ -43,11 +43,6 @@ pub struct KoboInitRequest {
 // ── Handler
 // ───────────────────────────────────────────────────────────────────
 
-#[tracing::instrument(
-    level = "trace",
-    skip(kobo, req_headers, body, base_url),
-    fields(device_id = kobo.device.id)
-)]
 pub async fn handle(kobo: KoboDevice, method: Method, req_headers: HeaderMap, body: Bytes, base_url: String) -> impl IntoResponse {
     let req: KoboInitRequest = serde_json::from_slice(&body).unwrap_or_default();
     tracing::debug!(

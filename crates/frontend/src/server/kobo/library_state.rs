@@ -99,9 +99,6 @@ fn read_status_to_kobo_status(s: ReadStatus) -> &'static str {
 // ── GET handler
 // ────────────────────────────────────────────────────────────
 
-#[tracing::instrument(level = "trace", skip(kobo, core_services),
-    fields(device_id = kobo.device.id)
-)]
 pub async fn handle_get(kobo: KoboDevice, Path(params): Path<HashMap<String, String>>, core_services: Arc<CoreServices>) -> impl IntoResponse {
     let Some(uuid) = params.get("uuid") else {
         return StatusCode::BAD_REQUEST.into_response();
@@ -111,6 +108,8 @@ pub async fn handle_get(kobo: KoboDevice, Path(params): Path<HashMap<String, Str
         Ok(t) => t,
         Err(_) => return Json(json!([])).into_response(),
     };
+
+    tracing::debug!(device_id = kobo.device.id, book_token = %token, "Retrieve book state");
 
     let book = match core_services.book_service.find_book_by_token(&token).await {
         Ok(Some(b)) => b,
@@ -140,9 +139,6 @@ pub async fn handle_get(kobo: KoboDevice, Path(params): Path<HashMap<String, Str
 // ── PUT handler
 // ────────────────────────────────────────────────────────────
 
-#[tracing::instrument(level = "trace", skip(kobo, core_services),
-    fields(device_id = kobo.device.id)
-)]
 pub async fn handle_put(
     kobo: KoboDevice,
     Path(params): Path<HashMap<String, String>>,
@@ -153,22 +149,23 @@ pub async fn handle_put(
         return StatusCode::BAD_REQUEST.into_response();
     };
 
+    let Ok(token) = BookToken::from_str(&format!("BK_{uuid}")) else {
+        return StatusCode::OK.into_response();
+    };
+
+    tracing::debug!(device_id = kobo.device.id, book_token = %token, "Set book state");
+
+    let book = match core_services.book_service.find_book_by_token(&token).await {
+        Ok(Some(b)) => b,
+        Ok(None) => return StatusCode::OK.into_response(),
+        Err(e) => {
+            tracing::error!(error = ?e, "find_book_by_token failed");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
     // DeleteEntitlement: remove the book from the device sync list.
     if items.iter().any(|i| i.delete_entitlement) {
-        let token = match BookToken::from_str(&format!("BK_{uuid}")) {
-            Ok(t) => t,
-            Err(_) => return StatusCode::OK.into_response(),
-        };
-
-        let book = match core_services.book_service.find_book_by_token(&token).await {
-            Ok(Some(b)) => b,
-            Ok(None) => return StatusCode::OK.into_response(),
-            Err(e) => {
-                tracing::error!(error = ?e, "find_book_by_token failed");
-                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-            }
-        };
-
         if let Err(e) = core_services.device_service.remove_book_from_device(kobo.device.id, book.id).await {
             tracing::error!(error = ?e, "remove_book_from_device failed");
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
@@ -182,20 +179,6 @@ pub async fn handle_put(
     // Reading state update: take the first item that has status info.
     let Some(item) = items.into_iter().find(|i| i.status_info.is_some()) else {
         return Json(json!({ "RequestResult": "Success", "UpdateResults": [] })).into_response();
-    };
-
-    let token = match BookToken::from_str(&format!("BK_{uuid}")) {
-        Ok(t) => t,
-        Err(_) => return StatusCode::OK.into_response(),
-    };
-
-    let book = match core_services.book_service.find_book_by_token(&token).await {
-        Ok(Some(b)) => b,
-        Ok(None) => return StatusCode::OK.into_response(),
-        Err(e) => {
-            tracing::error!(error = ?e, "find_book_by_token failed");
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
     };
 
     let status_info = item.status_info.unwrap_or_default();

@@ -22,11 +22,6 @@ use super::{KoboDevice, dto};
 // ── Handler
 // ─────────────────────────────────────────────────────────────────
 
-#[tracing::instrument(level = "trace", skip(kobo, core_services, base_url),
-    fields(
-        device_id = kobo.device.id,
-    )
-)]
 pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>>, core_services: Arc<CoreServices>, base_url: String) -> Response {
     let Some(uuid) = params.get("uuid") else {
         return StatusCode::BAD_REQUEST.into_response();
@@ -37,6 +32,8 @@ pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>
     let Ok(token) = BookToken::from_str(&full_token) else {
         return Json(Vec::<dto::KoboBookMetadata>::new()).into_response();
     };
+
+    tracing::debug!(device_id = kobo.device.id, book_token = full_token, "Retrieve book metadata");
 
     // Look up the book — return empty array if not found (matches Komga behaviour).
     let book = match core_services.book_service.find_book_by_token(&token).await {

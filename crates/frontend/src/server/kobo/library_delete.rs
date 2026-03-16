@@ -13,20 +13,17 @@ use super::KoboDevice;
 // ── Handler
 // ─────────────────────────────────────────────────────────────────
 
-#[tracing::instrument(level = "trace", skip(kobo, core_services),     fields(
-        device_id = kobo.device.id,
-    )
-)]
 pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>>, core_services: Arc<CoreServices>) -> impl IntoResponse {
     let Some(uuid) = params.get("uuid") else {
         return StatusCode::BAD_REQUEST.into_response();
     };
 
     let full_token = format!("BK_{uuid}");
-    let token = match BookToken::from_str(&full_token) {
-        Ok(t) => t,
-        Err(_) => return StatusCode::OK.into_response(),
+    let Ok(token) = BookToken::from_str(&full_token) else {
+        return StatusCode::OK.into_response();
     };
+
+    tracing::debug!(device_id = kobo.device.id, book_token = full_token, "delete book from device");
 
     let book = match core_services.book_service.find_book_by_token(&token).await {
         Ok(Some(b)) => b,
