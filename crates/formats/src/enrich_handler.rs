@@ -9,7 +9,7 @@ use bb_core::{
 };
 use bb_utils::hash::hash_file;
 
-use crate::conversion::EnrichEpubPayload;
+use crate::conversion::{ConvertKepubPayload, EnrichEpubPayload};
 
 pub struct EnrichEpubHandler {
     repository_service: Arc<RepositoryService>,
@@ -186,7 +186,18 @@ impl JobHandler for EnrichEpubHandler {
         })
         .await?;
 
-        tracing::info!(book_id, "EPUB enrichment complete");
+        // ── 10. Enqueue KEPUB conversion as the next step in the chain ────────
+        let job_repo = self.repository_service.job_repository().clone();
+        transaction(&**self.repository_service.repository(), |tx| {
+            let job_repo = job_repo.clone();
+            Box::pin(async move {
+                job_repo.enqueue(tx, &ConvertKepubPayload { book_id }).await?;
+                Ok(())
+            })
+        })
+        .await?;
+
+        tracing::info!(book_id, "EPUB enrichment complete; KEPUB conversion enqueued");
         Ok(())
     }
 }
