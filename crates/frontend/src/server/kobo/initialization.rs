@@ -78,12 +78,18 @@ pub async fn handle(kobo: KoboDevice, method: Method, req_headers: HeaderMap, bo
 /// and return the store's full JSON (preserving any extra fields). Otherwise
 /// fall back to our own minimal response shape.
 fn build_response_json(store_result: Option<(axum::http::StatusCode, HeaderMap, Bytes)>, base: &str, t: &str) -> Value {
-    if let Some((_, _, ref store_bytes)) = store_result {
-        if let Ok(mut store_json) = serde_json::from_slice::<Value>(store_bytes) {
-            patch_resources(&mut store_json, base, t);
-            return store_json;
+    if let Some((status, _, ref store_bytes)) = store_result {
+        if !status.is_success() {
+            tracing::warn!(%status, "Kobo store init returned error status; using fallback resources");
+        } else if let Ok(mut store_json) = serde_json::from_slice::<Value>(store_bytes) {
+            if store_json.get("Resources").is_some() {
+                patch_resources(&mut store_json, base, t);
+                return store_json;
+            }
+            tracing::warn!("Kobo store init response missing Resources key; using fallback resources");
+        } else {
+            tracing::warn!("Kobo store init response was not valid JSON; using fallback resources");
         }
-        tracing::warn!("Kobo store init response was not valid JSON; using fallback");
     } else {
         tracing::warn!("Kobo store unreachable for initialization; using fallback resources");
     }

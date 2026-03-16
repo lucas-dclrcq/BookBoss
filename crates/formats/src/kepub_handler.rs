@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use bb_core::{
     Error, RepositoryError,
-    book::{FileFormat, FileRole},
+    book::{FileFormat, FileRole, book_slug},
     jobs::{JobHandler, JobRepositoryExt},
     repository::{RepositoryService, read_only_transaction, transaction},
     storage::LibraryStore,
@@ -33,18 +33,28 @@ impl JobHandler for ConvertKepubHandler {
     async fn handle(&self, payload: ConvertKepubPayload) -> Result<(), Error> {
         let book_id = payload.book_id;
 
-        // ── 1. Load book + files in a read transaction ────────────────────────
+        // ── 1. Load book, files, and first author in a read transaction ──────
         let repo = self.repository_service.clone();
-        let (book, files) = read_only_transaction(&**self.repository_service.repository(), |tx| {
+        let (book, files, first_author_name) = read_only_transaction(&**self.repository_service.repository(), |tx| {
             let repo = repo.clone();
             Box::pin(async move {
                 let book_repo = repo.book_repository().clone();
+                let author_repo = repo.author_repository().clone();
+
                 let book = book_repo
                     .find_by_id(tx, book_id)
                     .await?
                     .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
                 let files = book_repo.files_for_book(tx, book_id).await?;
-                Ok((book, files))
+
+                let book_authors = book_repo.authors_for_book(tx, book_id).await?;
+                let first_author_name = if let Some(link) = book_authors.first() {
+                    author_repo.find_by_id(tx, link.author_id).await?.map(|a| a.name)
+                } else {
+                    None
+                };
+
+                Ok((book, files, first_author_name))
             })
         })
         .await?;
@@ -75,13 +85,8 @@ impl JobHandler for ConvertKepubHandler {
             .map_err(|e| Error::Infrastructure(format!("metadata failed: {e}")))?
             .len() as i64;
 
-        // ── 5. Derive slug from enriched EPUB path ────────────────────────────
-        // The enriched EPUB path is e.g. "BK_X/{slug}.epub"; strip the
-        // directory prefix and the ".epub" extension to recover the slug.
-        let slug = {
-            let filename = enriched_epub.path.rsplit('/').next().unwrap_or("");
-            filename.trim_end_matches(".epub").to_string()
-        };
+        // ── 5. Derive slug ────────────────────────────────────────────────────
+        let slug = book_slug(&book.title, first_author_name.as_deref());
 
         // ── 6. Move converted file into the library ───────────────────────────
         let kepub_path = self.library_store.store_book_file(&book.token, &slug, FileFormat::Kepub, &temp_path).await?;
