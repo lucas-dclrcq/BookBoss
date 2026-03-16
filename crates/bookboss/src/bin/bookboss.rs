@@ -146,7 +146,7 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     use bb_api::create_api_subsystem;
     use bb_core::{create_core_subsystem, create_services, jobs::JobRegistry, pipeline::PipelineServiceImpl};
     use bb_database::{create_repository_service, open_database};
-    use bb_formats::{ConversionServiceImpl, EnrichEpubHandler, EpubExtractor, recover_enrichments};
+    use bb_formats::{ConversionServiceImpl, ConvertKepubHandler, EnrichEpubHandler, EpubExtractor, recover_enrichments, recover_kepub_conversions};
     use bb_frontend::server::create_frontend_subsystem;
     use bb_import::{ProcessImportHandler, create_import_subsystem};
     use bb_metadata::create_metadata_providers;
@@ -175,8 +175,10 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     let mut registry = JobRegistry::new();
     registry.register(ProcessImportHandler::new(repository_service.clone(), core_services.pipeline_service.clone()));
     registry.register(EnrichEpubHandler::new(repository_service.clone(), core_services.library_store.clone()));
+    registry.register(ConvertKepubHandler::new(repository_service.clone(), core_services.library_store.clone()));
 
     recover_enrichments(&repository_service).await.context("Couldn't recover pending enrichments")?;
+    recover_kepub_conversions(&repository_service).await.context("Couldn't recover pending KEPUB conversions")?;
 
     let api_subsystem = create_api_subsystem(&config.api, core_services.clone());
     let core_subsystem = create_core_subsystem(registry, repository_service.clone(), worker_poll_interval);
