@@ -24,9 +24,15 @@ pub struct UserBookMetadata {
     pub read_status: ReadStatus,
     /// Reading progress in basis points (0 = none, 10000 = complete).
     pub progress_percentage: Option<u16>,
-    /// Raw device-specific resume position (EPUB CFI, Kindle location, etc.).
+    /// Location type for `position_token` (e.g. `"KoboSpanXPath"`, `"CFI"`).
+    pub position_type: Option<String>,
+    /// Raw device-specific resume position (EPUB CFI, Kobo XPath, etc.).
     pub position_token: Option<String>,
     pub last_progress_at: Option<DateTime<Utc>>,
+    /// Minutes spent reading as reported by the device.
+    pub spent_reading_minutes: Option<i32>,
+    /// Estimated minutes remaining as reported by the device.
+    pub remaining_time_minutes: Option<i32>,
     /// Personal star rating, 1–5.
     pub personal_rating: Option<u8>,
     /// Incremented each time a `reading → read` transition completes.

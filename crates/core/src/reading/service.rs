@@ -65,6 +65,28 @@ pub trait ReadingService: Send + Sync {
     /// Returns all reading state rows for a user, optionally filtered by
     /// status.
     async fn list_for_user(&self, user_id: UserId, status: Option<ReadStatus>) -> Result<Vec<UserBookMetadata>, Error>;
+
+    /// Applies a device-reported reading state update.
+    ///
+    /// The state machine transitions (`date_started`, `date_finished`,
+    /// `times_read`) are applied for the given `new_status`, then the
+    /// position, progress, and reading-time fields are set from the device
+    /// report. The caller (Kobo handler) is responsible for applying
+    /// status-driven overrides before calling this method (e.g. clearing
+    /// the position token when `Finished` is reported).
+    #[allow(clippy::too_many_arguments)]
+    async fn sync_device_state(
+        &self,
+        user_id: UserId,
+        book_id: BookId,
+        new_status: ReadStatus,
+        progress_bps: Option<u16>,
+        position_type: Option<String>,
+        position_token: Option<String>,
+        spent_reading_minutes: Option<i32>,
+        remaining_time_minutes: Option<i32>,
+        last_progress_at: Option<chrono::DateTime<Utc>>,
+    ) -> Result<UserBookMetadata, Error>;
 }
 
 // ── Impl ──────────────────────────────────────────────────────────────────────
@@ -91,8 +113,11 @@ pub(crate) fn default_state(user_id: UserId, book_id: BookId) -> UserBookMetadat
         book_id,
         read_status: ReadStatus::Unread,
         progress_percentage: None,
+        position_type: None,
         position_token: None,
         last_progress_at: None,
+        spent_reading_minutes: None,
+        remaining_time_minutes: None,
         personal_rating: None,
         times_read: 0,
         date_started: None,
@@ -111,6 +136,7 @@ pub(crate) fn apply_transition(mut current: UserBookMetadata, target: ReadStatus
         ReadStatus::Unread => {
             current.read_status = ReadStatus::Unread;
             current.progress_percentage = None;
+            current.position_type = None;
             current.position_token = None;
             current.date_started = None;
             current.date_finished = None;
@@ -129,6 +155,7 @@ pub(crate) fn apply_transition(mut current: UserBookMetadata, target: ReadStatus
             current.date_started = Some(now);
             current.date_finished = None;
             current.progress_percentage = None;
+            current.position_type = None;
             current.position_token = None;
             current.read_status = ReadStatus::Rereading;
         }
@@ -257,6 +284,39 @@ impl ReadingService for ReadingServiceImpl {
     async fn list_for_user(&self, user_id: UserId, status: Option<ReadStatus>) -> Result<Vec<UserBookMetadata>, Error> {
         with_read_only_transaction!(self, user_book_metadata_repository, |tx| {
             user_book_metadata_repository.list_for_user(tx, user_id, status, None, None).await
+        })
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    #[allow(clippy::too_many_arguments)]
+    async fn sync_device_state(
+        &self,
+        user_id: UserId,
+        book_id: BookId,
+        new_status: ReadStatus,
+        progress_bps: Option<u16>,
+        position_type: Option<String>,
+        position_token: Option<String>,
+        spent_reading_minutes: Option<i32>,
+        remaining_time_minutes: Option<i32>,
+        last_progress_at: Option<chrono::DateTime<Utc>>,
+    ) -> Result<UserBookMetadata, Error> {
+        with_transaction!(self, user_book_metadata_repository, |tx| {
+            let current = user_book_metadata_repository
+                .find_by_user_and_book(tx, user_id, book_id)
+                .await?
+                .unwrap_or_else(|| default_state(user_id, book_id));
+
+            let mut state = apply_transition(current, new_status);
+            state.progress_percentage = progress_bps;
+            state.position_type = position_type;
+            state.position_token = position_token;
+            state.spent_reading_minutes = spent_reading_minutes;
+            state.remaining_time_minutes = remaining_time_minutes;
+            if let Some(at) = last_progress_at {
+                state.last_progress_at = Some(at);
+            }
+            user_book_metadata_repository.upsert(tx, state).await
         })
     }
 }
@@ -850,8 +910,11 @@ mod tests {
             book_id,
             read_status: status,
             progress_percentage: None,
+            position_type: None,
             position_token: None,
             last_progress_at: None,
+            spent_reading_minutes: None,
+            remaining_time_minutes: None,
             personal_rating: None,
             times_read: 0,
             date_started: None,
