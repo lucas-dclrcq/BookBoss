@@ -87,10 +87,12 @@ pub fn kobo_router(base_url: String, core_services: Arc<CoreServices>) -> Router
         )
         // M8.8 — loyalty benefits
         .route("/kobo/{sync_token}/v1/user/loyalty/benefits", routing::get(stubs::loyalty_benefits))
-        // M8.8 — reading state (GET stub; PUT handles DeleteEntitlement)
+        // M11.4/M11.5 — reading state: GET restores position, PUT persists it
         .route("/kobo/{sync_token}/v1/library/{uuid}/state", {
-            let core = core_services.clone();
-            routing::get(stubs::library_state_get).put(move |kobo: KoboDevice, params, body| library_state::handle(kobo, params, core.clone(), body))
+            let core_get = core_services.clone();
+            let core_put = core_services.clone();
+            routing::get(move |kobo: KoboDevice, params| library_state::handle_get(kobo, params, core_get.clone()))
+                .put(move |kobo: KoboDevice, params, body| library_state::handle_put(kobo, params, core_put.clone(), body))
         })
         // M8.8 — book delete (Kobo removed book from device; drop DeviceBook so it re-syncs as New)
         .route("/kobo/{sync_token}/v1/library/{uuid}", {

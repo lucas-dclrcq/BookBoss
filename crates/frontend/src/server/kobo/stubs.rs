@@ -45,26 +45,6 @@ pub async fn loyalty_benefits(_kobo: KoboDevice) -> impl IntoResponse {
     Json(json!({ "Benefits": {} }))
 }
 
-/// `GET /v1/library/{uuid}/state` — per-book reading state query.
-///
-/// Returns an empty state array. The Kobo won't crash, but won't restore
-/// reading positions until we implement full reading state sync.
-pub async fn library_state_get(_kobo: KoboDevice, Path(_params): Path<HashMap<String, String>>) -> impl IntoResponse {
-    Json(json!([{}]))
-}
-
-/// `PUT /v1/library/{uuid}/state` — per-book reading state update.
-///
-/// Acknowledges the state push as successful without persisting anything.
-/// The `UpdateResults` array is intentionally empty (no entitlement IDs
-/// to echo back without parsing the request body).
-pub async fn library_state_put(_kobo: KoboDevice, Path(_params): Path<HashMap<String, String>>) -> impl IntoResponse {
-    Json(json!({
-        "RequestResult": "Success",
-        "UpdateResults": []
-    }))
-}
-
 // ── Catch-all
 // ─────────────────────────────────────────────────────────────────
 
