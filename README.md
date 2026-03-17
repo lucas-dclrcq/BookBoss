@@ -4,30 +4,58 @@
 
 BookBoss is a self-hosted digital library manager built in Rust. It provides a
 web-based interface for organising and browsing your e-book collection, backed
-by a flexible database layer that supports PostgreSQL, MySQL, and SQLite.
+by a flexible database layer that supports PostgreSQL, MySQL, MariaDB, and SQLite.
 
 ## Features
 
-- **Web UI** built with [Dioxus](https://dioxus.dev) (fullstack, WASM + SSR)
-- **Multi-database support**: PostgreSQL, MySQL, SQLite
-- **Import pipeline** — drop a file into a bookdrop directory, BookBoss picks it
-  up, extracts embedded metadata, enriches it from external providers, and queues
-  it for review
-- **Metadata providers**: Hardcover, Open Library, Google Books
-- **Review workflow** — an _Incoming_ queue lets you inspect and edit metadata
-  before committing a book to your library
-- **Shelves** — organise books into named collections; drag-and-drop books
-  directly onto shelf pills in the sidebar
-- **Book detail page** — view full metadata, download files in any available
-  format (EPUB, MOBI, AZW3, PDF, CBZ)
-- **Edit metadata** — update title, authors, series, description, genres, tags,
-  and cover after import
-- **User management** with role-based access control (SuperAdmin, Admin, User)
-  and fine-grained capabilities
-- **Session-based authentication**
-- **Duplicate detection** — SHA-256 hashing prevents re-importing the same file
+### Library
 
-## Requirements
+- Browse your book library with cover art, title, author, series, and publisher
+- View book detail pages with full metadata (description, genres, tags, language, publication date, identifiers)
+- View author detail pages listing all their books
+- View series detail pages listing all books in a series
+- Edit book metadata (title, author, series, publisher, genres, tags, description, identifiers, cover)
+- Delete books from the library
+
+### Import
+
+- Drop books into a watched folder — BookBoss scans and picks them up automatically
+- Metadata extracted from EPUB files automatically
+- Metadata enriched from external providers (Hardcover, OpenLibrary, GoogleBooks)
+- Review incoming books before they enter the library (approve or reject)
+- Cover art fetched automatically from metadata providers
+
+### Shelves
+
+- Create manual shelves and add/remove books
+- Create smart shelves with filter rules (e.g. "all books with read status Active")
+- Smart shelves update automatically as books and reading state change
+
+### Reading State
+
+- Track reading status per book (e.g. Active, Finished, etc.)
+- Per-user — each user has their own reading state
+
+### Kobo Device Sync
+
+- Register Kobo devices to your account
+- Each device gets a companion smart shelf — books on the shelf sync to the device
+- Incremental sync — only sends new or changed books each time
+- Cover art served to the Kobo automatically
+- Download book files directly to the device (EPUB and KEPUB)
+- Reset sync state to force a full re-sync
+- Copy device sync URL to clipboard from the profile page
+- Kobo-initiated book removal handled — deleted books re-sync on next connection
+
+### User & Admin
+
+- User registration and login
+- Admin first-run setup
+- Multi-user support (each user has their own reading state, shelves, devices)
+- Settings page with library stats (total books, authors)
+- User management (admin)
+
+## Development Requirements
 
 - [Rust](https://rustup.rs) 1.85+ (nightly toolchain for formatting/clippy)
 - [mise](https://mise.jdx.dev) — manages tool versions
