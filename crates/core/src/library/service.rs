@@ -659,8 +659,8 @@ mod tests {
                 .clone()
                 .unwrap_or_else(|| Err(Error::MockNotConfigured("count_authors")))
         }
-        async fn delete_author(&self, _: &dyn Transaction, id: AuthorId) -> Result<(), Error> {
-            self.delete_author_calls.lock().unwrap().push(id);
+        async fn delete_author(&self, _: &dyn Transaction, author_id: AuthorId) -> Result<(), Error> {
+            self.delete_author_calls.lock().unwrap().push(author_id);
             Ok(())
         }
         async fn add_author(&self, _: &dyn Transaction, _: NewAuthor) -> Result<Author, Error> {
@@ -717,8 +717,8 @@ mod tests {
                 .clone()
                 .unwrap_or_else(|| Err(Error::MockNotConfigured("find_by_candidate_book_id")))
         }
-        async fn delete_job(&self, _: &dyn Transaction, id: ImportJobId) -> Result<(), Error> {
-            self.delete_job_calls.lock().unwrap().push(id);
+        async fn delete_job(&self, _: &dyn Transaction, job_id: ImportJobId) -> Result<(), Error> {
+            self.delete_job_calls.lock().unwrap().push(job_id);
             Ok(())
         }
         async fn add_job(&self, _: &dyn Transaction, _: NewImportJob) -> Result<ImportJob, Error> {
