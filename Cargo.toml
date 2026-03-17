@@ -200,11 +200,11 @@ useless_conversion = "warn"
 
 # Opt-outs
 redundant_feature_names = "allow" # "test-support" is established convention across all crates
-struct_field_names    = "allow"   # test mock naming (_result suffix) is a legitimate convention
-too_many_lines        = "allow"   # subjective; doesn't indicate correctness issues
-doc_markdown          = "allow"   # overzealous about backtick formatting in docs
+struct_field_names = "allow"      # test mock naming (_result suffix) is a legitimate convention
+too_many_lines = "allow"          # subjective; doesn't indicate correctness issues
+doc_markdown = "allow"            # overzealous about backtick formatting in docs
 items_after_statements = "allow"  # fires on `use` blocks inside match arms / closures
-map_err_ignore        = "allow"   # intentional in server fns that must not leak internal errors
+map_err_ignore = "allow"          # intentional in server fns that must not leak internal errors
 
 # Restriction lints
 allow_attributes_without_reason = "warn"
@@ -233,6 +233,7 @@ suspicious_else_formatting = "allow"          # Dioxus RSX `class: if cond { ...
 unused_async = "allow"                        # Required for Dioxus endpoints
 unused_trait_names = "allow"
 missing_panics_doc = "allow"
+struct_excessive_bools = "allow"
 
 # Pending Review
 missing_errors_doc = "allow"

@@ -53,6 +53,6 @@ impl<S: Send + Sync> FromRequestParts<S> for KoboDevice {
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
             .ok_or(StatusCode::UNAUTHORIZED)?;
 
-        Ok(KoboDevice { device, sync_token })
+        Ok(Self { device, sync_token })
     }
 }

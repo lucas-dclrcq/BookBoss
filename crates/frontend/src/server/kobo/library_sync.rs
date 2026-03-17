@@ -94,7 +94,7 @@ pub async fn handle(kobo: KoboDevice, req_headers: HeaderMap, core_services: Arc
     }
 
     // New books → NewEntitlement.
-    for entry in diff.new_books.iter() {
+    for entry in &diff.new_books {
         let rs = state_map.get(&entry.book.id);
         items.push(dto::build_new_entitlement(entry, t, base, rs));
     }
