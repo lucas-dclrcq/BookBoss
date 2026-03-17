@@ -57,7 +57,7 @@ use {
     crate::server::{AuthSession, AuthUser, BackendSessionPool},
     axum::http::Method,
     axum_session_auth::{Auth, Rights},
-    bb_core::book::{AuthorRole, AuthorToken, BookToken, FileFormat, FileRole, IdentifierType, SeriesToken},
+    bb_core::book::{AuthorToken, BookToken, FileRole, SeriesToken},
     bb_core::reading::{AUTO_READ_THRESHOLD_KEY, DEFAULT_AUTO_READ_THRESHOLD, ReadStatus, UserBookMetadata},
     bb_core::{CoreServices, types::Capability, user::UserId},
     std::str::FromStr,
@@ -151,13 +151,7 @@ async fn get_book(token: String) -> Result<BookDetail, ServerFnError> {
             author_map.get(&ba.author_id).map(|(token, name)| AuthorDetail {
                 token: token.clone(),
                 name: name.clone(),
-                role: match &ba.role {
-                    AuthorRole::Author => "Author",
-                    AuthorRole::Editor => "Editor",
-                    AuthorRole::Translator => "Translator",
-                    AuthorRole::Illustrator => "Illustrator",
-                }
-                .to_string(),
+                role: ba.role.display_name().to_string(),
             })
         })
         .collect();
@@ -180,15 +174,7 @@ async fn get_book(token: String) -> Result<BookDetail, ServerFnError> {
     // This ensures one download badge per format even when both roles exist.
     let mut format_map: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
     for f in &book_files {
-        let fmt_str = match &f.format {
-            FileFormat::Epub => "EPUB",
-            FileFormat::Kepub => "KEPUB",
-            FileFormat::Mobi => "MOBI",
-            FileFormat::Azw3 => "AZW3",
-            FileFormat::Pdf => "PDF",
-            FileFormat::Cbz => "CBZ",
-        }
-        .to_string();
+        let fmt_str = f.format.display_name().to_string();
         let entry = format_map.entry(fmt_str).or_insert(f.file_size);
         if f.file_role == FileRole::Enriched {
             *entry = f.file_size;
@@ -200,15 +186,7 @@ async fn get_book(token: String) -> Result<BookDetail, ServerFnError> {
     let identifiers: Vec<IdentifierDetail> = book_identifiers
         .iter()
         .map(|i| IdentifierDetail {
-            identifier_type: match &i.identifier_type {
-                IdentifierType::Isbn13 => "ISBN-13",
-                IdentifierType::Isbn10 => "ISBN-10",
-                IdentifierType::Asin => "ASIN",
-                IdentifierType::GoogleBooks => "Google Books",
-                IdentifierType::OpenLibrary => "Open Library",
-                IdentifierType::Hardcover => "Hardcover",
-            }
-            .to_string(),
+            identifier_type: i.identifier_type.display_name().to_string(),
             value: i.value.clone(),
         })
         .collect();

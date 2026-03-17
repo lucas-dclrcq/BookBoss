@@ -28,24 +28,13 @@ impl LocalLibraryStore {
     }
 
     fn book_file_path(&self, token: &BookToken, slug: &str, format: &FileFormat) -> PathBuf {
-        self.book_dir(*token).join(format!("{slug}.{}", format_ext(format)))
+        self.book_dir(*token).join(format!("{slug}.{}", format.extension()))
     }
 
     /// Returns the library-root-relative path for a book file
     /// (e.g. `"BK_XXXXX/slug.epub"`).
     fn book_file_rel_path(&self, token: &BookToken, slug: &str, format: &FileFormat) -> String {
-        format!("{}/{}.{}", token, slug, format_ext(format))
-    }
-}
-
-fn format_ext(format: &FileFormat) -> &'static str {
-    match format {
-        FileFormat::Epub => "epub",
-        FileFormat::Kepub => "kepub.epub",
-        FileFormat::Mobi => "mobi",
-        FileFormat::Azw3 => "azw3",
-        FileFormat::Pdf => "pdf",
-        FileFormat::Cbz => "cbz",
+        format!("{}/{}.{}", token, slug, format.extension())
     }
 }
 

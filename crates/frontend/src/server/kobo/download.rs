@@ -38,9 +38,8 @@ pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>
     };
 
     // 1. Parse format from path param — only epub and kepub are served via Kobo.
-    let format = match format_str.as_str() {
-        "epub" => FileFormat::Epub,
-        "kepub" => FileFormat::Kepub,
+    let format = match format_str.parse::<FileFormat>() {
+        Ok(f @ (FileFormat::Epub | FileFormat::Kepub)) => f,
         _ => return StatusCode::NOT_FOUND.into_response(),
     };
 
@@ -126,11 +125,7 @@ pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>
 
     // 6. Build Content-Disposition filename. Kepub must have .kepub.epub extension
     //    so the Kobo recognises it.
-    let ext = match format {
-        FileFormat::Kepub => "kepub.epub",
-        // FileFormat::Epub => "epub",
-        _ => "epub",
-    };
+    let ext = format.extension();
     let safe_title: String = book
         .title
         .chars()

@@ -1,8 +1,8 @@
 use bb_core::{
     Error, RepositoryError,
     book::{
-        AuthorId, AuthorRole, Book, BookAuthor, BookFile, BookId, BookIdentifier, BookQuery, BookRepository, BookStatus, BookToken, FileFormat, FileRole,
-        Genre, GenreId, IdentifierType, MetadataSource, NewBook, Tag, TagId,
+        AuthorId, AuthorRole, Book, BookAuthor, BookFile, BookId, BookIdentifier, BookQuery, BookRepository, BookToken, FileFormat, FileRole, Genre, GenreId,
+        IdentifierType, NewBook, Tag, TagId,
     },
     repository::Transaction,
 };
@@ -17,122 +17,8 @@ use crate::{
     transaction::TransactionImpl,
 };
 
-// ─── Enum conversions ────────────────────────────────────────────────────────
-
-fn book_status_to_str(status: &BookStatus) -> &'static str {
-    match status {
-        BookStatus::Incoming => "incoming",
-        BookStatus::Available => "available",
-        BookStatus::Archived => "archived",
-    }
-}
-
-fn str_to_book_status(s: &str) -> Result<BookStatus, Error> {
-    match s {
-        "incoming" => Ok(BookStatus::Incoming),
-        "available" => Ok(BookStatus::Available),
-        "archived" => Ok(BookStatus::Archived),
-        _ => Err(Error::RepositoryError(RepositoryError::Database(format!("unknown book status: {s}")))),
-    }
-}
-
-fn metadata_source_to_str(ms: &MetadataSource) -> &'static str {
-    match ms {
-        MetadataSource::Hardcover => "hardcover",
-        MetadataSource::GoogleBooks => "google_books",
-        MetadataSource::OpenLibrary => "open_library",
-        MetadataSource::Manual => "manual",
-    }
-}
-
-fn str_to_metadata_source(s: &str) -> Result<MetadataSource, Error> {
-    match s {
-        "hardcover" => Ok(MetadataSource::Hardcover),
-        "google_books" => Ok(MetadataSource::GoogleBooks),
-        "open_library" => Ok(MetadataSource::OpenLibrary),
-        "manual" => Ok(MetadataSource::Manual),
-        _ => Err(Error::RepositoryError(RepositoryError::Database(format!("unknown metadata source: {s}")))),
-    }
-}
-
-fn author_role_to_str(role: &AuthorRole) -> &'static str {
-    match role {
-        AuthorRole::Author => "author",
-        AuthorRole::Editor => "editor",
-        AuthorRole::Translator => "translator",
-        AuthorRole::Illustrator => "illustrator",
-    }
-}
-
-fn file_format_to_str(format: &FileFormat) -> &'static str {
-    match format {
-        FileFormat::Epub => "epub",
-        FileFormat::Kepub => "kepub",
-        FileFormat::Mobi => "mobi",
-        FileFormat::Azw3 => "azw3",
-        FileFormat::Pdf => "pdf",
-        FileFormat::Cbz => "cbz",
-    }
-}
-
-fn file_role_to_str(role: &FileRole) -> &'static str {
-    match role {
-        FileRole::Original => "original",
-        FileRole::Enriched => "enriched",
-    }
-}
-
-fn identifier_type_to_str(id_type: &IdentifierType) -> &'static str {
-    match id_type {
-        IdentifierType::Isbn10 => "isbn10",
-        IdentifierType::Isbn13 => "isbn13",
-        IdentifierType::Asin => "asin",
-        IdentifierType::GoogleBooks => "google_books",
-        IdentifierType::OpenLibrary => "open_library",
-        IdentifierType::Hardcover => "hardcover",
-    }
-}
-
-fn str_to_author_role(s: &str) -> Result<AuthorRole, Error> {
-    match s {
-        "author" => Ok(AuthorRole::Author),
-        "editor" => Ok(AuthorRole::Editor),
-        "translator" => Ok(AuthorRole::Translator),
-        "illustrator" => Ok(AuthorRole::Illustrator),
-        _ => Err(Error::RepositoryError(RepositoryError::Database(format!("unknown author role: {s}")))),
-    }
-}
-
-fn str_to_file_format(s: &str) -> Result<FileFormat, Error> {
-    match s {
-        "epub" => Ok(FileFormat::Epub),
-        "kepub" => Ok(FileFormat::Kepub),
-        "mobi" => Ok(FileFormat::Mobi),
-        "azw3" => Ok(FileFormat::Azw3),
-        "pdf" => Ok(FileFormat::Pdf),
-        "cbz" => Ok(FileFormat::Cbz),
-        _ => Err(Error::RepositoryError(RepositoryError::Database(format!("unknown file format: {s}")))),
-    }
-}
-
-fn str_to_file_role(s: &str) -> Result<FileRole, Error> {
-    match s {
-        "original" => Ok(FileRole::Original),
-        "enriched" => Ok(FileRole::Enriched),
-        _ => Err(Error::RepositoryError(RepositoryError::Database(format!("unknown file role: {s}")))),
-    }
-}
-
-fn str_to_identifier_type(s: &str) -> Result<IdentifierType, Error> {
-    match s {
-        "isbn10" => Ok(IdentifierType::Isbn10),
-        "isbn13" => Ok(IdentifierType::Isbn13),
-        "asin" => Ok(IdentifierType::Asin),
-        "google_books" => Ok(IdentifierType::GoogleBooks),
-        "open_library" => Ok(IdentifierType::OpenLibrary),
-        "hardcover" => Ok(IdentifierType::Hardcover),
-        _ => Err(Error::RepositoryError(RepositoryError::Database(format!("unknown identifier type: {s}")))),
-    }
+fn parse_or_db_err<T: std::str::FromStr<Err = String>>(s: &str) -> Result<T, Error> {
+    s.parse().map_err(|e| Error::RepositoryError(RepositoryError::Database(e)))
 }
 
 // ─── From impls ──────────────────────────────────────────────────────────────
@@ -145,7 +31,7 @@ impl From<books::Model> for Book {
             version: model.version as u64,
             token,
             title: model.title,
-            status: str_to_book_status(&model.status).expect("DB has unknown book status"),
+            status: model.status.parse().expect("DB has unknown book status"),
             description: model.description,
             published_date: model.published_date,
             language: model.language,
@@ -154,10 +40,7 @@ impl From<books::Model> for Book {
             publisher_id: model.publisher_id.map(|id| id as u64),
             page_count: model.page_count,
             rating: model.rating,
-            metadata_source: model
-                .metadata_source
-                .as_deref()
-                .map(|s| str_to_metadata_source(s).expect("DB has unknown metadata source")),
+            metadata_source: model.metadata_source.as_deref().map(|s| s.parse().expect("DB has unknown metadata source")),
             cover_path: model.cover_path,
             created_at: model.created_at.with_timezone(&Utc),
             updated_at: model.updated_at.with_timezone(&Utc),
@@ -187,7 +70,7 @@ impl BookRepository for BookRepositoryAdapter {
             id: Set(token.id() as i64),
             token: Set(token.to_string()),
             title: Set(book.title),
-            status: Set(book_status_to_str(&book.status).to_string()),
+            status: Set(book.status.to_string()),
             description: Set(book.description),
             published_date: Set(book.published_date),
             language: Set(book.language),
@@ -196,7 +79,7 @@ impl BookRepository for BookRepositoryAdapter {
             publisher_id: Set(book.publisher_id.map(|id| id as i64)),
             page_count: Set(book.page_count),
             rating: Set(book.rating),
-            metadata_source: Set(book.metadata_source.as_ref().map(|ms| metadata_source_to_str(ms).to_string())),
+            metadata_source: Set(book.metadata_source.as_ref().map(|ms| ms.to_string())),
             cover_path: Set(book.cover_path),
             version: Set(0),
             created_at: Set(now.into()),
@@ -226,7 +109,7 @@ impl BookRepository for BookRepositoryAdapter {
 
         let mut updater: books::ActiveModel = existing.into();
         updater.title = Set(book.title);
-        updater.status = Set(book_status_to_str(&book.status).to_string());
+        updater.status = Set(book.status.to_string());
         updater.description = Set(book.description);
         updater.published_date = Set(book.published_date);
         updater.language = Set(book.language);
@@ -235,7 +118,7 @@ impl BookRepository for BookRepositoryAdapter {
         updater.publisher_id = Set(book.publisher_id.map(|id| id as i64));
         updater.page_count = Set(book.page_count);
         updater.rating = Set(book.rating);
-        updater.metadata_source = Set(book.metadata_source.as_ref().map(|ms| metadata_source_to_str(ms).to_string()));
+        updater.metadata_source = Set(book.metadata_source.as_ref().map(|ms| ms.to_string()));
         updater.cover_path = Set(book.cover_path);
 
         let result = updater.update(transaction).await.map_err(handle_dberr)?;
@@ -285,7 +168,7 @@ impl BookRepository for BookRepositoryAdapter {
         }
 
         if let Some(status) = &filter.status {
-            query = query.filter(books::Column::Status.eq(book_status_to_str(status)));
+            query = query.filter(books::Column::Status.eq(status.as_str()));
         }
 
         if let Some(series_id) = filter.series_id {
@@ -341,7 +224,7 @@ impl BookRepository for BookRepositoryAdapter {
                 Ok(BookAuthor {
                     book_id: m.book_id as u64,
                     author_id: m.author_id as u64,
-                    role: str_to_author_role(&m.role)?,
+                    role: parse_or_db_err(&m.role)?,
                     sort_order: m.sort_order,
                 })
             })
@@ -364,8 +247,8 @@ impl BookRepository for BookRepositoryAdapter {
             .map(|m| {
                 Ok(BookFile {
                     book_id: m.book_id as u64,
-                    format: str_to_file_format(&m.format)?,
-                    file_role: str_to_file_role(&m.file_role)?,
+                    format: parse_or_db_err(&m.format)?,
+                    file_role: parse_or_db_err(&m.file_role)?,
                     path: m.path,
                     file_size: m.file_size,
                     file_hash: m.file_hash,
@@ -390,7 +273,7 @@ impl BookRepository for BookRepositoryAdapter {
             .map(|m| {
                 Ok(BookIdentifier {
                     book_id: m.book_id as u64,
-                    identifier_type: str_to_identifier_type(&m.identifier_type)?,
+                    identifier_type: parse_or_db_err(&m.identifier_type)?,
                     value: m.value,
                 })
             })
@@ -409,8 +292,8 @@ impl BookRepository for BookRepositoryAdapter {
         row.map(|m| {
             Ok(BookFile {
                 book_id: m.book_id as u64,
-                format: str_to_file_format(&m.format)?,
-                file_role: str_to_file_role(&m.file_role)?,
+                format: parse_or_db_err(&m.format)?,
+                file_role: parse_or_db_err(&m.file_role)?,
                 path: m.path,
                 file_size: m.file_size,
                 file_hash: m.file_hash,
@@ -433,8 +316,8 @@ impl BookRepository for BookRepositoryAdapter {
 
         let model = book_files::ActiveModel {
             book_id: Set(book_id as i64),
-            format: Set(file_format_to_str(&format).to_string()),
-            file_role: Set(file_role_to_str(&file_role).to_string()),
+            format: Set(format.to_string()),
+            file_role: Set(file_role.to_string()),
             path: Set(path.clone()),
             file_size: Set(file_size),
             file_hash: Set(file_hash.clone()),
@@ -460,7 +343,7 @@ impl BookRepository for BookRepositoryAdapter {
         book_files::Entity::update_many()
             .col_expr(book_files::Column::Path, Expr::cust_with_values("REPLACE(path, ?, ?)", [old_slug, new_slug]))
             .filter(book_files::Column::BookId.eq(book_id as i64))
-            .filter(book_files::Column::FileRole.eq(file_role_to_str(&FileRole::Enriched)))
+            .filter(book_files::Column::FileRole.eq(FileRole::Enriched.as_str()))
             .exec(transaction)
             .await
             .map_err(handle_dberr)?;
@@ -481,7 +364,7 @@ impl BookRepository for BookRepositoryAdapter {
         let model = book_authors::ActiveModel {
             book_id: Set(book_id as i64),
             author_id: Set(author_id as i64),
-            role: Set(author_role_to_str(&role).to_string()),
+            role: Set(role.to_string()),
             sort_order: Set(sort_order),
         };
 
@@ -495,7 +378,7 @@ impl BookRepository for BookRepositoryAdapter {
 
         let model = book_identifiers::ActiveModel {
             book_id: Set(book_id as i64),
-            identifier_type: Set(identifier_type_to_str(&identifier_type).to_string()),
+            identifier_type: Set(identifier_type.to_string()),
             value: Set(value),
         };
 
@@ -663,8 +546,8 @@ impl BookRepository for BookRepositoryAdapter {
 
         prelude::BookFiles::delete_many()
             .filter(book_files::Column::BookId.eq(book_id as i64))
-            .filter(book_files::Column::Format.eq(file_format_to_str(&format)))
-            .filter(book_files::Column::FileRole.eq(file_role_to_str(&role)))
+            .filter(book_files::Column::Format.eq(format.as_str()))
+            .filter(book_files::Column::FileRole.eq(role.as_str()))
             .exec(transaction)
             .await
             .map_err(handle_dberr)?;

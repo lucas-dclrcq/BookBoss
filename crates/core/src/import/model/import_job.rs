@@ -1,3 +1,5 @@
+use std::{fmt, str::FromStr};
+
 use bb_utils::{define_token_prefix, token::Token};
 use chrono::{DateTime, Utc};
 
@@ -21,6 +23,43 @@ pub enum ImportStatus {
     Error,
 }
 
+impl ImportStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ImportStatus::Pending => "pending",
+            ImportStatus::Extracting => "extracting",
+            ImportStatus::Identifying => "identifying",
+            ImportStatus::NeedsReview => "needs_review",
+            ImportStatus::Approved => "approved",
+            ImportStatus::Rejected => "rejected",
+            ImportStatus::Error => "error",
+        }
+    }
+}
+
+impl fmt::Display for ImportStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for ImportStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "pending" => Ok(ImportStatus::Pending),
+            "extracting" => Ok(ImportStatus::Extracting),
+            "identifying" => Ok(ImportStatus::Identifying),
+            "needs_review" => Ok(ImportStatus::NeedsReview),
+            "approved" => Ok(ImportStatus::Approved),
+            "rejected" => Ok(ImportStatus::Rejected),
+            "error" => Ok(ImportStatus::Error),
+            _ => Err(format!("unknown import status: {s}")),
+        }
+    }
+}
+
 /// Which provider populated the metadata during the import pipeline.
 ///
 /// Distinct from `book::MetadataSource`, which tracks the ongoing canonical
@@ -32,6 +71,37 @@ pub enum ImportSource {
     Hardcover,
     GoogleBooks,
     OpenLibrary,
+}
+
+impl ImportSource {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ImportSource::Embedded => "embedded",
+            ImportSource::Hardcover => "hardcover",
+            ImportSource::GoogleBooks => "google_books",
+            ImportSource::OpenLibrary => "open_library",
+        }
+    }
+}
+
+impl fmt::Display for ImportSource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for ImportSource {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "embedded" => Ok(ImportSource::Embedded),
+            "hardcover" => Ok(ImportSource::Hardcover),
+            "google_books" => Ok(ImportSource::GoogleBooks),
+            "open_library" => Ok(ImportSource::OpenLibrary),
+            _ => Err(format!("unknown import source: {s}")),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

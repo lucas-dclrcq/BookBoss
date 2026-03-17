@@ -26,27 +26,12 @@ use super::types::{BookEditFields, BookReviewData, IdentifierMap, PicklistData, 
 
 #[cfg(feature = "server")]
 pub(crate) fn identifier_type_key(t: &IdentifierType) -> &'static str {
-    match t {
-        IdentifierType::Isbn13 => "Isbn13",
-        IdentifierType::Isbn10 => "Isbn10",
-        IdentifierType::Asin => "Asin",
-        IdentifierType::GoogleBooks => "GoogleBooks",
-        IdentifierType::OpenLibrary => "OpenLibrary",
-        IdentifierType::Hardcover => "Hardcover",
-    }
+    t.form_key()
 }
 
 #[cfg(feature = "server")]
 fn key_to_identifier_type(key: &str) -> Option<IdentifierType> {
-    match key {
-        "Isbn13" => Some(IdentifierType::Isbn13),
-        "Isbn10" => Some(IdentifierType::Isbn10),
-        "Asin" => Some(IdentifierType::Asin),
-        "GoogleBooks" => Some(IdentifierType::GoogleBooks),
-        "OpenLibrary" => Some(IdentifierType::OpenLibrary),
-        "Hardcover" => Some(IdentifierType::Hardcover),
-        _ => None,
-    }
+    IdentifierType::from_form_key(key)
 }
 
 #[cfg(feature = "server")]

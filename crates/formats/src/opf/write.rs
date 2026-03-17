@@ -1,7 +1,7 @@
 use std::io::Cursor;
 
 use bb_core::{
-    book::{AuthorRole, BookStatus, IdentifierType, MetadataSource},
+    book::{BookStatus, MetadataSource},
     storage::{BookSidecar, SidecarAuthor, SidecarFile, SidecarSeries},
 };
 use quick_xml::{
@@ -11,25 +11,6 @@ use quick_xml::{
 use serde::Serialize;
 
 use crate::Error;
-
-fn author_role_to_marc(role: &AuthorRole) -> &'static str {
-    match role {
-        AuthorRole::Author => "aut",
-        AuthorRole::Editor => "edt",
-        AuthorRole::Translator => "trl",
-        AuthorRole::Illustrator => "ill",
-    }
-}
-
-fn identifier_type_to_scheme(id_type: &IdentifierType) -> &'static str {
-    match id_type {
-        IdentifierType::Isbn10 | IdentifierType::Isbn13 => "ISBN",
-        IdentifierType::Asin => "ASIN",
-        IdentifierType::GoogleBooks => "GoogleBooks",
-        IdentifierType::OpenLibrary => "OpenLibrary",
-        IdentifierType::Hardcover => "Hardcover",
-    }
-}
 
 #[derive(Serialize)]
 struct AuthorSortOrder {
@@ -73,7 +54,7 @@ pub(crate) fn write_metadata_xml(sidecar: &BookSidecar) -> Result<Vec<u8>, Error
     sorted_authors.sort_by_key(|a| a.sort_order);
     for author in &sorted_authors {
         let mut creator = BytesStart::new("dc:creator");
-        creator.push_attribute(("opf:role", author_role_to_marc(&author.role)));
+        creator.push_attribute(("opf:role", author.role.marc_relator()));
         if let Some(file_as) = &author.file_as {
             creator.push_attribute(("opf:file-as", file_as.as_str()));
         }
@@ -114,7 +95,7 @@ pub(crate) fn write_metadata_xml(sidecar: &BookSidecar) -> Result<Vec<u8>, Error
 
     for identifier in &sidecar.identifiers {
         let mut id_elem = BytesStart::new("dc:identifier");
-        id_elem.push_attribute(("opf:scheme", identifier_type_to_scheme(&identifier.identifier_type)));
+        id_elem.push_attribute(("opf:scheme", identifier.identifier_type.opf_scheme()));
         writer.write_event(Event::Start(id_elem))?;
         writer.write_event(Event::Text(BytesText::new(&identifier.value)))?;
         writer.write_event(Event::End(BytesEnd::new("dc:identifier")))?;

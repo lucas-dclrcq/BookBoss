@@ -1,7 +1,7 @@
 use bb_core::{
     Error, RepositoryError,
-    book::{BookId, FileFormat},
-    import::{ImportJob, ImportJobId, ImportJobRepository, ImportJobToken, ImportSource, ImportStatus, NewImportJob},
+    book::BookId,
+    import::{ImportJob, ImportJobId, ImportJobRepository, ImportJobToken, ImportStatus, NewImportJob},
     repository::Transaction,
 };
 use chrono::Utc;
@@ -12,73 +12,6 @@ use crate::{
     error::handle_dberr,
     transaction::TransactionImpl,
 };
-
-// ── String conversions ───────────────────────────────────────────────────────
-
-fn import_status_to_str(s: &ImportStatus) -> &'static str {
-    match s {
-        ImportStatus::Pending => "pending",
-        ImportStatus::Extracting => "extracting",
-        ImportStatus::Identifying => "identifying",
-        ImportStatus::NeedsReview => "needs_review",
-        ImportStatus::Approved => "approved",
-        ImportStatus::Rejected => "rejected",
-        ImportStatus::Error => "error",
-    }
-}
-
-fn str_to_import_status(s: &str) -> ImportStatus {
-    match s {
-        "pending" => ImportStatus::Pending,
-        "extracting" => ImportStatus::Extracting,
-        "identifying" => ImportStatus::Identifying,
-        "needs_review" => ImportStatus::NeedsReview,
-        "approved" => ImportStatus::Approved,
-        "rejected" => ImportStatus::Rejected,
-        "error" => ImportStatus::Error,
-        other => panic!("unknown import status: {other}"),
-    }
-}
-
-fn import_source_to_str(s: &ImportSource) -> &'static str {
-    match s {
-        ImportSource::Embedded => "embedded",
-        ImportSource::Hardcover => "hardcover",
-        ImportSource::GoogleBooks => "google_books",
-        ImportSource::OpenLibrary => "open_library",
-    }
-}
-
-fn str_to_import_source(s: &str) -> ImportSource {
-    match s {
-        "embedded" => ImportSource::Embedded,
-        "hardcover" => ImportSource::Hardcover,
-        "google_books" => ImportSource::GoogleBooks,
-        "open_library" => ImportSource::OpenLibrary,
-        other => panic!("unknown import source: {other}"),
-    }
-}
-
-fn file_format_to_str(f: &FileFormat) -> &'static str {
-    match f {
-        FileFormat::Epub => "epub",
-        FileFormat::Kepub => "kepub",
-        FileFormat::Mobi => "mobi",
-        FileFormat::Azw3 => "azw3",
-        FileFormat::Pdf => "pdf",
-        FileFormat::Cbz => "cbz",
-    }
-}
-
-fn str_to_file_format(s: &str) -> FileFormat {
-    match s {
-        "mobi" => FileFormat::Mobi,
-        "azw3" => FileFormat::Azw3,
-        "pdf" => FileFormat::Pdf,
-        "cbz" => FileFormat::Cbz,
-        _ => FileFormat::Epub,
-    }
-}
 
 // ── From impl ────────────────────────────────────────────────────────────────
 
@@ -91,11 +24,11 @@ impl From<import_jobs::Model> for ImportJob {
             token,
             file_path: m.file_path,
             file_hash: m.file_hash,
-            file_format: str_to_file_format(&m.file_format),
+            file_format: m.file_format.parse().expect("DB has unknown file format"),
             detected_at: m.detected_at.with_timezone(&Utc),
-            status: str_to_import_status(&m.status),
+            status: m.status.parse().expect("DB has unknown import status"),
             candidate_book_id: m.candidate_book_id.map(|id| id as u64),
-            metadata_source: m.metadata_source.as_deref().map(str_to_import_source),
+            metadata_source: m.metadata_source.as_deref().map(|s| s.parse().expect("DB has unknown import source")),
             error_message: m.error_message,
             reviewed_by: m.reviewed_by.map(|id| id as u64),
             reviewed_at: m.reviewed_at.map(|dt| dt.with_timezone(&Utc)),
@@ -128,9 +61,9 @@ impl ImportJobRepository for ImportJobRepositoryAdapter {
             token: Set(token.to_string()),
             file_path: Set(job.file_path),
             file_hash: Set(job.file_hash),
-            file_format: Set(file_format_to_str(&job.file_format).to_owned()),
+            file_format: Set(job.file_format.to_string()),
             detected_at: Set(job.detected_at.into()),
-            status: Set(import_status_to_str(&ImportStatus::Pending).to_owned()),
+            status: Set(ImportStatus::Pending.to_string()),
             candidate_book_id: Set(None),
             metadata_source: Set(None),
             error_message: Set(None),
@@ -163,9 +96,9 @@ impl ImportJobRepository for ImportJobRepositoryAdapter {
 
         let mut updater: import_jobs::ActiveModel = existing.into();
 
-        updater.status = Set(import_status_to_str(&job.status).to_owned());
+        updater.status = Set(job.status.to_string());
         updater.candidate_book_id = Set(job.candidate_book_id.map(|id| id as i64));
-        updater.metadata_source = Set(job.metadata_source.as_ref().map(import_source_to_str).map(str::to_owned));
+        updater.metadata_source = Set(job.metadata_source.as_ref().map(|s| s.to_string()));
         updater.error_message = Set(job.error_message);
         updater.reviewed_by = Set(job.reviewed_by.map(|id| id as i64));
         updater.reviewed_at = Set(job.reviewed_at.map(Into::into));
@@ -221,7 +154,7 @@ impl ImportJobRepository for ImportJobRepositoryAdapter {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
         let mut query = prelude::ImportJobs::find()
-            .filter(import_jobs::Column::Status.eq(import_status_to_str(&status)))
+            .filter(import_jobs::Column::Status.eq(status.as_str()))
             .order_by_asc(import_jobs::Column::Id);
 
         if let Some(start_id) = start_id {
@@ -283,7 +216,7 @@ impl ImportJobRepository for ImportJobRepositoryAdapter {
             .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
         let mut updater: import_jobs::ActiveModel = existing.into();
-        updater.status = Set(import_status_to_str(&ImportStatus::Approved).to_owned());
+        updater.status = Set(ImportStatus::Approved.to_string());
         updater.reviewed_at = Set(Some(now.into()));
         updater.update(transaction).await.map_err(handle_dberr)?;
 

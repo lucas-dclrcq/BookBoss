@@ -1,7 +1,7 @@
 use bb_core::{
     Error,
-    book::{BookId, FileFormat, FileRole},
-    device::{Device, DeviceBook, DeviceId, DeviceRepository, DeviceSyncLog, DeviceToken, NewDevice, NewDeviceSyncLog, OnRemovalAction, SyncStatus},
+    book::BookId,
+    device::{Device, DeviceBook, DeviceId, DeviceRepository, DeviceSyncLog, DeviceToken, NewDevice, NewDeviceSyncLog},
     repository::Transaction,
     user::UserId,
 };
@@ -13,76 +13,6 @@ use crate::{
     error::handle_dberr,
     transaction::TransactionImpl,
 };
-
-// ── String conversions
-// ────────────────────────────────────────────────────────
-
-fn file_format_to_str(f: &FileFormat) -> &'static str {
-    match f {
-        FileFormat::Epub => "epub",
-        FileFormat::Kepub => "kepub",
-        FileFormat::Mobi => "mobi",
-        FileFormat::Azw3 => "azw3",
-        FileFormat::Pdf => "pdf",
-        FileFormat::Cbz => "cbz",
-    }
-}
-
-fn str_to_file_format(s: &str) -> FileFormat {
-    match s {
-        "mobi" => FileFormat::Mobi,
-        "azw3" => FileFormat::Azw3,
-        "pdf" => FileFormat::Pdf,
-        "cbz" => FileFormat::Cbz,
-        _ => FileFormat::Epub,
-    }
-}
-
-fn removal_action_to_str(a: &OnRemovalAction) -> &'static str {
-    match a {
-        OnRemovalAction::MarkRead => "mark_read",
-        OnRemovalAction::MarkDnf => "mark_dnf",
-        OnRemovalAction::Nothing => "nothing",
-    }
-}
-
-fn str_to_removal_action(s: &str) -> OnRemovalAction {
-    match s {
-        "mark_read" => OnRemovalAction::MarkRead,
-        "mark_dnf" => OnRemovalAction::MarkDnf,
-        _ => OnRemovalAction::Nothing,
-    }
-}
-
-fn file_role_to_str(r: &FileRole) -> &'static str {
-    match r {
-        FileRole::Original => "original",
-        FileRole::Enriched => "enriched",
-    }
-}
-
-fn str_to_file_role(s: &str) -> FileRole {
-    match s {
-        "enriched" => FileRole::Enriched,
-        _ => FileRole::Original,
-    }
-}
-
-fn sync_status_to_str(s: &SyncStatus) -> &'static str {
-    match s {
-        SyncStatus::Running => "running",
-        SyncStatus::Completed => "completed",
-        SyncStatus::Failed => "failed",
-    }
-}
-
-fn str_to_sync_status(s: &str) -> SyncStatus {
-    match s {
-        "completed" => SyncStatus::Completed,
-        "failed" => SyncStatus::Failed,
-        _ => SyncStatus::Running,
-    }
-}
 
 // ── From impls
 // ────────────────────────────────────────────────────────────────
@@ -97,8 +27,8 @@ impl From<devices::Model> for Device {
             owner_id: m.owner_id as u64,
             name: m.name,
             device_type: m.device_type,
-            preferred_format: m.preferred_format.as_deref().map(str_to_file_format),
-            on_removal_action: str_to_removal_action(&m.on_removal_action),
+            preferred_format: m.preferred_format.as_deref().map(|s| s.parse().expect("DB has unknown file format")),
+            on_removal_action: m.on_removal_action.parse().expect("DB has unknown removal action"),
             last_synced_at: m.last_synced_at.map(|t| t.with_timezone(&Utc)),
             created_at: m.created_at.with_timezone(&Utc),
             updated_at: m.updated_at.with_timezone(&Utc),
@@ -111,8 +41,8 @@ impl From<device_books::Model> for DeviceBook {
         Self {
             device_id: m.device_id as u64,
             book_id: m.book_id as u64,
-            format: str_to_file_format(&m.format),
-            file_role: str_to_file_role(&m.file_role),
+            format: m.format.parse().expect("DB has unknown file format"),
+            file_role: m.file_role.parse().expect("DB has unknown file role"),
             synced_at: m.synced_at.with_timezone(&Utc),
         }
     }
@@ -123,7 +53,7 @@ impl From<device_sync_log::Model> for DeviceSyncLog {
         Self {
             id: m.id,
             device_id: m.device_id as u64,
-            status: str_to_sync_status(&m.status),
+            status: m.status.parse().expect("DB has unknown sync status"),
             books_added: m.books_added,
             books_removed: m.books_removed,
             started_at: m.started_at.with_timezone(&Utc),
@@ -157,8 +87,8 @@ impl DeviceRepository for DeviceRepositoryAdapter {
             owner_id: Set(device.owner_id as i64),
             name: Set(device.name),
             device_type: Set(device.device_type),
-            preferred_format: Set(device.preferred_format.as_ref().map(|f| file_format_to_str(f).to_owned())),
-            on_removal_action: Set(removal_action_to_str(&device.on_removal_action).to_owned()),
+            preferred_format: Set(device.preferred_format.as_ref().map(|f| f.to_string())),
+            on_removal_action: Set(device.on_removal_action.to_string()),
             last_synced_at: Set(None),
             version: Set(0),
             created_at: Set(now.into()),
@@ -183,8 +113,8 @@ impl DeviceRepository for DeviceRepositoryAdapter {
         let mut updater: devices::ActiveModel = existing.into();
         updater.name = Set(device.name);
         updater.device_type = Set(device.device_type);
-        updater.preferred_format = Set(device.preferred_format.as_ref().map(|f| file_format_to_str(f).to_owned()));
-        updater.on_removal_action = Set(removal_action_to_str(&device.on_removal_action).to_owned());
+        updater.preferred_format = Set(device.preferred_format.as_ref().map(|f| f.to_string()));
+        updater.on_removal_action = Set(device.on_removal_action.to_string());
         updater.last_synced_at = Set(device.last_synced_at.map(Into::into));
 
         let result = updater.update(transaction).await.map_err(handle_dberr)?;
@@ -254,8 +184,8 @@ impl DeviceRepository for DeviceRepositoryAdapter {
         let model = device_books::ActiveModel {
             device_id: Set(book.device_id as i64),
             book_id: Set(book.book_id as i64),
-            format: Set(file_format_to_str(&book.format).to_owned()),
-            file_role: Set(file_role_to_str(&book.file_role).to_owned()),
+            format: Set(book.format.to_string()),
+            file_role: Set(book.file_role.to_string()),
             synced_at: Set(now.into()),
         }
         .insert(transaction)
@@ -271,8 +201,8 @@ impl DeviceRepository for DeviceRepositoryAdapter {
         let now = Utc::now();
         prelude::DeviceBooks::update_many()
             .set(device_books::ActiveModel {
-                format: Set(file_format_to_str(&book.format).to_owned()),
-                file_role: Set(file_role_to_str(&book.file_role).to_owned()),
+                format: Set(book.format.to_string()),
+                file_role: Set(book.file_role.to_string()),
                 synced_at: Set(now.into()),
                 ..Default::default()
             })
@@ -328,7 +258,7 @@ impl DeviceRepository for DeviceRepositoryAdapter {
 
         let model = device_sync_log::ActiveModel {
             device_id: Set(log.device_id as i64),
-            status: Set(sync_status_to_str(&log.status).to_owned()),
+            status: Set(log.status.to_string()),
             books_added: Set(log.books_added),
             books_removed: Set(log.books_removed),
             started_at: Set(log.started_at.into()),

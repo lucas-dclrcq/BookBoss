@@ -1,3 +1,5 @@
+use std::{fmt, str::FromStr};
+
 use bb_utils::{define_token_prefix, token::Token};
 use chrono::{DateTime, Utc};
 
@@ -12,6 +14,35 @@ pub enum OnRemovalAction {
     MarkRead,
     MarkDnf,
     Nothing,
+}
+
+impl OnRemovalAction {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            OnRemovalAction::MarkRead => "mark_read",
+            OnRemovalAction::MarkDnf => "mark_dnf",
+            OnRemovalAction::Nothing => "nothing",
+        }
+    }
+}
+
+impl fmt::Display for OnRemovalAction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for OnRemovalAction {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "mark_read" => Ok(OnRemovalAction::MarkRead),
+            "mark_dnf" => Ok(OnRemovalAction::MarkDnf),
+            "nothing" => Ok(OnRemovalAction::Nothing),
+            _ => Err(format!("unknown removal action: {s}")),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

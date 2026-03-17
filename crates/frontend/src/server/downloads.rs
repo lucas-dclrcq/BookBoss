@@ -36,13 +36,9 @@ pub(crate) async fn serve_book_file(
         Err(_) => return Response::builder().status(StatusCode::BAD_REQUEST).body(Body::empty()).unwrap(),
     };
 
-    let format = match format_str.to_lowercase().as_str() {
-        "epub" => FileFormat::Epub,
-        "mobi" => FileFormat::Mobi,
-        "azw3" => FileFormat::Azw3,
-        "pdf" => FileFormat::Pdf,
-        "cbz" => FileFormat::Cbz,
-        _ => return Response::builder().status(StatusCode::BAD_REQUEST).body(Body::empty()).unwrap(),
+    let format = match format_str.to_lowercase().parse::<FileFormat>() {
+        Ok(f) => f,
+        Err(_) => return Response::builder().status(StatusCode::BAD_REQUEST).body(Body::empty()).unwrap(),
     };
 
     let book = match core_services.book_service.find_book_by_token(&token).await {
@@ -62,7 +58,7 @@ pub(crate) async fn serve_book_file(
         return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap();
     }
 
-    let ext = format_ext(&format);
+    let ext = format.extension();
 
     // Try the enriched file first; fall back to the original if not yet on disk.
     let data = if let Some(enriched) = enriched_file {
@@ -103,7 +99,7 @@ pub(crate) async fn serve_book_file(
 
     Response::builder()
         .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, HeaderValue::from_static(content_type_for_format(&format)))
+        .header(header::CONTENT_TYPE, HeaderValue::from_static(format.content_type()))
         .header(
             header::CONTENT_DISPOSITION,
             HeaderValue::from_str(&content_disposition).unwrap_or(HeaderValue::from_static("attachment")),
@@ -117,26 +113,4 @@ pub(crate) async fn serve_book_file(
 /// spaces, and hyphens; replaces everything else with underscores).
 fn sanitize_filename(s: &str) -> String {
     s.chars().map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' { c } else { '_' }).collect()
-}
-
-fn format_ext(format: &FileFormat) -> &'static str {
-    match format {
-        FileFormat::Epub => "epub",
-        FileFormat::Kepub => "kepub.epub",
-        FileFormat::Mobi => "mobi",
-        FileFormat::Azw3 => "azw3",
-        FileFormat::Pdf => "pdf",
-        FileFormat::Cbz => "cbz",
-    }
-}
-
-fn content_type_for_format(format: &FileFormat) -> &'static str {
-    match format {
-        FileFormat::Epub => "application/epub+zip",
-        FileFormat::Kepub => "application/epub+zip",
-        FileFormat::Mobi => "application/x-mobipocket-ebook",
-        FileFormat::Azw3 => "application/vnd.amazon.mobi8-ebook",
-        FileFormat::Pdf => "application/pdf",
-        FileFormat::Cbz => "application/vnd.comicbook+zip",
-    }
 }

@@ -1,3 +1,5 @@
+use std::{fmt, str::FromStr};
+
 use bb_utils::{define_token_prefix, token::Token};
 use chrono::{DateTime, Utc};
 use derive_builder::Builder;
@@ -26,16 +28,7 @@ pub fn book_slug(title: &str, first_author_name: Option<&str>) -> String {
 /// Returns the full filename (`slug.ext`) for a book file, e.g.
 /// `"tolkien-j-r-r-the-fellowship-of-the-ring.epub"`.
 pub fn book_filename(title: &str, first_author_name: Option<&str>, format: &FileFormat) -> String {
-    let slug = book_slug(title, first_author_name);
-    let ext = match format {
-        FileFormat::Epub => "epub",
-        FileFormat::Kepub => "kepub.epub",
-        FileFormat::Mobi => "mobi",
-        FileFormat::Azw3 => "azw3",
-        FileFormat::Pdf => "pdf",
-        FileFormat::Cbz => "cbz",
-    };
-    format!("{slug}.{ext}")
+    format!("{}.{}", book_slug(title, first_author_name), format.extension())
 }
 
 #[cfg(test)]
@@ -77,6 +70,35 @@ pub enum BookStatus {
     Incoming,
     Available,
     Archived,
+}
+
+impl BookStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            BookStatus::Incoming => "incoming",
+            BookStatus::Available => "available",
+            BookStatus::Archived => "archived",
+        }
+    }
+}
+
+impl fmt::Display for BookStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for BookStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "incoming" => Ok(BookStatus::Incoming),
+            "available" => Ok(BookStatus::Available),
+            "archived" => Ok(BookStatus::Archived),
+            _ => Err(format!("unknown book status: {s}")),
+        }
+    }
 }
 
 /// Filter criteria for listing books.

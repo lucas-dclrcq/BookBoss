@@ -1,3 +1,5 @@
+use std::{fmt, str::FromStr};
+
 use bb_utils::{define_token_prefix, token::Token};
 use chrono::{DateTime, Utc};
 
@@ -37,12 +39,7 @@ impl BookAuthor {
     #[cfg(any(test, feature = "test-support"))]
     #[must_use]
     pub fn fake(book_id: BookId, author_id: AuthorId, role: &str, sort_order: i32) -> Self {
-        let role = match role {
-            "editor" => AuthorRole::Editor,
-            "translator" => AuthorRole::Translator,
-            "illustrator" => AuthorRole::Illustrator,
-            _ => AuthorRole::Author,
-        };
+        let role = role.parse::<AuthorRole>().unwrap_or(AuthorRole::Author);
         Self {
             book_id,
             author_id,
@@ -64,6 +61,57 @@ pub enum AuthorRole {
     Editor,
     Translator,
     Illustrator,
+}
+
+impl AuthorRole {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AuthorRole::Author => "author",
+            AuthorRole::Editor => "editor",
+            AuthorRole::Translator => "translator",
+            AuthorRole::Illustrator => "illustrator",
+        }
+    }
+
+    /// Capitalised label for display in the UI.
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            AuthorRole::Author => "Author",
+            AuthorRole::Editor => "Editor",
+            AuthorRole::Translator => "Translator",
+            AuthorRole::Illustrator => "Illustrator",
+        }
+    }
+
+    /// MARC relator code for use in OPF metadata.
+    pub fn marc_relator(&self) -> &'static str {
+        match self {
+            AuthorRole::Author => "aut",
+            AuthorRole::Editor => "edt",
+            AuthorRole::Translator => "trl",
+            AuthorRole::Illustrator => "ill",
+        }
+    }
+}
+
+impl fmt::Display for AuthorRole {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for AuthorRole {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "author" => Ok(AuthorRole::Author),
+            "editor" => Ok(AuthorRole::Editor),
+            "translator" => Ok(AuthorRole::Translator),
+            "illustrator" => Ok(AuthorRole::Illustrator),
+            _ => Err(format!("unknown author role: {s}")),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
