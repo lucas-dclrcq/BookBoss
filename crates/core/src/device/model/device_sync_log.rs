@@ -14,9 +14,9 @@ pub enum SyncStatus {
 impl SyncStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
-            SyncStatus::Running => "running",
-            SyncStatus::Completed => "completed",
-            SyncStatus::Failed => "failed",
+            Self::Running => "running",
+            Self::Completed => "completed",
+            Self::Failed => "failed",
         }
     }
 }
@@ -32,9 +32,9 @@ impl FromStr for SyncStatus {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "running" => Ok(SyncStatus::Running),
-            "completed" => Ok(SyncStatus::Completed),
-            "failed" => Ok(SyncStatus::Failed),
+            "running" => Ok(Self::Running),
+            "completed" => Ok(Self::Completed),
+            "failed" => Ok(Self::Failed),
             _ => Err(format!("unknown sync status: {s}")),
         }
     }

@@ -15,59 +15,59 @@ pub enum IdentifierType {
 impl IdentifierType {
     pub fn as_str(&self) -> &'static str {
         match self {
-            IdentifierType::Isbn10 => "isbn10",
-            IdentifierType::Isbn13 => "isbn13",
-            IdentifierType::Asin => "asin",
-            IdentifierType::GoogleBooks => "google_books",
-            IdentifierType::OpenLibrary => "open_library",
-            IdentifierType::Hardcover => "hardcover",
+            Self::Isbn10 => "isbn10",
+            Self::Isbn13 => "isbn13",
+            Self::Asin => "asin",
+            Self::GoogleBooks => "google_books",
+            Self::OpenLibrary => "open_library",
+            Self::Hardcover => "hardcover",
         }
     }
 
     /// Human-readable label for display in the UI.
     pub fn display_name(&self) -> &'static str {
         match self {
-            IdentifierType::Isbn10 => "ISBN-10",
-            IdentifierType::Isbn13 => "ISBN-13",
-            IdentifierType::Asin => "ASIN",
-            IdentifierType::GoogleBooks => "Google Books",
-            IdentifierType::OpenLibrary => "Open Library",
-            IdentifierType::Hardcover => "Hardcover",
+            Self::Isbn10 => "ISBN-10",
+            Self::Isbn13 => "ISBN-13",
+            Self::Asin => "ASIN",
+            Self::GoogleBooks => "Google Books",
+            Self::OpenLibrary => "Open Library",
+            Self::Hardcover => "Hardcover",
         }
     }
 
     /// OPF scheme string for Dublin Core identifier metadata.
     pub fn opf_scheme(&self) -> &'static str {
         match self {
-            IdentifierType::Isbn10 | IdentifierType::Isbn13 => "ISBN",
-            IdentifierType::Asin => "ASIN",
-            IdentifierType::GoogleBooks => "GoogleBooks",
-            IdentifierType::OpenLibrary => "OpenLibrary",
-            IdentifierType::Hardcover => "Hardcover",
+            Self::Isbn10 | Self::Isbn13 => "ISBN",
+            Self::Asin => "ASIN",
+            Self::GoogleBooks => "GoogleBooks",
+            Self::OpenLibrary => "OpenLibrary",
+            Self::Hardcover => "Hardcover",
         }
     }
 
     /// PascalCase key used in the review/edit form identifier map.
     pub fn form_key(&self) -> &'static str {
         match self {
-            IdentifierType::Isbn13 => "Isbn13",
-            IdentifierType::Isbn10 => "Isbn10",
-            IdentifierType::Asin => "Asin",
-            IdentifierType::GoogleBooks => "GoogleBooks",
-            IdentifierType::OpenLibrary => "OpenLibrary",
-            IdentifierType::Hardcover => "Hardcover",
+            Self::Isbn13 => "Isbn13",
+            Self::Isbn10 => "Isbn10",
+            Self::Asin => "Asin",
+            Self::GoogleBooks => "GoogleBooks",
+            Self::OpenLibrary => "OpenLibrary",
+            Self::Hardcover => "Hardcover",
         }
     }
 
     /// Parse from the PascalCase form key used in the review/edit form.
     pub fn from_form_key(key: &str) -> Option<Self> {
         match key {
-            "Isbn13" => Some(IdentifierType::Isbn13),
-            "Isbn10" => Some(IdentifierType::Isbn10),
-            "Asin" => Some(IdentifierType::Asin),
-            "GoogleBooks" => Some(IdentifierType::GoogleBooks),
-            "OpenLibrary" => Some(IdentifierType::OpenLibrary),
-            "Hardcover" => Some(IdentifierType::Hardcover),
+            "Isbn13" => Some(Self::Isbn13),
+            "Isbn10" => Some(Self::Isbn10),
+            "Asin" => Some(Self::Asin),
+            "GoogleBooks" => Some(Self::GoogleBooks),
+            "OpenLibrary" => Some(Self::OpenLibrary),
+            "Hardcover" => Some(Self::Hardcover),
             _ => None,
         }
     }
@@ -84,12 +84,12 @@ impl FromStr for IdentifierType {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "isbn10" => Ok(IdentifierType::Isbn10),
-            "isbn13" => Ok(IdentifierType::Isbn13),
-            "asin" => Ok(IdentifierType::Asin),
-            "google_books" => Ok(IdentifierType::GoogleBooks),
-            "open_library" => Ok(IdentifierType::OpenLibrary),
-            "hardcover" => Ok(IdentifierType::Hardcover),
+            "isbn10" => Ok(Self::Isbn10),
+            "isbn13" => Ok(Self::Isbn13),
+            "asin" => Ok(Self::Asin),
+            "google_books" => Ok(Self::GoogleBooks),
+            "open_library" => Ok(Self::OpenLibrary),
+            "hardcover" => Ok(Self::Hardcover),
             _ => Err(format!("unknown identifier type: {s}")),
         }
     }

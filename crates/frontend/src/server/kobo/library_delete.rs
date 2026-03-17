@@ -3,7 +3,7 @@
 //! Called when the user removes a book from the Kobo device. Deletes the
 //! `DeviceBook` record so the book is re-delivered as `New` on the next sync.
 
-use std::{collections::HashMap, str::FromStr, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 use bb_core::{CoreServices, book::BookToken};

@@ -66,30 +66,30 @@ pub enum AuthorRole {
 impl AuthorRole {
     pub fn as_str(&self) -> &'static str {
         match self {
-            AuthorRole::Author => "author",
-            AuthorRole::Editor => "editor",
-            AuthorRole::Translator => "translator",
-            AuthorRole::Illustrator => "illustrator",
+            Self::Author => "author",
+            Self::Editor => "editor",
+            Self::Translator => "translator",
+            Self::Illustrator => "illustrator",
         }
     }
 
     /// Capitalised label for display in the UI.
     pub fn display_name(&self) -> &'static str {
         match self {
-            AuthorRole::Author => "Author",
-            AuthorRole::Editor => "Editor",
-            AuthorRole::Translator => "Translator",
-            AuthorRole::Illustrator => "Illustrator",
+            Self::Author => "Author",
+            Self::Editor => "Editor",
+            Self::Translator => "Translator",
+            Self::Illustrator => "Illustrator",
         }
     }
 
     /// MARC relator code for use in OPF metadata.
     pub fn marc_relator(&self) -> &'static str {
         match self {
-            AuthorRole::Author => "aut",
-            AuthorRole::Editor => "edt",
-            AuthorRole::Translator => "trl",
-            AuthorRole::Illustrator => "ill",
+            Self::Author => "aut",
+            Self::Editor => "edt",
+            Self::Translator => "trl",
+            Self::Illustrator => "ill",
         }
     }
 }
@@ -105,10 +105,10 @@ impl FromStr for AuthorRole {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "author" => Ok(AuthorRole::Author),
-            "editor" => Ok(AuthorRole::Editor),
-            "translator" => Ok(AuthorRole::Translator),
-            "illustrator" => Ok(AuthorRole::Illustrator),
+            "author" => Ok(Self::Author),
+            "editor" => Ok(Self::Editor),
+            "translator" => Ok(Self::Translator),
+            "illustrator" => Ok(Self::Illustrator),
             _ => Err(format!("unknown author role: {s}")),
         }
     }

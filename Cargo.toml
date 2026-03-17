@@ -234,9 +234,13 @@ unused_async = "allow"                        # Required for Dioxus endpoints
 unused_trait_names = "allow"
 missing_panics_doc = "allow"
 struct_excessive_bools = "allow"
+must_use_candidate = "allow"
+too_many_arguments = "allow"
 
 # Pending Review
 missing_errors_doc = "allow"
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
 
 [profile.dev]
 opt-level = 1

@@ -74,7 +74,7 @@ pub trait ReadingService: Send + Sync {
     /// report. The caller (Kobo handler) is responsible for applying
     /// status-driven overrides before calling this method (e.g. clearing
     /// the position token when `Finished` is reported).
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments, reason = "Required to capture state")]
     async fn sync_device_state(
         &self,
         user_id: UserId,
@@ -288,7 +288,7 @@ impl ReadingService for ReadingServiceImpl {
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments, reason = "Required to capture state")]
     async fn sync_device_state(
         &self,
         user_id: UserId,

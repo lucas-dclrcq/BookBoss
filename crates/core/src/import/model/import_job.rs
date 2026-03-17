@@ -26,13 +26,13 @@ pub enum ImportStatus {
 impl ImportStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
-            ImportStatus::Pending => "pending",
-            ImportStatus::Extracting => "extracting",
-            ImportStatus::Identifying => "identifying",
-            ImportStatus::NeedsReview => "needs_review",
-            ImportStatus::Approved => "approved",
-            ImportStatus::Rejected => "rejected",
-            ImportStatus::Error => "error",
+            Self::Pending => "pending",
+            Self::Extracting => "extracting",
+            Self::Identifying => "identifying",
+            Self::NeedsReview => "needs_review",
+            Self::Approved => "approved",
+            Self::Rejected => "rejected",
+            Self::Error => "error",
         }
     }
 }
@@ -48,13 +48,13 @@ impl FromStr for ImportStatus {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "pending" => Ok(ImportStatus::Pending),
-            "extracting" => Ok(ImportStatus::Extracting),
-            "identifying" => Ok(ImportStatus::Identifying),
-            "needs_review" => Ok(ImportStatus::NeedsReview),
-            "approved" => Ok(ImportStatus::Approved),
-            "rejected" => Ok(ImportStatus::Rejected),
-            "error" => Ok(ImportStatus::Error),
+            "pending" => Ok(Self::Pending),
+            "extracting" => Ok(Self::Extracting),
+            "identifying" => Ok(Self::Identifying),
+            "needs_review" => Ok(Self::NeedsReview),
+            "approved" => Ok(Self::Approved),
+            "rejected" => Ok(Self::Rejected),
+            "error" => Ok(Self::Error),
             _ => Err(format!("unknown import status: {s}")),
         }
     }
@@ -76,10 +76,10 @@ pub enum ImportSource {
 impl ImportSource {
     pub fn as_str(&self) -> &'static str {
         match self {
-            ImportSource::Embedded => "embedded",
-            ImportSource::Hardcover => "hardcover",
-            ImportSource::GoogleBooks => "google_books",
-            ImportSource::OpenLibrary => "open_library",
+            Self::Embedded => "embedded",
+            Self::Hardcover => "hardcover",
+            Self::GoogleBooks => "google_books",
+            Self::OpenLibrary => "open_library",
         }
     }
 }
@@ -95,10 +95,10 @@ impl FromStr for ImportSource {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "embedded" => Ok(ImportSource::Embedded),
-            "hardcover" => Ok(ImportSource::Hardcover),
-            "google_books" => Ok(ImportSource::GoogleBooks),
-            "open_library" => Ok(ImportSource::OpenLibrary),
+            "embedded" => Ok(Self::Embedded),
+            "hardcover" => Ok(Self::Hardcover),
+            "google_books" => Ok(Self::GoogleBooks),
+            "open_library" => Ok(Self::OpenLibrary),
             _ => Err(format!("unknown import source: {s}")),
         }
     }

@@ -489,11 +489,11 @@ fn FilterGroupEditor(
 ) -> Element {
     let is_and = group.condition == FilterCondition::And;
 
-    let condition_oc = on_change.clone();
+    let condition_oc = on_change;
     let condition_group = group.clone();
-    let add_rule_oc = on_change.clone();
+    let add_rule_oc = on_change;
     let add_rule_group = group.clone();
-    let add_group_oc = on_change.clone();
+    let add_group_oc = on_change;
     let add_group_group = group.clone();
 
     // Root group has a subtle card look; sub-groups use a left accent border.
@@ -556,9 +556,9 @@ fn FilterGroupEditor(
             // ── Items ────────────────────────────────────────────────────────
             for (i, item) in group.items.iter().cloned().enumerate() {
                 {
-                    let oc1 = on_change.clone();
-                    let oc2 = on_change.clone();
-                    let or2 = on_remove.clone();
+                    let oc1 = on_change;
+                    let oc2 = on_change;
+                    let or2 = on_remove;
                     let gc1 = group.clone();
                     let gc2 = group.clone();
                     match item {
@@ -621,7 +621,7 @@ fn FilterRuleRow(rule: FilterRule, entity_options: FilterEntityOptions, on_chang
     let input_class = "flex-1 text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-400";
 
     // Field selector
-    let oc_field = on_change.clone();
+    let oc_field = on_change;
     let field_select = rsx! {
         select {
             class: select_class,
@@ -647,10 +647,10 @@ fn FilterRuleRow(rule: FilterRule, entity_options: FilterEntityOptions, on_chang
             let is_text_field = matches!(rule, FilterRule::TitleText { .. });
             let op_key = text_op_key(&op);
             let needs_value = !matches!(op, TextOp::IsEmpty | TextOp::IsNotEmpty);
-            let oc_op = on_change.clone();
+            let oc_op = on_change;
             let current_value_for_op = value.clone();
             let current_op_for_val = op.clone();
-            let oc_val = on_change.clone();
+            let oc_val = on_change;
             rsx! {
                 select {
                     class: select_class,
@@ -696,47 +696,32 @@ fn FilterRuleRow(rule: FilterRule, entity_options: FilterEntityOptions, on_chang
 
         FilterRule::Author { op, values } => {
             let options = entity_options.authors.clone();
-            entity_set_rule_ui(select_class, op, values, options, on_change.clone(), |op, values| FilterRule::Author {
-                op,
-                values,
-            })
+            entity_set_rule_ui(select_class, op, values, options, on_change, |op, values| FilterRule::Author { op, values })
         }
         FilterRule::Series { op, values } => {
             let options = entity_options.series.clone();
-            entity_set_rule_ui(select_class, op, values, options, on_change.clone(), |op, values| FilterRule::Series {
-                op,
-                values,
-            })
+            entity_set_rule_ui(select_class, op, values, options, on_change, |op, values| FilterRule::Series { op, values })
         }
         FilterRule::Genre { op, values } => {
             let options = entity_options.genres.clone();
-            entity_set_rule_ui(select_class, op, values, options, on_change.clone(), |op, values| FilterRule::Genre {
-                op,
-                values,
-            })
+            entity_set_rule_ui(select_class, op, values, options, on_change, |op, values| FilterRule::Genre { op, values })
         }
         FilterRule::Tag { op, values } => {
             let options = entity_options.tags.clone();
-            entity_set_rule_ui(select_class, op, values, options, on_change.clone(), |op, values| FilterRule::Tag {
-                op,
-                values,
-            })
+            entity_set_rule_ui(select_class, op, values, options, on_change, |op, values| FilterRule::Tag { op, values })
         }
         FilterRule::Publisher { op, values } => {
             let options = entity_options.publishers.clone();
-            entity_set_rule_ui(select_class, op, values, options, on_change.clone(), |op, values| FilterRule::Publisher {
-                op,
-                values,
-            })
+            entity_set_rule_ui(select_class, op, values, options, on_change, |op, values| FilterRule::Publisher { op, values })
         }
 
         FilterRule::Language { op, values } => {
             let op_key = set_op_key(&op);
             let needs_value = !matches!(op, SetOp::IsEmpty | SetOp::IsNotEmpty);
-            let oc_op = on_change.clone();
+            let oc_op = on_change;
             let op_for_val = op.clone();
             let values_for_val = values.clone();
-            let oc_val = on_change.clone();
+            let oc_val = on_change;
             rsx! {
                 select {
                     class: select_class,
@@ -765,9 +750,9 @@ fn FilterRuleRow(rule: FilterRule, entity_options: FilterEntityOptions, on_chang
         FilterRule::ReadStatus { op, values } => {
             let op_key = set_op_key(&op);
             let needs_value = !matches!(op, SetOp::IsEmpty | SetOp::IsNotEmpty);
-            let oc_op = on_change.clone();
+            let oc_op = on_change;
             let op_for_val = op.clone();
-            let oc_val = on_change.clone();
+            let oc_val = on_change;
             rsx! {
                 select {
                     class: select_class,
@@ -795,9 +780,9 @@ fn FilterRuleRow(rule: FilterRule, entity_options: FilterEntityOptions, on_chang
 
         FilterRule::Rating { op, value } => {
             let op_key = numeric_op_key(&op);
-            let oc_op = on_change.clone();
+            let oc_op = on_change;
             let op_for_val = op.clone();
-            let oc_val = on_change.clone();
+            let oc_val = on_change;
             rsx! {
                 select {
                     class: select_class,
@@ -832,15 +817,15 @@ fn FilterRuleRow(rule: FilterRule, entity_options: FilterEntityOptions, on_chang
             let op_key = date_op_key(&op);
             let needs_value = !matches!(op, DateOp::IsEmpty | DateOp::IsNotEmpty);
             let date_str = value.as_ref().map(datetime_to_date_str).unwrap_or_default();
-            let oc_op = on_change.clone();
+            let oc_op = on_change;
             let op_for_val = op.clone();
-            let oc_val = on_change.clone();
+            let oc_val = on_change;
             rsx! {
                 select {
                     class: select_class,
                     value: op_key,
                     onchange: move |e| {
-                        oc_op.call(FilterRule::DateAdded { op: parse_date_op(&e.value()), value: value.clone() });
+                        oc_op.call(FilterRule::DateAdded { op: parse_date_op(&e.value()), value });
                     },
                     option { value: "before", "before" }
                     option { value: "after", "after" }
@@ -897,12 +882,12 @@ fn entity_set_rule_ui(
 ) -> Element {
     let op_key = set_op_key(&op);
     let needs_value = !matches!(op, SetOp::IsEmpty | SetOp::IsNotEmpty);
-    let oc_op = on_change.clone();
+    let oc_op = on_change;
     let make_rule_op = make_rule.clone();
     let values_for_op = values.clone();
     let op_for_val = op.clone();
     let make_rule_val = make_rule.clone();
-    let oc_val = on_change.clone();
+    let oc_val = on_change;
     rsx! {
         select {
             class: select_class,
@@ -957,7 +942,7 @@ fn EntityPicker(values: Vec<EntityRef>, options: Vec<(i64, String)>, on_change: 
                     {
                         let label = entity.label.clone();
                         let new_values: Vec<EntityRef> = values.iter().cloned().enumerate().filter(|(j, _)| *j != i).map(|(_, e)| e).collect();
-                        let oc = on_change.clone();
+                        let oc = on_change;
                         rsx! {
                             span {
                                 key: "{i}",
@@ -1001,7 +986,7 @@ fn EntityPicker(values: Vec<EntityRef>, options: Vec<(i64, String)>, on_change: 
                             let display = label.clone();
                             let mut new_values = values.clone();
                             new_values.push(EntityRef { id, label });
-                            let oc = on_change.clone();
+                            let oc = on_change;
                             rsx! {
                                 div {
                                     key: "{id}",
@@ -1034,7 +1019,7 @@ fn LanguageChipInput(values: Vec<String>, on_change: EventHandler<Vec<String>>) 
                 {
                     let label = chip.clone();
                     let new_values: Vec<String> = values.iter().cloned().enumerate().filter(|(j, _)| *j != i).map(|(_, v)| v).collect();
-                    let oc = on_change.clone();
+                    let oc = on_change;
                     rsx! {
                         span {
                             key: "{i}",
@@ -1127,7 +1112,7 @@ fn ReadStatusChipInput(values: Vec<FilterReadStatus>, on_change: EventHandler<Ve
                             .filter(|(j, _)| *j != i)
                             .map(|(_, v)| v)
                             .collect();
-                        let oc = on_change.clone();
+                        let oc = on_change;
                         rsx! {
                             span {
                                 key: "{i}",
@@ -1187,7 +1172,7 @@ fn ReadStatusChipInput(values: Vec<FilterReadStatus>, on_change: EventHandler<Ve
                             let label = status.label();
                             let mut new_values = values.clone();
                             new_values.push(status.clone());
-                            let oc = on_change.clone();
+                            let oc = on_change;
                             rsx! {
                                 div {
                                     key: "{label}",

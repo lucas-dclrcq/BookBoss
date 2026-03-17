@@ -19,9 +19,9 @@ pub enum OnRemovalAction {
 impl OnRemovalAction {
     pub fn as_str(&self) -> &'static str {
         match self {
-            OnRemovalAction::MarkRead => "mark_read",
-            OnRemovalAction::MarkDnf => "mark_dnf",
-            OnRemovalAction::Nothing => "nothing",
+            Self::MarkRead => "mark_read",
+            Self::MarkDnf => "mark_dnf",
+            Self::Nothing => "nothing",
         }
     }
 }
@@ -37,9 +37,9 @@ impl FromStr for OnRemovalAction {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "mark_read" => Ok(OnRemovalAction::MarkRead),
-            "mark_dnf" => Ok(OnRemovalAction::MarkDnf),
-            "nothing" => Ok(OnRemovalAction::Nothing),
+            "mark_read" => Ok(Self::MarkRead),
+            "mark_dnf" => Ok(Self::MarkDnf),
+            "nothing" => Ok(Self::Nothing),
             _ => Err(format!("unknown removal action: {s}")),
         }
     }

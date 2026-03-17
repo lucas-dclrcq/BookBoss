@@ -75,9 +75,9 @@ pub enum BookStatus {
 impl BookStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
-            BookStatus::Incoming => "incoming",
-            BookStatus::Available => "available",
-            BookStatus::Archived => "archived",
+            Self::Incoming => "incoming",
+            Self::Available => "available",
+            Self::Archived => "archived",
         }
     }
 }
@@ -93,9 +93,9 @@ impl FromStr for BookStatus {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "incoming" => Ok(BookStatus::Incoming),
-            "available" => Ok(BookStatus::Available),
-            "archived" => Ok(BookStatus::Archived),
+            "incoming" => Ok(Self::Incoming),
+            "available" => Ok(Self::Available),
+            "archived" => Ok(Self::Archived),
             _ => Err(format!("unknown book status: {s}")),
         }
     }

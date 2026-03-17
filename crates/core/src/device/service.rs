@@ -330,12 +330,12 @@ impl DeviceService for DeviceServiceImpl {
     ) -> Result<SyncDiff, Error> {
         with_read_only_transaction!(self, shelf_repository, book_repository, device_repository, |tx| {
             // 1. Find companion shelf — no shelf means nothing to sync
-            let Some(shelf) = shelf_repository.find_by_device_id(tx, device_id).await? else {
+            let Some(companion_shelf) = shelf_repository.find_by_device_id(tx, device_id).await? else {
                 tracing::debug!(device_id, "no companion shelf found, returning empty diff");
                 return Ok(SyncDiff::empty());
             };
-            let Some(ref filter) = shelf.filter_criteria else {
-                tracing::warn!(device_id, shelf_id = shelf.id, "companion shelf has no filter criteria");
+            let Some(ref filter) = companion_shelf.filter_criteria else {
+                tracing::warn!(device_id, shelf_id = companion_shelf.id, "companion shelf has no filter criteria");
                 return Ok(SyncDiff::empty());
             };
 
@@ -612,7 +612,7 @@ mod tests {
         device::{DeviceRepository, DeviceSyncLog},
         import::{ImportJob, ImportJobId, ImportJobRepository, ImportJobToken, ImportStatus, NewImportJob},
         jobs::{Job, JobRepository},
-        reading::{ReadStatus, UserBookMetadata, UserBookMetadataRepository},
+        reading::{UserBookMetadata, UserBookMetadataRepository},
         repository::{Repository, RepositoryServiceBuilder, Transaction},
         shelf::{BookShelf, ShelfId, ShelfRepository, ShelfToken},
         user::{NewUser, NewUserSetting, User, UserRepository, UserSetting, UserSettingRepository, UserToken},

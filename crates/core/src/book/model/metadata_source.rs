@@ -17,10 +17,10 @@ pub enum MetadataSource {
 impl MetadataSource {
     pub fn as_str(&self) -> &'static str {
         match self {
-            MetadataSource::Hardcover => "hardcover",
-            MetadataSource::GoogleBooks => "google_books",
-            MetadataSource::OpenLibrary => "open_library",
-            MetadataSource::Manual => "manual",
+            Self::Hardcover => "hardcover",
+            Self::GoogleBooks => "google_books",
+            Self::OpenLibrary => "open_library",
+            Self::Manual => "manual",
         }
     }
 }
@@ -36,10 +36,10 @@ impl FromStr for MetadataSource {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "hardcover" => Ok(MetadataSource::Hardcover),
-            "google_books" => Ok(MetadataSource::GoogleBooks),
-            "open_library" => Ok(MetadataSource::OpenLibrary),
-            "manual" => Ok(MetadataSource::Manual),
+            "hardcover" => Ok(Self::Hardcover),
+            "google_books" => Ok(Self::GoogleBooks),
+            "open_library" => Ok(Self::OpenLibrary),
+            "manual" => Ok(Self::Manual),
             _ => Err(format!("unknown metadata source: {s}")),
         }
     }

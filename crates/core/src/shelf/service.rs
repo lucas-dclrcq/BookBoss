@@ -119,7 +119,7 @@ impl ShelfService for ShelfServiceImpl {
                 return Err(Error::RepositoryError(RepositoryError::Conflict));
             }
 
-            let shelf = shelf_repository
+            let new_shelf = shelf_repository
                 .add_shelf(
                     tx,
                     crate::shelf::NewShelf {
@@ -133,7 +133,7 @@ impl ShelfService for ShelfServiceImpl {
                 )
                 .await?;
 
-            Ok(shelf.token)
+            Ok(new_shelf.token)
         })
     }
 
@@ -147,12 +147,12 @@ impl ShelfService for ShelfServiceImpl {
         let new_name_lower = new_name.to_lowercase();
 
         with_transaction!(self, shelf_repository, device_repository, |tx| {
-            let shelf = shelf_repository
+            let existing_shelf = shelf_repository
                 .find_by_token(tx, &token)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
-            if shelf.owner_id != user_id {
+            if existing_shelf.owner_id != user_id {
                 return Err(Error::Validation("only the owner may rename a shelf".to_string()));
             }
 
@@ -161,10 +161,10 @@ impl ShelfService for ShelfServiceImpl {
                 return Err(Error::RepositoryError(RepositoryError::Conflict));
             }
 
-            let device_id = shelf.device_id;
+            let device_id = existing_shelf.device_id;
             let updated = Shelf {
                 name: new_name.clone(),
-                ..shelf
+                ..existing_shelf
             };
             shelf_repository.update_shelf(tx, updated).await?;
 
@@ -183,16 +183,16 @@ impl ShelfService for ShelfServiceImpl {
         let token = *token;
 
         with_transaction!(self, shelf_repository, |tx| {
-            let shelf = shelf_repository
+            let shelf_to_delete = shelf_repository
                 .find_by_token(tx, &token)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
-            if shelf.owner_id != user_id {
+            if shelf_to_delete.owner_id != user_id {
                 return Err(Error::Validation("only the owner may delete a shelf".to_string()));
             }
 
-            shelf_repository.delete_shelf(tx, shelf).await
+            shelf_repository.delete_shelf(tx, shelf_to_delete).await
         })
     }
 
@@ -202,12 +202,12 @@ impl ShelfService for ShelfServiceImpl {
         let book_token = *book_token;
 
         with_transaction!(self, shelf_repository, book_repository, |tx| {
-            let shelf = shelf_repository
+            let target_shelf = shelf_repository
                 .find_by_token(tx, &shelf_token)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
-            if shelf.owner_id != user_id {
+            if target_shelf.owner_id != user_id {
                 return Err(Error::Validation("only the owner may add books to a shelf".to_string()));
             }
 
@@ -220,7 +220,7 @@ impl ShelfService for ShelfServiceImpl {
                 .add_book_to_shelf(
                     tx,
                     BookShelf {
-                        shelf_id: shelf.id,
+                        shelf_id: target_shelf.id,
                         book_id: book.id,
                         sort_order: 0,
                         added_at: chrono::Utc::now(),
@@ -238,12 +238,12 @@ impl ShelfService for ShelfServiceImpl {
         let book_token = *book_token;
 
         with_transaction!(self, shelf_repository, book_repository, |tx| {
-            let shelf = shelf_repository
+            let current_shelf = shelf_repository
                 .find_by_token(tx, &shelf_token)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
-            if shelf.owner_id != user_id {
+            if current_shelf.owner_id != user_id {
                 return Err(Error::Validation("only the owner may remove books from a shelf".to_string()));
             }
 
@@ -252,7 +252,7 @@ impl ShelfService for ShelfServiceImpl {
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
-            shelf_repository.remove_book_from_shelf(tx, shelf.id, book.id).await
+            shelf_repository.remove_book_from_shelf(tx, current_shelf.id, book.id).await
         })
     }
 
@@ -261,16 +261,16 @@ impl ShelfService for ShelfServiceImpl {
         let token = *token;
 
         with_read_only_transaction!(self, shelf_repository, |tx| {
-            let shelf = shelf_repository
+            let current_shelf = shelf_repository
                 .find_by_token(tx, &token)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
-            if shelf.visibility == ShelfVisibility::Private && shelf.owner_id != user_id {
+            if current_shelf.visibility == ShelfVisibility::Private && current_shelf.owner_id != user_id {
                 return Err(Error::Validation("this shelf is private".to_string()));
             }
 
-            shelf_repository.books_for_shelf(tx, shelf.id, start_id, page_size).await
+            shelf_repository.books_for_shelf(tx, current_shelf.id, start_id, page_size).await
         })
     }
 
@@ -289,16 +289,16 @@ impl ShelfService for ShelfServiceImpl {
         let token = *token;
 
         with_read_only_transaction!(self, shelf_repository, |tx| {
-            let shelf = shelf_repository
+            let target_shelf = shelf_repository
                 .find_by_token(tx, &token)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
-            if shelf.visibility == ShelfVisibility::Private && shelf.owner_id != user_id {
+            if target_shelf.visibility == ShelfVisibility::Private && target_shelf.owner_id != user_id {
                 return Err(Error::Validation("this shelf is private".to_string()));
             }
 
-            Ok(shelf)
+            Ok(target_shelf)
         })
     }
 
@@ -312,12 +312,12 @@ impl ShelfService for ShelfServiceImpl {
         let new_name_lower = new_name.to_lowercase();
 
         with_transaction!(self, shelf_repository, device_repository, |tx| {
-            let shelf = shelf_repository
+            let target_shelf = shelf_repository
                 .find_by_token(tx, &token)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
-            if shelf.owner_id != user_id {
+            if target_shelf.owner_id != user_id {
                 return Err(Error::Validation("only the owner may update a shelf".to_string()));
             }
 
@@ -326,11 +326,11 @@ impl ShelfService for ShelfServiceImpl {
                 return Err(Error::RepositoryError(RepositoryError::Conflict));
             }
 
-            let device_id = shelf.device_id;
+            let device_id = target_shelf.device_id;
             let updated = Shelf {
                 name: new_name.clone(),
                 visibility,
-                ..shelf
+                ..target_shelf
             };
             shelf_repository.update_shelf(tx, updated).await?;
 
@@ -358,7 +358,7 @@ impl ShelfService for ShelfServiceImpl {
                 return Err(Error::RepositoryError(RepositoryError::Conflict));
             }
 
-            let shelf = shelf_repository
+            let new_shelf = shelf_repository
                 .add_shelf(
                     tx,
                     crate::shelf::NewShelf {
@@ -372,7 +372,7 @@ impl ShelfService for ShelfServiceImpl {
                 )
                 .await?;
 
-            Ok(shelf.token)
+            Ok(new_shelf.token)
         })
     }
 
@@ -381,22 +381,22 @@ impl ShelfService for ShelfServiceImpl {
         let token = *token;
 
         with_transaction!(self, shelf_repository, |tx| {
-            let shelf = shelf_repository
+            let target_shelf = shelf_repository
                 .find_by_token(tx, &token)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
-            if shelf.owner_id != user_id {
+            if target_shelf.owner_id != user_id {
                 return Err(Error::Validation("only the owner may update a shelf filter".to_string()));
             }
 
-            if shelf.shelf_type != ShelfType::Smart {
+            if target_shelf.shelf_type != ShelfType::Smart {
                 return Err(Error::Validation("filter can only be set on a smart shelf".to_string()));
             }
 
             let updated = Shelf {
                 filter_criteria: Some(filter),
-                ..shelf
+                ..target_shelf
             };
             shelf_repository.update_shelf(tx, updated).await?;
 
@@ -409,20 +409,20 @@ impl ShelfService for ShelfServiceImpl {
         let token = *token;
 
         with_read_only_transaction!(self, shelf_repository, |tx| {
-            let shelf = shelf_repository
+            let target_shelf = shelf_repository
                 .find_by_token(tx, &token)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
-            if shelf.visibility == ShelfVisibility::Private && shelf.owner_id != user_id {
+            if target_shelf.visibility == ShelfVisibility::Private && target_shelf.owner_id != user_id {
                 return Err(Error::Validation("this shelf is private".to_string()));
             }
 
-            if shelf.shelf_type != ShelfType::Smart {
+            if target_shelf.shelf_type != ShelfType::Smart {
                 return Err(Error::Validation("books_for_filter only works on smart shelves".to_string()));
             }
 
-            let filter = shelf
+            let filter = target_shelf
                 .filter_criteria
                 .ok_or_else(|| Error::Validation("smart shelf has no filter criteria".to_string()))?;
 
@@ -435,20 +435,20 @@ impl ShelfService for ShelfServiceImpl {
         let token = *token;
 
         with_read_only_transaction!(self, shelf_repository, |tx| {
-            let shelf = shelf_repository
+            let target_shelf = shelf_repository
                 .find_by_token(tx, &token)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
-            if shelf.visibility == ShelfVisibility::Private && shelf.owner_id != user_id {
+            if target_shelf.visibility == ShelfVisibility::Private && target_shelf.owner_id != user_id {
                 return Err(Error::Validation("this shelf is private".to_string()));
             }
 
-            if shelf.shelf_type != ShelfType::Smart {
+            if target_shelf.shelf_type != ShelfType::Smart {
                 return Err(Error::Validation("count_for_filter only works on smart shelves".to_string()));
             }
 
-            let filter = shelf
+            let filter = target_shelf
                 .filter_criteria
                 .ok_or_else(|| Error::Validation("smart shelf has no filter criteria".to_string()))?;
 
@@ -461,16 +461,16 @@ impl ShelfService for ShelfServiceImpl {
         let token = *token;
 
         with_transaction!(self, shelf_repository, |tx| {
-            let shelf = shelf_repository
+            let target_shelf = shelf_repository
                 .find_by_token(tx, &token)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
-            if shelf.owner_id != user_id {
+            if target_shelf.owner_id != user_id {
                 return Err(Error::Validation("only the owner may change shelf visibility".to_string()));
             }
 
-            let updated = Shelf { visibility, ..shelf };
+            let updated = Shelf { visibility, ..target_shelf };
             shelf_repository.update_shelf(tx, updated).await?;
 
             Ok(())
@@ -487,7 +487,7 @@ impl ShelfService for ShelfServiceImpl {
         });
 
         with_transaction!(self, shelf_repository, |tx| {
-            let shelf = shelf_repository
+            let target_shelf = shelf_repository
                 .add_shelf(
                     tx,
                     crate::shelf::NewShelf {
@@ -500,7 +500,7 @@ impl ShelfService for ShelfServiceImpl {
                     },
                 )
                 .await?;
-            Ok(shelf.token)
+            Ok(target_shelf.token)
         })
     }
 

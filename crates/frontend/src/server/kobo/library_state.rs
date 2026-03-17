@@ -26,7 +26,7 @@
 //! (not stored) and progress is forced to 100%. Conversely, when returning
 //! state for a `Read` book, the position blob is omitted and percent is 1.0.
 
-use std::{collections::HashMap, str::FromStr, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use axum::{Json, body::Bytes, extract::Path, http::StatusCode, response::IntoResponse};
 use bb_core::{CoreServices, book::BookToken, reading::ReadStatus};

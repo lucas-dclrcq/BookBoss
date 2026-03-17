@@ -27,13 +27,13 @@ impl LocalLibraryStore {
         self.library_path.join(token.to_string())
     }
 
-    fn book_file_path(&self, token: &BookToken, slug: &str, format: &FileFormat) -> PathBuf {
-        self.book_dir(*token).join(format!("{slug}.{}", format.extension()))
+    fn book_file_path(&self, token: BookToken, slug: &str, format: &FileFormat) -> PathBuf {
+        self.book_dir(token).join(format!("{slug}.{}", format.extension()))
     }
 
     /// Returns the library-root-relative path for a book file
     /// (e.g. `"BK_XXXXX/slug.epub"`).
-    fn book_file_rel_path(&self, token: &BookToken, slug: &str, format: &FileFormat) -> String {
+    fn book_file_rel_path(&self, token: BookToken, slug: &str, format: &FileFormat) -> String {
         format!("{}/{}.{}", token, slug, format.extension())
     }
 }
@@ -126,14 +126,14 @@ impl LibraryStore for LocalLibraryStore {
     async fn store_book_file(&self, token: &BookToken, slug: &str, format: FileFormat, source: &Path) -> Result<String, Error> {
         let book_dir = self.book_dir(*token);
         tokio::fs::create_dir_all(&book_dir).await.map_err(io_err)?;
-        let dest = self.book_file_path(token, slug, &format);
+        let dest = self.book_file_path(*token, slug, &format);
         // Try rename first (fast, same filesystem)
         if tokio::fs::rename(source, &dest).await.is_err() {
             // Fall back to copy then remove source
             tokio::fs::copy(source, &dest).await.map_err(io_err)?;
             let _ = tokio::fs::remove_file(source).await;
         }
-        Ok(self.book_file_rel_path(token, slug, &format))
+        Ok(self.book_file_rel_path(*token, slug, &format))
     }
 
     async fn store_cover(&self, token: &BookToken, filename: &str, data: &[u8]) -> Result<(), Error> {

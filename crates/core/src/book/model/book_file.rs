@@ -16,12 +16,12 @@ impl FileFormat {
     /// Canonical database/wire string (`"epub"`, `"kepub"`, etc.).
     pub fn as_str(&self) -> &'static str {
         match self {
-            FileFormat::Epub => "epub",
-            FileFormat::Kepub => "kepub",
-            FileFormat::Mobi => "mobi",
-            FileFormat::Azw3 => "azw3",
-            FileFormat::Pdf => "pdf",
-            FileFormat::Cbz => "cbz",
+            Self::Epub => "epub",
+            Self::Kepub => "kepub",
+            Self::Mobi => "mobi",
+            Self::Azw3 => "azw3",
+            Self::Pdf => "pdf",
+            Self::Cbz => "cbz",
         }
     }
 
@@ -29,7 +29,7 @@ impl FileFormat {
     /// match the canonical string.
     pub fn extension(&self) -> &'static str {
         match self {
-            FileFormat::Kepub => "kepub.epub",
+            Self::Kepub => "kepub.epub",
             other => other.as_str(),
         }
     }
@@ -37,23 +37,23 @@ impl FileFormat {
     /// MIME content-type for HTTP responses.
     pub fn content_type(&self) -> &'static str {
         match self {
-            FileFormat::Epub | FileFormat::Kepub => "application/epub+zip",
-            FileFormat::Mobi => "application/x-mobipocket-ebook",
-            FileFormat::Azw3 => "application/vnd.amazon.mobi8-ebook",
-            FileFormat::Pdf => "application/pdf",
-            FileFormat::Cbz => "application/vnd.comicbook+zip",
+            Self::Epub | Self::Kepub => "application/epub+zip",
+            Self::Mobi => "application/x-mobipocket-ebook",
+            Self::Azw3 => "application/vnd.amazon.mobi8-ebook",
+            Self::Pdf => "application/pdf",
+            Self::Cbz => "application/vnd.comicbook+zip",
         }
     }
 
     /// Short uppercase label for display in the UI (`"EPUB"`, `"KEPUB"`, etc.).
     pub fn display_name(&self) -> &'static str {
         match self {
-            FileFormat::Epub => "EPUB",
-            FileFormat::Kepub => "KEPUB",
-            FileFormat::Mobi => "MOBI",
-            FileFormat::Azw3 => "AZW3",
-            FileFormat::Pdf => "PDF",
-            FileFormat::Cbz => "CBZ",
+            Self::Epub => "EPUB",
+            Self::Kepub => "KEPUB",
+            Self::Mobi => "MOBI",
+            Self::Azw3 => "AZW3",
+            Self::Pdf => "PDF",
+            Self::Cbz => "CBZ",
         }
     }
 }
@@ -69,12 +69,12 @@ impl FromStr for FileFormat {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "epub" => Ok(FileFormat::Epub),
-            "kepub" => Ok(FileFormat::Kepub),
-            "mobi" => Ok(FileFormat::Mobi),
-            "azw3" => Ok(FileFormat::Azw3),
-            "pdf" => Ok(FileFormat::Pdf),
-            "cbz" => Ok(FileFormat::Cbz),
+            "epub" => Ok(Self::Epub),
+            "kepub" => Ok(Self::Kepub),
+            "mobi" => Ok(Self::Mobi),
+            "azw3" => Ok(Self::Azw3),
+            "pdf" => Ok(Self::Pdf),
+            "cbz" => Ok(Self::Cbz),
             _ => Err(format!("unknown file format: {s}")),
         }
     }
@@ -89,8 +89,8 @@ pub enum FileRole {
 impl FileRole {
     pub fn as_str(&self) -> &'static str {
         match self {
-            FileRole::Original => "original",
-            FileRole::Enriched => "enriched",
+            Self::Original => "original",
+            Self::Enriched => "enriched",
         }
     }
 }
@@ -106,8 +106,8 @@ impl FromStr for FileRole {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "original" => Ok(FileRole::Original),
-            "enriched" => Ok(FileRole::Enriched),
+            "original" => Ok(Self::Original),
+            "enriched" => Ok(Self::Enriched),
             _ => Err(format!("unknown file role: {s}")),
         }
     }

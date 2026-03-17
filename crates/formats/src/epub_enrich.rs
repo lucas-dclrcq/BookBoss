@@ -79,7 +79,7 @@ pub fn enrich_epub(source: &Path, dest: &Path, sidecar: &BookSidecar, cover: Opt
     // ── 4. Write destination archive ─────────────────────────────────────────
 
     let dest_file = std::fs::File::create(dest)?;
-    let mut dst = ZipWriter::new(std::io::BufWriter::new(dest_file));
+    let mut dest_zip = ZipWriter::new(std::io::BufWriter::new(dest_file));
 
     let stored = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
     let deflated = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
@@ -89,8 +89,8 @@ pub fn enrich_epub(source: &Path, dest: &Path, sidecar: &BookSidecar, cover: Opt
         let mut f = src.by_index(idx)?;
         let mut buf = Vec::new();
         f.read_to_end(&mut buf)?;
-        dst.start_file("mimetype", stored)?;
-        dst.write_all(&buf)?;
+        dest_zip.start_file("mimetype", stored)?;
+        dest_zip.write_all(&buf)?;
     }
 
     for (i, name) in &entries {
@@ -99,28 +99,28 @@ pub fn enrich_epub(source: &Path, dest: &Path, sidecar: &BookSidecar, cover: Opt
         }
 
         if name == &opf_path {
-            dst.start_file(name, deflated)?;
-            dst.write_all(new_opf.as_bytes())?;
+            dest_zip.start_file(name, deflated)?;
+            dest_zip.write_all(new_opf.as_bytes())?;
         } else if Some(name) == existing_cover_zip_path.as_ref() {
             // Replace or preserve existing cover entry.
             if let Some(cover_bytes) = cover {
-                dst.start_file(name, stored)?;
-                dst.write_all(cover_bytes)?;
+                dest_zip.start_file(name, stored)?;
+                dest_zip.write_all(cover_bytes)?;
             } else {
-                copy_entry(&mut src, &mut dst, *i)?;
+                copy_entry(&mut src, &mut dest_zip, *i)?;
             }
         } else {
-            copy_entry(&mut src, &mut dst, *i)?;
+            copy_entry(&mut src, &mut dest_zip, *i)?;
         }
     }
 
     // If we're adding a cover to an EPUB that had none, write the new entry.
     if let (Some(new_path), Some(cover_bytes)) = (&new_cover_zip_path, cover) {
-        dst.start_file(new_path, stored)?;
-        dst.write_all(cover_bytes)?;
+        dest_zip.start_file(new_path, stored)?;
+        dest_zip.write_all(cover_bytes)?;
     }
 
-    let mut buf_writer = dst.finish()?;
+    let mut buf_writer = dest_zip.finish()?;
     buf_writer.flush()?;
 
     Ok(())

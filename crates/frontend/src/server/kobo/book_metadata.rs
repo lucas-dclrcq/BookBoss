@@ -7,7 +7,7 @@
 //! Sources consulted: Komga (`KoboController.kt`, `KoboBookMetadataDto.kt`)
 //! and Calibre-Web (`kobo.py :: HandleMetadataRequest`).
 
-use std::{collections::HashMap, str::FromStr, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use axum::{
     Json,

@@ -11,7 +11,7 @@
 //! PNG, WebP, or GIF return 404 — on-the-fly conversion can be added later if
 //! needed. The `/image.jpg` suffix in the route path implies JPEG is expected.
 
-use std::{collections::HashMap, str::FromStr, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use axum::{
     extract::Path,
