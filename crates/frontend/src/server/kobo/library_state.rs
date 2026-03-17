@@ -105,7 +105,7 @@ pub(super) async fn handle_get(kobo: KoboDevice, Path(params): Path<HashMap<Stri
         return StatusCode::BAD_REQUEST.into_response();
     };
 
-    let Ok(token) = BookToken::from_str(&format!("BK_{uuid}")) else {
+    let Ok(token) = BookToken::from_encoded_id(uuid) else {
         return Json(json!([])).into_response();
     };
 
@@ -167,7 +167,7 @@ pub(super) async fn handle_put(
         return StatusCode::BAD_REQUEST.into_response();
     };
 
-    let Ok(token) = BookToken::from_str(&format!("BK_{uuid}")) else {
+    let Ok(token) = BookToken::from_encoded_id(uuid) else {
         return StatusCode::OK.into_response();
     };
 

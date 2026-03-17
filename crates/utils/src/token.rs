@@ -202,6 +202,29 @@ impl<P: TokenPrefix, I: TokenId, const MAX: u128> Token<P, I, MAX> {
         self.id
     }
 
+    /// Returns the encoded portion of the token string without the prefix.
+    ///
+    /// This is the inverse of [`Token::from_encoded_id`].
+    pub fn encoded_id(&self) -> String {
+        self.id.encode()
+    }
+
+    /// Parse a token from the encoded portion alone (no prefix).
+    ///
+    /// Equivalent to parsing `"{PREFIX}{s}"` but without constructing the
+    /// intermediate string. Returns an error if `s` has the wrong length or
+    /// contains invalid characters.
+    pub fn from_encoded_id(s: &str) -> Result<Self, TokenError> {
+        if s.len() != I::ENCODED_LEN {
+            return Err(TokenError::InvalidLength {
+                expected: P::PREFIX.len() + I::ENCODED_LEN,
+                found: P::PREFIX.len() + s.len(),
+            });
+        }
+        let id = I::decode(s)?;
+        Ok(Self::new(id))
+    }
+
     /// Check if a string is a well-formed token of this type.
     #[must_use]
     pub fn is_valid(s: &str) -> bool {
@@ -363,6 +386,34 @@ mod tests {
         let s = TestToken::new(99).to_string();
         let parsed: TestToken = s.parse().unwrap();
         assert_eq!(parsed.id(), 99);
+    }
+
+    #[test]
+    fn encoded_id_round_trips() {
+        let token = TestToken::new(42);
+        let enc = token.encoded_id();
+        assert_eq!(enc.len(), 13);
+        assert!(!enc.starts_with("T_"));
+        let parsed = TestToken::from_encoded_id(&enc).unwrap();
+        assert_eq!(parsed.id(), 42);
+    }
+
+    #[test]
+    fn from_encoded_id_rejects_wrong_length() {
+        let err = TestToken::from_encoded_id("SHORT").unwrap_err();
+        assert!(matches!(err, TokenError::InvalidLength { .. }));
+    }
+
+    #[test]
+    fn from_encoded_id_rejects_invalid_char() {
+        let err = TestToken::from_encoded_id("AAAAAAAAAAAAI").unwrap_err();
+        assert_eq!(err, TokenError::InvalidCharacter('I'));
+    }
+
+    #[test]
+    fn encoded_id_does_not_include_prefix() {
+        let token = TestToken::new(1);
+        assert_eq!(token.encoded_id(), "YYYYYYYYYYYY4");
     }
 
     #[test]

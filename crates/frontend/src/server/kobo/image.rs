@@ -30,13 +30,11 @@ pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>
         return StatusCode::BAD_REQUEST.into_response();
     };
 
-    // Reconstruct the full BookToken by prepending the `BK_` prefix.
-    let full_token = format!("BK_{book_token_str}");
-    let Ok(token) = BookToken::from_str(&full_token) else {
+    let Ok(token) = BookToken::from_encoded_id(&book_token_str) else {
         return StatusCode::NOT_FOUND.into_response();
     };
 
-    tracing::debug!(device_id = kobo.device.id, book_token = full_token, "Retrieve book cover");
+    tracing::debug!(device_id = kobo.device.id, book_token = %token, "Retrieve book cover");
 
     // Look up the book.
     let book = match core_services.book_service.find_book_by_token(&token).await {

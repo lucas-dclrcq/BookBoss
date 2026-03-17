@@ -140,14 +140,14 @@ pub(super) enum KoboSyncItem {
 // ── Helpers
 // ─────────────────────────────────────────────────────────────────
 
-/// Returns the Kobo-facing ID for a book: the token string with `BK_` stripped.
+/// Returns the Kobo-facing ID for a book: the encoded portion of the token
+/// without the `BK_` prefix.
 pub(super) fn book_uuid_from_token(token: &BookToken) -> String {
-    let s = token.to_string();
-    s.strip_prefix("BK_").unwrap_or(&s).to_string()
+    token.encoded_id()
 }
 
 pub(super) fn book_uuid_from_id(id: BookId) -> String {
-    book_uuid_from_token(&BookToken::new(id))
+    BookToken::new(id).encoded_id()
 }
 
 pub(super) fn build_entitlement(uuid: &str, is_removed: bool, created: &str, last_modified: &str) -> KoboBookEntitlement {
