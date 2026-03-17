@@ -2,7 +2,7 @@
 use bb_core::{CoreServices, types::Capability, user::NewUser};
 use dioxus::prelude::*;
 #[cfg(feature = "server")]
-use {crate::server::AuthSession, std::sync::Arc};
+use {crate::routes::server_helpers::authenticated_user, crate::server::AuthSession, std::sync::Arc};
 
 // ---------------------------------------------------------------------------
 // DTOs
@@ -49,11 +49,7 @@ impl UserAdminRow {
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 pub(crate) async fn list_users_admin() -> Result<Vec<UserAdminRow>, ServerFnError> {
-    let user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+    let user = authenticated_user(&auth_session)?;
 
     if !user.permissions.contains("SuperAdmin") && !user.permissions.contains("Admin") {
         return Err(ServerFnError::new("Insufficient permissions"));
@@ -111,11 +107,7 @@ pub(crate) async fn admin_create_user(
 ) -> Result<(), ServerFnError> {
     use std::collections::HashSet;
 
-    let actor = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+    let actor = authenticated_user(&auth_session)?;
 
     if !actor.permissions.contains("SuperAdmin") && !actor.permissions.contains("Admin") {
         return Err(ServerFnError::new("Insufficient permissions"));
@@ -167,11 +159,7 @@ pub(crate) async fn admin_update_user(
 
     use bb_core::user::UserToken;
 
-    let actor = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+    let actor = authenticated_user(&auth_session)?;
 
     if !actor.permissions.contains("SuperAdmin") && !actor.permissions.contains("Admin") {
         return Err(ServerFnError::new("Insufficient permissions"));
@@ -233,11 +221,7 @@ pub(crate) async fn admin_update_user(
 pub(crate) async fn admin_delete_user(token: String) -> Result<(), ServerFnError> {
     use bb_core::user::UserToken;
 
-    let actor = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+    let actor = authenticated_user(&auth_session)?;
 
     if !actor.permissions.contains("SuperAdmin") && !actor.permissions.contains("Admin") {
         return Err(ServerFnError::new("Insufficient permissions"));
@@ -274,11 +258,7 @@ pub(crate) async fn admin_delete_user(token: String) -> Result<(), ServerFnError
     auth_session: axum::Extension<AuthSession>
 )]
 pub(crate) async fn generate_password() -> Result<String, ServerFnError> {
-    auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+    authenticated_user(&auth_session)?;
 
     Ok(make_password())
 }

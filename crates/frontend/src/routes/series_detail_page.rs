@@ -17,21 +17,17 @@ pub(crate) struct SeriesPageData {
 
 #[cfg(feature = "server")]
 use {
+    crate::routes::{books_page::hydrate_books, server_helpers::authenticated_user},
     crate::server::AuthSession,
     bb_core::CoreServices,
-    bb_core::book::{AuthorToken, BookQuery, BookStatus, SeriesToken},
-    std::collections::{HashMap, HashSet},
+    bb_core::book::{BookQuery, BookStatus, SeriesToken},
     std::str::FromStr,
     std::sync::Arc,
 };
 
 #[post("/api/v1/series", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
 async fn get_series(token: String) -> Result<SeriesPageData, ServerFnError> {
-    auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+    authenticated_user(&auth_session)?;
 
     let book_service = &core_services.book_service;
 
@@ -61,49 +57,7 @@ async fn get_series(token: String) -> Result<SeriesPageData, ServerFnError> {
         (None, None) => std::cmp::Ordering::Equal,
     });
 
-    // Gather per-book author links and collect unique author IDs
-    let mut book_authors: Vec<Vec<(i32, u64)>> = Vec::with_capacity(books.len());
-    let mut all_author_ids: HashSet<u64> = HashSet::new();
-    for book in &books {
-        let authors = book_service.authors_for_book(book.id).await.map_err(|e| ServerFnError::new(e.to_string()))?;
-        let pairs: Vec<(i32, u64)> = authors.iter().map(|ba| (ba.sort_order, ba.author_id)).collect();
-        for &(_, aid) in &pairs {
-            all_author_ids.insert(aid);
-        }
-        book_authors.push(pairs);
-    }
-
-    // Fetch each unique author once
-    let mut author_name_map: HashMap<u64, String> = HashMap::new();
-    for author_id in all_author_ids {
-        if let Some(a) = book_service
-            .find_author_by_token(&AuthorToken::new(author_id))
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?
-        {
-            author_name_map.insert(author_id, a.name);
-        }
-    }
-
-    // Assemble BookSummary list (series_name/number already known from series)
-    let book_summaries = books
-        .iter()
-        .zip(book_authors.iter())
-        .map(|(book, author_pairs)| {
-            let mut sorted = author_pairs.clone();
-            sorted.sort_by_key(|&(order, _)| order);
-            let author_names = sorted.iter().filter_map(|&(_, aid)| author_name_map.get(&aid).cloned()).collect();
-            BookSummary {
-                token: book.token.to_string(),
-                title: book.title.clone(),
-                cover_path: book.cover_path.clone(),
-                author_names,
-                series_name: Some(series.name.clone()),
-                series_number: book.series_number.as_ref().map(std::string::ToString::to_string),
-                reading_state: None,
-            }
-        })
-        .collect();
+    let book_summaries = hydrate_books(&books, &core_services, None).await?;
 
     Ok(SeriesPageData {
         token: series.token.to_string(),

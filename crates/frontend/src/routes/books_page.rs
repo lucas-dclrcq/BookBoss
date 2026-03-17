@@ -31,118 +31,75 @@ pub(crate) struct ListBooksResponse {
 
 #[cfg(feature = "server")]
 use {
+    crate::routes::{book_detail_page::to_reading_state_dto, server_helpers::authenticated_user},
     crate::server::{AuthSession, AuthUser, BackendSessionPool},
     axum::http::Method,
     axum_session_auth::{Auth, Rights},
     bb_core::{
         CoreServices,
-        book::{AuthorToken, BookQuery, BookStatus, SeriesToken},
+        book::{AuthorToken, Book, BookQuery, BookStatus, SeriesToken},
         reading::ReadStatus,
         types::Capability,
     },
     std::sync::Arc,
 };
 
-#[get("/api/v1/books", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
-async fn list_books() -> Result<ListBooksResponse, ServerFnError> {
+/// Hydrates a slice of `Book`s into `BookSummary` view-models.
+///
+/// For each book this fetches the linked authors and series names in two
+/// batched passes (one per unique ID), then assembles `BookSummary`.
+/// `reading_map` is an optional pre-built map of `book_id → ReadingStateDto`
+/// used to attach per-user reading state; pass `None` for read-only contexts.
+#[cfg(feature = "server")]
+pub(crate) async fn hydrate_books(
+    books: &[Book],
+    core_services: &CoreServices,
+    reading_map: Option<&std::collections::HashMap<u64, ReadingStateDto>>,
+) -> Result<Vec<BookSummary>, ServerFnError> {
     use std::collections::{HashMap, HashSet};
-
-    let current_user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?
-        .clone();
-
-    let user_id = current_user.id();
-
-    let can_delete_books = Auth::<AuthUser, _, BackendSessionPool>::build([Method::POST], true)
-        .requires(Rights::any([Rights::permission(Capability::DeleteBook.as_str())]))
-        .validate(&current_user, &Method::POST, None)
-        .await;
 
     let book_service = &core_services.book_service;
 
-    let filter = BookQuery {
-        status: Some(BookStatus::Available),
-        ..Default::default()
-    };
-    let books = book_service
-        .list_books(&filter, None, None)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
-
-    // Gather per-book author links and collect unique author IDs
-    let mut book_authors: Vec<Vec<(i32, u64)>> = Vec::with_capacity(books.len());
+    // Gather per-book author links and collect unique author IDs.
+    let mut book_author_pairs: Vec<Vec<(i32, u64)>> = Vec::with_capacity(books.len());
     let mut all_author_ids: HashSet<u64> = HashSet::new();
-    for book in &books {
+    for book in books {
         let authors = book_service.authors_for_book(book.id).await.map_err(|e| ServerFnError::new(e.to_string()))?;
         let pairs: Vec<(i32, u64)> = authors.iter().map(|ba| (ba.sort_order, ba.author_id)).collect();
         for &(_, aid) in &pairs {
             all_author_ids.insert(aid);
         }
-        book_authors.push(pairs);
+        book_author_pairs.push(pairs);
     }
 
-    // Fetch each unique author once
+    // Batch-load unique authors.
     let mut author_map: HashMap<u64, String> = HashMap::new();
     for author_id in all_author_ids {
-        if let Some(author) = book_service
+        if let Some(a) = book_service
             .find_author_by_token(&AuthorToken::new(author_id))
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?
         {
-            author_map.insert(author_id, author.name);
+            author_map.insert(author_id, a.name);
         }
     }
 
-    // Fetch each unique series once
+    // Batch-load unique series.
     let unique_series: HashSet<u64> = books.iter().filter_map(|b| b.series_id).collect();
     let mut series_map: HashMap<u64, String> = HashMap::new();
     for series_id in unique_series {
-        if let Some(series) = book_service
+        if let Some(s) = book_service
             .find_series_by_token(&SeriesToken::new(series_id))
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?
         {
-            series_map.insert(series_id, series.name);
+            series_map.insert(series_id, s.name);
         }
     }
 
-    // Load per-user reading state for all books in one query
-    let reading_metas = core_services
-        .reading_service
-        .list_for_user(user_id, None)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
-    let reading_map: std::collections::HashMap<u64, ReadingStateDto> = reading_metas
+    let summaries = books
         .iter()
-        .filter(|m| m.read_status != ReadStatus::Unread)
-        .map(|m| {
-            let dto = ReadingStateDto {
-                status: match m.read_status {
-                    ReadStatus::Unread => "Unread",
-                    ReadStatus::Reading => "Reading",
-                    ReadStatus::Paused => "Paused",
-                    ReadStatus::Rereading => "Rereading",
-                    ReadStatus::Read => "Read",
-                    ReadStatus::Abandoned => "Abandoned",
-                }
-                .to_string(),
-                #[expect(clippy::cast_possible_truncation, reason = "bps / 100 gives 0–100 percentage; always fits u8")]
-                progress_pct: m.progress_percentage.map(|bps| (bps / 100) as u8),
-                personal_rating: m.personal_rating,
-                times_read: m.times_read,
-                notes: m.notes.clone(),
-            };
-            (m.book_id, dto)
-        })
-        .collect();
-
-    // Assemble view models
-    let summaries: Vec<BookSummary> = books
-        .iter()
-        .zip(book_authors.iter())
+        .zip(book_author_pairs.iter())
         .map(|(book, author_pairs)| {
             let mut sorted = author_pairs.clone();
             sorted.sort_by_key(|&(order, _)| order);
@@ -154,10 +111,49 @@ async fn list_books() -> Result<ListBooksResponse, ServerFnError> {
                 author_names,
                 series_name: book.series_id.and_then(|sid| series_map.get(&sid).cloned()),
                 series_number: book.series_number.as_ref().map(std::string::ToString::to_string),
-                reading_state: reading_map.get(&book.id).cloned(),
+                reading_state: reading_map.and_then(|m| m.get(&book.id).cloned()),
             }
         })
         .collect();
+
+    Ok(summaries)
+}
+
+#[get("/api/v1/books", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
+async fn list_books() -> Result<ListBooksResponse, ServerFnError> {
+    use std::collections::HashMap;
+
+    let current_user = authenticated_user(&auth_session)?;
+    let user_id = current_user.id();
+
+    let can_delete_books = Auth::<AuthUser, _, BackendSessionPool>::build([Method::POST], true)
+        .requires(Rights::any([Rights::permission(Capability::DeleteBook.as_str())]))
+        .validate(&current_user, &Method::POST, None)
+        .await;
+
+    let filter = BookQuery {
+        status: Some(BookStatus::Available),
+        ..Default::default()
+    };
+    let books = core_services
+        .book_service
+        .list_books(&filter, None, None)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    // Load per-user reading state for all books in one query.
+    let reading_metas = core_services
+        .reading_service
+        .list_for_user(user_id, None)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let reading_map: HashMap<u64, ReadingStateDto> = reading_metas
+        .iter()
+        .filter(|m| m.read_status != ReadStatus::Unread)
+        .map(|m| (m.book_id, to_reading_state_dto(m)))
+        .collect();
+
+    let summaries = hydrate_books(&books, &core_services, Some(&reading_map)).await?;
 
     // Build the "Currently Reading" list: Reading books sorted by last_progress_at
     // desc.

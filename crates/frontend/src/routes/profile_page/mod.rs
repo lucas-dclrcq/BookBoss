@@ -4,6 +4,7 @@ use devices_section::DevicesSectionContent;
 use dioxus::prelude::*;
 #[cfg(feature = "server")]
 use {
+    crate::routes::server_helpers::authenticated_user,
     crate::server::{AuthSession, kobo::KoboConfig},
     bb_core::{
         CoreServices,
@@ -56,11 +57,7 @@ struct DeviceRow {
     auth_session: axum::Extension<AuthSession>
 )]
 async fn get_profile_context() -> Result<(), ServerFnError> {
-    auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+    authenticated_user(&auth_session)?;
     Ok(())
 }
 
@@ -70,12 +67,7 @@ async fn get_profile_context() -> Result<(), ServerFnError> {
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 async fn get_profile_info() -> Result<ProfileInfo, ServerFnError> {
-    let user_id = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?
-        .id();
+    let user_id = authenticated_user(&auth_session)?.id();
 
     let user = core_services
         .user_service
@@ -102,12 +94,7 @@ async fn update_profile(full_name: String, email: String) -> Result<(), ServerFn
     }
     let email_address = EmailAddress::new(&email).map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    let user_id = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?
-        .id();
+    let user_id = authenticated_user(&auth_session)?.id();
 
     let existing = core_services
         .user_service
@@ -135,13 +122,7 @@ async fn update_profile(full_name: String, email: String) -> Result<(), ServerFn
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 async fn get_reading_settings() -> Result<ReadingSettings, ServerFnError> {
-    let user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
-
-    let user_id = user.id();
+    let user_id = authenticated_user(&auth_session)?.id();
     let setting = core_services
         .user_setting_service
         .get(user_id, AUTO_READ_THRESHOLD_KEY)
@@ -161,17 +142,11 @@ async fn get_reading_settings() -> Result<ReadingSettings, ServerFnError> {
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 async fn save_auto_read_threshold(threshold_pct: u8) -> Result<(), ServerFnError> {
-    let user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+    let user_id = authenticated_user(&auth_session)?.id();
 
     if threshold_pct > 100 {
         return Err(ServerFnError::new("Threshold must be between 0 and 100"));
     }
-
-    let user_id = user.id();
     let bps = u16::from(threshold_pct) * 100;
     core_services
         .user_setting_service
@@ -192,12 +167,7 @@ async fn change_password(current: String, new_password: String) -> Result<(), Se
         return Err(ServerFnError::new("New password must not be empty"));
     }
 
-    let user_id = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?
-        .id();
+    let user_id = authenticated_user(&auth_session)?.id();
 
     let existing = core_services
         .user_service
@@ -254,12 +224,7 @@ fn parse_removal_action(s: &str) -> Result<OnRemovalAction, ServerFnError> {
     kobo_config: axum::Extension<Arc<KoboConfig>>
 )]
 async fn get_devices_for_profile() -> Result<Vec<DeviceRow>, ServerFnError> {
-    let user_id = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?
-        .id();
+    let user_id = authenticated_user(&auth_session)?.id();
 
     let devices = core_services
         .device_service
@@ -313,12 +278,7 @@ fn humanize_synced_at(ts: Option<DateTime<Utc>>) -> String {
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 async fn get_default_device_name() -> Result<String, ServerFnError> {
-    let user_id = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?
-        .id();
+    let user_id = authenticated_user(&auth_session)?.id();
 
     core_services
         .device_service
@@ -338,12 +298,7 @@ async fn create_device_for_profile(name: String, device_type: String, on_removal
         return Err(ServerFnError::new("Device name must not be empty"));
     }
 
-    let user_id = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?
-        .id();
+    let user_id = authenticated_user(&auth_session)?.id();
 
     let action = parse_removal_action(&on_removal_action)?;
 
@@ -367,12 +322,7 @@ async fn update_device_for_profile(token: String, name: String, on_removal_actio
         return Err(ServerFnError::new("Device name must not be empty"));
     }
 
-    let user_id = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?
-        .id();
+    let user_id = authenticated_user(&auth_session)?.id();
 
     let device_token = DeviceToken::from_str(&token).map_err(|e| ServerFnError::new(e.to_string()))?;
     let action = parse_removal_action(&on_removal_action)?;
@@ -392,12 +342,7 @@ async fn update_device_for_profile(token: String, name: String, on_removal_actio
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 async fn delete_device_for_profile(token: String, delete_shelf: bool) -> Result<(), ServerFnError> {
-    let user_id = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?
-        .id();
+    let user_id = authenticated_user(&auth_session)?.id();
 
     let device_token = DeviceToken::from_str(&token).map_err(|e| ServerFnError::new(e.to_string()))?;
 
@@ -416,12 +361,7 @@ async fn delete_device_for_profile(token: String, delete_shelf: bool) -> Result<
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 async fn reset_device_sync_for_profile(token: String) -> Result<(), ServerFnError> {
-    let user_id = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?
-        .id();
+    let user_id = authenticated_user(&auth_session)?.id();
 
     let device_token = DeviceToken::from_str(&token).map_err(|e| ServerFnError::new(e.to_string()))?;
 

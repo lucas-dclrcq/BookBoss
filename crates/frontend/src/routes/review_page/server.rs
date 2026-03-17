@@ -25,16 +25,6 @@ use super::types::{BookEditFields, BookReviewData, IdentifierMap, PicklistData, 
 // ─────────────────────────────────────────────────────
 
 #[cfg(feature = "server")]
-pub(crate) fn identifier_type_key(t: &IdentifierType) -> &'static str {
-    t.form_key()
-}
-
-#[cfg(feature = "server")]
-fn key_to_identifier_type(key: &str) -> Option<IdentifierType> {
-    IdentifierType::from_form_key(key)
-}
-
-#[cfg(feature = "server")]
 fn cover_to_base64(bytes: &[u8]) -> String {
     let mime = if bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
         "image/png"
@@ -117,7 +107,7 @@ fn provider_book_to_result(pb: &ProviderBook) -> ProviderResult {
         .as_deref()
         .unwrap_or(&[])
         .iter()
-        .map(|i| (identifier_type_key(&i.identifier_type).to_string(), i.value.clone()))
+        .map(|i| (i.identifier_type.form_key().to_string(), i.value.clone()))
         .collect();
     // Provider cover bytes take priority; fall back to embedded cover in metadata.
     let cover_bytes = pb.cover_bytes.as_deref().or(meta.cover_bytes.as_deref());
@@ -223,7 +213,7 @@ pub(super) async fn get_review_data(job_token: String) -> Result<BookReviewData,
         .map_err(|e| ServerFnError::new(e.to_string()))?;
     let identifiers: IdentifierMap = raw_identifiers
         .iter()
-        .map(|i| (identifier_type_key(&i.identifier_type).to_string(), i.value.clone()))
+        .map(|i| (i.identifier_type.form_key().to_string(), i.value.clone()))
         .collect();
 
     let provider_names = pipeline_service
@@ -301,7 +291,7 @@ pub(super) async fn fetch_provider_metadata(
     let parsed_identifiers: Vec<(IdentifierType, String)> = identifiers
         .into_iter()
         .filter(|(_, v)| !v.is_empty())
-        .filter_map(|(k, v)| key_to_identifier_type(&k).map(|t| (t, v)))
+        .filter_map(|(k, v)| IdentifierType::from_form_key(&k).map(|t| (t, v)))
         .collect();
 
     let title = if title.is_empty() { None } else { Some(title) };
@@ -337,7 +327,7 @@ pub(super) async fn approve_book(fields: BookEditFields) -> Result<(), ServerFnE
         .identifiers
         .into_iter()
         .filter(|(_, v)| !v.is_empty())
-        .filter_map(|(k, v)| key_to_identifier_type(&k).map(|t| (t, v)))
+        .filter_map(|(k, v)| IdentifierType::from_form_key(&k).map(|t| (t, v)))
         .collect();
 
     let edit = BookEdit {
@@ -477,7 +467,7 @@ pub(crate) async fn get_book_for_edit(book_token: String) -> Result<BookReviewDa
         .map_err(|e| ServerFnError::new(e.to_string()))?;
     let identifiers: IdentifierMap = raw_identifiers
         .iter()
-        .map(|i| (identifier_type_key(&i.identifier_type).to_string(), i.value.clone()))
+        .map(|i| (i.identifier_type.form_key().to_string(), i.value.clone()))
         .collect();
 
     let provider_names = pipeline_service
@@ -554,7 +544,7 @@ pub(super) async fn fetch_provider_for_edit(
     let parsed_identifiers: Vec<(IdentifierType, String)> = identifiers
         .into_iter()
         .filter(|(_, v)| !v.is_empty())
-        .filter_map(|(k, v)| key_to_identifier_type(&k).map(|t| (t, v)))
+        .filter_map(|(k, v)| IdentifierType::from_form_key(&k).map(|t| (t, v)))
         .collect();
 
     let title = if title.is_empty() { None } else { Some(title) };
@@ -590,7 +580,7 @@ pub(super) async fn save_library_book(book_token: String, fields: BookEditFields
         .identifiers
         .into_iter()
         .filter(|(_, v)| !v.is_empty())
-        .filter_map(|(k, v)| key_to_identifier_type(&k).map(|t| (t, v)))
+        .filter_map(|(k, v)| IdentifierType::from_form_key(&k).map(|t| (t, v)))
         .collect();
 
     let edit = BookEdit {

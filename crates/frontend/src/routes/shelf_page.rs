@@ -46,10 +46,11 @@ pub(crate) struct ShelfSummary {
 
 #[cfg(feature = "server")]
 use {
+    crate::routes::{books_page::hydrate_books, server_helpers::authenticated_user},
     crate::server::AuthSession,
     bb_core::{
         CoreServices,
-        book::{AuthorToken, Book, BookToken, SeriesToken},
+        book::{Book, BookToken},
         filter::BookFilter as CoreBookFilter,
         shelf::{ShelfToken, ShelfType, ShelfVisibility},
     },
@@ -88,12 +89,7 @@ fn visibility_str(v: &ShelfVisibility) -> &'static str {
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 pub(crate) async fn list_my_shelves() -> Result<Vec<ShelfSummary>, ServerFnError> {
-    let user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
-    let user_id = user.id();
+    let user_id = authenticated_user(&auth_session)?.id();
 
     let shelves = core_services
         .shelf_service
@@ -131,12 +127,7 @@ pub(crate) async fn list_my_shelves() -> Result<Vec<ShelfSummary>, ServerFnError
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 pub(crate) async fn create_shelf(name: String, visibility: String) -> Result<String, ServerFnError> {
-    let user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
-    let user_id = user.id();
+    let user_id = authenticated_user(&auth_session)?.id();
 
     let vis = parse_visibility(&visibility)?;
 
@@ -159,12 +150,7 @@ pub(crate) async fn create_shelf(name: String, visibility: String) -> Result<Str
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 pub(crate) async fn create_smart_shelf(name: String, visibility: String, filter_json: String) -> Result<String, ServerFnError> {
-    let user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
-    let user_id = user.id();
+    let user_id = authenticated_user(&auth_session)?.id();
 
     let vis = parse_visibility(&visibility)?;
     let filter: CoreBookFilter = serde_json::from_str(&filter_json).map_err(|e| ServerFnError::new(format!("Invalid filter: {e}")))?;
@@ -185,12 +171,7 @@ pub(crate) async fn create_smart_shelf(name: String, visibility: String, filter_
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 pub(crate) async fn update_smart_shelf_filter(token: String, filter_json: String) -> Result<(), ServerFnError> {
-    let user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
-    let user_id = user.id();
+    let user_id = authenticated_user(&auth_session)?.id();
 
     let shelf_token: ShelfToken = token.parse().map_err(|_| ServerFnError::new("Invalid shelf token"))?;
     let filter: CoreBookFilter = serde_json::from_str(&filter_json).map_err(|e| ServerFnError::new(format!("Invalid filter: {e}")))?;
@@ -209,12 +190,7 @@ pub(crate) async fn update_smart_shelf_filter(token: String, filter_json: String
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 pub(crate) async fn delete_shelf(token: String) -> Result<(), ServerFnError> {
-    let user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
-    let user_id = user.id();
+    let user_id = authenticated_user(&auth_session)?.id();
 
     let shelf_token: ShelfToken = token.parse().map_err(|_| ServerFnError::new("Invalid shelf token"))?;
 
@@ -232,12 +208,7 @@ pub(crate) async fn delete_shelf(token: String) -> Result<(), ServerFnError> {
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 pub(crate) async fn add_book_to_shelf(shelf_token: String, book_token: String) -> Result<(), ServerFnError> {
-    let user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
-    let user_id = user.id();
+    let user_id = authenticated_user(&auth_session)?.id();
 
     let shelf: ShelfToken = shelf_token.parse().map_err(|_| ServerFnError::new("Invalid shelf token"))?;
     let book: BookToken = book_token.parse().map_err(|_| ServerFnError::new("Invalid book token"))?;
@@ -256,12 +227,7 @@ pub(crate) async fn add_book_to_shelf(shelf_token: String, book_token: String) -
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 pub(crate) async fn remove_book_from_shelf(shelf_token: String, book_token: String) -> Result<(), ServerFnError> {
-    let user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
-    let user_id = user.id();
+    let user_id = authenticated_user(&auth_session)?.id();
 
     let shelf: ShelfToken = shelf_token.parse().map_err(|_| ServerFnError::new("Invalid shelf token"))?;
     let book: BookToken = book_token.parse().map_err(|_| ServerFnError::new("Invalid book token"))?;
@@ -281,12 +247,7 @@ pub(crate) async fn remove_book_from_shelf(shelf_token: String, book_token: Stri
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 pub(crate) async fn update_shelf(token: String, name: String, visibility: String) -> Result<(), ServerFnError> {
-    let user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
-    let user_id = user.id();
+    let user_id = authenticated_user(&auth_session)?.id();
 
     let shelf_token: ShelfToken = token.parse().map_err(|_| ServerFnError::new("Invalid shelf token"))?;
     let vis = parse_visibility(&visibility)?;
@@ -307,11 +268,7 @@ pub(crate) async fn update_shelf(token: String, name: String, visibility: String
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 pub(crate) async fn get_filter_entity_options() -> Result<FilterEntityOptions, ServerFnError> {
-    let _user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+    authenticated_user(&auth_session)?;
 
     let book_service = &core_services.book_service;
 
@@ -376,12 +333,7 @@ pub(crate) async fn get_filter_entity_options() -> Result<FilterEntityOptions, S
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 pub(crate) async fn list_all_accessible_shelves() -> Result<Vec<ShelfSummary>, ServerFnError> {
-    let user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
-    let user_id = user.id();
+    let user_id = authenticated_user(&auth_session)?.id();
 
     let shelf_service = &core_services.shelf_service;
 
@@ -448,16 +400,9 @@ pub(crate) async fn list_all_accessible_shelves() -> Result<Vec<ShelfSummary>, S
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 pub(crate) async fn books_for_shelf(token: String, cursor: Option<u64>, page_size: Option<u64>) -> Result<ShelfBooksPage, ServerFnError> {
-    use std::collections::{HashMap, HashSet};
-
     const PAGE_SIZE: u64 = 48;
 
-    let user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
-    let user_id = user.id();
+    let user_id = authenticated_user(&auth_session)?.id();
 
     let shelf_token: ShelfToken = token.parse().map_err(|_| ServerFnError::new("Invalid shelf token"))?;
 
@@ -510,62 +455,7 @@ pub(crate) async fn books_for_shelf(token: String, cursor: Option<u64>, page_siz
         });
     }
 
-    // Hydrate authors.
-    let mut all_author_ids: HashSet<u64> = HashSet::new();
-    let mut books_with_authors = Vec::with_capacity(books.len());
-
-    for book in &books {
-        let authors = book_service.authors_for_book(book.id).await.map_err(|e| ServerFnError::new(e.to_string()))?;
-        for ba in &authors {
-            all_author_ids.insert(ba.author_id);
-        }
-        books_with_authors.push((book.clone(), authors));
-    }
-
-    // Batch-load unique authors.
-    let mut author_map: HashMap<u64, String> = HashMap::new();
-    for author_id in all_author_ids {
-        if let Some(author) = book_service
-            .find_author_by_token(&AuthorToken::new(author_id))
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?
-        {
-            author_map.insert(author_id, author.name);
-        }
-    }
-
-    // Batch-load unique series.
-    let unique_series: HashSet<u64> = books_with_authors.iter().filter_map(|(b, _)| b.series_id).collect();
-    let mut series_map: HashMap<u64, String> = HashMap::new();
-    for series_id in unique_series {
-        if let Some(series) = book_service
-            .find_series_by_token(&SeriesToken::new(series_id))
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?
-        {
-            series_map.insert(series_id, series.name);
-        }
-    }
-
-    // Assemble summaries.
-    let book_summaries = books_with_authors
-        .iter()
-        .map(|(book, author_links)| {
-            let mut sorted = author_links.clone();
-            sorted.sort_by_key(|ba| ba.sort_order);
-            let author_names = sorted.iter().filter_map(|ba| author_map.get(&ba.author_id).cloned()).collect();
-
-            BookSummary {
-                token: book.token.to_string(),
-                title: book.title.clone(),
-                cover_path: book.cover_path.clone(),
-                author_names,
-                series_name: book.series_id.and_then(|sid| series_map.get(&sid).cloned()),
-                series_number: book.series_number.as_ref().map(std::string::ToString::to_string),
-                reading_state: None,
-            }
-        })
-        .collect();
+    let book_summaries = hydrate_books(&books, &core_services, None).await?;
 
     Ok(ShelfBooksPage {
         books: book_summaries,

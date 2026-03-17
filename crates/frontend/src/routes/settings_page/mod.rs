@@ -3,9 +3,11 @@ mod users_section;
 use dioxus::prelude::*;
 use users_section::UsersSection;
 
-use crate::Route;
+#[cfg(feature = "server")]
+use crate::routes::server_helpers::authenticated_user;
 #[cfg(feature = "server")]
 use crate::server::AuthSession;
+use crate::Route;
 
 // ---------------------------------------------------------------------------
 // Settings context (admin status + current user identity)
@@ -23,11 +25,7 @@ pub(crate) struct SettingsContext {
     auth_session: axum::Extension<AuthSession>,
 )]
 async fn get_settings_context() -> Result<SettingsContext, ServerFnError> {
-    let user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+    let user = authenticated_user(&auth_session)?;
 
     let is_super_admin = user.permissions.contains("SuperAdmin");
     let is_admin = is_super_admin || user.permissions.contains("Admin");

@@ -54,6 +54,7 @@ pub(crate) struct BookDetail {
 
 #[cfg(feature = "server")]
 use {
+    crate::routes::server_helpers::authenticated_user,
     crate::server::{AuthSession, AuthUser, BackendSessionPool},
     axum::http::Method,
     axum_session_auth::{Auth, Rights},
@@ -65,7 +66,7 @@ use {
 };
 
 #[cfg(feature = "server")]
-fn to_reading_state_dto(meta: &UserBookMetadata) -> ReadingStateDto {
+pub(crate) fn to_reading_state_dto(meta: &UserBookMetadata) -> ReadingStateDto {
     ReadingStateDto {
         status: match meta.read_status {
             ReadStatus::Unread => "Unread",
@@ -102,13 +103,7 @@ async fn load_threshold(user_id: UserId, core_services: &CoreServices) -> Option
 
 #[post("/api/v1/book", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
 async fn get_book(token: String) -> Result<BookDetail, ServerFnError> {
-    let user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
-
-    let user_id = user.id();
+    let user_id = authenticated_user(&auth_session)?.id();
     let book_service = &core_services.book_service;
 
     let book_token = BookToken::from_str(&token).map_err(|_| ServerFnError::new("Invalid book token"))?;
@@ -277,13 +272,7 @@ pub(crate) async fn delete_library_book(token: String) -> Result<(), ServerFnErr
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 async fn set_reading_status(token: String, status: String) -> Result<ReadingStateDto, ServerFnError> {
-    let user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
-
-    let user_id = user.id();
+    let user_id = authenticated_user(&auth_session)?.id();
     let book_token = BookToken::from_str(&token).map_err(|_| ServerFnError::new("Invalid book token"))?;
     let book = core_services
         .book_service
@@ -317,17 +306,11 @@ async fn set_reading_status(token: String, status: String) -> Result<ReadingStat
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 async fn update_reading_progress(token: String, progress_pct: u8) -> Result<ReadingStateDto, ServerFnError> {
-    let user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
+    let user_id = authenticated_user(&auth_session)?.id();
 
     if progress_pct > 100 {
         return Err(ServerFnError::new("Progress must be between 0 and 100"));
     }
-
-    let user_id = user.id();
     let book_token = BookToken::from_str(&token).map_err(|_| ServerFnError::new("Invalid book token"))?;
     let book = core_services
         .book_service
@@ -353,13 +336,7 @@ async fn update_reading_progress(token: String, progress_pct: u8) -> Result<Read
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 async fn set_personal_rating(token: String, rating: u8) -> Result<ReadingStateDto, ServerFnError> {
-    let user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
-
-    let user_id = user.id();
+    let user_id = authenticated_user(&auth_session)?.id();
     let book_token = BookToken::from_str(&token).map_err(|_| ServerFnError::new("Invalid book token"))?;
     let book = core_services
         .book_service
@@ -383,13 +360,7 @@ async fn set_personal_rating(token: String, rating: u8) -> Result<ReadingStateDt
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 async fn clear_personal_rating(token: String) -> Result<ReadingStateDto, ServerFnError> {
-    let user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
-
-    let user_id = user.id();
+    let user_id = authenticated_user(&auth_session)?.id();
     let book_token = BookToken::from_str(&token).map_err(|_| ServerFnError::new("Invalid book token"))?;
     let book = core_services
         .book_service
@@ -413,13 +384,7 @@ async fn clear_personal_rating(token: String) -> Result<ReadingStateDto, ServerF
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 async fn save_reading_notes(token: String, notes: String) -> Result<ReadingStateDto, ServerFnError> {
-    let user = auth_session
-        .current_user
-        .as_ref()
-        .filter(|u| !u.username.is_empty())
-        .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
-
-    let user_id = user.id();
+    let user_id = authenticated_user(&auth_session)?.id();
     let book_token = BookToken::from_str(&token).map_err(|_| ServerFnError::new("Invalid book token"))?;
     let book = core_services
         .book_service

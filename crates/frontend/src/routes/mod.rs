@@ -1,3 +1,6 @@
+#[cfg(feature = "server")]
+pub(crate) mod server_helpers;
+
 pub(crate) mod author_detail_page;
 pub(crate) mod book_detail_page;
 pub(crate) mod books_page;

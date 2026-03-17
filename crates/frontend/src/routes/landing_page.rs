@@ -33,6 +33,28 @@ pub(crate) const MIN_PASSWORD_LEN: usize = 12;
 #[cfg(feature = "server")]
 use {crate::server::AuthSession, bb_core::CoreServices};
 
+/// Server-side password strength validation. Returns `Err` with a user-facing
+/// message if the password does not satisfy all requirements.
+#[cfg(feature = "server")]
+fn validate_password_strength(password: &str) -> Result<(), ServerFnError> {
+    if password.len() < MIN_PASSWORD_LEN {
+        return Err(ServerFnError::new(format!("Password must be at least {MIN_PASSWORD_LEN} characters")));
+    }
+    if !password.chars().any(char::is_uppercase) {
+        return Err(ServerFnError::new("Password must contain at least one uppercase letter"));
+    }
+    if !password.chars().any(char::is_lowercase) {
+        return Err(ServerFnError::new("Password must contain at least one lowercase letter"));
+    }
+    if !password.chars().any(|c| c.is_ascii_digit()) {
+        return Err(ServerFnError::new("Password must contain at least one digit"));
+    }
+    if !password.chars().any(|c| SPECIAL_CHARS.contains(c)) {
+        return Err(ServerFnError::new("Password must contain at least one special character"));
+    }
+    Ok(())
+}
+
 #[get("/api/v1/get_landing_state", core_services: axum::Extension<std::sync::Arc<CoreServices>>, auth_session: axum::Extension<AuthSession>)]
 async fn get_landing_state() -> Result<LandingState, ServerFnError> {
     let is_authenticated = auth_session.current_user.as_ref().is_some_and(|u| !u.username.is_empty());
@@ -81,22 +103,7 @@ pub(crate) async fn perform_login(username: String, password: String) -> Result<
 pub(crate) async fn change_password_and_login(user_token: String, new_password: String) -> Result<(), ServerFnError> {
     use bb_core::user::UserToken;
 
-    // Server-side password strength validation
-    if new_password.len() < MIN_PASSWORD_LEN {
-        return Err(ServerFnError::new(format!("Password must be at least {MIN_PASSWORD_LEN} characters")));
-    }
-    if !new_password.chars().any(char::is_uppercase) {
-        return Err(ServerFnError::new("Password must contain at least one uppercase letter"));
-    }
-    if !new_password.chars().any(char::is_lowercase) {
-        return Err(ServerFnError::new("Password must contain at least one lowercase letter"));
-    }
-    if !new_password.chars().any(|c| c.is_ascii_digit()) {
-        return Err(ServerFnError::new("Password must contain at least one digit"));
-    }
-    if !new_password.chars().any(|c| SPECIAL_CHARS.contains(c)) {
-        return Err(ServerFnError::new("Password must contain at least one special character"));
-    }
+    validate_password_strength(&new_password)?;
 
     let token: UserToken = user_token.parse().map_err(|_| ServerFnError::new("Invalid token"))?;
 
@@ -137,22 +144,7 @@ pub(crate) async fn register_admin(username: String, full_name: String, password
         return Err(ServerFnError::new("Full name is required"));
     }
 
-    // Server-side password strength validation
-    if password.len() < MIN_PASSWORD_LEN {
-        return Err(ServerFnError::new("Password must be at least 12 characters"));
-    }
-    if !password.chars().any(char::is_uppercase) {
-        return Err(ServerFnError::new("Password must contain at least one uppercase letter"));
-    }
-    if !password.chars().any(char::is_lowercase) {
-        return Err(ServerFnError::new("Password must contain at least one lowercase letter"));
-    }
-    if !password.chars().any(|c| c.is_ascii_digit()) {
-        return Err(ServerFnError::new("Password must contain at least one digit"));
-    }
-    if !password.chars().any(|c| "!@#$%^&*()_+-=[]{}|;:,.<>?".contains(c)) {
-        return Err(ServerFnError::new("Password must contain at least one special character"));
-    }
+    validate_password_strength(&password)?;
 
     // Safety check: ensure no users exist yet
     let existing = core_services
