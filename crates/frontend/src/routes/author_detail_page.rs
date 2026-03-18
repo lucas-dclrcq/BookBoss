@@ -94,7 +94,10 @@ pub(crate) fn AuthorDetailPage(token: String) -> Element {
                         }
                         BookGrid {
                             books: author.books,
-                            context: BookGridContext::ReadOnly,
+                            context: BookGridContext::ReadOnly {
+                                current_author_token: Some(author.token.clone()),
+                                current_series_token: None,
+                            },
                             on_action: |()| {},
                         }
                     }

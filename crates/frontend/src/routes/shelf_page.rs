@@ -538,7 +538,10 @@ pub(crate) fn ShelfPage(token: String) -> Element {
     let context = if is_own && !current_is_smart {
         BookGridContext::OwnShelf { shelf_token: token.clone() }
     } else {
-        BookGridContext::ReadOnly
+        BookGridContext::ReadOnly {
+            current_author_token: None,
+            current_series_token: None,
+        }
     };
 
     // Merged book list: first page + any load-more pages.

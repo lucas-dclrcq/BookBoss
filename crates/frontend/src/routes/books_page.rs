@@ -11,11 +11,18 @@ use crate::{
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct AuthorLink {
+    pub token: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct BookSummary {
     pub token: String,
     pub title: String,
     pub cover_path: Option<String>,
-    pub author_names: Vec<String>,
+    pub authors: Vec<AuthorLink>,
+    pub series_token: Option<String>,
     pub series_name: Option<String>,
     pub series_number: Option<String>,
     pub reading_state: Option<ReadingStateDto>,
@@ -72,28 +79,28 @@ pub(crate) async fn hydrate_books(
         book_author_pairs.push(pairs);
     }
 
-    // Batch-load unique authors.
-    let mut author_map: HashMap<u64, String> = HashMap::new();
+    // Batch-load unique authors (token + name).
+    let mut author_map: HashMap<u64, (String, String)> = HashMap::new();
     for author_id in all_author_ids {
         if let Some(a) = book_service
             .find_author_by_token(&AuthorToken::new(author_id))
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?
         {
-            author_map.insert(author_id, a.name);
+            author_map.insert(author_id, (a.token.to_string(), a.name));
         }
     }
 
-    // Batch-load unique series.
+    // Batch-load unique series (token + name).
     let unique_series: HashSet<u64> = books.iter().filter_map(|b| b.series_id).collect();
-    let mut series_map: HashMap<u64, String> = HashMap::new();
+    let mut series_map: HashMap<u64, (String, String)> = HashMap::new();
     for series_id in unique_series {
         if let Some(s) = book_service
             .find_series_by_token(&SeriesToken::new(series_id))
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?
         {
-            series_map.insert(series_id, s.name);
+            series_map.insert(series_id, (s.token.to_string(), s.name));
         }
     }
 
@@ -103,13 +110,27 @@ pub(crate) async fn hydrate_books(
         .map(|(book, author_pairs)| {
             let mut sorted = author_pairs.clone();
             sorted.sort_by_key(|&(order, _)| order);
-            let author_names = sorted.iter().filter_map(|&(_, aid)| author_map.get(&aid).cloned()).collect();
+            let authors = sorted
+                .iter()
+                .filter_map(|&(_, aid)| {
+                    author_map.get(&aid).map(|(token, name)| AuthorLink {
+                        token: token.clone(),
+                        name: name.clone(),
+                    })
+                })
+                .collect();
+            let (series_token, series_name) = book
+                .series_id
+                .and_then(|sid| series_map.get(&sid))
+                .map(|(tok, name)| (Some(tok.clone()), Some(name.clone())))
+                .unwrap_or((None, None));
             BookSummary {
                 token: book.token.to_string(),
                 title: book.title.clone(),
                 cover_path: book.cover_path.clone(),
-                author_names,
-                series_name: book.series_id.and_then(|sid| series_map.get(&sid).cloned()),
+                authors,
+                series_token,
+                series_name,
                 series_number: book.series_number.as_ref().map(std::string::ToString::to_string),
                 reading_state: reading_map.and_then(|m| m.get(&book.id).cloned()),
             }

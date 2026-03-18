@@ -9,7 +9,9 @@ use crate::{
 // Context types
 // ---------------------------------------------------------------------------
 
-/// Describes the viewing context so `BookCard` knows what the × button does.
+/// Describes the viewing context so `BookCard` knows what the × button does
+/// and which author/series links to suppress (to avoid linking to the current
+/// page).
 #[derive(Clone, PartialEq, Debug)]
 pub(crate) enum BookGridContext {
     /// All-books view: × deletes the book from the library (requires
@@ -19,8 +21,12 @@ pub(crate) enum BookGridContext {
     /// shelf.
     OwnShelf { shelf_token: String },
     /// Read-only view (e.g. someone else's shelf, author/series pages): no ×
-    /// button.
-    ReadOnly,
+    /// button. Supply `current_author_token` or `current_series_token` to
+    /// suppress the corresponding link when already on that page.
+    ReadOnly {
+        current_author_token: Option<String>,
+        current_series_token: Option<String>,
+    },
 }
 
 /// Page-level signal tracking the token of the book currently being dragged,
@@ -65,11 +71,18 @@ fn BookCard(book: BookSummary) -> Element {
     let mut show_confirm = use_signal(|| false);
     let mut deleting = use_signal(|| false);
 
-    let author_str = book.author_names.join(", ");
     let series_line = match (&book.series_name, &book.series_number) {
         (Some(name), Some(num)) => Some(format!("{name} #{num}")),
         (Some(name), None) => Some(name.clone()),
         _ => None,
+    };
+
+    let (suppressed_author_token, suppressed_series_token) = match &ctx {
+        BookGridContext::ReadOnly {
+            current_author_token,
+            current_series_token,
+        } => (current_author_token.clone(), current_series_token.clone()),
+        _ => (None, None),
     };
 
     let is_dragging = dragged_token().as_deref() == Some(book.token.as_str());
@@ -216,11 +229,36 @@ fn BookCard(book: BookSummary) -> Element {
                     "{book.title}"
                 }
                 p { class: "text-xs text-gray-500 leading-tight truncate mt-0.5",
-                    "{author_str}"
+                    for (i, author) in book.authors.iter().enumerate() {
+                        if i > 0 {
+                            span { ", " }
+                        }
+                        if suppressed_author_token.as_deref() == Some(author.token.as_str()) {
+                            span { "{author.name}" }
+                        } else {
+                            Link {
+                                to: Route::AuthorDetailPage { token: author.token.clone() },
+                                class: "hover:underline",
+                                "{author.name}"
+                            }
+                        }
+                    }
                 }
                 if let Some(series) = series_line {
                     p { class: "text-xs text-gray-400 leading-tight truncate mt-0.5",
-                        "{series}"
+                        if let Some(ref stok) = book.series_token {
+                            if suppressed_series_token.as_deref() == Some(stok.as_str()) {
+                                span { "{series}" }
+                            } else {
+                                Link {
+                                    to: Route::SeriesDetailPage { token: stok.clone() },
+                                    class: "hover:underline",
+                                    "{series}"
+                                }
+                            }
+                        } else {
+                            span { "{series}" }
+                        }
                     }
                 }
             }
