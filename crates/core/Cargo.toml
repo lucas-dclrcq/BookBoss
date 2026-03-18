@@ -16,6 +16,7 @@ test-support = []
 bb-utils.workspace = true
 
 argon2.workspace = true
+rand.workspace = true
 async-trait.workspace = true
 chrono.workspace = true
 tokio.workspace = true

@@ -11,6 +11,7 @@ pub enum Capability {
     ConvertBook,
     DeleteBook,
     EditBook,
+    OpdsAccess,
     SuperAdmin,
 }
 
@@ -23,6 +24,7 @@ impl Capability {
             Self::ConvertBook => "ConvertBook",
             Self::DeleteBook => "DeleteBook",
             Self::EditBook => "EditBook",
+            Self::OpdsAccess => "OpdsAccess",
             Self::SuperAdmin => "SuperAdmin",
         }
     }
@@ -35,6 +37,7 @@ impl Capability {
             Self::ConvertBook => "Convert Books",
             Self::DeleteBook => "Delete Books",
             Self::EditBook => "Edit Books",
+            Self::OpdsAccess => "OPDS Access",
             Self::SuperAdmin => "Super Admin",
         }
     }
@@ -44,6 +47,6 @@ impl Capability {
     /// designations.
     #[must_use]
     pub fn user_grantable() -> &'static [Self] {
-        &[Self::ApproveImports, Self::ConvertBook, Self::DeleteBook, Self::EditBook]
+        &[Self::ApproveImports, Self::ConvertBook, Self::DeleteBook, Self::EditBook, Self::OpdsAccess]
     }
 }

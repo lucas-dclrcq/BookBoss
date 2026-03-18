@@ -786,6 +786,7 @@ dependencies = [
  "bb-utils",
  "chrono",
  "derive_builder",
+ "rand 0.10.0",
  "rust_decimal",
  "serde",
  "serde_json",

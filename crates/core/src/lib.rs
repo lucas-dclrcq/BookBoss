@@ -7,6 +7,7 @@ pub mod filter;
 pub mod import;
 pub mod jobs;
 pub mod library;
+pub mod opds;
 pub mod pipeline;
 pub mod reading;
 pub mod repository;
@@ -28,6 +29,7 @@ use crate::{
     import::{ImportJobService, service::ImportJobServiceImpl},
     jobs::{JobRegistry, JobWorker},
     library::{LibraryService, LibraryServiceImpl},
+    opds::{OpdsService, OpdsServiceImpl},
     pipeline::PipelineService,
     reading::{ReadingService, ReadingServiceImpl},
     repository::RepositoryService,
@@ -52,6 +54,7 @@ pub struct CoreServices {
     pub shelf_service: Arc<dyn ShelfService>,
     pub reading_service: Arc<dyn ReadingService>,
     pub device_service: Arc<dyn DeviceService>,
+    pub opds_service: Arc<dyn OpdsService>,
 }
 
 impl CoreServices {
@@ -73,7 +76,8 @@ impl CoreServices {
             conversion_service,
             shelf_service: Arc::new(ShelfServiceImpl::new(repository_service.clone())),
             reading_service: Arc::new(ReadingServiceImpl::new(repository_service.clone())),
-            device_service: Arc::new(DeviceServiceImpl::new(repository_service)),
+            device_service: Arc::new(DeviceServiceImpl::new(repository_service.clone())),
+            opds_service: Arc::new(OpdsServiceImpl::new(repository_service)),
         }
     }
 }
