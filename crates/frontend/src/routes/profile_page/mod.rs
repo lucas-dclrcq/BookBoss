@@ -10,7 +10,7 @@ use {
         CoreServices,
         device::{DeviceToken, OnRemovalAction},
         reading::{AUTO_READ_THRESHOLD_KEY, DEFAULT_AUTO_READ_THRESHOLD},
-        types::EmailAddress,
+        types::{Capability, EmailAddress},
         user::User,
     },
     chrono::{DateTime, Utc},
@@ -48,6 +48,14 @@ struct DeviceRow {
     companion_shelf_token: Option<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+struct OpdsInfo {
+    has_access: bool,
+    password: Option<String>,
+    opds_url: String,
+    username: String,
+}
+
 // ---------------------------------------------------------------------------
 // Server functions
 // ---------------------------------------------------------------------------
@@ -59,6 +67,85 @@ struct DeviceRow {
 async fn get_profile_context() -> Result<(), ServerFnError> {
     authenticated_user(&auth_session)?;
     Ok(())
+}
+
+#[get(
+    "/api/v1/profile/opds",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+async fn get_opds_info() -> Result<OpdsInfo, ServerFnError> {
+    let auth_user = authenticated_user(&auth_session)?;
+    let user_id = auth_user.id();
+
+    let user = core_services
+        .user_service
+        .find_by_id(user_id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .ok_or_else(|| ServerFnError::new("User not found"))?;
+
+    if !user.has_capability(Capability::OpdsAccess) {
+        return Ok(OpdsInfo {
+            has_access: false,
+            password: None,
+            opds_url: String::new(),
+            username: String::new(),
+        });
+    }
+
+    let has_pw = core_services
+        .opds_service
+        .has_password(&user)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let password = if has_pw {
+        None
+    } else {
+        let pw = core_services
+            .opds_service
+            .get_or_create_password(&user)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        Some(pw)
+    };
+
+    Ok(OpdsInfo {
+        has_access: true,
+        password,
+        opds_url: "/opds/".to_string(),
+        username: user.username.clone(),
+    })
+}
+
+#[post(
+    "/api/v1/profile/opds/regenerate",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+async fn regenerate_opds_password() -> Result<String, ServerFnError> {
+    let auth_user = authenticated_user(&auth_session)?;
+    let user_id = auth_user.id();
+
+    let user = core_services
+        .user_service
+        .find_by_id(user_id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .ok_or_else(|| ServerFnError::new("User not found"))?;
+
+    if !user.has_capability(Capability::OpdsAccess) {
+        return Err(ServerFnError::new("OPDS access not enabled"));
+    }
+
+    let pw = core_services
+        .opds_service
+        .regenerate_password(&user)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(pw)
 }
 
 #[get(
@@ -409,6 +496,11 @@ pub(crate) fn ProfilePage() -> Element {
 
                 hr { class: "border-gray-200" }
 
+                // ── OPDS ─────────────────────────────────────────────────
+                OpdsSectionContent {}
+
+                hr { class: "border-gray-200" }
+
                 // ── My Devices ────────────────────────────────────────────
                 section {
                     DevicesSectionContent {}
@@ -663,6 +755,121 @@ fn ProfileSectionContent() -> Element {
                             },
                             if pw_saving() { "Saving…" } else { "Change Password" }
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// OPDS section
+// ---------------------------------------------------------------------------
+
+#[component]
+fn OpdsSectionContent() -> Element {
+    let opds_info = use_server_future(get_opds_info)?;
+    let mut password: Signal<Option<String>> = use_signal(|| None);
+    let mut regenerating = use_signal(|| false);
+    let mut copied = use_signal(|| false);
+    let mut error_msg: Signal<Option<String>> = use_signal(|| None);
+
+    use_effect(move || {
+        if let Some(Ok(info)) = opds_info() {
+            if let Some(pw) = info.password {
+                password.set(Some(pw));
+            }
+        }
+    });
+
+    let info = match opds_info() {
+        Some(Ok(info)) => info,
+        Some(Err(_)) => return rsx! {},
+        None => return rsx! {},
+    };
+
+    if !info.has_access {
+        return rsx! {};
+    }
+
+    rsx! {
+        section {
+            h2 { class: "text-lg font-semibold text-gray-900 mb-4", "OPDS" }
+            div { class: "rounded-lg border border-gray-200 bg-white px-4 py-4 flex flex-col gap-3",
+                p { class: "text-sm text-gray-600",
+                    "Use these credentials to connect your e-reader app (KOReader, Moon+ Reader, etc.) to your BookBoss library."
+                }
+
+                div {
+                    span { class: "block text-sm font-medium text-gray-700 mb-1", "Catalog URL" }
+                    div { class: "flex items-center gap-2",
+                        code { class: "flex-1 text-sm bg-gray-50 rounded px-3 py-1.5 border border-gray-200 text-gray-900 select-all",
+                            "{info.opds_url}"
+                        }
+                    }
+                }
+
+                div {
+                    span { class: "block text-sm font-medium text-gray-700 mb-1", "Username" }
+                    code { class: "text-sm bg-gray-50 rounded px-3 py-1.5 border border-gray-200 text-gray-900 select-all inline-block",
+                        "{info.username}"
+                    }
+                }
+
+                div {
+                    span { class: "block text-sm font-medium text-gray-700 mb-1", "Password" }
+                    if let Some(pw) = password() {
+                        div { class: "flex items-center gap-2",
+                            code { class: "text-sm bg-gray-50 rounded px-3 py-1.5 border border-gray-200 text-gray-900 select-all font-mono",
+                                "{pw}"
+                            }
+                            button {
+                                class: "px-2 py-1.5 text-xs font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50",
+                                onclick: move |_| {
+                                    let pw_val = pw.clone();
+                                    spawn(async move {
+                                        if let Ok(eval) = document::eval(&format!(
+                                            "navigator.clipboard.writeText('{pw_val}')"
+                                        )).await {
+                                            let _ = eval;
+                                            copied.set(true);
+                                        }
+                                    });
+                                },
+                                if copied() { "Copied!" } else { "Copy" }
+                            }
+                        }
+                        p { class: "text-xs text-amber-600 mt-1",
+                            "Save this password now — it cannot be shown again."
+                        }
+                    } else {
+                        p { class: "text-sm text-gray-500 italic",
+                            "Password has been generated. Use Regenerate to get a new one."
+                        }
+                    }
+                }
+
+                if let Some(err) = error_msg() {
+                    p { class: "text-xs text-red-600", "{err}" }
+                }
+
+                div { class: "flex justify-end",
+                    button {
+                        class: "px-3 py-1.5 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50",
+                        disabled: regenerating(),
+                        onclick: move |_| {
+                            regenerating.set(true);
+                            error_msg.set(None);
+                            copied.set(false);
+                            spawn(async move {
+                                match regenerate_opds_password().await {
+                                    Ok(pw) => password.set(Some(pw)),
+                                    Err(e) => error_msg.set(Some(e.to_string())),
+                                }
+                                regenerating.set(false);
+                            });
+                        },
+                        if regenerating() { "Regenerating…" } else { "Regenerate Password" }
                     }
                 }
             }
