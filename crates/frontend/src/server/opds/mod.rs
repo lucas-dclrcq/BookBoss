@@ -20,12 +20,16 @@
 //! | GET    | `/opds/download/:book_token/:fmt` | Book file download       |
 
 pub mod extractor;
+pub mod feeds;
 pub mod xml;
 
-use axum::Router;
+use axum::{Router, routing};
 pub use extractor::OpdsUser;
 
 /// Builds the OPDS catalog router.
 pub fn opds_router() -> Router {
     Router::new()
+        .route("/opds/", routing::get(feeds::root))
+        .route("/opds/all", routing::get(feeds::all_books))
+        .route("/opds/shelves", routing::get(feeds::shelves))
 }
