@@ -3,6 +3,7 @@ use serde::Serialize;
 use crate::{Error, jobs::model::Job, repository::Transaction};
 
 #[async_trait::async_trait]
+#[cfg_attr(test, mockall::automock)]
 pub trait JobRepository: Send + Sync {
     async fn enqueue_raw(&self, transaction: &dyn Transaction, job_type: &str, payload: serde_json::Value, priority: i16) -> Result<Job, Error>;
 

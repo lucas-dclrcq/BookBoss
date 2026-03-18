@@ -9,6 +9,7 @@ use crate::{
 };
 
 #[async_trait]
+#[cfg_attr(test, mockall::automock)]
 pub trait LibraryStore: Send + Sync {
     // ── Path resolution (sync, no I/O) ──────────────────────────────────────
 

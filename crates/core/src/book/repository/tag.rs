@@ -5,6 +5,7 @@ use crate::{
 };
 
 #[async_trait::async_trait]
+#[cfg_attr(test, mockall::automock)]
 pub trait TagRepository: Send + Sync {
     async fn add_tag(&self, transaction: &dyn Transaction, tag: NewTag) -> Result<Tag, Error>;
     async fn update_tag(&self, transaction: &dyn Transaction, tag: Tag) -> Result<Tag, Error>;

@@ -5,6 +5,7 @@ use crate::{
 };
 
 #[async_trait::async_trait]
+#[cfg_attr(test, mockall::automock)]
 pub trait SeriesRepository: Send + Sync {
     async fn add_series(&self, transaction: &dyn Transaction, series: NewSeries) -> Result<Series, Error>;
     async fn update_series(&self, transaction: &dyn Transaction, series: Series) -> Result<Series, Error>;

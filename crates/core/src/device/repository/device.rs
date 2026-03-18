@@ -7,6 +7,7 @@ use crate::{
 };
 
 #[async_trait::async_trait]
+#[cfg_attr(test, mockall::automock)]
 pub trait DeviceRepository: Send + Sync {
     // Device CRUD
     async fn add_device(&self, transaction: &dyn Transaction, device: NewDevice) -> Result<Device, Error>;

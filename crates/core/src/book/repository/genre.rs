@@ -5,6 +5,7 @@ use crate::{
 };
 
 #[async_trait::async_trait]
+#[cfg_attr(test, mockall::automock)]
 pub trait GenreRepository: Send + Sync {
     async fn add_genre(&self, transaction: &dyn Transaction, genre: NewGenre) -> Result<Genre, Error>;
     async fn update_genre(&self, transaction: &dyn Transaction, genre: Genre) -> Result<Genre, Error>;

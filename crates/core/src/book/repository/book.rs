@@ -8,6 +8,7 @@ use crate::{
 };
 
 #[async_trait::async_trait]
+#[cfg_attr(test, mockall::automock)]
 pub trait BookRepository: Send + Sync {
     async fn add_book(&self, transaction: &dyn Transaction, book: NewBook) -> Result<Book, Error>;
     async fn update_book(&self, transaction: &dyn Transaction, book: Book) -> Result<Book, Error>;

@@ -7,6 +7,7 @@ use crate::{
 };
 
 #[async_trait::async_trait]
+#[cfg_attr(test, mockall::automock)]
 pub trait UserBookMetadataRepository: Send + Sync {
     async fn upsert(&self, transaction: &dyn Transaction, metadata: UserBookMetadata) -> Result<UserBookMetadata, Error>;
     async fn find_by_user_and_book(&self, transaction: &dyn Transaction, user_id: UserId, book_id: BookId) -> Result<Option<UserBookMetadata>, Error>;

@@ -5,6 +5,7 @@ use crate::{
 };
 
 #[async_trait::async_trait]
+#[cfg_attr(test, mockall::automock)]
 pub trait ImportJobRepository: Send + Sync {
     async fn add_job(&self, transaction: &dyn Transaction, job: NewImportJob) -> Result<ImportJob, Error>;
     async fn update_job(&self, transaction: &dyn Transaction, job: ImportJob) -> Result<ImportJob, Error>;

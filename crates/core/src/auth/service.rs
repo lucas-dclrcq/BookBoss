@@ -87,37 +87,28 @@ impl AuthService for AuthServiceImpl {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        any::Any,
-        collections::HashSet,
-        sync::{Arc, Mutex},
-    };
+    use std::{any::Any, collections::HashSet, sync::Arc};
 
     use chrono::Utc;
 
     use super::{AuthService, AuthServiceImpl};
     use crate::{
         Error, RepositoryError,
-        auth::{NewSession, Session, SessionBuilder, repository::SessionRepository},
-        book::{
-            Author, AuthorId, AuthorRepository, AuthorRole, AuthorToken, Book, BookAuthor, BookFile, BookId, BookIdentifier, BookQuery, BookRepository,
-            BookToken, FileFormat, FileRole, Genre, GenreId, GenreRepository, GenreToken, IdentifierType, NewAuthor, NewBook, NewGenre, NewPublisher,
-            NewSeries, NewTag, Publisher, PublisherId, PublisherRepository, PublisherToken, Series, SeriesId, SeriesRepository, SeriesToken, Tag, TagId,
-            TagRepository, TagToken,
+        auth::{NewSession, Session, SessionBuilder, repository::MockSessionRepository},
+        book::repository::{
+            author::MockAuthorRepository, book::MockBookRepository, genre::MockGenreRepository, publisher::MockPublisherRepository,
+            series::MockSeriesRepository, tag::MockTagRepository,
         },
-        device::{Device, DeviceBook, DeviceId, DeviceRepository, DeviceSyncLog, DeviceToken, NewDevice, NewDeviceSyncLog},
-        import::{ImportJob, ImportJobId, ImportJobRepository, ImportJobToken, ImportStatus, NewImportJob},
-        jobs::{Job, JobRepository},
-        reading::{ReadStatus, UserBookMetadata, UserBookMetadataRepository},
-        repository::{Repository, RepositoryServiceBuilder, Transaction},
-        shelf::{BookShelf, NewShelf, Shelf, ShelfId, ShelfRepository, ShelfToken},
-        user::{
-            NewUser, NewUserSetting, User, UserId, UserSetting,
-            repository::{UserRepository, UserSettingRepository},
-        },
+        device::repository::device::MockDeviceRepository,
+        import::repository::import_job::MockImportJobRepository,
+        jobs::repository::MockJobRepository,
+        reading::repository::user_book_metadata::MockUserBookMetadataRepository,
+        repository::{MockRepository, RepositoryService, RepositoryServiceBuilder, Transaction},
+        shelf::repository::shelf::MockShelfRepository,
+        user::repository::{user::MockUserRepository, user_settings::MockUserSettingRepository},
     };
 
-    // ─── Mock Transaction ────────────────────────────────────────────────────
+    // ─── Manual MockTransaction (can't automock due to Any not being Sync) ──
 
     struct MockTransaction;
 
@@ -136,648 +127,58 @@ mod tests {
         }
     }
 
-    // ─── Mock Repository ─────────────────────────────────────────────────────
-
-    struct MockRepository;
-
-    #[async_trait::async_trait]
-    impl Repository for MockRepository {
-        async fn begin(&self) -> Result<Box<dyn Transaction>, Error> {
-            Ok(Box::new(MockTransaction))
-        }
-
-        async fn begin_read_only(&self) -> Result<Box<dyn Transaction>, Error> {
-            Ok(Box::new(MockTransaction))
-        }
-
-        async fn close(&self) -> Result<(), Error> {
-            Ok(())
-        }
-    }
-
-    // ─── Mock UserRepository ─────────────────────────────────────────────────
-
-    #[derive(Default)]
-    struct MockUserRepository {
-        find_by_username_result: Mutex<Option<Result<Option<User>, Error>>>,
-    }
-
-    impl MockUserRepository {
-        fn with_find_by_username_result(self, result: Result<Option<User>, Error>) -> Self {
-            *self.find_by_username_result.lock().unwrap() = Some(result);
-            self
-        }
-    }
-
-    #[async_trait::async_trait]
-    impl UserRepository for MockUserRepository {
-        async fn add_user(&self, _tx: &dyn Transaction, _user: NewUser) -> Result<User, Error> {
-            Err(Error::MockNotConfigured("add_user"))
-        }
-
-        async fn update_user(&self, _tx: &dyn Transaction, _user: User) -> Result<User, Error> {
-            Err(Error::MockNotConfigured("update_user"))
-        }
-
-        async fn delete_user(&self, _tx: &dyn Transaction, _user: User) -> Result<User, Error> {
-            Err(Error::MockNotConfigured("delete_user"))
-        }
-
-        async fn list_users(&self, _tx: &dyn Transaction, _start_id: Option<UserId>, _page_size: Option<u64>) -> Result<Vec<User>, Error> {
-            Err(Error::MockNotConfigured("list_users"))
-        }
-
-        async fn find_by_id(&self, _tx: &dyn Transaction, _id: UserId) -> Result<Option<User>, Error> {
-            Err(Error::MockNotConfigured("find_by_id"))
-        }
-
-        async fn find_by_username(&self, _tx: &dyn Transaction, _username: &str) -> Result<Option<User>, Error> {
-            self.find_by_username_result
-                .lock()
-                .unwrap()
-                .clone()
-                .unwrap_or_else(|| Err(Error::MockNotConfigured("find_by_username")))
-        }
-    }
-
-    // ─── Mock UserSettingRepository ──────────────────────────────────────────
-
-    struct MockUserSettingRepository;
-
-    #[async_trait::async_trait]
-    impl UserSettingRepository for MockUserSettingRepository {
-        async fn get(&self, _tx: &dyn Transaction, _user_id: UserId, _key: &str) -> Result<Option<UserSetting>, Error> {
-            unimplemented!()
-        }
-        async fn set(&self, _tx: &dyn Transaction, _setting: NewUserSetting) -> Result<UserSetting, Error> {
-            unimplemented!()
-        }
-        async fn delete(&self, _tx: &dyn Transaction, _user_id: UserId, _key: &str) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn list_by_user(&self, _tx: &dyn Transaction, _user_id: UserId) -> Result<Vec<UserSetting>, Error> {
-            unimplemented!()
-        }
-    }
-
-    // ─── Mock SessionRepository ───────────────────────────────────────────────
-
-    #[derive(Default)]
-    struct MockSessionRepository {
-        count_result: Mutex<Option<Result<i64, Error>>>,
-        store_result: Mutex<Option<Result<Session, Error>>>,
-        load_result: Mutex<Option<Result<Option<Session>, Error>>>,
-        delete_by_id_result: Mutex<Option<Result<(), Error>>>,
-        exists_result: Mutex<Option<Result<bool, Error>>>,
-        delete_by_expiry_result: Mutex<Option<Result<Vec<String>, Error>>>,
-        delete_all_result: Mutex<Option<Result<(), Error>>>,
-        get_ids_result: Mutex<Option<Result<Vec<String>, Error>>>,
-    }
-
-    impl MockSessionRepository {
-        fn with_count_result(self, result: Result<i64, Error>) -> Self {
-            *self.count_result.lock().unwrap() = Some(result);
-            self
-        }
-
-        fn with_store_result(self, result: Result<Session, Error>) -> Self {
-            *self.store_result.lock().unwrap() = Some(result);
-            self
-        }
-
-        fn with_load_result(self, result: Result<Option<Session>, Error>) -> Self {
-            *self.load_result.lock().unwrap() = Some(result);
-            self
-        }
-
-        fn with_delete_by_id_result(self, result: Result<(), Error>) -> Self {
-            *self.delete_by_id_result.lock().unwrap() = Some(result);
-            self
-        }
-
-        fn with_exists_result(self, result: Result<bool, Error>) -> Self {
-            *self.exists_result.lock().unwrap() = Some(result);
-            self
-        }
-
-        fn with_delete_by_expiry_result(self, result: Result<Vec<String>, Error>) -> Self {
-            *self.delete_by_expiry_result.lock().unwrap() = Some(result);
-            self
-        }
-
-        fn with_delete_all_result(self, result: Result<(), Error>) -> Self {
-            *self.delete_all_result.lock().unwrap() = Some(result);
-            self
-        }
-
-        fn with_get_ids_result(self, result: Result<Vec<String>, Error>) -> Self {
-            *self.get_ids_result.lock().unwrap() = Some(result);
-            self
-        }
-    }
-
-    #[async_trait::async_trait]
-    impl SessionRepository for MockSessionRepository {
-        async fn count(&self, _tx: &dyn Transaction) -> Result<i64, Error> {
-            self.count_result
-                .lock()
-                .unwrap()
-                .clone()
-                .unwrap_or_else(|| Err(Error::MockNotConfigured("count")))
-        }
-
-        async fn store(&self, _tx: &dyn Transaction, _session: NewSession) -> Result<Session, Error> {
-            self.store_result
-                .lock()
-                .unwrap()
-                .clone()
-                .unwrap_or_else(|| Err(Error::MockNotConfigured("store")))
-        }
-
-        async fn load(&self, _tx: &dyn Transaction, _id: &str) -> Result<Option<Session>, Error> {
-            self.load_result
-                .lock()
-                .unwrap()
-                .clone()
-                .unwrap_or_else(|| Err(Error::MockNotConfigured("load")))
-        }
-
-        async fn delete_by_id(&self, _tx: &dyn Transaction, _id: &str) -> Result<(), Error> {
-            self.delete_by_id_result
-                .lock()
-                .unwrap()
-                .clone()
-                .unwrap_or_else(|| Err(Error::MockNotConfigured("delete_by_id")))
-        }
-
-        async fn exists(&self, _tx: &dyn Transaction, _id: &str) -> Result<bool, Error> {
-            self.exists_result
-                .lock()
-                .unwrap()
-                .clone()
-                .unwrap_or_else(|| Err(Error::MockNotConfigured("exists")))
-        }
-
-        async fn delete_by_expiry(&self, _tx: &dyn Transaction) -> Result<Vec<String>, Error> {
-            self.delete_by_expiry_result
-                .lock()
-                .unwrap()
-                .clone()
-                .unwrap_or_else(|| Err(Error::MockNotConfigured("delete_by_expiry")))
-        }
-
-        async fn delete_all(&self, _tx: &dyn Transaction) -> Result<(), Error> {
-            self.delete_all_result
-                .lock()
-                .unwrap()
-                .clone()
-                .unwrap_or_else(|| Err(Error::MockNotConfigured("delete_all")))
-        }
-
-        async fn get_ids(&self, _tx: &dyn Transaction) -> Result<Vec<String>, Error> {
-            self.get_ids_result
-                .lock()
-                .unwrap()
-                .clone()
-                .unwrap_or_else(|| Err(Error::MockNotConfigured("get_ids")))
-        }
-    }
-
-    // ─── Mock Book Repositories ──────────────────────────────────────────────
-
-    struct MockAuthorRepository;
-    #[async_trait::async_trait]
-    impl AuthorRepository for MockAuthorRepository {
-        async fn add_author(&self, _: &dyn Transaction, _: NewAuthor) -> Result<Author, Error> {
-            unimplemented!()
-        }
-        async fn update_author(&self, _: &dyn Transaction, _: Author) -> Result<Author, Error> {
-            unimplemented!()
-        }
-        async fn find_by_id(&self, _: &dyn Transaction, _: AuthorId) -> Result<Option<Author>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_token(&self, _: &dyn Transaction, _: &AuthorToken) -> Result<Option<Author>, Error> {
-            unimplemented!()
-        }
-        async fn list_authors(&self, _: &dyn Transaction, _: Option<AuthorId>, _: Option<u64>) -> Result<Vec<Author>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_name(&self, _: &dyn Transaction, _: &str) -> Result<Option<Author>, Error> {
-            unimplemented!()
-        }
-        async fn count_authors(&self, _: &dyn Transaction) -> Result<u64, Error> {
-            unimplemented!()
-        }
-        async fn delete_author(&self, _: &dyn Transaction, _: AuthorId) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn list_all_authors(&self, _: &dyn Transaction) -> Result<Vec<Author>, Error> {
-            unimplemented!()
-        }
-    }
-
-    struct MockSeriesRepository;
-    #[async_trait::async_trait]
-    impl SeriesRepository for MockSeriesRepository {
-        async fn add_series(&self, _: &dyn Transaction, _: NewSeries) -> Result<Series, Error> {
-            unimplemented!()
-        }
-        async fn update_series(&self, _: &dyn Transaction, _: Series) -> Result<Series, Error> {
-            unimplemented!()
-        }
-        async fn find_by_id(&self, _: &dyn Transaction, _: SeriesId) -> Result<Option<Series>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_token(&self, _: &dyn Transaction, _: &SeriesToken) -> Result<Option<Series>, Error> {
-            unimplemented!()
-        }
-        async fn list_series(&self, _: &dyn Transaction, _: Option<SeriesId>, _: Option<u64>) -> Result<Vec<Series>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_name(&self, _: &dyn Transaction, _: &str) -> Result<Option<Series>, Error> {
-            unimplemented!()
-        }
-        async fn list_all_series(&self, _: &dyn Transaction) -> Result<Vec<Series>, Error> {
-            unimplemented!()
-        }
-        async fn max_series_number_for_series(&self, _: &dyn Transaction, _: SeriesId) -> Result<Option<rust_decimal::Decimal>, Error> {
-            unimplemented!()
-        }
-    }
-
-    struct MockPublisherRepository;
-    #[async_trait::async_trait]
-    impl PublisherRepository for MockPublisherRepository {
-        async fn add_publisher(&self, _: &dyn Transaction, _: NewPublisher) -> Result<Publisher, Error> {
-            unimplemented!()
-        }
-        async fn update_publisher(&self, _: &dyn Transaction, _: Publisher) -> Result<Publisher, Error> {
-            unimplemented!()
-        }
-        async fn find_by_id(&self, _: &dyn Transaction, _: PublisherId) -> Result<Option<Publisher>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_token(&self, _: &dyn Transaction, _: &PublisherToken) -> Result<Option<Publisher>, Error> {
-            unimplemented!()
-        }
-        async fn list_publishers(&self, _: &dyn Transaction, _: Option<PublisherId>, _: Option<u64>) -> Result<Vec<Publisher>, Error> {
-            unimplemented!()
-        }
-        async fn list_all_publishers(&self, _: &dyn Transaction) -> Result<Vec<Publisher>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_name(&self, _: &dyn Transaction, _: &str) -> Result<Option<Publisher>, Error> {
-            unimplemented!()
-        }
-    }
-
-    struct MockGenreRepository;
-    #[async_trait::async_trait]
-    impl GenreRepository for MockGenreRepository {
-        async fn add_genre(&self, _: &dyn Transaction, _: NewGenre) -> Result<Genre, Error> {
-            unimplemented!()
-        }
-        async fn update_genre(&self, _: &dyn Transaction, _: Genre) -> Result<Genre, Error> {
-            unimplemented!()
-        }
-        async fn find_by_id(&self, _: &dyn Transaction, _: GenreId) -> Result<Option<Genre>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_token(&self, _: &dyn Transaction, _: &GenreToken) -> Result<Option<Genre>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_name(&self, _: &dyn Transaction, _: &str) -> Result<Option<Genre>, Error> {
-            unimplemented!()
-        }
-        async fn list_genres(&self, _: &dyn Transaction, _: Option<GenreId>, _: Option<u64>) -> Result<Vec<Genre>, Error> {
-            unimplemented!()
-        }
-        async fn list_all_genres(&self, _: &dyn Transaction) -> Result<Vec<Genre>, Error> {
-            unimplemented!()
-        }
-    }
-
-    struct MockTagRepository;
-    #[async_trait::async_trait]
-    impl TagRepository for MockTagRepository {
-        async fn add_tag(&self, _: &dyn Transaction, _: NewTag) -> Result<Tag, Error> {
-            unimplemented!()
-        }
-        async fn update_tag(&self, _: &dyn Transaction, _: Tag) -> Result<Tag, Error> {
-            unimplemented!()
-        }
-        async fn find_by_id(&self, _: &dyn Transaction, _: TagId) -> Result<Option<Tag>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_token(&self, _: &dyn Transaction, _: &TagToken) -> Result<Option<Tag>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_name(&self, _: &dyn Transaction, _: &str) -> Result<Option<Tag>, Error> {
-            unimplemented!()
-        }
-        async fn list_tags(&self, _: &dyn Transaction, _: Option<TagId>, _: Option<u64>) -> Result<Vec<Tag>, Error> {
-            unimplemented!()
-        }
-        async fn list_all_tags(&self, _: &dyn Transaction) -> Result<Vec<Tag>, Error> {
-            unimplemented!()
-        }
-    }
-
-    struct MockImportJobRepository;
-    #[async_trait::async_trait]
-    impl ImportJobRepository for MockImportJobRepository {
-        async fn add_job(&self, _: &dyn Transaction, _: NewImportJob) -> Result<ImportJob, Error> {
-            unimplemented!()
-        }
-        async fn update_job(&self, _: &dyn Transaction, _: ImportJob) -> Result<ImportJob, Error> {
-            unimplemented!()
-        }
-        async fn find_by_id(&self, _: &dyn Transaction, _: ImportJobId) -> Result<Option<ImportJob>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_token(&self, _: &dyn Transaction, _: &ImportJobToken) -> Result<Option<ImportJob>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_hash(&self, _: &dyn Transaction, _: &str) -> Result<Option<ImportJob>, Error> {
-            unimplemented!()
-        }
-        async fn list_by_status(&self, _: &dyn Transaction, _: ImportStatus, _: Option<ImportJobId>, _: Option<u64>) -> Result<Vec<ImportJob>, Error> {
-            unimplemented!()
-        }
-        async fn reset_in_progress_to_pending(&self, _: &dyn Transaction) -> Result<u64, Error> {
-            unimplemented!()
-        }
-        async fn find_by_candidate_book_id(&self, _: &dyn Transaction, _: BookId) -> Result<Option<ImportJob>, Error> {
-            unimplemented!()
-        }
-        async fn delete_job(&self, _: &dyn Transaction, _: ImportJobId) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn approve_job(&self, _: &dyn Transaction, _: ImportJobId) -> Result<(), Error> {
-            unimplemented!()
-        }
-    }
-
-    struct MockJobRepository;
-    #[async_trait::async_trait]
-    impl JobRepository for MockJobRepository {
-        async fn enqueue_raw(&self, _: &dyn Transaction, _: &str, _: serde_json::Value, _: i16) -> Result<Job, Error> {
-            unimplemented!()
-        }
-        async fn claim_next(&self, _: &dyn Transaction) -> Result<Option<Job>, Error> {
-            unimplemented!()
-        }
-        async fn complete(&self, _: &dyn Transaction, _: Job) -> Result<Job, Error> {
-            unimplemented!()
-        }
-        async fn fail(&self, _: &dyn Transaction, _: Job, _: String) -> Result<Job, Error> {
-            unimplemented!()
-        }
-        async fn reset_running_to_pending(&self, _: &dyn Transaction) -> Result<u64, Error> {
-            unimplemented!()
-        }
-        async fn count_pending_by_type(&self, _: &dyn Transaction, _: &str) -> Result<u64, Error> {
-            unimplemented!()
-        }
-    }
-
-    struct MockShelfRepository;
-    #[async_trait::async_trait]
-    impl ShelfRepository for MockShelfRepository {
-        async fn add_shelf(&self, _: &dyn Transaction, _: NewShelf) -> Result<Shelf, Error> {
-            unimplemented!()
-        }
-        async fn update_shelf(&self, _: &dyn Transaction, _: Shelf) -> Result<Shelf, Error> {
-            unimplemented!()
-        }
-        async fn delete_shelf(&self, _: &dyn Transaction, _: Shelf) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn find_by_id(&self, _: &dyn Transaction, _: ShelfId) -> Result<Option<Shelf>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_token(&self, _: &dyn Transaction, _: &ShelfToken) -> Result<Option<Shelf>, Error> {
-            unimplemented!()
-        }
-        async fn list_for_user(&self, _: &dyn Transaction, _: UserId) -> Result<Vec<Shelf>, Error> {
-            unimplemented!()
-        }
-        async fn list_public_shelves(&self, _: &dyn Transaction, _: UserId) -> Result<Vec<Shelf>, Error> {
-            unimplemented!()
-        }
-        async fn add_book_to_shelf(&self, _: &dyn Transaction, _: BookShelf) -> Result<BookShelf, Error> {
-            unimplemented!()
-        }
-        async fn remove_book_from_shelf(&self, _: &dyn Transaction, _: ShelfId, _: BookId) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn books_for_shelf(&self, _: &dyn Transaction, _: ShelfId, _: Option<BookId>, _: Option<u64>) -> Result<Vec<BookShelf>, Error> {
-            unimplemented!()
-        }
-        async fn books_for_filter(
-            &self,
-            _: &dyn Transaction,
-            _: &crate::filter::BookFilter,
-            _: UserId,
-            _: Option<BookId>,
-            _: Option<u64>,
-        ) -> Result<Vec<Book>, Error> {
-            unimplemented!()
-        }
-        async fn count_for_filter(&self, _: &dyn Transaction, _: &crate::filter::BookFilter, _: UserId) -> Result<u64, Error> {
-            unimplemented!()
-        }
-        async fn find_by_device_id(&self, _: &dyn Transaction, _: crate::device::DeviceId) -> Result<Option<Shelf>, Error> {
-            unimplemented!()
-        }
-    }
-
-    struct MockBookRepository;
-    #[async_trait::async_trait]
-    impl BookRepository for MockBookRepository {
-        async fn add_book(&self, _: &dyn Transaction, _: NewBook) -> Result<Book, Error> {
-            unimplemented!()
-        }
-        async fn update_book(&self, _: &dyn Transaction, _: Book) -> Result<Book, Error> {
-            unimplemented!()
-        }
-        async fn find_by_id(&self, _: &dyn Transaction, _: BookId) -> Result<Option<Book>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_token(&self, _: &dyn Transaction, _: &BookToken) -> Result<Option<Book>, Error> {
-            unimplemented!()
-        }
-        async fn list_books(&self, _: &dyn Transaction, _: &BookQuery, _: Option<BookId>, _: Option<u64>) -> Result<Vec<Book>, Error> {
-            unimplemented!()
-        }
-        async fn authors_for_book(&self, _: &dyn Transaction, _: BookId) -> Result<Vec<BookAuthor>, Error> {
-            unimplemented!()
-        }
-        async fn files_for_book(&self, _: &dyn Transaction, _: BookId) -> Result<Vec<BookFile>, Error> {
-            unimplemented!()
-        }
-        async fn identifiers_for_book(&self, _: &dyn Transaction, _: BookId) -> Result<Vec<BookIdentifier>, Error> {
-            unimplemented!()
-        }
-        async fn find_file_by_hash(&self, _: &dyn Transaction, _: &str) -> Result<Option<BookFile>, Error> {
-            unimplemented!()
-        }
-        async fn add_book_file(&self, _: &dyn Transaction, _: BookId, _: FileFormat, _: FileRole, _: String, _: i64, _: String) -> Result<BookFile, Error> {
-            unimplemented!()
-        }
-        async fn add_book_author(&self, _: &dyn Transaction, _: BookId, _: AuthorId, _: AuthorRole, _: i32) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn add_book_identifier(&self, _: &dyn Transaction, _: BookId, _: IdentifierType, _: String) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn delete_book(&self, _: &dyn Transaction, _: BookId) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn delete_book_authors(&self, _: &dyn Transaction, _: BookId) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn delete_book_identifiers(&self, _: &dyn Transaction, _: BookId) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn count_available_books(&self, _: &dyn Transaction) -> Result<u64, Error> {
-            unimplemented!()
-        }
-        async fn count_books_for_author(&self, _: &dyn Transaction, _: AuthorId) -> Result<u64, Error> {
-            unimplemented!()
-        }
-        async fn genres_for_book(&self, _: &dyn Transaction, _: BookId) -> Result<Vec<Genre>, Error> {
-            unimplemented!()
-        }
-        async fn tags_for_book(&self, _: &dyn Transaction, _: BookId) -> Result<Vec<Tag>, Error> {
-            unimplemented!()
-        }
-        async fn add_book_genre(&self, _: &dyn Transaction, _: BookId, _: GenreId) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn add_book_tag(&self, _: &dyn Transaction, _: BookId, _: TagId) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn delete_book_genres(&self, _: &dyn Transaction, _: BookId) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn delete_book_tags(&self, _: &dyn Transaction, _: BookId) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn delete_book_file_by_role(&self, _: &dyn Transaction, _: BookId, _: FileFormat, _: FileRole) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn find_book_ids_needing_enrichment(&self, _: &dyn Transaction) -> Result<Vec<BookId>, Error> {
-            unimplemented!()
-        }
-
-        async fn find_book_ids_needing_kepub_conversion(&self, _: &dyn Transaction) -> Result<Vec<BookId>, Error> {
-            unimplemented!()
-        }
-
-        async fn update_enriched_paths(&self, _: &dyn Transaction, _: BookId, _: &str, _: &str) -> Result<(), Error> {
-            unimplemented!()
-        }
-    }
-
-    // ─── Mock UserBookMetadataRepository ────────────────────────────────────
-
-    struct MockUserBookMetadataRepository;
-
-    #[async_trait::async_trait]
-    impl UserBookMetadataRepository for MockUserBookMetadataRepository {
-        async fn upsert(&self, _: &dyn Transaction, _: UserBookMetadata) -> Result<UserBookMetadata, Error> {
-            unimplemented!()
-        }
-        async fn find_by_user_and_book(&self, _: &dyn Transaction, _: UserId, _: BookId) -> Result<Option<UserBookMetadata>, Error> {
-            unimplemented!()
-        }
-        async fn list_for_user(
-            &self,
-            _: &dyn Transaction,
-            _: UserId,
-            _: Option<ReadStatus>,
-            _: Option<BookId>,
-            _: Option<u64>,
-        ) -> Result<Vec<UserBookMetadata>, Error> {
-            unimplemented!()
-        }
-        async fn list_for_user_and_books(&self, _: &dyn Transaction, _: UserId, _: &[BookId]) -> Result<Vec<UserBookMetadata>, Error> {
-            unimplemented!()
-        }
-    }
-
-    // ─── Mock DeviceRepository ───────────────────────────────────────────────
-
-    struct MockDeviceRepository;
-
-    #[async_trait::async_trait]
-    impl DeviceRepository for MockDeviceRepository {
-        async fn add_device(&self, _: &dyn Transaction, _: NewDevice) -> Result<Device, Error> {
-            unimplemented!()
-        }
-        async fn update_device(&self, _: &dyn Transaction, _: Device) -> Result<Device, Error> {
-            unimplemented!()
-        }
-        async fn delete_device(&self, _: &dyn Transaction, _: Device) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn find_by_id(&self, _: &dyn Transaction, _: DeviceId) -> Result<Option<Device>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_token(&self, _: &dyn Transaction, _: &DeviceToken) -> Result<Option<Device>, Error> {
-            unimplemented!()
-        }
-        async fn list_for_user(&self, _: &dyn Transaction, _: UserId) -> Result<Vec<Device>, Error> {
-            unimplemented!()
-        }
-        async fn count_with_name_prefix(&self, _: &dyn Transaction, _: UserId, _: &str) -> Result<u64, Error> {
-            unimplemented!()
-        }
-        async fn add_device_book(&self, _: &dyn Transaction, _: DeviceBook) -> Result<DeviceBook, Error> {
-            unimplemented!()
-        }
-        async fn remove_device_book(&self, _: &dyn Transaction, _: DeviceId, _: BookId) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn clear_device_books(&self, _: &dyn Transaction, _: DeviceId) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn update_device_book(&self, _: &dyn Transaction, _: DeviceBook) -> Result<DeviceBook, Error> {
-            unimplemented!()
-        }
-        async fn books_for_device(&self, _: &dyn Transaction, _: DeviceId) -> Result<Vec<DeviceBook>, Error> {
-            unimplemented!()
-        }
-        async fn add_sync_log(&self, _: &dyn Transaction, _: NewDeviceSyncLog) -> Result<DeviceSyncLog, Error> {
-            unimplemented!()
-        }
-        async fn list_sync_logs_for_device(&self, _: &dyn Transaction, _: DeviceId, _: Option<u64>) -> Result<Vec<DeviceSyncLog>, Error> {
-            unimplemented!()
-        }
-    }
-
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
-    fn create_service(mock: MockSessionRepository) -> AuthServiceImpl {
+    fn make_mock_repo() -> MockRepository {
+        let mut r = MockRepository::new();
+        r.expect_begin()
+            .returning(|| Box::pin(async { Ok(Box::new(MockTransaction) as Box<dyn Transaction>) }));
+        r.expect_begin_read_only()
+            .returning(|| Box::pin(async { Ok(Box::new(MockTransaction) as Box<dyn Transaction>) }));
+        r
+    }
+
+    fn stub_repo_service() -> Arc<RepositoryService> {
+        Arc::new(
+            RepositoryServiceBuilder::default()
+                .repository(Arc::new(make_mock_repo()))
+                .session_repository(Arc::new(MockSessionRepository::new()))
+                .user_repository(Arc::new(MockUserRepository::new()))
+                .user_setting_repository(Arc::new(MockUserSettingRepository::new()))
+                .author_repository(Arc::new(MockAuthorRepository::new()))
+                .series_repository(Arc::new(MockSeriesRepository::new()))
+                .publisher_repository(Arc::new(MockPublisherRepository::new()))
+                .genre_repository(Arc::new(MockGenreRepository::new()))
+                .tag_repository(Arc::new(MockTagRepository::new()))
+                .book_repository(Arc::new(MockBookRepository::new()))
+                .import_job_repository(Arc::new(MockImportJobRepository::new()))
+                .job_repository(Arc::new(MockJobRepository::new()))
+                .shelf_repository(Arc::new(MockShelfRepository::new()))
+                .user_book_metadata_repository(Arc::new(MockUserBookMetadataRepository::new()))
+                .device_repository(Arc::new(MockDeviceRepository::new()))
+                .build()
+                .expect("all fields provided"),
+        )
+    }
+
+    fn create_service(session_mock: MockSessionRepository) -> AuthServiceImpl {
         let repository_service = Arc::new(
             RepositoryServiceBuilder::default()
-                .repository(Arc::new(MockRepository) as Arc<dyn Repository>)
-                .session_repository(Arc::new(mock) as Arc<dyn SessionRepository>)
-                .user_repository(Arc::new(MockUserRepository::default()) as Arc<dyn UserRepository>)
-                .user_setting_repository(Arc::new(MockUserSettingRepository) as Arc<dyn UserSettingRepository>)
-                .author_repository(Arc::new(MockAuthorRepository) as Arc<dyn AuthorRepository>)
-                .series_repository(Arc::new(MockSeriesRepository) as Arc<dyn SeriesRepository>)
-                .publisher_repository(Arc::new(MockPublisherRepository) as Arc<dyn PublisherRepository>)
-                .genre_repository(Arc::new(MockGenreRepository) as Arc<dyn GenreRepository>)
-                .tag_repository(Arc::new(MockTagRepository) as Arc<dyn TagRepository>)
-                .book_repository(Arc::new(MockBookRepository) as Arc<dyn BookRepository>)
-                .import_job_repository(Arc::new(MockImportJobRepository) as Arc<dyn ImportJobRepository>)
-                .job_repository(Arc::new(MockJobRepository) as Arc<dyn JobRepository>)
-                .shelf_repository(Arc::new(MockShelfRepository) as Arc<dyn ShelfRepository>)
-                .user_book_metadata_repository(Arc::new(MockUserBookMetadataRepository) as Arc<dyn UserBookMetadataRepository>)
-                .device_repository(Arc::new(MockDeviceRepository) as Arc<dyn DeviceRepository>)
+                .repository(Arc::new(make_mock_repo()))
+                .session_repository(Arc::new(session_mock))
+                .user_repository(Arc::new(MockUserRepository::new()))
+                .user_setting_repository(Arc::new(MockUserSettingRepository::new()))
+                .author_repository(Arc::new(MockAuthorRepository::new()))
+                .series_repository(Arc::new(MockSeriesRepository::new()))
+                .publisher_repository(Arc::new(MockPublisherRepository::new()))
+                .genre_repository(Arc::new(MockGenreRepository::new()))
+                .tag_repository(Arc::new(MockTagRepository::new()))
+                .book_repository(Arc::new(MockBookRepository::new()))
+                .import_job_repository(Arc::new(MockImportJobRepository::new()))
+                .job_repository(Arc::new(MockJobRepository::new()))
+                .shelf_repository(Arc::new(MockShelfRepository::new()))
+                .user_book_metadata_repository(Arc::new(MockUserBookMetadataRepository::new()))
+                .device_repository(Arc::new(MockDeviceRepository::new()))
                 .build()
                 .expect("all fields provided"),
         );
@@ -787,21 +188,21 @@ mod tests {
     fn create_login_service(user_mock: MockUserRepository) -> AuthServiceImpl {
         let repository_service = Arc::new(
             RepositoryServiceBuilder::default()
-                .repository(Arc::new(MockRepository) as Arc<dyn Repository>)
-                .session_repository(Arc::new(MockSessionRepository::default()) as Arc<dyn SessionRepository>)
-                .user_repository(Arc::new(user_mock) as Arc<dyn UserRepository>)
-                .user_setting_repository(Arc::new(MockUserSettingRepository) as Arc<dyn UserSettingRepository>)
-                .author_repository(Arc::new(MockAuthorRepository) as Arc<dyn AuthorRepository>)
-                .series_repository(Arc::new(MockSeriesRepository) as Arc<dyn SeriesRepository>)
-                .publisher_repository(Arc::new(MockPublisherRepository) as Arc<dyn PublisherRepository>)
-                .genre_repository(Arc::new(MockGenreRepository) as Arc<dyn GenreRepository>)
-                .tag_repository(Arc::new(MockTagRepository) as Arc<dyn TagRepository>)
-                .book_repository(Arc::new(MockBookRepository) as Arc<dyn BookRepository>)
-                .import_job_repository(Arc::new(MockImportJobRepository) as Arc<dyn ImportJobRepository>)
-                .job_repository(Arc::new(MockJobRepository) as Arc<dyn JobRepository>)
-                .shelf_repository(Arc::new(MockShelfRepository) as Arc<dyn ShelfRepository>)
-                .user_book_metadata_repository(Arc::new(MockUserBookMetadataRepository) as Arc<dyn UserBookMetadataRepository>)
-                .device_repository(Arc::new(MockDeviceRepository) as Arc<dyn DeviceRepository>)
+                .repository(Arc::new(make_mock_repo()))
+                .session_repository(Arc::new(MockSessionRepository::new()))
+                .user_repository(Arc::new(user_mock))
+                .user_setting_repository(Arc::new(MockUserSettingRepository::new()))
+                .author_repository(Arc::new(MockAuthorRepository::new()))
+                .series_repository(Arc::new(MockSeriesRepository::new()))
+                .publisher_repository(Arc::new(MockPublisherRepository::new()))
+                .genre_repository(Arc::new(MockGenreRepository::new()))
+                .tag_repository(Arc::new(MockTagRepository::new()))
+                .book_repository(Arc::new(MockBookRepository::new()))
+                .import_job_repository(Arc::new(MockImportJobRepository::new()))
+                .job_repository(Arc::new(MockJobRepository::new()))
+                .shelf_repository(Arc::new(MockShelfRepository::new()))
+                .user_book_metadata_repository(Arc::new(MockUserBookMetadataRepository::new()))
+                .device_repository(Arc::new(MockDeviceRepository::new()))
                 .build()
                 .expect("all fields provided"),
         );
@@ -821,7 +222,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_count_returns_value() {
-        let svc = create_service(MockSessionRepository::default().with_count_result(Ok(3)));
+        let mut session_repo = MockSessionRepository::new();
+        session_repo.expect_count().returning(|_| Box::pin(async { Ok(3) }));
+        let svc = create_service(session_repo);
 
         let result = svc.count().await;
 
@@ -831,7 +234,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_count_propagates_error() {
-        let svc = create_service(MockSessionRepository::default().with_count_result(Err(Error::RepositoryError(RepositoryError::Database("db error".into())))));
+        let mut session_repo = MockSessionRepository::new();
+        session_repo
+            .expect_count()
+            .returning(|_| Box::pin(async { Err(Error::RepositoryError(RepositoryError::Database("db error".into()))) }));
+        let svc = create_service(session_repo);
 
         let result = svc.count().await;
 
@@ -843,7 +250,12 @@ mod tests {
     #[tokio::test]
     async fn test_store_success() {
         let session = fake_session("sess-1");
-        let svc = create_service(MockSessionRepository::default().with_store_result(Ok(session)));
+        let mut session_repo = MockSessionRepository::new();
+        session_repo.expect_store().returning(move |_, _| {
+            let session = session.clone();
+            Box::pin(async move { Ok(session) })
+        });
+        let svc = create_service(session_repo);
 
         let new_session = NewSession::new("sess-1", "data", Utc::now() + chrono::Duration::hours(1)).unwrap();
         let result = svc.store(new_session).await;
@@ -854,8 +266,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_store_propagates_constraint_error() {
-        let svc =
-            create_service(MockSessionRepository::default().with_store_result(Err(Error::RepositoryError(RepositoryError::Constraint("duplicate id".into())))));
+        let mut session_repo = MockSessionRepository::new();
+        session_repo
+            .expect_store()
+            .returning(|_, _| Box::pin(async { Err(Error::RepositoryError(RepositoryError::Constraint("duplicate id".into()))) }));
+        let svc = create_service(session_repo);
 
         let new_session = NewSession::new("sess-1", "data", Utc::now()).unwrap();
         let result = svc.store(new_session).await;
@@ -868,7 +283,12 @@ mod tests {
     #[tokio::test]
     async fn test_load_found() {
         let session = fake_session("sess-1");
-        let svc = create_service(MockSessionRepository::default().with_load_result(Ok(Some(session))));
+        let mut session_repo = MockSessionRepository::new();
+        session_repo.expect_load().returning(move |_, _| {
+            let session = session.clone();
+            Box::pin(async move { Ok(Some(session)) })
+        });
+        let svc = create_service(session_repo);
 
         let result = svc.load("sess-1").await;
 
@@ -878,7 +298,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_load_not_found() {
-        let svc = create_service(MockSessionRepository::default().with_load_result(Ok(None)));
+        let mut session_repo = MockSessionRepository::new();
+        session_repo.expect_load().returning(|_, _| Box::pin(async { Ok(None) }));
+        let svc = create_service(session_repo);
 
         let result = svc.load("missing").await;
 
@@ -890,7 +312,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_by_id_success() {
-        let svc = create_service(MockSessionRepository::default().with_delete_by_id_result(Ok(())));
+        let mut session_repo = MockSessionRepository::new();
+        session_repo.expect_delete_by_id().returning(|_, _| Box::pin(async { Ok(()) }));
+        let svc = create_service(session_repo);
 
         let result = svc.delete_by_id("sess-1").await;
 
@@ -899,7 +323,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_by_id_propagates_error() {
-        let svc = create_service(MockSessionRepository::default().with_delete_by_id_result(Err(Error::RepositoryError(RepositoryError::NotFound))));
+        let mut session_repo = MockSessionRepository::new();
+        session_repo
+            .expect_delete_by_id()
+            .returning(|_, _| Box::pin(async { Err(Error::RepositoryError(RepositoryError::NotFound)) }));
+        let svc = create_service(session_repo);
 
         let result = svc.delete_by_id("missing").await;
 
@@ -910,7 +338,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_exists_true() {
-        let svc = create_service(MockSessionRepository::default().with_exists_result(Ok(true)));
+        let mut session_repo = MockSessionRepository::new();
+        session_repo.expect_exists().returning(|_, _| Box::pin(async { Ok(true) }));
+        let svc = create_service(session_repo);
 
         let result = svc.exists("sess-1").await;
 
@@ -920,7 +350,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_exists_false() {
-        let svc = create_service(MockSessionRepository::default().with_exists_result(Ok(false)));
+        let mut session_repo = MockSessionRepository::new();
+        session_repo.expect_exists().returning(|_, _| Box::pin(async { Ok(false) }));
+        let svc = create_service(session_repo);
 
         let result = svc.exists("missing").await;
 
@@ -933,7 +365,12 @@ mod tests {
     #[tokio::test]
     async fn test_delete_by_expiry_returns_deleted_ids() {
         let ids = vec!["sess-1".to_owned(), "sess-2".to_owned()];
-        let svc = create_service(MockSessionRepository::default().with_delete_by_expiry_result(Ok(ids)));
+        let mut session_repo = MockSessionRepository::new();
+        session_repo.expect_delete_by_expiry().returning(move |_| {
+            let ids = ids.clone();
+            Box::pin(async move { Ok(ids) })
+        });
+        let svc = create_service(session_repo);
 
         let result = svc.delete_by_expiry().await;
 
@@ -946,7 +383,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_by_expiry_empty_when_none_expired() {
-        let svc = create_service(MockSessionRepository::default().with_delete_by_expiry_result(Ok(vec![])));
+        let mut session_repo = MockSessionRepository::new();
+        session_repo.expect_delete_by_expiry().returning(|_| Box::pin(async { Ok(vec![]) }));
+        let svc = create_service(session_repo);
 
         let result = svc.delete_by_expiry().await;
 
@@ -958,7 +397,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_all_success() {
-        let svc = create_service(MockSessionRepository::default().with_delete_all_result(Ok(())));
+        let mut session_repo = MockSessionRepository::new();
+        session_repo.expect_delete_all().returning(|_| Box::pin(async { Ok(()) }));
+        let svc = create_service(session_repo);
 
         let result = svc.delete_all().await;
 
@@ -967,8 +408,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_all_propagates_error() {
-        let svc =
-            create_service(MockSessionRepository::default().with_delete_all_result(Err(Error::RepositoryError(RepositoryError::Database("db error".into())))));
+        let mut session_repo = MockSessionRepository::new();
+        session_repo
+            .expect_delete_all()
+            .returning(|_| Box::pin(async { Err(Error::RepositoryError(RepositoryError::Database("db error".into()))) }));
+        let svc = create_service(session_repo);
 
         let result = svc.delete_all().await;
 
@@ -980,7 +424,12 @@ mod tests {
     #[tokio::test]
     async fn test_get_ids_returns_all() {
         let ids = vec!["sess-1".to_owned(), "sess-2".to_owned(), "sess-3".to_owned()];
-        let svc = create_service(MockSessionRepository::default().with_get_ids_result(Ok(ids)));
+        let mut session_repo = MockSessionRepository::new();
+        session_repo.expect_get_ids().returning(move |_| {
+            let ids = ids.clone();
+            Box::pin(async move { Ok(ids) })
+        });
+        let svc = create_service(session_repo);
 
         let result = svc.get_ids().await;
 
@@ -992,7 +441,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_ids_empty() {
-        let svc = create_service(MockSessionRepository::default().with_get_ids_result(Ok(vec![])));
+        let mut session_repo = MockSessionRepository::new();
+        session_repo.expect_get_ids().returning(|_| Box::pin(async { Ok(vec![]) }));
+        let svc = create_service(session_repo);
 
         let result = svc.get_ids().await;
 
@@ -1004,9 +455,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_is_valid_login_success() {
-        let hash = User::encrypt_password("correct-password").unwrap();
-        let user = User::fake(1, "alice", hash, "alice@example.com", HashSet::new());
-        let svc = create_login_service(MockUserRepository::default().with_find_by_username_result(Ok(Some(user))));
+        let hash = crate::user::User::encrypt_password("correct-password").unwrap();
+        let user = crate::user::User::fake(1, "alice", hash, "alice@example.com", HashSet::new());
+        let mut user_repo = MockUserRepository::new();
+        user_repo.expect_find_by_username().returning(move |_, _| {
+            let user = user.clone();
+            Box::pin(async move { Ok(Some(user)) })
+        });
+        let svc = create_login_service(user_repo);
 
         let result = svc.is_valid_login("alice", "correct-password").await;
 
@@ -1018,9 +474,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_is_valid_login_wrong_password() {
-        let hash = User::encrypt_password("correct-password").unwrap();
-        let user = User::fake(1, "alice", hash, "alice@example.com", HashSet::new());
-        let svc = create_login_service(MockUserRepository::default().with_find_by_username_result(Ok(Some(user))));
+        let hash = crate::user::User::encrypt_password("correct-password").unwrap();
+        let user = crate::user::User::fake(1, "alice", hash, "alice@example.com", HashSet::new());
+        let mut user_repo = MockUserRepository::new();
+        user_repo.expect_find_by_username().returning(move |_, _| {
+            let user = user.clone();
+            Box::pin(async move { Ok(Some(user)) })
+        });
+        let svc = create_login_service(user_repo);
 
         let result = svc.is_valid_login("alice", "wrong-password").await;
 
@@ -1030,7 +491,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_is_valid_login_user_not_found() {
-        let svc = create_login_service(MockUserRepository::default().with_find_by_username_result(Ok(None)));
+        let mut user_repo = MockUserRepository::new();
+        user_repo.expect_find_by_username().returning(|_, _| Box::pin(async { Ok(None) }));
+        let svc = create_login_service(user_repo);
 
         let result = svc.is_valid_login("nobody", "password").await;
 
@@ -1040,12 +503,21 @@ mod tests {
 
     #[tokio::test]
     async fn test_is_valid_login_propagates_error() {
-        let svc = create_login_service(
-            MockUserRepository::default().with_find_by_username_result(Err(Error::RepositoryError(RepositoryError::Database("db error".into())))),
-        );
+        let mut user_repo = MockUserRepository::new();
+        user_repo
+            .expect_find_by_username()
+            .returning(|_, _| Box::pin(async { Err(Error::RepositoryError(RepositoryError::Database("db error".into()))) }));
+        let svc = create_login_service(user_repo);
 
         let result = svc.is_valid_login("alice", "password").await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::Database(_)))));
+    }
+
+    // ─── suppress unused warning for stub_repo_service ───────────────────────
+
+    #[allow(dead_code)]
+    fn _use_stub_repo_service() {
+        let _ = stub_repo_service();
     }
 }

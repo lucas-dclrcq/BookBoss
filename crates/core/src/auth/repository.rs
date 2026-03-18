@@ -5,6 +5,7 @@ use crate::{
 };
 
 #[async_trait::async_trait]
+#[cfg_attr(test, mockall::automock)]
 pub trait SessionRepository: Send + Sync {
     async fn count(&self, transaction: &dyn Transaction) -> Result<i64, Error>;
     async fn store(&self, transaction: &dyn Transaction, session: NewSession) -> Result<Session, Error>;

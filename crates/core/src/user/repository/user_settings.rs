@@ -5,6 +5,7 @@ use crate::{
 };
 
 #[async_trait::async_trait]
+#[cfg_attr(test, mockall::automock)]
 pub trait UserSettingRepository: Send + Sync {
     async fn get(&self, tx: &dyn Transaction, user_id: UserId, key: &str) -> Result<Option<UserSetting>, Error>;
     async fn set(&self, tx: &dyn Transaction, setting: NewUserSetting) -> Result<UserSetting, Error>;

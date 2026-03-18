@@ -9,6 +9,7 @@ use crate::{
 };
 
 #[async_trait::async_trait]
+#[cfg_attr(test, mockall::automock)]
 pub trait ShelfRepository: Send + Sync {
     // Shelf CRUD
     async fn add_shelf(&self, transaction: &dyn Transaction, book_shelf: NewShelf) -> Result<Shelf, Error>;

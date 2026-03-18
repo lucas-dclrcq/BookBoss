@@ -163,23 +163,21 @@ mod tests {
     use super::{BookService, BookServiceImpl};
     use crate::{
         Error, RepositoryError,
-        auth::{NewSession, Session, repository::SessionRepository},
+        auth::repository::MockSessionRepository,
         book::{
-            Author, AuthorId, AuthorRepository, AuthorRole, AuthorToken, Book, BookAuthor, BookFile, BookId, BookIdentifier, BookQuery, BookRepository,
-            BookStatus, BookToken, FileFormat, FileRole, Genre, GenreId, GenreRepository, GenreToken, IdentifierType, NewAuthor, NewBook, NewGenre,
-            NewPublisher, NewSeries, NewTag, Publisher, PublisherId, PublisherRepository, PublisherToken, Series, SeriesId, SeriesRepository, SeriesToken, Tag,
-            TagId, TagRepository, TagToken,
+            Author, AuthorId, AuthorToken, Book, BookAuthor, BookFile, BookId, BookIdentifier, BookQuery, BookStatus, BookToken, Series, SeriesId, SeriesToken,
+            repository::{
+                author::MockAuthorRepository, book::MockBookRepository, genre::MockGenreRepository, publisher::MockPublisherRepository,
+                series::MockSeriesRepository, tag::MockTagRepository,
+            },
         },
-        device::{Device, DeviceBook, DeviceId, DeviceRepository, DeviceSyncLog, DeviceToken, NewDevice, NewDeviceSyncLog},
-        import::{ImportJob, ImportJobId, ImportJobRepository, ImportJobToken, ImportStatus, NewImportJob},
-        jobs::{Job, JobRepository},
-        reading::{ReadStatus, UserBookMetadata, UserBookMetadataRepository},
-        repository::{Repository, RepositoryServiceBuilder, Transaction},
-        shelf::{BookShelf, NewShelf, Shelf, ShelfId, ShelfRepository, ShelfToken},
-        user::{
-            NewUser, NewUserSetting, User, UserId, UserSetting,
-            repository::{UserRepository, UserSettingRepository},
-        },
+        device::repository::device::MockDeviceRepository,
+        import::repository::import_job::MockImportJobRepository,
+        jobs::repository::MockJobRepository,
+        reading::repository::user_book_metadata::MockUserBookMetadataRepository,
+        repository::{MockRepository, RepositoryServiceBuilder, Transaction},
+        shelf::repository::shelf::MockShelfRepository,
+        user::repository::{user::MockUserRepository, user_settings::MockUserSettingRepository},
     };
 
     // ─── Mock Transaction ────────────────────────────────────────────────────
@@ -199,620 +197,6 @@ mod tests {
         }
     }
 
-    // ─── Mock Repository ─────────────────────────────────────────────────────
-
-    struct MockRepository;
-
-    #[async_trait::async_trait]
-    impl Repository for MockRepository {
-        async fn begin(&self) -> Result<Box<dyn Transaction>, Error> {
-            Ok(Box::new(MockTransaction))
-        }
-        async fn begin_read_only(&self) -> Result<Box<dyn Transaction>, Error> {
-            Ok(Box::new(MockTransaction))
-        }
-        async fn close(&self) -> Result<(), Error> {
-            Ok(())
-        }
-    }
-
-    // ─── Mock SessionRepository ──────────────────────────────────────────────
-
-    struct MockSessionRepository;
-
-    #[async_trait::async_trait]
-    impl SessionRepository for MockSessionRepository {
-        async fn count(&self, _: &dyn Transaction) -> Result<i64, Error> {
-            unimplemented!()
-        }
-        async fn store(&self, _: &dyn Transaction, _: NewSession) -> Result<Session, Error> {
-            unimplemented!()
-        }
-        async fn load(&self, _: &dyn Transaction, _: &str) -> Result<Option<Session>, Error> {
-            unimplemented!()
-        }
-        async fn delete_by_id(&self, _: &dyn Transaction, _: &str) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn exists(&self, _: &dyn Transaction, _: &str) -> Result<bool, Error> {
-            unimplemented!()
-        }
-        async fn delete_by_expiry(&self, _: &dyn Transaction) -> Result<Vec<String>, Error> {
-            unimplemented!()
-        }
-        async fn delete_all(&self, _: &dyn Transaction) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn get_ids(&self, _: &dyn Transaction) -> Result<Vec<String>, Error> {
-            unimplemented!()
-        }
-    }
-
-    // ─── Mock UserRepository ─────────────────────────────────────────────────
-
-    struct MockUserRepository;
-
-    #[async_trait::async_trait]
-    impl UserRepository for MockUserRepository {
-        async fn add_user(&self, _: &dyn Transaction, _: NewUser) -> Result<User, Error> {
-            unimplemented!()
-        }
-        async fn update_user(&self, _: &dyn Transaction, _: User) -> Result<User, Error> {
-            unimplemented!()
-        }
-        async fn delete_user(&self, _: &dyn Transaction, _: User) -> Result<User, Error> {
-            unimplemented!()
-        }
-        async fn list_users(&self, _: &dyn Transaction, _: Option<UserId>, _: Option<u64>) -> Result<Vec<User>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_id(&self, _: &dyn Transaction, _: UserId) -> Result<Option<User>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_username(&self, _: &dyn Transaction, _: &str) -> Result<Option<User>, Error> {
-            unimplemented!()
-        }
-    }
-
-    // ─── Mock UserSettingRepository ──────────────────────────────────────────
-
-    struct MockUserSettingRepository;
-
-    #[async_trait::async_trait]
-    impl UserSettingRepository for MockUserSettingRepository {
-        async fn get(&self, _: &dyn Transaction, _: UserId, _: &str) -> Result<Option<UserSetting>, Error> {
-            unimplemented!()
-        }
-        async fn set(&self, _: &dyn Transaction, _: NewUserSetting) -> Result<UserSetting, Error> {
-            unimplemented!()
-        }
-        async fn delete(&self, _: &dyn Transaction, _: UserId, _: &str) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn list_by_user(&self, _: &dyn Transaction, _: UserId) -> Result<Vec<UserSetting>, Error> {
-            unimplemented!()
-        }
-    }
-
-    // ─── Mock GenreRepository ────────────────────────────────────────────────
-
-    struct MockGenreRepository;
-
-    #[async_trait::async_trait]
-    impl GenreRepository for MockGenreRepository {
-        async fn add_genre(&self, _: &dyn Transaction, _: NewGenre) -> Result<Genre, Error> {
-            unimplemented!()
-        }
-        async fn update_genre(&self, _: &dyn Transaction, _: Genre) -> Result<Genre, Error> {
-            unimplemented!()
-        }
-        async fn find_by_id(&self, _: &dyn Transaction, _: GenreId) -> Result<Option<Genre>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_token(&self, _: &dyn Transaction, _: &GenreToken) -> Result<Option<Genre>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_name(&self, _: &dyn Transaction, _: &str) -> Result<Option<Genre>, Error> {
-            unimplemented!()
-        }
-        async fn list_genres(&self, _: &dyn Transaction, _: Option<GenreId>, _: Option<u64>) -> Result<Vec<Genre>, Error> {
-            unimplemented!()
-        }
-        async fn list_all_genres(&self, _: &dyn Transaction) -> Result<Vec<Genre>, Error> {
-            unimplemented!()
-        }
-    }
-
-    // ─── Mock PublisherRepository ────────────────────────────────────────────
-
-    struct MockPublisherRepository;
-
-    #[async_trait::async_trait]
-    impl PublisherRepository for MockPublisherRepository {
-        async fn add_publisher(&self, _: &dyn Transaction, _: NewPublisher) -> Result<Publisher, Error> {
-            unimplemented!()
-        }
-        async fn update_publisher(&self, _: &dyn Transaction, _: Publisher) -> Result<Publisher, Error> {
-            unimplemented!()
-        }
-        async fn find_by_id(&self, _: &dyn Transaction, _: PublisherId) -> Result<Option<Publisher>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_token(&self, _: &dyn Transaction, _: &PublisherToken) -> Result<Option<Publisher>, Error> {
-            unimplemented!()
-        }
-        async fn list_publishers(&self, _: &dyn Transaction, _: Option<PublisherId>, _: Option<u64>) -> Result<Vec<Publisher>, Error> {
-            unimplemented!()
-        }
-        async fn list_all_publishers(&self, _: &dyn Transaction) -> Result<Vec<Publisher>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_name(&self, _: &dyn Transaction, _: &str) -> Result<Option<Publisher>, Error> {
-            unimplemented!()
-        }
-    }
-
-    // ─── Mock TagRepository ──────────────────────────────────────────────────
-
-    struct MockTagRepository;
-
-    #[async_trait::async_trait]
-    impl TagRepository for MockTagRepository {
-        async fn add_tag(&self, _: &dyn Transaction, _: NewTag) -> Result<Tag, Error> {
-            unimplemented!()
-        }
-        async fn update_tag(&self, _: &dyn Transaction, _: Tag) -> Result<Tag, Error> {
-            unimplemented!()
-        }
-        async fn find_by_id(&self, _: &dyn Transaction, _: TagId) -> Result<Option<Tag>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_token(&self, _: &dyn Transaction, _: &TagToken) -> Result<Option<Tag>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_name(&self, _: &dyn Transaction, _: &str) -> Result<Option<Tag>, Error> {
-            unimplemented!()
-        }
-        async fn list_tags(&self, _: &dyn Transaction, _: Option<TagId>, _: Option<u64>) -> Result<Vec<Tag>, Error> {
-            unimplemented!()
-        }
-        async fn list_all_tags(&self, _: &dyn Transaction) -> Result<Vec<Tag>, Error> {
-            unimplemented!()
-        }
-    }
-
-    // ─── Mock AuthorRepository ───────────────────────────────────────────────
-
-    struct MockAuthorRepository {
-        list_authors_result: Option<Result<Vec<Author>, Error>>,
-        find_by_token_result: Option<Result<Option<Author>, Error>>,
-    }
-
-    impl MockAuthorRepository {
-        fn with_list_authors(result: Result<Vec<Author>, Error>) -> Self {
-            Self {
-                list_authors_result: Some(result),
-                find_by_token_result: None,
-            }
-        }
-        fn with_find_by_token(result: Result<Option<Author>, Error>) -> Self {
-            Self {
-                list_authors_result: None,
-                find_by_token_result: Some(result),
-            }
-        }
-    }
-
-    #[async_trait::async_trait]
-    impl AuthorRepository for MockAuthorRepository {
-        async fn add_author(&self, _: &dyn Transaction, _: NewAuthor) -> Result<Author, Error> {
-            unimplemented!()
-        }
-        async fn update_author(&self, _: &dyn Transaction, _: Author) -> Result<Author, Error> {
-            unimplemented!()
-        }
-        async fn find_by_id(&self, _: &dyn Transaction, _: AuthorId) -> Result<Option<Author>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_token(&self, _: &dyn Transaction, _: &AuthorToken) -> Result<Option<Author>, Error> {
-            self.find_by_token_result
-                .clone()
-                .unwrap_or_else(|| Err(Error::MockNotConfigured("find_by_token")))
-        }
-        async fn list_authors(&self, _: &dyn Transaction, _: Option<AuthorId>, _: Option<u64>) -> Result<Vec<Author>, Error> {
-            self.list_authors_result
-                .clone()
-                .unwrap_or_else(|| Err(Error::MockNotConfigured("list_authors")))
-        }
-        async fn find_by_name(&self, _: &dyn Transaction, _: &str) -> Result<Option<Author>, Error> {
-            unimplemented!()
-        }
-        async fn count_authors(&self, _: &dyn Transaction) -> Result<u64, Error> {
-            unimplemented!()
-        }
-        async fn delete_author(&self, _: &dyn Transaction, _: AuthorId) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn list_all_authors(&self, _: &dyn Transaction) -> Result<Vec<Author>, Error> {
-            unimplemented!()
-        }
-    }
-
-    // ─── Mock SeriesRepository ───────────────────────────────────────────────
-
-    struct MockSeriesRepository {
-        list_series_result: Option<Result<Vec<Series>, Error>>,
-        find_by_token_result: Option<Result<Option<Series>, Error>>,
-    }
-
-    impl MockSeriesRepository {
-        fn with_list_series(result: Result<Vec<Series>, Error>) -> Self {
-            Self {
-                list_series_result: Some(result),
-                find_by_token_result: None,
-            }
-        }
-        fn with_find_by_token(result: Result<Option<Series>, Error>) -> Self {
-            Self {
-                list_series_result: None,
-                find_by_token_result: Some(result),
-            }
-        }
-    }
-
-    #[async_trait::async_trait]
-    impl SeriesRepository for MockSeriesRepository {
-        async fn add_series(&self, _: &dyn Transaction, _: NewSeries) -> Result<Series, Error> {
-            unimplemented!()
-        }
-        async fn update_series(&self, _: &dyn Transaction, _: Series) -> Result<Series, Error> {
-            unimplemented!()
-        }
-        async fn find_by_id(&self, _: &dyn Transaction, _: SeriesId) -> Result<Option<Series>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_token(&self, _: &dyn Transaction, _: &SeriesToken) -> Result<Option<Series>, Error> {
-            self.find_by_token_result
-                .clone()
-                .unwrap_or_else(|| Err(Error::MockNotConfigured("find_by_token")))
-        }
-        async fn list_series(&self, _: &dyn Transaction, _: Option<SeriesId>, _: Option<u64>) -> Result<Vec<Series>, Error> {
-            self.list_series_result.clone().unwrap_or_else(|| Err(Error::MockNotConfigured("list_series")))
-        }
-        async fn find_by_name(&self, _: &dyn Transaction, _: &str) -> Result<Option<Series>, Error> {
-            unimplemented!()
-        }
-        async fn list_all_series(&self, _: &dyn Transaction) -> Result<Vec<Series>, Error> {
-            unimplemented!()
-        }
-        async fn max_series_number_for_series(&self, _: &dyn Transaction, _: SeriesId) -> Result<Option<rust_decimal::Decimal>, Error> {
-            unimplemented!()
-        }
-    }
-
-    // ─── Mock BookRepository ─────────────────────────────────────────────────
-
-    struct MockBookRepository {
-        list_books_result: Option<Result<Vec<Book>, Error>>,
-        find_by_token_result: Option<Result<Option<Book>, Error>>,
-        authors_for_book_result: Option<Result<Vec<BookAuthor>, Error>>,
-        files_for_book_result: Option<Result<Vec<BookFile>, Error>>,
-        identifiers_for_book_result: Option<Result<Vec<BookIdentifier>, Error>>,
-    }
-
-    impl MockBookRepository {
-        fn new() -> Self {
-            Self {
-                list_books_result: None,
-                find_by_token_result: None,
-                authors_for_book_result: None,
-                files_for_book_result: None,
-                identifiers_for_book_result: None,
-            }
-        }
-        fn with_list_books(mut self, result: Result<Vec<Book>, Error>) -> Self {
-            self.list_books_result = Some(result);
-            self
-        }
-        fn with_find_by_token(mut self, result: Result<Option<Book>, Error>) -> Self {
-            self.find_by_token_result = Some(result);
-            self
-        }
-        fn with_authors_for_book(mut self, result: Result<Vec<BookAuthor>, Error>) -> Self {
-            self.authors_for_book_result = Some(result);
-            self
-        }
-        fn with_files_for_book(mut self, result: Result<Vec<BookFile>, Error>) -> Self {
-            self.files_for_book_result = Some(result);
-            self
-        }
-        fn with_identifiers_for_book(mut self, result: Result<Vec<BookIdentifier>, Error>) -> Self {
-            self.identifiers_for_book_result = Some(result);
-            self
-        }
-    }
-
-    #[async_trait::async_trait]
-    impl BookRepository for MockBookRepository {
-        async fn add_book(&self, _: &dyn Transaction, _: NewBook) -> Result<Book, Error> {
-            unimplemented!()
-        }
-        async fn update_book(&self, _: &dyn Transaction, _: Book) -> Result<Book, Error> {
-            unimplemented!()
-        }
-        async fn find_by_id(&self, _: &dyn Transaction, _: BookId) -> Result<Option<Book>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_token(&self, _: &dyn Transaction, _: &BookToken) -> Result<Option<Book>, Error> {
-            self.find_by_token_result
-                .clone()
-                .unwrap_or_else(|| Err(Error::MockNotConfigured("find_by_token")))
-        }
-        async fn list_books(&self, _: &dyn Transaction, _: &BookQuery, _: Option<BookId>, _: Option<u64>) -> Result<Vec<Book>, Error> {
-            self.list_books_result.clone().unwrap_or_else(|| Err(Error::MockNotConfigured("list_books")))
-        }
-        async fn authors_for_book(&self, _: &dyn Transaction, _: BookId) -> Result<Vec<BookAuthor>, Error> {
-            self.authors_for_book_result
-                .clone()
-                .unwrap_or_else(|| Err(Error::MockNotConfigured("authors_for_book")))
-        }
-        async fn files_for_book(&self, _: &dyn Transaction, _: BookId) -> Result<Vec<BookFile>, Error> {
-            self.files_for_book_result
-                .clone()
-                .unwrap_or_else(|| Err(Error::MockNotConfigured("files_for_book")))
-        }
-        async fn identifiers_for_book(&self, _: &dyn Transaction, _: BookId) -> Result<Vec<BookIdentifier>, Error> {
-            self.identifiers_for_book_result
-                .clone()
-                .unwrap_or_else(|| Err(Error::MockNotConfigured("identifiers_for_book")))
-        }
-        async fn find_file_by_hash(&self, _: &dyn Transaction, _: &str) -> Result<Option<BookFile>, Error> {
-            unimplemented!()
-        }
-        async fn add_book_file(&self, _: &dyn Transaction, _: BookId, _: FileFormat, _: FileRole, _: String, _: i64, _: String) -> Result<BookFile, Error> {
-            unimplemented!()
-        }
-        async fn add_book_author(&self, _: &dyn Transaction, _: BookId, _: AuthorId, _: AuthorRole, _: i32) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn add_book_identifier(&self, _: &dyn Transaction, _: BookId, _: IdentifierType, _: String) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn delete_book(&self, _: &dyn Transaction, _: BookId) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn delete_book_authors(&self, _: &dyn Transaction, _: BookId) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn delete_book_identifiers(&self, _: &dyn Transaction, _: BookId) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn count_available_books(&self, _: &dyn Transaction) -> Result<u64, Error> {
-            unimplemented!()
-        }
-        async fn count_books_for_author(&self, _: &dyn Transaction, _: AuthorId) -> Result<u64, Error> {
-            unimplemented!()
-        }
-        async fn genres_for_book(&self, _: &dyn Transaction, _: BookId) -> Result<Vec<Genre>, Error> {
-            unimplemented!()
-        }
-        async fn tags_for_book(&self, _: &dyn Transaction, _: BookId) -> Result<Vec<Tag>, Error> {
-            unimplemented!()
-        }
-        async fn add_book_genre(&self, _: &dyn Transaction, _: BookId, _: GenreId) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn add_book_tag(&self, _: &dyn Transaction, _: BookId, _: TagId) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn delete_book_genres(&self, _: &dyn Transaction, _: BookId) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn delete_book_tags(&self, _: &dyn Transaction, _: BookId) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn delete_book_file_by_role(&self, _: &dyn Transaction, _: BookId, _: FileFormat, _: FileRole) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn find_book_ids_needing_enrichment(&self, _: &dyn Transaction) -> Result<Vec<BookId>, Error> {
-            unimplemented!()
-        }
-
-        async fn find_book_ids_needing_kepub_conversion(&self, _: &dyn Transaction) -> Result<Vec<BookId>, Error> {
-            unimplemented!()
-        }
-
-        async fn update_enriched_paths(&self, _: &dyn Transaction, _: BookId, _: &str, _: &str) -> Result<(), Error> {
-            unimplemented!()
-        }
-    }
-
-    struct MockJobRepository;
-    #[async_trait::async_trait]
-    impl JobRepository for MockJobRepository {
-        async fn enqueue_raw(&self, _: &dyn Transaction, _: &str, _: serde_json::Value, _: i16) -> Result<Job, Error> {
-            unimplemented!()
-        }
-        async fn claim_next(&self, _: &dyn Transaction) -> Result<Option<Job>, Error> {
-            unimplemented!()
-        }
-        async fn complete(&self, _: &dyn Transaction, _: Job) -> Result<Job, Error> {
-            unimplemented!()
-        }
-        async fn fail(&self, _: &dyn Transaction, _: Job, _: String) -> Result<Job, Error> {
-            unimplemented!()
-        }
-        async fn reset_running_to_pending(&self, _: &dyn Transaction) -> Result<u64, Error> {
-            unimplemented!()
-        }
-        async fn count_pending_by_type(&self, _: &dyn Transaction, _: &str) -> Result<u64, Error> {
-            unimplemented!()
-        }
-    }
-
-    struct MockShelfRepository;
-    #[async_trait::async_trait]
-    impl ShelfRepository for MockShelfRepository {
-        async fn add_shelf(&self, _: &dyn Transaction, _: NewShelf) -> Result<Shelf, Error> {
-            unimplemented!()
-        }
-        async fn update_shelf(&self, _: &dyn Transaction, _: Shelf) -> Result<Shelf, Error> {
-            unimplemented!()
-        }
-        async fn delete_shelf(&self, _: &dyn Transaction, _: Shelf) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn find_by_id(&self, _: &dyn Transaction, _: ShelfId) -> Result<Option<Shelf>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_token(&self, _: &dyn Transaction, _: &ShelfToken) -> Result<Option<Shelf>, Error> {
-            unimplemented!()
-        }
-        async fn list_for_user(&self, _: &dyn Transaction, _: UserId) -> Result<Vec<Shelf>, Error> {
-            unimplemented!()
-        }
-        async fn list_public_shelves(&self, _: &dyn Transaction, _: UserId) -> Result<Vec<Shelf>, Error> {
-            unimplemented!()
-        }
-        async fn add_book_to_shelf(&self, _: &dyn Transaction, _: BookShelf) -> Result<BookShelf, Error> {
-            unimplemented!()
-        }
-        async fn remove_book_from_shelf(&self, _: &dyn Transaction, _: ShelfId, _: BookId) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn books_for_shelf(&self, _: &dyn Transaction, _: ShelfId, _: Option<BookId>, _: Option<u64>) -> Result<Vec<BookShelf>, Error> {
-            unimplemented!()
-        }
-        async fn books_for_filter(
-            &self,
-            _: &dyn Transaction,
-            _: &crate::filter::BookFilter,
-            _: UserId,
-            _: Option<BookId>,
-            _: Option<u64>,
-        ) -> Result<Vec<Book>, Error> {
-            unimplemented!()
-        }
-        async fn count_for_filter(&self, _: &dyn Transaction, _: &crate::filter::BookFilter, _: UserId) -> Result<u64, Error> {
-            unimplemented!()
-        }
-        async fn find_by_device_id(&self, _: &dyn Transaction, _: crate::device::DeviceId) -> Result<Option<Shelf>, Error> {
-            unimplemented!()
-        }
-    }
-
-    struct MockImportJobRepository;
-    #[async_trait::async_trait]
-    impl ImportJobRepository for MockImportJobRepository {
-        async fn add_job(&self, _: &dyn Transaction, _: NewImportJob) -> Result<ImportJob, Error> {
-            unimplemented!()
-        }
-        async fn update_job(&self, _: &dyn Transaction, _: ImportJob) -> Result<ImportJob, Error> {
-            unimplemented!()
-        }
-        async fn find_by_id(&self, _: &dyn Transaction, _: ImportJobId) -> Result<Option<ImportJob>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_token(&self, _: &dyn Transaction, _: &ImportJobToken) -> Result<Option<ImportJob>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_hash(&self, _: &dyn Transaction, _: &str) -> Result<Option<ImportJob>, Error> {
-            unimplemented!()
-        }
-        async fn list_by_status(&self, _: &dyn Transaction, _: ImportStatus, _: Option<ImportJobId>, _: Option<u64>) -> Result<Vec<ImportJob>, Error> {
-            unimplemented!()
-        }
-        async fn reset_in_progress_to_pending(&self, _: &dyn Transaction) -> Result<u64, Error> {
-            unimplemented!()
-        }
-        async fn find_by_candidate_book_id(&self, _: &dyn Transaction, _: BookId) -> Result<Option<ImportJob>, Error> {
-            unimplemented!()
-        }
-        async fn delete_job(&self, _: &dyn Transaction, _: ImportJobId) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn approve_job(&self, _: &dyn Transaction, _: ImportJobId) -> Result<(), Error> {
-            unimplemented!()
-        }
-    }
-
-    // ─── Mock UserBookMetadataRepository ────────────────────────────────────
-
-    struct MockUserBookMetadataRepository;
-
-    #[async_trait::async_trait]
-    impl UserBookMetadataRepository for MockUserBookMetadataRepository {
-        async fn upsert(&self, _: &dyn Transaction, _: UserBookMetadata) -> Result<UserBookMetadata, Error> {
-            unimplemented!()
-        }
-        async fn find_by_user_and_book(&self, _: &dyn Transaction, _: UserId, _: BookId) -> Result<Option<UserBookMetadata>, Error> {
-            unimplemented!()
-        }
-        async fn list_for_user(
-            &self,
-            _: &dyn Transaction,
-            _: UserId,
-            _: Option<ReadStatus>,
-            _: Option<BookId>,
-            _: Option<u64>,
-        ) -> Result<Vec<UserBookMetadata>, Error> {
-            unimplemented!()
-        }
-        async fn list_for_user_and_books(&self, _: &dyn Transaction, _: UserId, _: &[BookId]) -> Result<Vec<UserBookMetadata>, Error> {
-            unimplemented!()
-        }
-    }
-
-    // ─── Mock DeviceRepository ───────────────────────────────────────────────
-
-    struct MockDeviceRepository;
-
-    #[async_trait::async_trait]
-    impl DeviceRepository for MockDeviceRepository {
-        async fn add_device(&self, _: &dyn Transaction, _: NewDevice) -> Result<Device, Error> {
-            unimplemented!()
-        }
-        async fn update_device(&self, _: &dyn Transaction, _: Device) -> Result<Device, Error> {
-            unimplemented!()
-        }
-        async fn delete_device(&self, _: &dyn Transaction, _: Device) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn find_by_id(&self, _: &dyn Transaction, _: DeviceId) -> Result<Option<Device>, Error> {
-            unimplemented!()
-        }
-        async fn find_by_token(&self, _: &dyn Transaction, _: &DeviceToken) -> Result<Option<Device>, Error> {
-            unimplemented!()
-        }
-        async fn list_for_user(&self, _: &dyn Transaction, _: UserId) -> Result<Vec<Device>, Error> {
-            unimplemented!()
-        }
-        async fn count_with_name_prefix(&self, _: &dyn Transaction, _: UserId, _: &str) -> Result<u64, Error> {
-            unimplemented!()
-        }
-        async fn add_device_book(&self, _: &dyn Transaction, _: DeviceBook) -> Result<DeviceBook, Error> {
-            unimplemented!()
-        }
-        async fn remove_device_book(&self, _: &dyn Transaction, _: DeviceId, _: BookId) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn clear_device_books(&self, _: &dyn Transaction, _: DeviceId) -> Result<(), Error> {
-            unimplemented!()
-        }
-        async fn update_device_book(&self, _: &dyn Transaction, _: DeviceBook) -> Result<DeviceBook, Error> {
-            unimplemented!()
-        }
-        async fn books_for_device(&self, _: &dyn Transaction, _: DeviceId) -> Result<Vec<DeviceBook>, Error> {
-            unimplemented!()
-        }
-        async fn add_sync_log(&self, _: &dyn Transaction, _: NewDeviceSyncLog) -> Result<DeviceSyncLog, Error> {
-            unimplemented!()
-        }
-        async fn list_sync_logs_for_device(&self, _: &dyn Transaction, _: DeviceId, _: Option<u64>) -> Result<Vec<DeviceSyncLog>, Error> {
-            unimplemented!()
-        }
-    }
-
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     fn fake_book(id: BookId, title: &str) -> Book {
@@ -827,24 +211,33 @@ mod tests {
         Series::fake(id, name)
     }
 
+    fn make_mock_repo() -> MockRepository {
+        let mut r = MockRepository::new();
+        r.expect_begin()
+            .returning(|| Box::pin(async { Ok(Box::new(MockTransaction) as Box<dyn Transaction>) }));
+        r.expect_begin_read_only()
+            .returning(|| Box::pin(async { Ok(Box::new(MockTransaction) as Box<dyn Transaction>) }));
+        r
+    }
+
     fn create_service(book_repo: MockBookRepository, author_repo: MockAuthorRepository, series_repo: MockSeriesRepository) -> BookServiceImpl {
         let repository_service = Arc::new(
             RepositoryServiceBuilder::default()
-                .repository(Arc::new(MockRepository) as Arc<dyn Repository>)
-                .session_repository(Arc::new(MockSessionRepository) as Arc<dyn SessionRepository>)
-                .user_repository(Arc::new(MockUserRepository) as Arc<dyn UserRepository>)
-                .user_setting_repository(Arc::new(MockUserSettingRepository) as Arc<dyn UserSettingRepository>)
-                .author_repository(Arc::new(author_repo) as Arc<dyn AuthorRepository>)
-                .series_repository(Arc::new(series_repo) as Arc<dyn SeriesRepository>)
-                .publisher_repository(Arc::new(MockPublisherRepository) as Arc<dyn PublisherRepository>)
-                .genre_repository(Arc::new(MockGenreRepository) as Arc<dyn GenreRepository>)
-                .tag_repository(Arc::new(MockTagRepository) as Arc<dyn TagRepository>)
-                .book_repository(Arc::new(book_repo) as Arc<dyn BookRepository>)
-                .import_job_repository(Arc::new(MockImportJobRepository) as Arc<dyn ImportJobRepository>)
-                .job_repository(Arc::new(MockJobRepository) as Arc<dyn JobRepository>)
-                .shelf_repository(Arc::new(MockShelfRepository) as Arc<dyn ShelfRepository>)
-                .user_book_metadata_repository(Arc::new(MockUserBookMetadataRepository) as Arc<dyn UserBookMetadataRepository>)
-                .device_repository(Arc::new(MockDeviceRepository) as Arc<dyn DeviceRepository>)
+                .repository(Arc::new(make_mock_repo()))
+                .session_repository(Arc::new(MockSessionRepository::new()))
+                .user_repository(Arc::new(MockUserRepository::new()))
+                .user_setting_repository(Arc::new(MockUserSettingRepository::new()))
+                .author_repository(Arc::new(author_repo))
+                .series_repository(Arc::new(series_repo))
+                .publisher_repository(Arc::new(MockPublisherRepository::new()))
+                .genre_repository(Arc::new(MockGenreRepository::new()))
+                .tag_repository(Arc::new(MockTagRepository::new()))
+                .book_repository(Arc::new(book_repo))
+                .import_job_repository(Arc::new(MockImportJobRepository::new()))
+                .job_repository(Arc::new(MockJobRepository::new()))
+                .shelf_repository(Arc::new(MockShelfRepository::new()))
+                .user_book_metadata_repository(Arc::new(MockUserBookMetadataRepository::new()))
+                .device_repository(Arc::new(MockDeviceRepository::new()))
                 .build()
                 .expect("all fields provided"),
         );
@@ -852,17 +245,7 @@ mod tests {
     }
 
     fn default_service_with_book_repo(book_repo: MockBookRepository) -> BookServiceImpl {
-        create_service(
-            book_repo,
-            MockAuthorRepository {
-                list_authors_result: None,
-                find_by_token_result: None,
-            },
-            MockSeriesRepository {
-                list_series_result: None,
-                find_by_token_result: None,
-            },
-        )
+        create_service(book_repo, MockAuthorRepository::new(), MockSeriesRepository::new())
     }
 
     // ─── list_books ──────────────────────────────────────────────────────────
@@ -870,7 +253,12 @@ mod tests {
     #[tokio::test]
     async fn test_list_books_returns_results() {
         let books = vec![fake_book(1, "Dune"), fake_book(2, "Foundation")];
-        let svc = default_service_with_book_repo(MockBookRepository::new().with_list_books(Ok(books)));
+        let mut book_repo = MockBookRepository::new();
+        book_repo.expect_list_books().returning(move |_, _, _, _| {
+            let books = books.clone();
+            Box::pin(async move { Ok(books) })
+        });
+        let svc = default_service_with_book_repo(book_repo);
 
         let result = svc.list_books(&BookQuery::default(), None, None).await;
 
@@ -883,7 +271,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_books_returns_empty() {
-        let svc = default_service_with_book_repo(MockBookRepository::new().with_list_books(Ok(vec![])));
+        let mut book_repo = MockBookRepository::new();
+        book_repo.expect_list_books().returning(|_, _, _, _| Box::pin(async { Ok(vec![]) }));
+        let svc = default_service_with_book_repo(book_repo);
 
         let result = svc.list_books(&BookQuery::default(), None, None).await;
 
@@ -893,9 +283,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_books_propagates_error() {
-        let svc = default_service_with_book_repo(
-            MockBookRepository::new().with_list_books(Err(Error::RepositoryError(RepositoryError::Database("db error".into())))),
-        );
+        let mut book_repo = MockBookRepository::new();
+        book_repo
+            .expect_list_books()
+            .returning(|_, _, _, _| Box::pin(async { Err(Error::RepositoryError(RepositoryError::Database("db error".into()))) }));
+        let svc = default_service_with_book_repo(book_repo);
 
         let result = svc.list_books(&BookQuery::default(), None, None).await;
 
@@ -908,7 +300,12 @@ mod tests {
     async fn test_find_book_by_token_found() {
         let book = fake_book(1, "Dune");
         let token = book.token;
-        let svc = default_service_with_book_repo(MockBookRepository::new().with_find_by_token(Ok(Some(book))));
+        let mut book_repo = MockBookRepository::new();
+        book_repo.expect_find_by_token().returning(move |_, _| {
+            let book = book.clone();
+            Box::pin(async move { Ok(Some(book)) })
+        });
+        let svc = default_service_with_book_repo(book_repo);
 
         let result = svc.find_book_by_token(&token).await;
 
@@ -920,7 +317,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_find_book_by_token_not_found() {
-        let svc = default_service_with_book_repo(MockBookRepository::new().with_find_by_token(Ok(None)));
+        let mut book_repo = MockBookRepository::new();
+        book_repo.expect_find_by_token().returning(|_, _| Box::pin(async { Ok(None) }));
+        let svc = default_service_with_book_repo(book_repo);
 
         let token = BookToken::generate();
         let result = svc.find_book_by_token(&token).await;
@@ -931,9 +330,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_find_book_by_token_propagates_error() {
-        let svc = default_service_with_book_repo(
-            MockBookRepository::new().with_find_by_token(Err(Error::RepositoryError(RepositoryError::Database("db error".into())))),
-        );
+        let mut book_repo = MockBookRepository::new();
+        book_repo
+            .expect_find_by_token()
+            .returning(|_, _| Box::pin(async { Err(Error::RepositoryError(RepositoryError::Database("db error".into()))) }));
+        let svc = default_service_with_book_repo(book_repo);
 
         let token = BookToken::generate();
         let result = svc.find_book_by_token(&token).await;
@@ -946,7 +347,12 @@ mod tests {
     #[tokio::test]
     async fn test_authors_for_book_returns_results() {
         let authors = vec![BookAuthor::fake(1, 1, "author", 0), BookAuthor::fake(1, 2, "editor", 1)];
-        let svc = default_service_with_book_repo(MockBookRepository::new().with_authors_for_book(Ok(authors)));
+        let mut book_repo = MockBookRepository::new();
+        book_repo.expect_authors_for_book().returning(move |_, _| {
+            let authors = authors.clone();
+            Box::pin(async move { Ok(authors) })
+        });
+        let svc = default_service_with_book_repo(book_repo);
 
         let result = svc.authors_for_book(1).await;
 
@@ -956,7 +362,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_authors_for_book_returns_empty() {
-        let svc = default_service_with_book_repo(MockBookRepository::new().with_authors_for_book(Ok(vec![])));
+        let mut book_repo = MockBookRepository::new();
+        book_repo.expect_authors_for_book().returning(|_, _| Box::pin(async { Ok(vec![]) }));
+        let svc = default_service_with_book_repo(book_repo);
 
         let result = svc.authors_for_book(1).await;
 
@@ -966,9 +374,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_authors_for_book_propagates_error() {
-        let svc = default_service_with_book_repo(
-            MockBookRepository::new().with_authors_for_book(Err(Error::RepositoryError(RepositoryError::Database("db error".into())))),
-        );
+        let mut book_repo = MockBookRepository::new();
+        book_repo
+            .expect_authors_for_book()
+            .returning(|_, _| Box::pin(async { Err(Error::RepositoryError(RepositoryError::Database("db error".into()))) }));
+        let svc = default_service_with_book_repo(book_repo);
 
         let result = svc.authors_for_book(1).await;
 
@@ -980,7 +390,12 @@ mod tests {
     #[tokio::test]
     async fn test_files_for_book_returns_results() {
         let files = vec![BookFile::fake(1, "epub"), BookFile::fake(1, "mobi")];
-        let svc = default_service_with_book_repo(MockBookRepository::new().with_files_for_book(Ok(files)));
+        let mut book_repo = MockBookRepository::new();
+        book_repo.expect_files_for_book().returning(move |_, _| {
+            let files = files.clone();
+            Box::pin(async move { Ok(files) })
+        });
+        let svc = default_service_with_book_repo(book_repo);
 
         let result = svc.files_for_book(1).await;
 
@@ -990,7 +405,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_files_for_book_returns_empty() {
-        let svc = default_service_with_book_repo(MockBookRepository::new().with_files_for_book(Ok(vec![])));
+        let mut book_repo = MockBookRepository::new();
+        book_repo.expect_files_for_book().returning(|_, _| Box::pin(async { Ok(vec![]) }));
+        let svc = default_service_with_book_repo(book_repo);
 
         let result = svc.files_for_book(1).await;
 
@@ -1000,9 +417,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_files_for_book_propagates_error() {
-        let svc = default_service_with_book_repo(
-            MockBookRepository::new().with_files_for_book(Err(Error::RepositoryError(RepositoryError::Database("db error".into())))),
-        );
+        let mut book_repo = MockBookRepository::new();
+        book_repo
+            .expect_files_for_book()
+            .returning(|_, _| Box::pin(async { Err(Error::RepositoryError(RepositoryError::Database("db error".into()))) }));
+        let svc = default_service_with_book_repo(book_repo);
 
         let result = svc.files_for_book(1).await;
 
@@ -1014,7 +433,12 @@ mod tests {
     #[tokio::test]
     async fn test_identifiers_for_book_returns_results() {
         let ids = vec![BookIdentifier::fake(1, "isbn13", "9780000000001")];
-        let svc = default_service_with_book_repo(MockBookRepository::new().with_identifiers_for_book(Ok(ids)));
+        let mut book_repo = MockBookRepository::new();
+        book_repo.expect_identifiers_for_book().returning(move |_, _| {
+            let ids = ids.clone();
+            Box::pin(async move { Ok(ids) })
+        });
+        let svc = default_service_with_book_repo(book_repo);
 
         let result = svc.identifiers_for_book(1).await;
 
@@ -1024,9 +448,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_identifiers_for_book_propagates_error() {
-        let svc = default_service_with_book_repo(
-            MockBookRepository::new().with_identifiers_for_book(Err(Error::RepositoryError(RepositoryError::Database("db error".into())))),
-        );
+        let mut book_repo = MockBookRepository::new();
+        book_repo
+            .expect_identifiers_for_book()
+            .returning(|_, _| Box::pin(async { Err(Error::RepositoryError(RepositoryError::Database("db error".into()))) }));
+        let svc = default_service_with_book_repo(book_repo);
 
         let result = svc.identifiers_for_book(1).await;
 
@@ -1038,14 +464,12 @@ mod tests {
     #[tokio::test]
     async fn test_list_authors_returns_results() {
         let authors = vec![fake_author(1, "Ursula K. Le Guin"), fake_author(2, "N.K. Jemisin")];
-        let svc = create_service(
-            MockBookRepository::new(),
-            MockAuthorRepository::with_list_authors(Ok(authors)),
-            MockSeriesRepository {
-                list_series_result: None,
-                find_by_token_result: None,
-            },
-        );
+        let mut author_repo = MockAuthorRepository::new();
+        author_repo.expect_list_authors().returning(move |_, _, _| {
+            let authors = authors.clone();
+            Box::pin(async move { Ok(authors) })
+        });
+        let svc = create_service(MockBookRepository::new(), author_repo, MockSeriesRepository::new());
 
         let result = svc.list_authors(None, None).await;
 
@@ -1057,14 +481,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_authors_returns_empty() {
-        let svc = create_service(
-            MockBookRepository::new(),
-            MockAuthorRepository::with_list_authors(Ok(vec![])),
-            MockSeriesRepository {
-                list_series_result: None,
-                find_by_token_result: None,
-            },
-        );
+        let mut author_repo = MockAuthorRepository::new();
+        author_repo.expect_list_authors().returning(|_, _, _| Box::pin(async { Ok(vec![]) }));
+        let svc = create_service(MockBookRepository::new(), author_repo, MockSeriesRepository::new());
 
         let result = svc.list_authors(None, None).await;
 
@@ -1074,14 +493,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_authors_propagates_error() {
-        let svc = create_service(
-            MockBookRepository::new(),
-            MockAuthorRepository::with_list_authors(Err(Error::RepositoryError(RepositoryError::Database("db error".into())))),
-            MockSeriesRepository {
-                list_series_result: None,
-                find_by_token_result: None,
-            },
-        );
+        let mut author_repo = MockAuthorRepository::new();
+        author_repo
+            .expect_list_authors()
+            .returning(|_, _, _| Box::pin(async { Err(Error::RepositoryError(RepositoryError::Database("db error".into()))) }));
+        let svc = create_service(MockBookRepository::new(), author_repo, MockSeriesRepository::new());
 
         let result = svc.list_authors(None, None).await;
 
@@ -1094,14 +510,12 @@ mod tests {
     async fn test_find_author_by_token_found() {
         let author = fake_author(1, "Brandon Sanderson");
         let token = author.token;
-        let svc = create_service(
-            MockBookRepository::new(),
-            MockAuthorRepository::with_find_by_token(Ok(Some(author))),
-            MockSeriesRepository {
-                list_series_result: None,
-                find_by_token_result: None,
-            },
-        );
+        let mut author_repo = MockAuthorRepository::new();
+        author_repo.expect_find_by_token().returning(move |_, _| {
+            let author = author.clone();
+            Box::pin(async move { Ok(Some(author)) })
+        });
+        let svc = create_service(MockBookRepository::new(), author_repo, MockSeriesRepository::new());
 
         let result = svc.find_author_by_token(&token).await;
 
@@ -1113,14 +527,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_find_author_by_token_not_found() {
-        let svc = create_service(
-            MockBookRepository::new(),
-            MockAuthorRepository::with_find_by_token(Ok(None)),
-            MockSeriesRepository {
-                list_series_result: None,
-                find_by_token_result: None,
-            },
-        );
+        let mut author_repo = MockAuthorRepository::new();
+        author_repo.expect_find_by_token().returning(|_, _| Box::pin(async { Ok(None) }));
+        let svc = create_service(MockBookRepository::new(), author_repo, MockSeriesRepository::new());
 
         let result = svc.find_author_by_token(&AuthorToken::generate()).await;
 
@@ -1133,14 +542,12 @@ mod tests {
     #[tokio::test]
     async fn test_list_series_returns_results() {
         let series = vec![fake_series(1, "Stormlight Archive"), fake_series(2, "Mistborn")];
-        let svc = create_service(
-            MockBookRepository::new(),
-            MockAuthorRepository {
-                list_authors_result: None,
-                find_by_token_result: None,
-            },
-            MockSeriesRepository::with_list_series(Ok(series)),
-        );
+        let mut series_repo = MockSeriesRepository::new();
+        series_repo.expect_list_series().returning(move |_, _, _| {
+            let series = series.clone();
+            Box::pin(async move { Ok(series) })
+        });
+        let svc = create_service(MockBookRepository::new(), MockAuthorRepository::new(), series_repo);
 
         let result = svc.list_series(None, None).await;
 
@@ -1152,14 +559,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_series_returns_empty() {
-        let svc = create_service(
-            MockBookRepository::new(),
-            MockAuthorRepository {
-                list_authors_result: None,
-                find_by_token_result: None,
-            },
-            MockSeriesRepository::with_list_series(Ok(vec![])),
-        );
+        let mut series_repo = MockSeriesRepository::new();
+        series_repo.expect_list_series().returning(|_, _, _| Box::pin(async { Ok(vec![]) }));
+        let svc = create_service(MockBookRepository::new(), MockAuthorRepository::new(), series_repo);
 
         let result = svc.list_series(None, None).await;
 
@@ -1169,14 +571,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_series_propagates_error() {
-        let svc = create_service(
-            MockBookRepository::new(),
-            MockAuthorRepository {
-                list_authors_result: None,
-                find_by_token_result: None,
-            },
-            MockSeriesRepository::with_list_series(Err(Error::RepositoryError(RepositoryError::Database("db error".into())))),
-        );
+        let mut series_repo = MockSeriesRepository::new();
+        series_repo
+            .expect_list_series()
+            .returning(|_, _, _| Box::pin(async { Err(Error::RepositoryError(RepositoryError::Database("db error".into()))) }));
+        let svc = create_service(MockBookRepository::new(), MockAuthorRepository::new(), series_repo);
 
         let result = svc.list_series(None, None).await;
 
@@ -1189,14 +588,12 @@ mod tests {
     async fn test_find_series_by_token_found() {
         let series = fake_series(1, "Stormlight Archive");
         let token = series.token;
-        let svc = create_service(
-            MockBookRepository::new(),
-            MockAuthorRepository {
-                list_authors_result: None,
-                find_by_token_result: None,
-            },
-            MockSeriesRepository::with_find_by_token(Ok(Some(series))),
-        );
+        let mut series_repo = MockSeriesRepository::new();
+        series_repo.expect_find_by_token().returning(move |_, _| {
+            let series = series.clone();
+            Box::pin(async move { Ok(Some(series)) })
+        });
+        let svc = create_service(MockBookRepository::new(), MockAuthorRepository::new(), series_repo);
 
         let result = svc.find_series_by_token(&token).await;
 
@@ -1208,14 +605,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_find_series_by_token_not_found() {
-        let svc = create_service(
-            MockBookRepository::new(),
-            MockAuthorRepository {
-                list_authors_result: None,
-                find_by_token_result: None,
-            },
-            MockSeriesRepository::with_find_by_token(Ok(None)),
-        );
+        let mut series_repo = MockSeriesRepository::new();
+        series_repo.expect_find_by_token().returning(|_, _| Box::pin(async { Ok(None) }));
+        let svc = create_service(MockBookRepository::new(), MockAuthorRepository::new(), series_repo);
 
         let result = svc.find_series_by_token(&SeriesToken::generate()).await;
 
