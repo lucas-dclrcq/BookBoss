@@ -19,6 +19,7 @@ rust_decimal = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 tokio-graceful-shutdown = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
+quick-xml = { workspace = true, optional = true }
 tokio-util = { workspace = true, optional = true, features = ["io"] }
 async-trait = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
@@ -57,6 +58,7 @@ server = [
     "dep:tower-http",
     "dep:tracing",
     "dep:tokio-graceful-shutdown",
+    "dep:quick-xml",
     "dep:tokio-util",
     "dioxus/server",
 ]

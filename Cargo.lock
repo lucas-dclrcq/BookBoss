@@ -847,6 +847,7 @@ dependencies = [
  "clap",
  "dioxus",
  "dioxus-server",
+ "quick-xml",
  "rand 0.10.0",
  "reqwest 0.13.2",
  "rust_decimal",
