@@ -37,4 +37,6 @@ pub fn opds_router() -> Router {
         .route("/opds/authors/{id}", routing::get(feeds::author_books))
         .route("/opds/series", routing::get(feeds::series_list))
         .route("/opds/series/{id}", routing::get(feeds::series_books))
+        .route("/opds/covers/{book_token}", routing::get(feeds::serve_cover))
+        .route("/opds/download/{book_token}/{format}", routing::get(feeds::serve_download))
 }

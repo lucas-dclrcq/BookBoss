@@ -1,16 +1,17 @@
-//! OPDS feed handlers for root catalog, all books, and shelves.
+//! OPDS feed handlers for root catalog, all books, shelves, and file serving.
 
 use std::sync::Arc;
 
 use axum::{
     Extension,
+    body::Body,
     extract::{Path, Query},
     http::{HeaderValue, StatusCode, header},
     response::Response,
 };
 use bb_core::{
     CoreServices,
-    book::{AuthorToken, Book, BookQuery, BookStatus, BookToken, SeriesToken},
+    book::{AuthorToken, Book, BookQuery, BookStatus, BookToken, FileFormat, FileRole, SeriesToken},
     shelf::ShelfType,
 };
 use chrono::Utc;
@@ -161,8 +162,6 @@ fn format_all_url(start: Option<u64>) -> String {
 
 /// Adds acquisition links for available book files.
 pub(crate) fn add_file_links(mut entry: AtomEntry, book_token: &str, files: &[bb_core::book::BookFile]) -> AtomEntry {
-    use bb_core::book::FileRole;
-
     // Group by format, prefer enriched over original.
     let mut seen_formats: Vec<String> = Vec::new();
     // Enriched files first.
@@ -272,11 +271,7 @@ pub async fn authors(opds_user: OpdsUser, Query(params): Query<PaginationParams>
     let _ = &opds_user;
     let now = Utc::now();
 
-    let author_list = match core_services
-        .book_service
-        .list_authors(params.start, Some(PAGE_SIZE + 1))
-        .await
-    {
+    let author_list = match core_services.book_service.list_authors(params.start, Some(PAGE_SIZE + 1)).await {
         Ok(a) => a,
         Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR),
     };
@@ -363,11 +358,7 @@ pub async fn series_list(opds_user: OpdsUser, Query(params): Query<PaginationPar
     let _ = &opds_user;
     let now = Utc::now();
 
-    let all_series = match core_services
-        .book_service
-        .list_series(params.start, Some(PAGE_SIZE + 1))
-        .await
-    {
+    let all_series = match core_services.book_service.list_series(params.start, Some(PAGE_SIZE + 1)).await {
         Ok(s) => s,
         Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR),
     };
@@ -488,4 +479,144 @@ async fn book_to_entry(book: &Book, core_services: &Arc<CoreServices>) -> AtomEn
     entry = add_cover_link(entry, &token_str, book.cover_path.as_deref());
 
     entry
+}
+
+static BLANK_COVER: &[u8] = include_bytes!("../../../assets/BlankCover.png");
+
+/// `GET /opds/covers/{book_token}` — Serve a book's cover image.
+pub async fn serve_cover(Path(book_token_str): Path<String>, _opds_user: OpdsUser, Extension(core_services): Extension<Arc<CoreServices>>) -> Response {
+    let token: BookToken = match book_token_str.parse() {
+        Ok(t) => t,
+        Err(_) => return error_response(StatusCode::BAD_REQUEST),
+    };
+
+    let book = match core_services.book_service.find_book_by_token(&token).await {
+        Ok(Some(b)) => b,
+        Ok(None) => return error_response(StatusCode::NOT_FOUND),
+        Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR),
+    };
+
+    let Some(filename) = book.cover_path else {
+        return Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, HeaderValue::from_static("image/png"))
+            .header(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"))
+            .body(Body::from(BLANK_COVER))
+            .unwrap();
+    };
+
+    let path = core_services.library_store.cover_path(&token, &filename);
+
+    match tokio::fs::read(&path).await {
+        Ok(data) => {
+            let content_type = cover_content_type(&filename);
+            Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, HeaderValue::from_static(content_type))
+                .header(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"))
+                .body(Body::from(data))
+                .unwrap()
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, HeaderValue::from_static("image/png"))
+            .header(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"))
+            .body(Body::from(BLANK_COVER))
+            .unwrap(),
+        Err(_) => error_response(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+/// `GET /opds/download/{book_token}/{format}` — Download a book file.
+pub async fn serve_download(
+    Path((book_token_str, format_str)): Path<(String, String)>,
+    _opds_user: OpdsUser,
+    Extension(core_services): Extension<Arc<CoreServices>>,
+) -> Response {
+    let token: BookToken = match book_token_str.parse() {
+        Ok(t) => t,
+        Err(_) => return error_response(StatusCode::BAD_REQUEST),
+    };
+
+    let format: FileFormat = match format_str.to_lowercase().parse() {
+        Ok(f) => f,
+        Err(_) => return error_response(StatusCode::BAD_REQUEST),
+    };
+
+    let book = match core_services.book_service.find_book_by_token(&token).await {
+        Ok(Some(b)) => b,
+        Ok(None) => return error_response(StatusCode::NOT_FOUND),
+        Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR),
+    };
+
+    let files = match core_services.book_service.files_for_book(book.id).await {
+        Ok(f) => f,
+        Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR),
+    };
+
+    let enriched_file = files.iter().find(|f| f.format == format && f.file_role == FileRole::Enriched);
+    let original_file = files.iter().find(|f| f.format == format && f.file_role == FileRole::Original);
+
+    if enriched_file.is_none() && original_file.is_none() {
+        return error_response(StatusCode::NOT_FOUND);
+    }
+
+    let ext = format.extension();
+
+    // Try the enriched file first; fall back to the original if not yet on disk.
+    let data = if let Some(enriched) = enriched_file {
+        let enriched_path = core_services.library_store.resolve(&enriched.path);
+        match tokio::fs::read(&enriched_path).await {
+            Ok(d) => d,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                let Some(original) = original_file else {
+                    return error_response(StatusCode::NOT_FOUND);
+                };
+                let orig_path = core_services.library_store.resolve(&original.path);
+                match tokio::fs::read(&orig_path).await {
+                    Ok(d) => d,
+                    Err(_) => return error_response(StatusCode::NOT_FOUND),
+                }
+            }
+            Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR),
+        }
+    } else {
+        let Some(original) = original_file else {
+            return error_response(StatusCode::NOT_FOUND);
+        };
+        let orig_path = core_services.library_store.resolve(&original.path);
+        match tokio::fs::read(&orig_path).await {
+            Ok(d) => d,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return error_response(StatusCode::NOT_FOUND),
+            Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR),
+        }
+    };
+
+    let download_name = format!("{}.{ext}", sanitize_filename(&book.title));
+    let content_disposition = format!("attachment; filename=\"{download_name}\"");
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, HeaderValue::from_static(format.content_type()))
+        .header(
+            header::CONTENT_DISPOSITION,
+            HeaderValue::from_str(&content_disposition).unwrap_or(HeaderValue::from_static("attachment")),
+        )
+        .header(header::CACHE_CONTROL, HeaderValue::from_static("private, no-cache"))
+        .body(Body::from(data))
+        .unwrap()
+}
+
+fn cover_content_type(filename: &str) -> &'static str {
+    let ext = filename.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+    match ext.as_str() {
+        "png" => "image/png",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        _ => "image/jpeg",
+    }
+}
+
+fn sanitize_filename(s: &str) -> String {
+    s.chars().map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' { c } else { '_' }).collect()
 }
