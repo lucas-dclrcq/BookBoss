@@ -94,22 +94,11 @@ async fn get_opds_info() -> Result<OpdsInfo, ServerFnError> {
         });
     }
 
-    let has_pw = core_services
+    let password = core_services
         .opds_service
-        .has_password(&user)
+        .get_or_create_password(&user)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
-
-    let password = if has_pw {
-        None
-    } else {
-        let pw = core_services
-            .opds_service
-            .get_or_create_password(&user)
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
-        Some(pw)
-    };
 
     Ok(OpdsInfo {
         has_access: true,
