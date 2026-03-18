@@ -11,6 +11,7 @@ fn library_services(ctx: &crate::context::TestContext) -> std::sync::Arc<bb_core
         fixtures::silent_library_store(),
         bb_core::test_support::nop_pipeline_service(),
         bb_core::test_support::nop_conversion_service(),
+        "test-encryption-secret",
     )
     .unwrap()
 }

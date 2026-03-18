@@ -781,8 +781,10 @@ dependencies = [
 name = "bb-core"
 version = "0.4.4"
 dependencies = [
+ "aes-gcm",
  "argon2",
  "async-trait",
+ "base64 0.22.1",
  "bb-utils",
  "chrono",
  "derive_builder",
@@ -790,6 +792,7 @@ dependencies = [
  "rust_decimal",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror 2.0.18",
  "tokio",
  "tokio-graceful-shutdown",

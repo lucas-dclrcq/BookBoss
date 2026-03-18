@@ -1,44 +1,41 @@
 use std::sync::Arc;
 
-use argon2::{
-    Argon2,
-    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
-};
+use aes_gcm::{AeadCore, Aes256Gcm, KeyInit, aead::Aead};
+use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use rand::RngExt;
+use sha2::{Digest, Sha256};
 
 use crate::{Error, repository::RepositoryService, types::Capability, user::User, with_read_only_transaction, with_transaction};
 
-const OPDS_PASSWORD_KEY: &str = "opds_password_hash";
+const OPDS_PASSWORD_KEY: &str = "opds_password";
 const OPDS_PASSWORD_LENGTH: usize = 12;
 const OPDS_PASSWORD_CHARSET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
 
 #[async_trait::async_trait]
 pub trait OpdsService: Send + Sync {
     /// Returns the plaintext OPDS password for a user, generating one if none
-    /// exists. Returns `Some(plaintext)` when a new password was created, or
-    /// `None` when a password already existed (the plaintext cannot be
-    /// recovered from the stored hash).
-    async fn get_or_create_password(&self, user: &User) -> Result<Option<String>, Error>;
+    /// exists. Always returns the plaintext password (decrypted from storage).
+    async fn get_or_create_password(&self, user: &User) -> Result<String, Error>;
 
     /// Generates a new OPDS password, replacing any existing one.
     /// Returns the new plaintext password.
     async fn regenerate_password(&self, user: &User) -> Result<String, Error>;
 
-    /// Verifies a plaintext password against the stored OPDS password hash for
-    /// a user.
+    /// Verifies a plaintext password against the stored OPDS password for a
+    /// user.
     async fn verify_password(&self, user: &User, password: &str) -> Result<bool, Error>;
-
-    /// Returns true if the user has a stored OPDS password.
-    async fn has_password(&self, user: &User) -> Result<bool, Error>;
 }
 
 pub(crate) struct OpdsServiceImpl {
     repository_service: Arc<RepositoryService>,
+    cipher: Aes256Gcm,
 }
 
 impl OpdsServiceImpl {
-    pub(crate) fn new(repository_service: Arc<RepositoryService>) -> Self {
-        Self { repository_service }
+    pub(crate) fn new(repository_service: Arc<RepositoryService>, encryption_secret: &str) -> Self {
+        let key = Sha256::digest(encryption_secret.as_bytes());
+        let cipher = Aes256Gcm::new(&key);
+        Self { repository_service, cipher }
     }
 }
 
@@ -52,24 +49,33 @@ fn generate_opds_password() -> String {
         .collect()
 }
 
-fn hash_opds_password(password: &str) -> Result<String, Error> {
-    let salt = SaltString::generate(&mut OsRng);
-    let hash = Argon2::default()
-        .hash_password(password.as_bytes(), &salt)
-        .map_err(|e| Error::CryptoError(e.to_string()))?;
-    Ok(hash.to_string())
+fn encrypt_password(cipher: &Aes256Gcm, plaintext: &str) -> Result<String, Error> {
+    let nonce = Aes256Gcm::generate_nonce(&mut aes_gcm::aead::OsRng);
+    let ciphertext = cipher.encrypt(&nonce, plaintext.as_bytes()).map_err(|e| Error::CryptoError(e.to_string()))?;
+
+    // Store as base64: nonce (12 bytes) || ciphertext
+    let mut combined = nonce.to_vec();
+    combined.extend_from_slice(&ciphertext);
+    Ok(BASE64.encode(&combined))
 }
 
-fn verify_opds_password(password: &str, hash: &str) -> bool {
-    let Ok(parsed_hash) = PasswordHash::new(hash) else {
-        return false;
-    };
-    Argon2::default().verify_password(password.as_bytes(), &parsed_hash).is_ok()
+fn decrypt_password(cipher: &Aes256Gcm, stored: &str) -> Result<String, Error> {
+    let combined = BASE64.decode(stored).map_err(|e| Error::CryptoError(e.to_string()))?;
+
+    if combined.len() < 12 {
+        return Err(Error::CryptoError("Invalid encrypted data".to_string()));
+    }
+
+    let (nonce_bytes, ciphertext) = combined.split_at(12);
+    let nonce = aes_gcm::Nonce::from_slice(nonce_bytes);
+    let plaintext = cipher.decrypt(nonce, ciphertext).map_err(|e| Error::CryptoError(e.to_string()))?;
+
+    String::from_utf8(plaintext).map_err(|e| Error::CryptoError(e.to_string()))
 }
 
 #[async_trait::async_trait]
 impl OpdsService for OpdsServiceImpl {
-    async fn get_or_create_password(&self, user: &User) -> Result<Option<String>, Error> {
+    async fn get_or_create_password(&self, user: &User) -> Result<String, Error> {
         if !user.has_capability(Capability::OpdsAccess) {
             return Err(Error::Validation("User does not have OPDS access".to_string()));
         }
@@ -79,21 +85,21 @@ impl OpdsService for OpdsServiceImpl {
             .get(tx, user_id, OPDS_PASSWORD_KEY)
             .await)?;
 
-        if existing.is_some() {
-            return Ok(None);
+        if let Some(setting) = existing {
+            return decrypt_password(&self.cipher, &setting.value);
         }
 
         let plaintext = generate_opds_password();
-        let hash = hash_opds_password(&plaintext)?;
+        let encrypted = encrypt_password(&self.cipher, &plaintext)?;
 
         let setting = crate::user::NewUserSetting {
             user_id,
             key: OPDS_PASSWORD_KEY.to_owned(),
-            value: hash,
+            value: encrypted,
         };
         with_transaction!(self, user_setting_repository, |tx| user_setting_repository.set(tx, setting).await)?;
 
-        Ok(Some(plaintext))
+        Ok(plaintext)
     }
 
     async fn regenerate_password(&self, user: &User) -> Result<String, Error> {
@@ -102,12 +108,12 @@ impl OpdsService for OpdsServiceImpl {
         }
 
         let plaintext = generate_opds_password();
-        let hash = hash_opds_password(&plaintext)?;
+        let encrypted = encrypt_password(&self.cipher, &plaintext)?;
 
         let setting = crate::user::NewUserSetting {
             user_id: user.id,
             key: OPDS_PASSWORD_KEY.to_owned(),
-            value: hash,
+            value: encrypted,
         };
         with_transaction!(self, user_setting_repository, |tx| user_setting_repository.set(tx, setting).await)?;
 
@@ -125,27 +131,18 @@ impl OpdsService for OpdsServiceImpl {
             .await)?;
 
         match setting {
-            Some(s) => Ok(verify_opds_password(password, &s.value)),
+            Some(s) => {
+                let stored_plaintext = decrypt_password(&self.cipher, &s.value)?;
+                Ok(stored_plaintext == password)
+            }
             None => Ok(false),
         }
-    }
-
-    async fn has_password(&self, user: &User) -> Result<bool, Error> {
-        let user_id = user.id;
-        let setting = with_read_only_transaction!(self, user_setting_repository, |tx| user_setting_repository
-            .get(tx, user_id, OPDS_PASSWORD_KEY)
-            .await)?;
-        Ok(setting.is_some())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        any::Any,
-        collections::HashSet,
-        sync::Mutex,
-    };
+    use std::{any::Any, collections::HashSet, sync::Mutex};
 
     use chrono::Utc;
 
@@ -174,6 +171,13 @@ mod tests {
 
     // ── Unit tests ──────────────────────────────────────────────────────────
 
+    const TEST_SECRET: &str = "test-encryption-secret";
+
+    fn test_cipher() -> Aes256Gcm {
+        let key = Sha256::digest(TEST_SECRET.as_bytes());
+        Aes256Gcm::new(&key)
+    }
+
     #[test]
     fn test_generate_opds_password_length() {
         let password = generate_opds_password();
@@ -194,21 +198,36 @@ mod tests {
     }
 
     #[test]
-    fn test_hash_and_verify_round_trip() {
-        let password = "testpassword";
-        let hash = hash_opds_password(password).unwrap();
-        assert!(verify_opds_password(password, &hash));
+    fn test_encrypt_decrypt_round_trip() {
+        let cipher = test_cipher();
+        let plaintext = "testpassword";
+        let encrypted = encrypt_password(&cipher, plaintext).unwrap();
+        let decrypted = decrypt_password(&cipher, &encrypted).unwrap();
+        assert_eq!(decrypted, plaintext);
     }
 
     #[test]
-    fn test_verify_wrong_password() {
-        let hash = hash_opds_password("correct").unwrap();
-        assert!(!verify_opds_password("wrong", &hash));
+    fn test_encrypt_produces_different_ciphertexts() {
+        let cipher = test_cipher();
+        let e1 = encrypt_password(&cipher, "same").unwrap();
+        let e2 = encrypt_password(&cipher, "same").unwrap();
+        assert_ne!(e1, e2, "different nonces should produce different ciphertexts");
     }
 
     #[test]
-    fn test_verify_invalid_hash() {
-        assert!(!verify_opds_password("password", "not-a-valid-hash"));
+    fn test_decrypt_invalid_data() {
+        let cipher = test_cipher();
+        assert!(decrypt_password(&cipher, "not-valid-base64!!!").is_err());
+    }
+
+    #[test]
+    fn test_decrypt_wrong_key() {
+        let cipher = test_cipher();
+        let encrypted = encrypt_password(&cipher, "secret").unwrap();
+
+        let wrong_key = Sha256::digest(b"wrong-secret");
+        let wrong_cipher = Aes256Gcm::new(&wrong_key);
+        assert!(decrypt_password(&wrong_cipher, &encrypted).is_err());
     }
 
     // ── Mock infrastructure ─────────────────────────────────────────────────
@@ -779,7 +798,7 @@ mod tests {
                 .build()
                 .expect("all fields provided"),
         );
-        OpdsServiceImpl::new(repository_service)
+        OpdsServiceImpl::new(repository_service, TEST_SECRET)
     }
 
     // ── get_or_create_password ──────────────────────────────────────────────
@@ -789,26 +808,27 @@ mod tests {
         let svc = create_service(MockUserSettingRepository::default().with_get_result(Ok(None)).with_set_result(Ok(UserSetting {
             user_id: 1,
             key: OPDS_PASSWORD_KEY.to_owned(),
-            value: "hashed".to_owned(),
+            value: "encrypted-placeholder".to_owned(),
         })));
 
-        let result = svc.get_or_create_password(&user_with_opds_access()).await.unwrap();
-        assert!(result.is_some());
-        let pw = result.unwrap();
+        let pw = svc.get_or_create_password(&user_with_opds_access()).await.unwrap();
         assert_eq!(pw.len(), OPDS_PASSWORD_LENGTH);
         assert!(pw.chars().all(|c| c.is_ascii_alphanumeric()));
     }
 
     #[tokio::test]
-    async fn get_or_create_password_returns_none_when_password_exists() {
+    async fn get_or_create_password_returns_existing_decrypted() {
+        let cipher = test_cipher();
+        let encrypted = encrypt_password(&cipher, "existing-pw").unwrap();
+
         let svc = create_service(MockUserSettingRepository::default().with_get_result(Ok(Some(UserSetting {
             user_id: 1,
             key: OPDS_PASSWORD_KEY.to_owned(),
-            value: "existing-hash".to_owned(),
+            value: encrypted,
         }))));
 
-        let result = svc.get_or_create_password(&user_with_opds_access()).await.unwrap();
-        assert!(result.is_none());
+        let pw = svc.get_or_create_password(&user_with_opds_access()).await.unwrap();
+        assert_eq!(pw, "existing-pw");
     }
 
     #[tokio::test]
@@ -827,7 +847,7 @@ mod tests {
         let svc = create_service(MockUserSettingRepository::default().with_set_result(Ok(UserSetting {
             user_id: 1,
             key: OPDS_PASSWORD_KEY.to_owned(),
-            value: "hashed".to_owned(),
+            value: "encrypted-placeholder".to_owned(),
         })));
 
         let pw = svc.regenerate_password(&user_with_opds_access()).await.unwrap();
@@ -847,27 +867,28 @@ mod tests {
 
     #[tokio::test]
     async fn verify_password_returns_true_for_correct_password() {
-        let plaintext = "testpassword";
-        let hash = hash_opds_password(plaintext).unwrap();
+        let cipher = test_cipher();
+        let encrypted = encrypt_password(&cipher, "testpassword").unwrap();
 
         let svc = create_service(MockUserSettingRepository::default().with_get_result(Ok(Some(UserSetting {
             user_id: 1,
             key: OPDS_PASSWORD_KEY.to_owned(),
-            value: hash,
+            value: encrypted,
         }))));
 
-        let valid = svc.verify_password(&user_with_opds_access(), plaintext).await.unwrap();
+        let valid = svc.verify_password(&user_with_opds_access(), "testpassword").await.unwrap();
         assert!(valid);
     }
 
     #[tokio::test]
     async fn verify_password_returns_false_for_wrong_password() {
-        let hash = hash_opds_password("correct").unwrap();
+        let cipher = test_cipher();
+        let encrypted = encrypt_password(&cipher, "correct").unwrap();
 
         let svc = create_service(MockUserSettingRepository::default().with_get_result(Ok(Some(UserSetting {
             user_id: 1,
             key: OPDS_PASSWORD_KEY.to_owned(),
-            value: hash,
+            value: encrypted,
         }))));
 
         let valid = svc.verify_password(&user_with_opds_access(), "wrong").await.unwrap();
@@ -888,25 +909,5 @@ mod tests {
 
         let valid = svc.verify_password(&user_without_opds_access(), "anything").await.unwrap();
         assert!(!valid);
-    }
-
-    // ── has_password ────────────────────────────────────────────────────────
-
-    #[tokio::test]
-    async fn has_password_returns_true_when_exists() {
-        let svc = create_service(MockUserSettingRepository::default().with_get_result(Ok(Some(UserSetting {
-            user_id: 1,
-            key: OPDS_PASSWORD_KEY.to_owned(),
-            value: "hash".to_owned(),
-        }))));
-
-        assert!(svc.has_password(&user_with_opds_access()).await.unwrap());
-    }
-
-    #[tokio::test]
-    async fn has_password_returns_false_when_absent() {
-        let svc = create_service(MockUserSettingRepository::default().with_get_result(Ok(None)));
-
-        assert!(!svc.has_password(&user_with_opds_access()).await.unwrap());
     }
 }

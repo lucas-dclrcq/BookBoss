@@ -63,6 +63,7 @@ impl CoreServices {
         library_store: Arc<dyn LibraryStore>,
         pipeline_service: Arc<dyn PipelineService>,
         conversion_service: Arc<dyn ConversionService>,
+        encryption_secret: &str,
     ) -> Self {
         Self {
             auth_service: Arc::new(AuthServiceImpl::new(repository_service.clone())),
@@ -77,7 +78,7 @@ impl CoreServices {
             shelf_service: Arc::new(ShelfServiceImpl::new(repository_service.clone())),
             reading_service: Arc::new(ReadingServiceImpl::new(repository_service.clone())),
             device_service: Arc::new(DeviceServiceImpl::new(repository_service.clone())),
-            opds_service: Arc::new(OpdsServiceImpl::new(repository_service)),
+            opds_service: Arc::new(OpdsServiceImpl::new(repository_service, encryption_secret)),
         }
     }
 }
@@ -87,12 +88,14 @@ pub fn create_services(
     library_store: Arc<dyn LibraryStore>,
     pipeline_service: Arc<dyn PipelineService>,
     conversion_service: Arc<dyn ConversionService>,
+    encryption_secret: &str,
 ) -> Result<Arc<CoreServices>, Error> {
     Ok(Arc::new(CoreServices::new(
         repository_service,
         library_store,
         pipeline_service,
         conversion_service,
+        encryption_secret,
     )))
 }
 

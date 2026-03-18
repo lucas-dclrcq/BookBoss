@@ -117,7 +117,14 @@ pub fn pipeline_services(ctx: &crate::context::TestContext, metadata: ExtractedM
         vec![],
         silent_conversion_service(),
     ));
-    bb_core::create_services(ctx.repos.clone(), silent_library_store(), pipeline, silent_conversion_service()).unwrap()
+    bb_core::create_services(
+        ctx.repos.clone(),
+        silent_library_store(),
+        pipeline,
+        silent_conversion_service(),
+        "test-encryption-secret",
+    )
+    .unwrap()
 }
 
 // ── Fixture helpers

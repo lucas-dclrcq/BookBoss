@@ -51,7 +51,7 @@ struct DeviceRow {
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 struct OpdsInfo {
     has_access: bool,
-    password: Option<String>,
+    password: String,
     opds_url: String,
     username: String,
 }
@@ -88,7 +88,7 @@ async fn get_opds_info() -> Result<OpdsInfo, ServerFnError> {
     if !user.has_capability(Capability::OpdsAccess) {
         return Ok(OpdsInfo {
             has_access: false,
-            password: None,
+            password: String::new(),
             opds_url: String::new(),
             username: String::new(),
         });
@@ -758,16 +758,14 @@ fn ProfileSectionContent() -> Element {
 #[component]
 fn OpdsSectionContent() -> Element {
     let opds_info = use_server_future(get_opds_info)?;
-    let mut password: Signal<Option<String>> = use_signal(|| None);
+    let mut password = use_signal(String::new);
     let mut regenerating = use_signal(|| false);
     let mut copied = use_signal(|| false);
     let mut error_msg: Signal<Option<String>> = use_signal(|| None);
 
     use_effect(move || {
         if let Some(Ok(info)) = opds_info() {
-            if let Some(pw) = info.password {
-                password.set(Some(pw));
-            }
+            password.set(info.password.clone());
         }
     });
 
@@ -807,33 +805,24 @@ fn OpdsSectionContent() -> Element {
 
                 div {
                     span { class: "block text-sm font-medium text-gray-700 mb-1", "Password" }
-                    if let Some(pw) = password() {
-                        div { class: "flex items-center gap-2",
-                            code { class: "text-sm bg-gray-50 rounded px-3 py-1.5 border border-gray-200 text-gray-900 select-all font-mono",
-                                "{pw}"
-                            }
-                            button {
-                                class: "px-2 py-1.5 text-xs font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50",
-                                onclick: move |_| {
-                                    let pw_val = pw.clone();
-                                    spawn(async move {
-                                        if let Ok(eval) = document::eval(&format!(
-                                            "navigator.clipboard.writeText('{pw_val}')"
-                                        )).await {
-                                            let _ = eval;
-                                            copied.set(true);
-                                        }
-                                    });
-                                },
-                                if copied() { "Copied!" } else { "Copy" }
-                            }
+                    div { class: "flex items-center gap-2",
+                        code { class: "text-sm bg-gray-50 rounded px-3 py-1.5 border border-gray-200 text-gray-900 select-all font-mono",
+                            "{password}"
                         }
-                        p { class: "text-xs text-amber-600 mt-1",
-                            "Save this password now — it cannot be shown again."
-                        }
-                    } else {
-                        p { class: "text-sm text-gray-500 italic",
-                            "Password has been generated. Use Regenerate to get a new one."
+                        button {
+                            class: "px-2 py-1.5 text-xs font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50",
+                            onclick: move |_| {
+                                let pw_val = password();
+                                spawn(async move {
+                                    if let Ok(eval) = document::eval(&format!(
+                                        "navigator.clipboard.writeText('{pw_val}')"
+                                    )).await {
+                                        let _ = eval;
+                                        copied.set(true);
+                                    }
+                                });
+                            },
+                            if copied() { "Copied!" } else { "Copy" }
                         }
                     }
                 }
@@ -852,7 +841,7 @@ fn OpdsSectionContent() -> Element {
                             copied.set(false);
                             spawn(async move {
                                 match regenerate_opds_password().await {
-                                    Ok(pw) => password.set(Some(pw)),
+                                    Ok(pw) => password.set(pw),
                                     Err(e) => error_msg.set(Some(e.to_string())),
                                 }
                                 regenerating.set(false);

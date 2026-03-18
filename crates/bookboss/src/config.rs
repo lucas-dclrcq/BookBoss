@@ -37,6 +37,7 @@ pub struct Config {
     #[serde(default)]
     pub api: ApiConfig,
     pub database: DatabaseConfig,
+    pub encryption_secret: String,
     #[serde(default)]
     pub frontend: FrontendConfig,
     pub import: ImportConfig,

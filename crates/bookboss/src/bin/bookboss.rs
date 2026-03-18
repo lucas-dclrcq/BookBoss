@@ -166,8 +166,14 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
         create_metadata_providers(&config.metadata),
         conversion_service.clone(),
     )) as Arc<dyn bb_core::pipeline::PipelineService>;
-    let core_services =
-        create_services(repository_service.clone(), library_store, pipeline_service, conversion_service).context("Couldn't create core services")?;
+    let core_services = create_services(
+        repository_service.clone(),
+        library_store,
+        pipeline_service,
+        conversion_service,
+        &config.encryption_secret,
+    )
+    .context("Couldn't create core services")?;
 
     let scan_interval = Duration::from_secs(config.import.scan_interval_secs);
     let worker_poll_interval = Duration::from_secs(config.import.worker_poll_interval_secs);
