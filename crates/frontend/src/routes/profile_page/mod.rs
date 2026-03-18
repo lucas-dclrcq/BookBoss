@@ -72,7 +72,8 @@ async fn get_profile_context() -> Result<(), ServerFnError> {
 #[get(
     "/api/v1/profile/opds",
     auth_session: axum::Extension<AuthSession>,
-    core_services: axum::Extension<Arc<CoreServices>>
+    core_services: axum::Extension<Arc<CoreServices>>,
+    kobo_config: axum::Extension<Arc<KoboConfig>>
 )]
 async fn get_opds_info() -> Result<OpdsInfo, ServerFnError> {
     let auth_user = authenticated_user(&auth_session)?;
@@ -100,10 +101,13 @@ async fn get_opds_info() -> Result<OpdsInfo, ServerFnError> {
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
+    let base = kobo_config.base_url.trim_end_matches('/');
+    let opds_url = format!("{base}/opds/");
+
     Ok(OpdsInfo {
         has_access: true,
         password,
-        opds_url: "/opds/".to_string(),
+        opds_url,
         username: user.username.clone(),
     })
 }
