@@ -10,7 +10,8 @@ use axum::{
 };
 use bb_core::{
     CoreServices,
-    book::{AuthorToken, BookQuery, BookStatus},
+    book::{AuthorToken, Book, BookQuery, BookStatus, BookToken},
+    shelf::ShelfType,
 };
 use chrono::Utc;
 use serde::Deserialize;
@@ -108,25 +109,7 @@ pub async fn all_books(opds_user: OpdsUser, Query(params): Query<PaginationParam
     }
 
     for book in page_books {
-        let mut book_authors = core_services.book_service.authors_for_book(book.id).await.unwrap_or_default();
-        book_authors.sort_by_key(|a| a.sort_order);
-        let files = core_services.book_service.files_for_book(book.id).await.unwrap_or_default();
-
-        let mut entry = AtomEntry::new(format!("urn:bookboss:book:{}", book.token), &book.title, book.updated_at);
-
-        if let Some(ref desc) = book.description {
-            entry = entry.with_content(desc);
-        }
-
-        for ba in &book_authors {
-            if let Ok(Some(author)) = core_services.book_service.find_author_by_token(&AuthorToken::new(ba.author_id)).await {
-                entry = entry.with_author(&author.name);
-            }
-        }
-
-        entry = add_file_links(entry, &book.token.to_string(), &files);
-        entry = add_cover_link(entry, &book.token.to_string(), book.cover_path.as_deref());
-
+        let entry = book_to_entry(book, &core_services).await;
         feed = feed.with_entry(entry);
     }
 
@@ -212,5 +195,114 @@ pub(crate) fn add_cover_link(mut entry: AtomEntry, book_token: &str, cover_path:
             .with_link(AtomLink::new(rel::IMAGE, &cover_url).with_type("image/jpeg"))
             .with_link(AtomLink::new(rel::THUMBNAIL, &cover_url).with_type("image/jpeg"));
     }
+    entry
+}
+
+/// `GET /opds/shelves/{shelf_token}` — Books on a shelf (acquisition feed).
+pub async fn shelf_books(
+    opds_user: OpdsUser,
+    axum::extract::Path(shelf_token_str): axum::extract::Path<String>,
+    Query(params): Query<PaginationParams>,
+    Extension(core_services): Extension<Arc<CoreServices>>,
+) -> Response {
+    let now = Utc::now();
+    let user_id = opds_user.user.id;
+
+    let shelf_token: bb_core::shelf::ShelfToken = match shelf_token_str.parse() {
+        Ok(t) => t,
+        Err(_) => return error_response(StatusCode::BAD_REQUEST),
+    };
+
+    let shelf = match core_services.shelf_service.get_shelf(&shelf_token, user_id).await {
+        Ok(s) => s,
+        Err(_) => return error_response(StatusCode::NOT_FOUND),
+    };
+
+    let books: Vec<Book> = if shelf.shelf_type == ShelfType::Smart {
+        match core_services
+            .shelf_service
+            .books_for_filter(&shelf_token, user_id, params.start, Some(PAGE_SIZE + 1))
+            .await
+        {
+            Ok(b) => b,
+            Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR),
+        }
+    } else {
+        let entries = match core_services
+            .shelf_service
+            .books_for_shelf(&shelf_token, user_id, params.start, Some(PAGE_SIZE + 1))
+            .await
+        {
+            Ok(e) => e,
+            Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR),
+        };
+        let mut result = Vec::with_capacity(entries.len());
+        for entry in &entries {
+            if let Ok(Some(book)) = core_services.book_service.find_book_by_token(&BookToken::new(entry.book_id)).await {
+                result.push(book);
+            }
+        }
+        result
+    };
+
+    let has_next = books.len() as u64 > PAGE_SIZE;
+    let page_books = if has_next { &books[..PAGE_SIZE as usize] } else { &books };
+
+    let self_url = format_shelf_url(&shelf_token_str, params.start);
+    let mut feed = AtomFeed::new(format!("urn:bookboss:shelf:{}", shelf.token), &shelf.name, now)
+        .with_link(AtomLink::new(rel::SELF, &self_url).with_type(mime::ACQUISITION))
+        .with_link(AtomLink::new(rel::START, "/opds/").with_type(mime::NAVIGATION));
+
+    if has_next {
+        if let Some(last) = page_books.last() {
+            feed = feed.with_link(AtomLink::new(rel::NEXT, format_shelf_url(&shelf_token_str, Some(last.id + 1))).with_type(mime::ACQUISITION));
+        }
+    }
+
+    for book in page_books {
+        let entry = book_to_entry(book, &core_services).await;
+        feed = feed.with_entry(entry);
+    }
+
+    match feed.to_xml() {
+        Ok(xml) => xml_response(xml),
+        Err(_) => error_response(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+fn format_shelf_url(token: &str, start: Option<u64>) -> String {
+    match start {
+        Some(s) => format!("/opds/shelves/{token}?start={s}"),
+        None => format!("/opds/shelves/{token}"),
+    }
+}
+
+fn error_response(status: StatusCode) -> Response {
+    Response::builder().status(status).body(axum::body::Body::empty()).unwrap()
+}
+
+/// Builds an OPDS acquisition entry from a Book, resolving authors, files, and
+/// cover.
+async fn book_to_entry(book: &Book, core_services: &Arc<CoreServices>) -> AtomEntry {
+    let mut book_authors = core_services.book_service.authors_for_book(book.id).await.unwrap_or_default();
+    book_authors.sort_by_key(|a| a.sort_order);
+    let files = core_services.book_service.files_for_book(book.id).await.unwrap_or_default();
+
+    let mut entry = AtomEntry::new(format!("urn:bookboss:book:{}", book.token), &book.title, book.updated_at);
+
+    if let Some(ref desc) = book.description {
+        entry = entry.with_content(desc);
+    }
+
+    for ba in &book_authors {
+        if let Ok(Some(author)) = core_services.book_service.find_author_by_token(&AuthorToken::new(ba.author_id)).await {
+            entry = entry.with_author(&author.name);
+        }
+    }
+
+    let token_str = book.token.to_string();
+    entry = add_file_links(entry, &token_str, &files);
+    entry = add_cover_link(entry, &token_str, book.cover_path.as_deref());
+
     entry
 }

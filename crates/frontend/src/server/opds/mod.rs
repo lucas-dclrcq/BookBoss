@@ -32,4 +32,5 @@ pub fn opds_router() -> Router {
         .route("/opds/", routing::get(feeds::root))
         .route("/opds/all", routing::get(feeds::all_books))
         .route("/opds/shelves", routing::get(feeds::shelves))
+        .route("/opds/shelves/{shelf_token}", routing::get(feeds::shelf_books))
 }
