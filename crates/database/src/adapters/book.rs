@@ -336,12 +336,17 @@ impl BookRepository for BookRepositoryAdapter {
     }
 
     async fn update_enriched_paths(&self, transaction: &dyn Transaction, book_id: BookId, old_slug: &str, new_slug: &str) -> Result<(), Error> {
-        use sea_orm::sea_query::Expr;
+        use sea_orm::sea_query::{Expr, Func};
 
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
+        let replace_expr = Func::cust("REPLACE")
+            .arg(Expr::col(book_files::Column::Path))
+            .arg(Expr::val(old_slug.to_owned()))
+            .arg(Expr::val(new_slug.to_owned()));
+
         book_files::Entity::update_many()
-            .col_expr(book_files::Column::Path, Expr::cust_with_values("REPLACE(path, ?, ?)", [old_slug, new_slug]))
+            .col_expr(book_files::Column::Path, replace_expr.into())
             .filter(book_files::Column::BookId.eq(book_id as i64))
             .filter(book_files::Column::FileRole.eq(FileRole::Enriched.as_str()))
             .exec(transaction)
