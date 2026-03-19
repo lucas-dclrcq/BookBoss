@@ -4,8 +4,9 @@ use devices_section::DevicesSectionContent;
 use dioxus::prelude::*;
 #[cfg(feature = "server")]
 use {
+    crate::FrontendConfig,
     crate::routes::server_helpers::authenticated_user,
-    crate::server::{AuthSession, kobo::KoboConfig},
+    crate::server::AuthSession,
     bb_core::{
         CoreServices,
         device::{DeviceToken, OnRemovalAction},
@@ -73,7 +74,7 @@ async fn get_profile_context() -> Result<(), ServerFnError> {
     "/api/v1/profile/opds",
     auth_session: axum::Extension<AuthSession>,
     core_services: axum::Extension<Arc<CoreServices>>,
-    kobo_config: axum::Extension<Arc<KoboConfig>>
+    frontend_config: axum::Extension<Arc<FrontendConfig>>
 )]
 async fn get_opds_info() -> Result<OpdsInfo, ServerFnError> {
     let auth_user = authenticated_user(&auth_session)?;
@@ -101,7 +102,7 @@ async fn get_opds_info() -> Result<OpdsInfo, ServerFnError> {
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    let base = kobo_config.base_url.trim_end_matches('/');
+    let base = frontend_config.base_url.trim_end_matches('/');
     let opds_url = format!("{base}/opds/");
 
     Ok(OpdsInfo {
@@ -297,11 +298,16 @@ fn parse_removal_action(s: &str) -> Result<OnRemovalAction, ServerFnError> {
     }
 }
 
+#[cfg(feature = "server")]
+pub(crate) fn kobo_sync_url(base_url: &str, sync_token: &str) -> String {
+    format!("{base_url}/kobo/{sync_token}")
+}
+
 #[get(
     "/api/v1/profile/devices",
     auth_session: axum::Extension<AuthSession>,
     core_services: axum::Extension<Arc<CoreServices>>,
-    kobo_config: axum::Extension<Arc<KoboConfig>>
+    frontend_config: axum::Extension<Arc<FrontendConfig>>
 )]
 async fn get_devices_for_profile() -> Result<Vec<DeviceRow>, ServerFnError> {
     let user_id = authenticated_user(&auth_session)?.id();
@@ -321,7 +327,7 @@ async fn get_devices_for_profile() -> Result<Vec<DeviceRow>, ServerFnError> {
             .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let sync_token_display = device.token.to_string().trim_start_matches("DV_").to_string();
-        let sync_url = kobo_config.sync_url(&sync_token_display);
+        let sync_url = kobo_sync_url(frontend_config.base_url.trim_end_matches('/'), &sync_token_display);
         let last_synced_at = humanize_synced_at(device.last_synced_at);
 
         rows.push(DeviceRow {

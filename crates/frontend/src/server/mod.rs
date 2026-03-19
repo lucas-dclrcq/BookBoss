@@ -71,7 +71,7 @@ impl IntoSubsystem<anyhow::Error> for FrontendSubsystem {
             .layer(SessionLayer::new(session_store))
             .layer(AuthSessionLayer::<AuthUser, UserId, BackendSessionPool, BackendSessionPool>::new(Some(backend_pool)).with_config(auth_config));
 
-        let kobo_config = kobo::KoboConfig::new(self.config.base_url.clone());
+        let frontend_config = Arc::new(self.config.clone());
         let kobo = kobo::kobo_router(self.config.base_url.clone(), core_services.clone());
         let opds = opds::opds_router();
 
@@ -82,7 +82,7 @@ impl IntoSubsystem<anyhow::Error> for FrontendSubsystem {
             .merge(kobo)
             .merge(opds)
             .layer(Extension(core_services))
-            .layer(Extension(kobo_config))
+            .layer(Extension(frontend_config))
             .layer(middleware);
 
         let health_handler = || async { axum::http::StatusCode::OK };

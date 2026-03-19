@@ -20,7 +20,6 @@
 //! | `{*path}` | `/kobo/:t/{*path}`                                    | M8.8 catch-all |
 
 pub mod book_metadata;
-pub mod config;
 pub mod cursor;
 pub mod download;
 pub mod dto;
@@ -37,7 +36,6 @@ use std::sync::Arc;
 
 use axum::{Router, routing};
 use bb_core::CoreServices;
-pub use config::KoboConfig;
 pub use extractor::KoboDevice;
 
 /// Builds the Kobo sync router.
