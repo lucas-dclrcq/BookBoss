@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.6](https://github.com/szinn/BookBoss/compare/v0.4.4..v0.4.6) - 2026-03-19
+
+### Features
+
+- _(core)_ Replace Argon2 hashing with AES-256-GCM encryption for OPDS passwords - ([403ac17](https://github.com/szinn/BookBoss/commit/403ac174ab86eb12823d233de2e42350dcb9fdf3))
+- _(core)_ Add OpdsAccess capability and OPDS password service - ([c2829fd](https://github.com/szinn/BookBoss/commit/c2829fdb32bfd76b425bb6eb7f0e353ee299afe2))
+- _(frontend)_ Add OPDS section to profile page - ([d74da75](https://github.com/szinn/BookBoss/commit/d74da75e32e717cacb1c9a7fdb7fdd71989d5224))
+- _(frontend)_ Add OPDS download and cover endpoints - ([afc3fcc](https://github.com/szinn/BookBoss/commit/afc3fcc0de1b2939605071a3ca473843a8b19ebb))
+- _(frontend)_ Add OPDS author and series navigation and acquisition feeds - ([7f11312](https://github.com/szinn/BookBoss/commit/7f113123104d8ba3ad816671acf07a9f54c55c56))
+- _(frontend)_ Add OPDS shelf acquisition feed - ([5aca37d](https://github.com/szinn/BookBoss/commit/5aca37d4ef718b1b7f2ba6095c0e65513eb56fbc))
+- _(frontend)_ Add OPDS root catalog, all books, and shelves feeds - ([62787b3](https://github.com/szinn/BookBoss/commit/62787b31a51d9887f2d83cd21968a841b73b34db))
+- _(frontend)_ Add OPDS module with Basic Auth extractor and Atom XML helpers - ([b33f736](https://github.com/szinn/BookBoss/commit/b33f73621ee92df12fad0971d45ead461c18cd93))
+- _(frontend)_ Make author and series names clickable links in book cards - ([41cdc46](https://github.com/szinn/BookBoss/commit/41cdc46280c9a5a03804031b921259b909477dae))
+
+### Bug Fixes
+
+- _(core)_ Fix OpdsService::get_or_create_password and add service tests - ([d61a124](https://github.com/szinn/BookBoss/commit/d61a124892c015d22396fa7442d65dbee8e002c1))
+- _(core)_ Use trait parameter names in mock AuthorRepository/ImportJobRepository impls - ([ebade68](https://github.com/szinn/BookBoss/commit/ebade682e722349cfd51609da55627b72a68691e))
+- _(database)_ Use Func::cust for REPLACE to fix Postgres compatibility - ([01a135a](https://github.com/szinn/BookBoss/commit/01a135a222250dc02aac1fa1a4602582ba925d30))
+- _(frontend)_ Add /opds route without trailing slash - ([5ccb544](https://github.com/szinn/BookBoss/commit/5ccb54405c2c03ea1fa25e540528ed9276ba6dff))
+- _(frontend)_ Use full base_url for OPDS catalog URL on profile page - ([9722808](https://github.com/szinn/BookBoss/commit/9722808a8c260a390f9953b50fc3fdadc0cf4ff7))
+
+### Refactor
+
+- _(core)_ Replace hand-rolled Mock\* structs with mockall - ([2070198](https://github.com/szinn/BookBoss/commit/207019886270c0770be940972cb538d49503cf62))
+- _(core)_ Move string conversions onto enum types - ([5a8fb25](https://github.com/szinn/BookBoss/commit/5a8fb25357c5c69ef5a644bacd2a35e3f7be2d21))
+- _(core,database,frontend,formats,storage)_ Move string conversions onto types - ([2d0ca79](https://github.com/szinn/BookBoss/commit/2d0ca79bc143f0391a384e4dfaaf818279fe8c29))
+- _(frontend)_ Extract shared server function helpers - ([cdee53a](https://github.com/szinn/BookBoss/commit/cdee53a15faf85da4bdcb682e95db955ee9b8d17))
+
+### Documentation
+
+- _(readme)_ Update feature list - ([678ffd2](https://github.com/szinn/BookBoss/commit/678ffd281f75a9615a49756e11b3b74915d90b76))
+
 ## [0.4.4](https://github.com/szinn/BookBoss/compare/v0.4.3..v0.4.4) - 2026-03-16
 
 ### Features
