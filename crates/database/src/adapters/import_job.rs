@@ -98,7 +98,7 @@ impl ImportJobRepository for ImportJobRepositoryAdapter {
 
         updater.status = Set(job.status.to_string());
         updater.candidate_book_id = Set(job.candidate_book_id.map(|id| id as i64));
-        updater.metadata_source = Set(job.metadata_source.as_ref().map(|s| s.to_string()));
+        updater.metadata_source = Set(job.metadata_source.as_ref().map(std::string::ToString::to_string));
         updater.error_message = Set(job.error_message);
         updater.reviewed_by = Set(job.reviewed_by.map(|id| id as i64));
         updater.reviewed_at = Set(job.reviewed_at.map(Into::into));

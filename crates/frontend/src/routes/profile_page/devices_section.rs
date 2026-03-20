@@ -13,7 +13,7 @@ use crate::Route;
 #[derive(Clone, PartialEq)]
 enum ModalMode {
     Add,
-    Edit(DeviceRow),
+    Edit(Box<DeviceRow>),
 }
 
 fn removal_label(action: &str) -> &'static str {
@@ -48,7 +48,7 @@ pub(super) fn DevicesSectionContent() -> Element {
     let mut reset_saving = use_signal(|| false);
     let mut reset_error: Signal<Option<String>> = use_signal(|| None);
 
-    let device_list = devices().and_then(|r| r.ok()).unwrap_or_default();
+    let device_list = devices().and_then(std::result::Result::ok).unwrap_or_default();
 
     rsx! {
         // ── Section header ────────────────────────────────────────────────
@@ -76,13 +76,13 @@ pub(super) fn DevicesSectionContent() -> Element {
                         DeviceCard {
                             key: "{device.token}",
                             device: d,
-                            on_edit: move |_| modal.set(Some(ModalMode::Edit(d_edit.clone()))),
-                            on_delete: move |_| {
+                            on_edit: move |()| modal.set(Some(ModalMode::Edit(Box::new(d_edit.clone())))),
+                            on_delete: move |()| {
                                 delete_shelf_checked.set(false);
                                 delete_error.set(None);
                                 delete_target.set(Some(d_delete.clone()));
                             },
-                            on_reset: move |_| {
+                            on_reset: move |()| {
                                 reset_error.set(None);
                                 reset_target.set(Some(d_reset.clone()));
                             },
@@ -96,8 +96,8 @@ pub(super) fn DevicesSectionContent() -> Element {
         if modal().is_some() {
             DeviceModal {
                 mode: modal().unwrap(),
-                on_close: move |_| modal.set(None),
-                on_saved: move |_| {
+                on_close: move |()| modal.set(None),
+                on_saved: move |()| {
                     modal.set(None);
                     devices.restart();
                 },

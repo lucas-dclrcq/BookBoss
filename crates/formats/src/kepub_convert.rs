@@ -56,7 +56,7 @@ pub fn convert_to_kepub(epub_path: &Path, dest: &Path) -> Result<(), Error> {
     }
 
     let dest_file = std::fs::File::create(dest)?;
-    let mut dst = ZipWriter::new(std::io::BufWriter::new(dest_file));
+    let mut output = ZipWriter::new(std::io::BufWriter::new(dest_file));
 
     let stored = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
     let deflated = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
@@ -66,8 +66,8 @@ pub fn convert_to_kepub(epub_path: &Path, dest: &Path) -> Result<(), Error> {
         let mut f = src.by_index(idx)?;
         let mut buf = Vec::new();
         f.read_to_end(&mut buf)?;
-        dst.start_file("mimetype", stored)?;
-        dst.write_all(&buf)?;
+        output.start_file("mimetype", stored)?;
+        output.write_all(&buf)?;
     }
 
     let mut chapter: usize = 0;
@@ -88,16 +88,16 @@ pub fn convert_to_kepub(epub_path: &Path, dest: &Path) -> Result<(), Error> {
         if is_xhtml {
             chapter += 1;
             let processed = inject_kobo_spans(&raw, chapter)?;
-            dst.start_file(name, deflated)?;
-            dst.write_all(&processed)?;
+            output.start_file(name, deflated)?;
+            output.write_all(&processed)?;
         } else {
             let opts = SimpleFileOptions::default().compression_method(compression);
-            dst.start_file(name, opts)?;
-            dst.write_all(&raw)?;
+            output.start_file(name, opts)?;
+            output.write_all(&raw)?;
         }
     }
 
-    let mut buf_writer = dst.finish()?;
+    let mut buf_writer = output.finish()?;
     buf_writer.flush()?;
     Ok(())
 }
@@ -154,7 +154,7 @@ fn inject_kobo_spans(xhtml_bytes: &[u8], chapter: usize) -> Result<Vec<u8>, Erro
             Event::Text(ref e) => {
                 // Wrap non-whitespace text inside body (but not inside <pre>).
                 let raw: &[u8] = e.as_ref();
-                let is_whitespace_only = raw.iter().all(|b| b.is_ascii_whitespace());
+                let is_whitespace_only = raw.iter().all(u8::is_ascii_whitespace);
 
                 if in_body && pre_depth == 0 && !is_whitespace_only {
                     span_counter += 1;

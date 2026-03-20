@@ -473,7 +473,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                             td { class: "py-2 pr-4",
                                 ChipInput {
                                     values: language,
-                                    options: LANGUAGE_CODES.iter().map(|s| s.to_string()).collect(),
+                                    options: LANGUAGE_CODES.iter().map(std::string::ToString::to_string).collect(),
                                     placeholder: "Add language…".to_string(),
                                     max_chips: Some(1),
                                 }

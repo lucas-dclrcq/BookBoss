@@ -226,18 +226,19 @@ unneeded_field_pattern = "warn"
 unused_result_ok = "warn"
 
 # Opt-outs
-cargo_common_metadata = "allow"               # App-only crates; readme/keywords/categories not needed
-default_trait_access = "allow"                # `Default::default()` is fine when type is clear from context
-enum_variant_names = "allow"                  # Route enums intentionally share a common suffix
-literal_string_with_formatting_args = "allow" # Conflicts with structured logging message templates
-multiple_crate_versions = "allow"             # Dependency resolution — not always in our control
-suspicious_else_formatting = "allow"          # Dioxus RSX `class: if cond { ... } else { ... }` is idiomatic
-unused_async = "allow"                        # Required for Dioxus endpoints
+cargo_common_metadata = "allow"                     # App-only crates; readme/keywords/categories not needed
+default_trait_access = "allow"                      # `Default::default()` is fine when type is clear from context
+enum_variant_names = "allow"                        # Route enums intentionally share a common suffix
+literal_string_with_formatting_args = "allow"       # Conflicts with structured logging message templates
+multiple_crate_versions = "allow"                   # Dependency resolution — not always in our control
+suspicious_else_formatting = "allow"                # Dioxus RSX `class: if cond { ... } else { ... }` is idiomatic
+unused_async = "allow"                              # Required for Dioxus endpoints
 unused_trait_names = "allow"
 missing_panics_doc = "allow"
 struct_excessive_bools = "allow"
 must_use_candidate = "allow"
 too_many_arguments = "allow"
+case_sensitive_file_extension_comparisons = "allow"
 
 # Pending Review
 missing_errors_doc = "allow"

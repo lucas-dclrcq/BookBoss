@@ -26,7 +26,6 @@ pub mod feeds;
 pub mod xml;
 
 use axum::{Router, routing};
-pub use extractor::OpdsUser;
 
 /// Builds the OPDS catalog router.
 pub fn opds_router() -> Router {

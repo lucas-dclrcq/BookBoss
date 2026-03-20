@@ -87,7 +87,7 @@ impl DeviceRepository for DeviceRepositoryAdapter {
             owner_id: Set(device.owner_id as i64),
             name: Set(device.name),
             device_type: Set(device.device_type),
-            preferred_format: Set(device.preferred_format.as_ref().map(|f| f.to_string())),
+            preferred_format: Set(device.preferred_format.as_ref().map(std::string::ToString::to_string)),
             on_removal_action: Set(device.on_removal_action.to_string()),
             last_synced_at: Set(None),
             version: Set(0),
@@ -113,7 +113,7 @@ impl DeviceRepository for DeviceRepositoryAdapter {
         let mut updater: devices::ActiveModel = existing.into();
         updater.name = Set(device.name);
         updater.device_type = Set(device.device_type);
-        updater.preferred_format = Set(device.preferred_format.as_ref().map(|f| f.to_string()));
+        updater.preferred_format = Set(device.preferred_format.as_ref().map(std::string::ToString::to_string));
         updater.on_removal_action = Set(device.on_removal_action.to_string());
         updater.last_synced_at = Set(device.last_synced_at.map(Into::into));
 

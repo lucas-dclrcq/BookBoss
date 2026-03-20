@@ -123,7 +123,7 @@ fn IncomingBadge() -> Element {
 /// as `IncomingBadge`.
 #[component]
 fn ConversionBadge() -> Element {
-    let pending_count = use_server_future(move || get_conversion_pending_count())?;
+    let pending_count = use_server_future(get_conversion_pending_count)?;
     let count = pending_count().and_then(|r: Result<u32, ServerFnError>| r.ok()).unwrap_or(0);
 
     if count == 0 {
@@ -165,7 +165,7 @@ fn ConversionBadge() -> Element {
 #[component]
 fn AdminSettingsButton() -> Element {
     let navigator = use_navigator();
-    let is_admin = use_server_future(move || get_is_admin())?;
+    let is_admin = use_server_future(get_is_admin)?;
     let admin = is_admin().and_then(|r: Result<bool, ServerFnError>| r.ok()).unwrap_or(false);
 
     if !admin {
@@ -372,7 +372,7 @@ pub(crate) fn NavBar() -> Element {
             }
         }
         if show_about() {
-            AboutModal { on_close: move |_| show_about.set(false) }
+            AboutModal { on_close: move |()| show_about.set(false) }
         }
     }
 }

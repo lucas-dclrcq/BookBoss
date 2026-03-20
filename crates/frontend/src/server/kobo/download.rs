@@ -44,7 +44,7 @@ pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>
     };
 
     // 2. Parse the BookToken from the encoded portion (no prefix).
-    let Ok(token) = BookToken::from_encoded_id(&book_token_str) else {
+    let Ok(token) = BookToken::from_encoded_id(book_token_str) else {
         return StatusCode::NOT_FOUND.into_response();
     };
 

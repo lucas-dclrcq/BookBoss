@@ -200,7 +200,7 @@ mod tests {
     #[test]
     fn test_decrypt_invalid_data() {
         let cipher = test_cipher();
-        assert!(decrypt_password(&cipher, "not-valid-base64!!!").is_err());
+        decrypt_password(&cipher, "not-valid-base64!!!").unwrap_err();
     }
 
     #[test]
@@ -210,7 +210,7 @@ mod tests {
 
         let wrong_key = Sha256::digest(b"wrong-secret");
         let wrong_cipher = Aes256Gcm::new(&wrong_key);
-        assert!(decrypt_password(&wrong_cipher, &encrypted).is_err());
+        decrypt_password(&wrong_cipher, &encrypted).unwrap_err();
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────
@@ -327,7 +327,7 @@ mod tests {
         let svc = create_service(MockUserSettingRepository::new());
 
         let result = svc.regenerate_password(&user_without_opds_access()).await;
-        assert!(result.is_err());
+        result.unwrap_err();
     }
 
     // ── verify_password ─────────────────────────────────────────────────────

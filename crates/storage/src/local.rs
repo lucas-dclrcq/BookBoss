@@ -33,7 +33,7 @@ impl LocalLibraryStore {
 
     /// Returns the library-root-relative path for a book file
     /// (e.g. `"BK_XXXXX/slug.epub"`).
-    fn book_file_rel_path(&self, token: BookToken, slug: &str, format: &FileFormat) -> String {
+    fn book_file_rel_path(token: BookToken, slug: &str, format: &FileFormat) -> String {
         format!("{}/{}.{}", token, slug, format.extension())
     }
 }
@@ -133,7 +133,7 @@ impl LibraryStore for LocalLibraryStore {
             tokio::fs::copy(source, &dest).await.map_err(io_err)?;
             let _ = tokio::fs::remove_file(source).await;
         }
-        Ok(self.book_file_rel_path(*token, slug, &format))
+        Ok(LocalLibraryStore::book_file_rel_path(*token, slug, &format))
     }
 
     async fn store_cover(&self, token: &BookToken, filename: &str, data: &[u8]) -> Result<(), Error> {

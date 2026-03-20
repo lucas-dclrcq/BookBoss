@@ -303,10 +303,6 @@ fn field_key(rule: &FilterRule) -> &'static str {
 
 fn default_rule_for_field(field: &str) -> FilterRule {
     match field {
-        "title_text" => FilterRule::TitleText {
-            op: TextOp::Contains,
-            value: String::new(),
-        },
         "author_text" => FilterRule::AuthorText {
             op: TextOp::Contains,
             value: String::new(),
@@ -344,6 +340,10 @@ fn default_rule_for_field(field: &str) -> FilterRule {
             op: DateOp::After,
             value: None,
         },
+        // "title_text" => FilterRule::TitleText {
+        //     op: TextOp::Contains,
+        //     value: String::new(),
+        // },
         _ => FilterRule::TitleText {
             op: TextOp::Contains,
             value: String::new(),
@@ -366,7 +366,6 @@ fn text_op_key(op: &TextOp) -> &'static str {
 
 fn parse_text_op(s: &str) -> TextOp {
     match s {
-        "contains" => TextOp::Contains,
         "doesnt_contain" => TextOp::DoesntContain,
         "starts_with" => TextOp::StartsWith,
         "ends_with" => TextOp::EndsWith,
@@ -374,6 +373,7 @@ fn parse_text_op(s: &str) -> TextOp {
         "not_equals" => TextOp::NotEquals,
         "is_empty" => TextOp::IsEmpty,
         "is_not_empty" => TextOp::IsNotEmpty,
+        // "contains" => TextOp::Contains,
         _ => TextOp::Contains,
     }
 }
@@ -390,11 +390,11 @@ fn set_op_key(op: &SetOp) -> &'static str {
 
 fn parse_set_op(s: &str) -> SetOp {
     match s {
-        "includes_any" => SetOp::IncludesAny,
         "includes_all" => SetOp::IncludesAll,
         "excludes_all" => SetOp::ExcludesAll,
         "is_empty" => SetOp::IsEmpty,
         "is_not_empty" => SetOp::IsNotEmpty,
+        // "includes_any" => SetOp::IncludesAny,
         _ => SetOp::IncludesAny,
     }
 }
@@ -417,7 +417,7 @@ fn parse_numeric_op(s: &str) -> NumericOp {
         "lt" => NumericOp::Lt,
         "lte" => NumericOp::Lte,
         "gt" => NumericOp::Gt,
-        "gte" => NumericOp::Gte,
+        // "gte" => NumericOp::Gte,
         _ => NumericOp::Gte,
     }
 }
@@ -434,9 +434,9 @@ fn date_op_key(op: &DateOp) -> &'static str {
 fn parse_date_op(s: &str) -> DateOp {
     match s {
         "before" => DateOp::Before,
-        "after" => DateOp::After,
         "is_empty" => DateOp::IsEmpty,
         "is_not_empty" => DateOp::IsNotEmpty,
+        // "after" => DateOp::After,
         _ => DateOp::After,
     }
 }

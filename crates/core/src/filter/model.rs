@@ -47,9 +47,9 @@ impl BookFilter {
     /// Use this to guard APIs that apply a filter without a user identity.
     pub fn contains_user_scoped_rules(&self) -> bool {
         match self {
-            BookFilter::Rule(FilterRule::ReadStatus { .. }) => true,
-            BookFilter::Rule(_) => false,
-            BookFilter::Group(group) => group.items.iter().any(|f| f.contains_user_scoped_rules()),
+            Self::Rule(FilterRule::ReadStatus { .. }) => true,
+            Self::Rule(_) => false,
+            Self::Group(group) => group.items.iter().any(Self::contains_user_scoped_rules),
         }
     }
 }
@@ -78,7 +78,7 @@ pub struct EntityRef {
 
 // --- Operator enums ---
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TextOp {
     Contains,
@@ -91,7 +91,7 @@ pub enum TextOp {
     IsNotEmpty,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SetOp {
     IncludesAny,
@@ -101,7 +101,7 @@ pub enum SetOp {
     IsNotEmpty,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NumericOp {
     Eq,
@@ -112,7 +112,7 @@ pub enum NumericOp {
     Gte,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DateOp {
     Before,

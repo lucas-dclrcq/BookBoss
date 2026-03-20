@@ -30,7 +30,7 @@ pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>
         return StatusCode::BAD_REQUEST.into_response();
     };
 
-    let Ok(token) = BookToken::from_encoded_id(&book_token_str) else {
+    let Ok(token) = BookToken::from_encoded_id(book_token_str) else {
         return StatusCode::NOT_FOUND.into_response();
     };
 

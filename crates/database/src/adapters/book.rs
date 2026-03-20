@@ -79,7 +79,7 @@ impl BookRepository for BookRepositoryAdapter {
             publisher_id: Set(book.publisher_id.map(|id| id as i64)),
             page_count: Set(book.page_count),
             rating: Set(book.rating),
-            metadata_source: Set(book.metadata_source.as_ref().map(|ms| ms.to_string())),
+            metadata_source: Set(book.metadata_source.as_ref().map(std::string::ToString::to_string)),
             cover_path: Set(book.cover_path),
             version: Set(0),
             created_at: Set(now.into()),
@@ -118,7 +118,7 @@ impl BookRepository for BookRepositoryAdapter {
         updater.publisher_id = Set(book.publisher_id.map(|id| id as i64));
         updater.page_count = Set(book.page_count);
         updater.rating = Set(book.rating);
-        updater.metadata_source = Set(book.metadata_source.as_ref().map(|ms| ms.to_string()));
+        updater.metadata_source = Set(book.metadata_source.as_ref().map(std::string::ToString::to_string));
         updater.cover_path = Set(book.cover_path);
 
         let result = updater.update(transaction).await.map_err(handle_dberr)?;
