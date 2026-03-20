@@ -426,18 +426,6 @@ impl BookRepository for BookRepositoryAdapter {
         Ok(())
     }
 
-    async fn count_available_books(&self, transaction: &dyn Transaction) -> Result<u64, Error> {
-        let transaction = TransactionImpl::get_db_transaction(transaction)?;
-
-        let count = prelude::Books::find()
-            .filter(books::Column::Status.eq("available"))
-            .count(transaction)
-            .await
-            .map_err(handle_dberr)?;
-
-        Ok(count)
-    }
-
     async fn count_books_for_author(&self, transaction: &dyn Transaction, author_id: AuthorId) -> Result<u64, Error> {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 

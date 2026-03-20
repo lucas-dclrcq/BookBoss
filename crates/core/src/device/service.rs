@@ -328,7 +328,7 @@ impl DeviceService for DeviceServiceImpl {
         after_book_id: Option<BookId>,
         page_size: u64,
     ) -> Result<SyncDiff, Error> {
-        with_read_only_transaction!(self, shelf_repository, book_repository, device_repository, |tx| {
+        with_read_only_transaction!(self, shelf_repository, library_repository, book_repository, device_repository, |tx| {
             // 1. Find companion shelf — no shelf means nothing to sync
             let Some(companion_shelf) = shelf_repository.find_by_device_id(tx, device_id).await? else {
                 tracing::debug!(device_id, "no companion shelf found, returning empty diff");
@@ -341,7 +341,7 @@ impl DeviceService for DeviceServiceImpl {
 
             // 2. Load all shelf books with no page limit, then sort by book_id for
             //    deterministic keyset pagination
-            let mut shelf_books = shelf_repository.books_for_filter(tx, filter, owner_id, None, None).await?;
+            let mut shelf_books = library_repository.books_for_filter(tx, filter, owner_id, None, None).await?;
             shelf_books.sort_by_key(|b| b.id);
 
             // 3. Load all DeviceBook records for quick lookup
@@ -614,6 +614,7 @@ mod tests {
         device::repository::device::MockDeviceRepository,
         import::repository::import_job::MockImportJobRepository,
         jobs::repository::MockJobRepository,
+        library::MockLibraryRepository,
         reading::repository::user_book_metadata::MockUserBookMetadataRepository,
         repository::{MockRepository, RepositoryServiceBuilder, Transaction},
         shelf::{ShelfToken, repository::shelf::MockShelfRepository},
@@ -666,6 +667,7 @@ mod tests {
                 .book_repository(Arc::new(MockBookRepository::new()))
                 .import_job_repository(Arc::new(MockImportJobRepository::new()))
                 .job_repository(Arc::new(MockJobRepository::new()))
+                .library_repository(Arc::new(MockLibraryRepository::new()))
                 .shelf_repository(Arc::new(shelf_repo))
                 .user_book_metadata_repository(Arc::new(MockUserBookMetadataRepository::new()))
                 .device_repository(Arc::new(device_repo))
@@ -723,7 +725,12 @@ mod tests {
         }
     }
 
-    fn create_sync_service(device_repo: MockDeviceRepository, shelf_repo: MockShelfRepository, book_repo: MockBookRepository) -> DeviceServiceImpl {
+    fn create_sync_service(
+        device_repo: MockDeviceRepository,
+        shelf_repo: MockShelfRepository,
+        library_repo: MockLibraryRepository,
+        book_repo: MockBookRepository,
+    ) -> DeviceServiceImpl {
         let repository_service = Arc::new(
             RepositoryServiceBuilder::default()
                 .repository(Arc::new(make_mock_repo()))
@@ -738,6 +745,7 @@ mod tests {
                 .book_repository(Arc::new(book_repo))
                 .import_job_repository(Arc::new(MockImportJobRepository::new()))
                 .job_repository(Arc::new(MockJobRepository::new()))
+                .library_repository(Arc::new(library_repo))
                 .shelf_repository(Arc::new(shelf_repo))
                 .user_book_metadata_repository(Arc::new(MockUserBookMetadataRepository::new()))
                 .device_repository(Arc::new(device_repo))
@@ -1103,8 +1111,9 @@ mod tests {
             let s = sync_shelf();
             Box::pin(async move { Ok(Some(s)) })
         });
-        shelf_repo.expect_books_for_filter().returning(|_, _, _, _, _| Box::pin(async { Ok(vec![]) }));
-        let svc = create_sync_service(device_repo, shelf_repo, MockBookRepository::new());
+        let mut library_repo = MockLibraryRepository::new();
+        library_repo.expect_books_for_filter().returning(|_, _, _, _, _| Box::pin(async { Ok(vec![]) }));
+        let svc = create_sync_service(device_repo, shelf_repo, library_repo, MockBookRepository::new());
 
         let diff = svc.compute_sync_diff(1, 1, None, None, 100).await.unwrap();
 
@@ -1116,7 +1125,7 @@ mod tests {
     async fn test_sync_diff_no_companion_shelf_returns_empty() {
         let mut shelf_repo = MockShelfRepository::new();
         shelf_repo.expect_find_by_device_id().returning(|_, _| Box::pin(async { Ok(None) }));
-        let svc = create_sync_service(MockDeviceRepository::new(), shelf_repo, MockBookRepository::new());
+        let svc = create_sync_service(MockDeviceRepository::new(), shelf_repo, MockLibraryRepository::new(), MockBookRepository::new());
 
         let diff = svc.compute_sync_diff(1, 1, None, None, 100).await.unwrap();
 
@@ -1133,13 +1142,14 @@ mod tests {
             let s = sync_shelf();
             Box::pin(async move { Ok(Some(s)) })
         });
-        shelf_repo.expect_books_for_filter().returning(move |_, _, _, _, _| {
+        let mut library_repo = MockLibraryRepository::new();
+        library_repo.expect_books_for_filter().returning(move |_, _, _, _, _| {
             let b = book.clone();
             Box::pin(async move { Ok(vec![b]) })
         });
         // no files configured → returns empty
         let book_repo = book_repo_with_files(std::collections::HashMap::new());
-        let svc = create_sync_service(device_repo, shelf_repo, book_repo);
+        let svc = create_sync_service(device_repo, shelf_repo, library_repo, book_repo);
 
         let diff = svc.compute_sync_diff(1, 1, None, None, 100).await.unwrap();
 
@@ -1161,7 +1171,8 @@ mod tests {
             let s = sync_shelf();
             Box::pin(async move { Ok(Some(s)) })
         });
-        shelf_repo.expect_books_for_filter().returning(move |_, _, _, _, _| {
+        let mut library_repo = MockLibraryRepository::new();
+        library_repo.expect_books_for_filter().returning(move |_, _, _, _, _| {
             let b = books.clone();
             Box::pin(async move { Ok(b) })
         });
@@ -1172,7 +1183,7 @@ mod tests {
         ]
         .into_iter()
         .collect();
-        let svc = create_sync_service(device_repo, shelf_repo, book_repo_with_files(file_map));
+        let svc = create_sync_service(device_repo, shelf_repo, library_repo, book_repo_with_files(file_map));
 
         let diff = svc.compute_sync_diff(1, 1, None, None, 100).await.unwrap();
 
@@ -1194,7 +1205,9 @@ mod tests {
             let s = sync_shelf();
             Box::pin(async move { Ok(Some(s)) })
         });
-        shelf_repo.expect_books_for_filter().returning(move |_, _, _, _, _| {
+        let mut library_repo = MockLibraryRepository::new();
+
+        library_repo.expect_books_for_filter().returning(move |_, _, _, _, _| {
             let b = book.clone();
             Box::pin(async move { Ok(vec![b]) })
         });
@@ -1208,7 +1221,7 @@ mod tests {
         )]
         .into_iter()
         .collect();
-        let svc = create_sync_service(device_repo, shelf_repo, book_repo_with_files(file_map));
+        let svc = create_sync_service(device_repo, shelf_repo, library_repo, book_repo_with_files(file_map));
 
         let diff = svc.compute_sync_diff(1, 1, None, None, 100).await.unwrap();
 
@@ -1232,7 +1245,9 @@ mod tests {
             let s = sync_shelf();
             Box::pin(async move { Ok(Some(s)) })
         });
-        shelf_repo.expect_books_for_filter().returning(move |_, _, _, _, _| {
+        let mut library_repo = MockLibraryRepository::new();
+
+        library_repo.expect_books_for_filter().returning(move |_, _, _, _, _| {
             let b = book.clone();
             Box::pin(async move { Ok(vec![b]) })
         });
@@ -1245,7 +1260,7 @@ mod tests {
         )]
         .into_iter()
         .collect();
-        let svc = create_sync_service(device_repo, shelf_repo, book_repo_with_files(file_map));
+        let svc = create_sync_service(device_repo, shelf_repo, library_repo, book_repo_with_files(file_map));
 
         let diff = svc.compute_sync_diff(1, 1, None, None, 100).await.unwrap();
 
@@ -1274,12 +1289,14 @@ mod tests {
             let s = sync_shelf();
             Box::pin(async move { Ok(Some(s)) })
         });
-        shelf_repo.expect_books_for_filter().returning(move |_, _, _, _, _| {
+        let mut library_repo = MockLibraryRepository::new();
+
+        library_repo.expect_books_for_filter().returning(move |_, _, _, _, _| {
             let b = book.clone();
             Box::pin(async move { Ok(vec![b]) })
         });
         let file_map = [(1u64, vec![fake_book_file(1, FileFormat::Epub, FileRole::Original)])].into_iter().collect();
-        let svc = create_sync_service(device_repo, shelf_repo, book_repo_with_files(file_map));
+        let svc = create_sync_service(device_repo, shelf_repo, library_repo, book_repo_with_files(file_map));
 
         let diff = svc.compute_sync_diff(1, 1, Some(since), None, 100).await.unwrap();
 
@@ -1307,12 +1324,14 @@ mod tests {
             let s = sync_shelf();
             Box::pin(async move { Ok(Some(s)) })
         });
-        shelf_repo.expect_books_for_filter().returning(move |_, _, _, _, _| {
+        let mut library_repo = MockLibraryRepository::new();
+
+        library_repo.expect_books_for_filter().returning(move |_, _, _, _, _| {
             let b = book.clone();
             Box::pin(async move { Ok(vec![b]) })
         });
         let file_map = [(1u64, vec![fake_book_file(1, FileFormat::Epub, FileRole::Original)])].into_iter().collect();
-        let svc = create_sync_service(device_repo, shelf_repo, book_repo_with_files(file_map));
+        let svc = create_sync_service(device_repo, shelf_repo, library_repo, book_repo_with_files(file_map));
 
         let diff = svc.compute_sync_diff(1, 1, Some(since), None, 100).await.unwrap();
 
@@ -1334,12 +1353,14 @@ mod tests {
             let s = sync_shelf();
             Box::pin(async move { Ok(Some(s)) })
         });
-        shelf_repo.expect_books_for_filter().returning(move |_, _, _, _, _| {
+        let mut library_repo = MockLibraryRepository::new();
+
+        library_repo.expect_books_for_filter().returning(move |_, _, _, _, _| {
             let b = book.clone();
             Box::pin(async move { Ok(vec![b]) })
         });
         let file_map = [(1u64, vec![fake_book_file(1, FileFormat::Epub, FileRole::Original)])].into_iter().collect();
-        let svc = create_sync_service(device_repo, shelf_repo, book_repo_with_files(file_map));
+        let svc = create_sync_service(device_repo, shelf_repo, library_repo, book_repo_with_files(file_map));
 
         // First page (after_book_id = None): removals included
         let diff_first = svc.compute_sync_diff(1, 1, None, None, 100).await.unwrap();
@@ -1364,11 +1385,13 @@ mod tests {
             let s = sync_shelf();
             Box::pin(async move { Ok(Some(s)) })
         });
-        shelf_repo.expect_books_for_filter().returning(move |_, _, _, _, _| {
+        let mut library_repo = MockLibraryRepository::new();
+
+        library_repo.expect_books_for_filter().returning(move |_, _, _, _, _| {
             let b = books.clone();
             Box::pin(async move { Ok(b) })
         });
-        let svc = create_sync_service(device_repo, shelf_repo, book_repo_with_files(file_map));
+        let svc = create_sync_service(device_repo, shelf_repo, library_repo, book_repo_with_files(file_map));
 
         // First page
         let diff = svc.compute_sync_diff(1, 1, None, None, 100).await.unwrap();

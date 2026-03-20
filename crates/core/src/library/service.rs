@@ -50,13 +50,11 @@ impl LibraryServiceImpl {
 #[async_trait::async_trait]
 impl LibraryService for LibraryServiceImpl {
     async fn library_stats(&self) -> Result<LibraryStats, Error> {
-        let book_repo = self.repository_service.book_repository().clone();
-        let author_repo = self.repository_service.author_repository().clone();
-
+        let library_repo = self.repository_service.library_repository().clone();
         read_only_transaction(&**self.repository_service.repository(), |tx| {
             Box::pin(async move {
-                let books = book_repo.count_available_books(tx).await?;
-                let authors = author_repo.count_authors(tx).await?;
+                let books = library_repo.count_available_books(tx).await?;
+                let authors = library_repo.count_authors(tx).await?;
                 Ok(LibraryStats { books, authors })
             })
         })
@@ -70,9 +68,9 @@ impl LibraryService for LibraryServiceImpl {
             ));
         }
         let filter = filter.clone();
-        let shelf_repo = self.repository_service.shelf_repository().clone();
+        let library_repo = self.repository_service.library_repository().clone();
         read_only_transaction(&**self.repository_service.repository(), |tx| {
-            Box::pin(async move { shelf_repo.books_for_filter(tx, &filter, 0, start_id, page_size).await })
+            Box::pin(async move { library_repo.books_for_filter(tx, &filter, 0, start_id, page_size).await })
         })
         .await
     }
@@ -149,6 +147,7 @@ mod tests {
         device::repository::device::MockDeviceRepository,
         import::{ImportJob, ImportJobId, ImportJobToken, ImportStatus, repository::import_job::MockImportJobRepository},
         jobs::repository::MockJobRepository,
+        library::MockLibraryRepository,
         reading::repository::user_book_metadata::MockUserBookMetadataRepository,
         repository::{MockRepository, RepositoryServiceBuilder, Transaction},
         shelf::repository::shelf::MockShelfRepository,
@@ -190,6 +189,7 @@ mod tests {
         book_repo: MockBookRepository,
         author_repo: MockAuthorRepository,
         job_repo: MockImportJobRepository,
+        library_repo: MockLibraryRepository,
         library_store: MockLibraryStore,
     ) -> LibraryServiceImpl {
         let repository_service = Arc::new(
@@ -206,6 +206,7 @@ mod tests {
                 .book_repository(Arc::new(book_repo))
                 .import_job_repository(Arc::new(job_repo))
                 .job_repository(Arc::new(MockJobRepository::new()))
+                .library_repository(Arc::new(library_repo))
                 .shelf_repository(Arc::new(MockShelfRepository::new()))
                 .user_book_metadata_repository(Arc::new(MockUserBookMetadataRepository::new()))
                 .device_repository(Arc::new(MockDeviceRepository::new()))
@@ -247,13 +248,17 @@ mod tests {
 
     #[tokio::test]
     async fn library_stats_returns_counts() {
-        let mut book_repo = MockBookRepository::new();
-        book_repo.expect_count_available_books().returning(|_| Box::pin(async { Ok(5) }));
+        let mut library_repo = MockLibraryRepository::new();
+        library_repo.expect_count_available_books().returning(|_| Box::pin(async { Ok(5) }));
+        library_repo.expect_count_authors().returning(|_| Box::pin(async { Ok(3) }));
 
-        let mut author_repo = MockAuthorRepository::new();
-        author_repo.expect_count_authors().returning(|_| Box::pin(async { Ok(3) }));
-
-        let svc = create_service(book_repo, author_repo, MockImportJobRepository::new(), MockLibraryStore::new());
+        let svc = create_service(
+            MockBookRepository::new(),
+            MockAuthorRepository::new(),
+            MockImportJobRepository::new(),
+            library_repo,
+            MockLibraryStore::new(),
+        );
 
         let stats = svc.library_stats().await.unwrap();
 
@@ -263,13 +268,17 @@ mod tests {
 
     #[tokio::test]
     async fn library_stats_returns_zeroes_when_empty() {
-        let mut book_repo = MockBookRepository::new();
-        book_repo.expect_count_available_books().returning(|_| Box::pin(async { Ok(0) }));
+        let mut library_repo = MockLibraryRepository::new();
+        library_repo.expect_count_available_books().returning(|_| Box::pin(async { Ok(0) }));
+        library_repo.expect_count_authors().returning(|_| Box::pin(async { Ok(0) }));
 
-        let mut author_repo = MockAuthorRepository::new();
-        author_repo.expect_count_authors().returning(|_| Box::pin(async { Ok(0) }));
-
-        let svc = create_service(book_repo, author_repo, MockImportJobRepository::new(), MockLibraryStore::new());
+        let svc = create_service(
+            MockBookRepository::new(),
+            MockAuthorRepository::new(),
+            MockImportJobRepository::new(),
+            library_repo,
+            MockLibraryStore::new(),
+        );
 
         let stats = svc.library_stats().await.unwrap();
 
@@ -284,7 +293,13 @@ mod tests {
         let mut book_repo = MockBookRepository::new();
         book_repo.expect_find_by_token().returning(|_, _| Box::pin(async { Ok(None) }));
 
-        let svc = create_service(book_repo, MockAuthorRepository::new(), MockImportJobRepository::new(), MockLibraryStore::new());
+        let svc = create_service(
+            book_repo,
+            MockAuthorRepository::new(),
+            MockImportJobRepository::new(),
+            MockLibraryRepository::new(),
+            MockLibraryStore::new(),
+        );
         let token = BookToken::new(99);
 
         let result = svc.delete_book(&token).await;
@@ -317,7 +332,7 @@ mod tests {
         let mut store = MockLibraryStore::new();
         store.expect_delete_book().returning(|_| Box::pin(async { Ok(()) }));
 
-        let svc = create_service(book_repo, MockAuthorRepository::new(), job_repo, store);
+        let svc = create_service(book_repo, MockAuthorRepository::new(), job_repo, MockLibraryRepository::new(), store);
         let token = BookToken::new(book_id);
 
         svc.delete_book(&token).await.unwrap();
@@ -358,7 +373,7 @@ mod tests {
         let mut store = MockLibraryStore::new();
         store.expect_delete_book().returning(|_| Box::pin(async { Ok(()) }));
 
-        let svc = create_service(book_repo, author_repo, job_repo, store);
+        let svc = create_service(book_repo, author_repo, job_repo, MockLibraryRepository::new(), store);
         let token = BookToken::new(book_id);
 
         svc.delete_book(&token).await.unwrap();
@@ -397,7 +412,7 @@ mod tests {
         let mut store = MockLibraryStore::new();
         store.expect_delete_book().returning(|_| Box::pin(async { Ok(()) }));
 
-        let svc = create_service(book_repo, author_repo, job_repo, store);
+        let svc = create_service(book_repo, author_repo, job_repo, MockLibraryRepository::new(), store);
         let token = BookToken::new(book_id);
 
         svc.delete_book(&token).await.unwrap();
@@ -435,7 +450,7 @@ mod tests {
         let mut store = MockLibraryStore::new();
         store.expect_delete_book().returning(|_| Box::pin(async { Ok(()) }));
 
-        let svc = create_service(book_repo, MockAuthorRepository::new(), job_repo, store);
+        let svc = create_service(book_repo, MockAuthorRepository::new(), job_repo, MockLibraryRepository::new(), store);
         let token = BookToken::new(book_id);
 
         svc.delete_book(&token).await.unwrap();
@@ -475,7 +490,7 @@ mod tests {
             .times(1)
             .returning(|_| Box::pin(async { Ok(()) }));
 
-        let svc = create_service(book_repo, MockAuthorRepository::new(), job_repo, store);
+        let svc = create_service(book_repo, MockAuthorRepository::new(), job_repo, MockLibraryRepository::new(), store);
         let token = BookToken::new(book_id);
 
         svc.delete_book(&token).await.unwrap();

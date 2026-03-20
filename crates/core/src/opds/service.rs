@@ -159,6 +159,7 @@ mod tests {
         filter::BookFilter,
         import::{ImportJob, ImportJobId, ImportJobRepository, ImportJobToken, ImportStatus, NewImportJob},
         jobs::{Job, JobRepository},
+        library::LibraryRepository,
         reading::{ReadStatus, UserBookMetadata, UserBookMetadataRepository},
         repository::{Repository, RepositoryServiceBuilder, Transaction},
         shelf::{BookShelf, NewShelf, Shelf, ShelfId, ShelfRepository, ShelfToken},
@@ -378,9 +379,6 @@ mod tests {
         async fn list_all_authors(&self, _: &dyn Transaction) -> Result<Vec<Author>, Error> {
             unimplemented!()
         }
-        async fn count_authors(&self, _: &dyn Transaction) -> Result<u64, Error> {
-            unimplemented!()
-        }
         async fn delete_author(&self, _: &dyn Transaction, _: AuthorId) -> Result<(), Error> {
             unimplemented!()
         }
@@ -541,9 +539,6 @@ mod tests {
         async fn delete_book_identifiers(&self, _: &dyn Transaction, _: BookId) -> Result<(), Error> {
             unimplemented!()
         }
-        async fn count_available_books(&self, _: &dyn Transaction) -> Result<u64, Error> {
-            unimplemented!()
-        }
         async fn count_books_for_author(&self, _: &dyn Transaction, _: AuthorId) -> Result<u64, Error> {
             unimplemented!()
         }
@@ -670,13 +665,24 @@ mod tests {
         async fn books_for_shelf(&self, _: &dyn Transaction, _: ShelfId, _: Option<BookId>, _: Option<u64>) -> Result<Vec<BookShelf>, Error> {
             unimplemented!()
         }
+        async fn find_by_device_id(&self, _: &dyn Transaction, _: DeviceId) -> Result<Option<Shelf>, Error> {
+            unimplemented!()
+        }
+    }
+
+    struct MockLibraryRepository;
+    #[async_trait::async_trait]
+    impl LibraryRepository for MockLibraryRepository {
+        async fn count_available_books(&self, _: &dyn Transaction) -> Result<u64, Error> {
+            unimplemented!()
+        }
+        async fn count_authors(&self, _: &dyn Transaction) -> Result<u64, Error> {
+            unimplemented!()
+        }
         async fn books_for_filter(&self, _: &dyn Transaction, _: &BookFilter, _: UserId, _: Option<BookId>, _: Option<u64>) -> Result<Vec<Book>, Error> {
             unimplemented!()
         }
         async fn count_for_filter(&self, _: &dyn Transaction, _: &BookFilter, _: UserId) -> Result<u64, Error> {
-            unimplemented!()
-        }
-        async fn find_by_device_id(&self, _: &dyn Transaction, _: DeviceId) -> Result<Option<Shelf>, Error> {
             unimplemented!()
         }
     }
@@ -792,6 +798,7 @@ mod tests {
                 .book_repository(Arc::new(MockBookRepository) as Arc<dyn BookRepository>)
                 .import_job_repository(Arc::new(MockImportJobRepository) as Arc<dyn ImportJobRepository>)
                 .job_repository(Arc::new(MockJobRepository) as Arc<dyn JobRepository>)
+                .library_repository(Arc::new(MockLibraryRepository) as Arc<dyn LibraryRepository>)
                 .shelf_repository(Arc::new(MockShelfRepository) as Arc<dyn ShelfRepository>)
                 .user_book_metadata_repository(Arc::new(MockUserBookMetadataRepository) as Arc<dyn UserBookMetadataRepository>)
                 .device_repository(Arc::new(MockDeviceRepository) as Arc<dyn DeviceRepository>)

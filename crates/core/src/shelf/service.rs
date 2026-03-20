@@ -408,7 +408,7 @@ impl ShelfService for ShelfServiceImpl {
     async fn books_for_filter(&self, token: &ShelfToken, user_id: UserId, start_id: Option<BookId>, page_size: Option<u64>) -> Result<Vec<Book>, Error> {
         let token = *token;
 
-        with_read_only_transaction!(self, shelf_repository, |tx| {
+        with_read_only_transaction!(self, shelf_repository, library_repository, |tx| {
             let target_shelf = shelf_repository
                 .find_by_token(tx, &token)
                 .await?
@@ -426,7 +426,7 @@ impl ShelfService for ShelfServiceImpl {
                 .filter_criteria
                 .ok_or_else(|| Error::Validation("smart shelf has no filter criteria".to_string()))?;
 
-            shelf_repository.books_for_filter(tx, &filter, user_id, start_id, page_size).await
+            library_repository.books_for_filter(tx, &filter, user_id, start_id, page_size).await
         })
     }
 
@@ -434,7 +434,7 @@ impl ShelfService for ShelfServiceImpl {
     async fn count_for_filter(&self, token: &ShelfToken, user_id: UserId) -> Result<u64, Error> {
         let token = *token;
 
-        with_read_only_transaction!(self, shelf_repository, |tx| {
+        with_read_only_transaction!(self, shelf_repository, library_repository, |tx| {
             let target_shelf = shelf_repository
                 .find_by_token(tx, &token)
                 .await?
@@ -452,7 +452,7 @@ impl ShelfService for ShelfServiceImpl {
                 .filter_criteria
                 .ok_or_else(|| Error::Validation("smart shelf has no filter criteria".to_string()))?;
 
-            shelf_repository.count_for_filter(tx, &filter, user_id).await
+            library_repository.count_for_filter(tx, &filter, user_id).await
         })
     }
 
@@ -530,6 +530,7 @@ mod tests {
         device::repository::device::MockDeviceRepository,
         import::repository::import_job::MockImportJobRepository,
         jobs::repository::MockJobRepository,
+        library::MockLibraryRepository,
         reading::repository::user_book_metadata::MockUserBookMetadataRepository,
         repository::{MockRepository, RepositoryServiceBuilder, Transaction},
         shelf::{BookShelf, Shelf, ShelfToken, ShelfType, ShelfVisibility, repository::shelf::MockShelfRepository},
@@ -582,6 +583,7 @@ mod tests {
                 .book_repository(Arc::new(book_repo))
                 .import_job_repository(Arc::new(MockImportJobRepository::new()))
                 .job_repository(Arc::new(MockJobRepository::new()))
+                .library_repository(Arc::new(MockLibraryRepository::new()))
                 .shelf_repository(Arc::new(shelf_repo))
                 .user_book_metadata_repository(Arc::new(MockUserBookMetadataRepository::new()))
                 .device_repository(Arc::new(MockDeviceRepository::new()))

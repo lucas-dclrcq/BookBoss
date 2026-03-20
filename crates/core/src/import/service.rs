@@ -97,6 +97,7 @@ mod tests {
         device::repository::device::MockDeviceRepository,
         import::{ImportJob, ImportJobId, ImportJobToken, ImportStatus, repository::import_job::MockImportJobRepository},
         jobs::repository::MockJobRepository,
+        library::MockLibraryRepository,
         reading::repository::user_book_metadata::MockUserBookMetadataRepository,
         repository::{MockRepository, RepositoryServiceBuilder, Transaction},
         shelf::repository::shelf::MockShelfRepository,
@@ -148,6 +149,7 @@ mod tests {
                 .book_repository(Arc::new(MockBookRepository::new()))
                 .import_job_repository(Arc::new(mock))
                 .job_repository(Arc::new(MockJobRepository::new()))
+                .library_repository(Arc::new(MockLibraryRepository::new()))
                 .shelf_repository(Arc::new(MockShelfRepository::new()))
                 .user_book_metadata_repository(Arc::new(MockUserBookMetadataRepository::new()))
                 .device_repository(Arc::new(MockDeviceRepository::new()))

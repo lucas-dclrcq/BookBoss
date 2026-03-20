@@ -7,7 +7,7 @@ use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait,
     ActiveValue::Set,
-    ColumnTrait, EntityTrait, ExprTrait, ModelTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
+    ColumnTrait, EntityTrait, ExprTrait, ModelTrait, QueryFilter, QueryOrder, QuerySelect,
     sea_query::{BinOper, Expr, Func},
 };
 
@@ -119,14 +119,6 @@ impl AuthorRepository for AuthorRepositoryAdapter {
             .await
             .map_err(handle_dberr)?
             .map(Into::into))
-    }
-
-    async fn count_authors(&self, transaction: &dyn Transaction) -> Result<u64, Error> {
-        let transaction = TransactionImpl::get_db_transaction(transaction)?;
-
-        let count = prelude::Authors::find().count(transaction).await.map_err(handle_dberr)?;
-
-        Ok(count)
     }
 
     async fn delete_author(&self, transaction: &dyn Transaction, author_id: AuthorId) -> Result<(), Error> {

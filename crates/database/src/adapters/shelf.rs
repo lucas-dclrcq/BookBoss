@@ -1,19 +1,17 @@
 use bb_core::{
     Error, RepositoryError,
-    book::{Book, BookId},
+    book::BookId,
     device::DeviceId,
-    filter::BookFilter,
     repository::Transaction,
     shelf::{BookShelf, NewShelf, Shelf, ShelfId, ShelfRepository, ShelfToken, ShelfType, ShelfVisibility},
     user::UserId,
 };
 use chrono::Utc;
-use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, ModelTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect};
+use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, ModelTrait, QueryFilter, QueryOrder, QuerySelect};
 
 use crate::{
-    entities::{book_shelves, books, prelude, shelves},
+    entities::{book_shelves, prelude, shelves},
     error::handle_dberr,
-    filter::build_condition,
     transaction::TransactionImpl,
 };
 
@@ -277,51 +275,6 @@ impl ShelfRepository for ShelfRepositoryAdapter {
 
         let rows = query.all(transaction).await.map_err(handle_dberr)?;
         Ok(rows.into_iter().map(Into::into).collect())
-    }
-
-    async fn books_for_filter(
-        &self,
-        transaction: &dyn Transaction,
-        filter: &BookFilter,
-        user_id: UserId,
-        start_id: Option<BookId>,
-        page_size: Option<u64>,
-    ) -> Result<Vec<Book>, Error> {
-        const DEFAULT_PAGE_SIZE: u64 = 50;
-        const MAX_PAGE_SIZE: u64 = 50;
-
-        if let Some(page_size) = page_size {
-            if page_size < 1 {
-                return Err(Error::InvalidPageSize(page_size));
-            }
-        }
-
-        let transaction = TransactionImpl::get_db_transaction(transaction)?;
-
-        let mut query = prelude::Books::find()
-            .filter(books::Column::Status.eq("available"))
-            .filter(build_condition(filter, user_id).map_err(bb_core::Error::RepositoryError)?)
-            .order_by_asc(books::Column::Id);
-
-        if let Some(start_id) = start_id {
-            query = query.filter(books::Column::Id.gte(start_id as i64));
-        }
-
-        let page_size = page_size.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE);
-        query = query.limit(page_size);
-
-        let rows = query.all(transaction).await.map_err(handle_dberr)?;
-        Ok(rows.into_iter().map(Into::into).collect())
-    }
-
-    async fn count_for_filter(&self, transaction: &dyn Transaction, filter: &BookFilter, user_id: UserId) -> Result<u64, Error> {
-        let transaction = TransactionImpl::get_db_transaction(transaction)?;
-
-        let query = prelude::Books::find()
-            .filter(books::Column::Status.eq("available"))
-            .filter(build_condition(filter, user_id).map_err(bb_core::Error::RepositoryError)?);
-
-        Ok(query.count(transaction).await.map_err(handle_dberr)?)
     }
 
     async fn find_by_device_id(&self, transaction: &dyn Transaction, device_id: DeviceId) -> Result<Option<Shelf>, Error> {
@@ -868,7 +821,7 @@ mod tests {
 
         let tx = svc.repository().begin().await.unwrap();
         let books = svc
-            .shelf_repository()
+            .library_repository()
             .books_for_filter(&*tx, &empty_and_filter(), user_id, None, None)
             .await
             .unwrap();
@@ -883,7 +836,9 @@ mod tests {
         let tx = svc.repository().begin().await.unwrap();
 
         assert!(matches!(
-            svc.shelf_repository().books_for_filter(&*tx, &empty_and_filter(), user_id, None, Some(0)).await,
+            svc.library_repository()
+                .books_for_filter(&*tx, &empty_and_filter(), user_id, None, Some(0))
+                .await,
             Err(bb_core::Error::InvalidPageSize(0))
         ));
     }
@@ -902,7 +857,7 @@ mod tests {
             value: "dun".to_owned(),
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, dune);
@@ -921,7 +876,7 @@ mod tests {
             value: "DUNE".to_owned(),
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, dune);
@@ -939,7 +894,7 @@ mod tests {
             value: "Dune".to_owned(),
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, dune);
@@ -1000,7 +955,7 @@ mod tests {
             }],
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, dune.id);
@@ -1055,7 +1010,7 @@ mod tests {
             values: vec![],
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, standalone);
@@ -1082,7 +1037,7 @@ mod tests {
             }],
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, dune);
@@ -1115,7 +1070,7 @@ mod tests {
             ],
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, co_authored);
@@ -1139,7 +1094,7 @@ mod tests {
             }],
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, foundation);
@@ -1159,7 +1114,7 @@ mod tests {
             value: "herbert".to_owned(),
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, dune);
@@ -1184,7 +1139,7 @@ mod tests {
             }],
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, dune);
@@ -1209,7 +1164,7 @@ mod tests {
             }],
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, dune);
@@ -1230,7 +1185,7 @@ mod tests {
             values: vec![FilterReadStatus::Reading],
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, reading_book);
@@ -1250,7 +1205,7 @@ mod tests {
             values: vec![FilterReadStatus::Unread],
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, unread_book);
@@ -1272,7 +1227,7 @@ mod tests {
             values: vec![FilterReadStatus::Active],
         });
         let tx = svc.repository().begin().await.unwrap();
-        let mut books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let mut books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
         books.sort_by_key(|b| b.id);
 
         let ids: Vec<u64> = books.iter().map(|b| b.id).collect();
@@ -1295,7 +1250,7 @@ mod tests {
             values: vec![FilterReadStatus::Reading],
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, unread);
@@ -1313,7 +1268,7 @@ mod tests {
 
         let filter = BookFilter::Rule(FilterRule::Rating { op: NumericOp::Gte, value: 4 });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, high);
@@ -1344,7 +1299,7 @@ mod tests {
             ],
         });
         let tx = svc.repository().begin().await.unwrap();
-        let mut books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let mut books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
         books.sort_by_key(|b| b.id);
 
         let ids: Vec<u64> = books.iter().map(|b| b.id).collect();
@@ -1375,7 +1330,7 @@ mod tests {
             }],
         }));
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, dune);
@@ -1392,7 +1347,7 @@ mod tests {
             items: vec![],
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
 
         assert!(books.is_empty());
     }
@@ -1409,8 +1364,8 @@ mod tests {
 
         let filter = empty_and_filter();
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.shelf_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
-        let count = svc.shelf_repository().count_for_filter(&*tx, &filter, user_id).await.unwrap();
+        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let count = svc.library_repository().count_for_filter(&*tx, &filter, user_id).await.unwrap();
 
         assert_eq!(count, books.len() as u64);
         assert_eq!(count, 3);

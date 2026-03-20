@@ -9,6 +9,7 @@ use crate::{
     device::DeviceRepository,
     import::ImportJobRepository,
     jobs::JobRepository,
+    library::LibraryRepository,
     reading::UserBookMetadataRepository,
     shelf::ShelfRepository,
     user::{UserRepository, UserSettingRepository},
@@ -29,6 +30,7 @@ pub struct RepositoryService {
     book_repository: Arc<dyn BookRepository>,
     import_job_repository: Arc<dyn ImportJobRepository>,
     job_repository: Arc<dyn JobRepository>,
+    library_repository: Arc<dyn LibraryRepository>,
     shelf_repository: Arc<dyn ShelfRepository>,
     user_book_metadata_repository: Arc<dyn UserBookMetadataRepository>,
     device_repository: Arc<dyn DeviceRepository>,
@@ -105,6 +107,12 @@ impl RepositoryService {
     #[must_use]
     pub fn job_repository(&self) -> &Arc<dyn JobRepository> {
         &self.job_repository
+    }
+
+    /// Returns a reference to the library repository.
+    #[must_use]
+    pub fn library_repository(&self) -> &Arc<dyn LibraryRepository> {
+        &self.library_repository
     }
 
     /// Returns a reference to the shelf repository.

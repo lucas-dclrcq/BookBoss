@@ -1,8 +1,7 @@
 use crate::{
     Error,
-    book::{Book, BookId},
+    book::BookId,
     device::DeviceId,
-    filter::BookFilter,
     repository::Transaction,
     shelf::{BookShelf, NewShelf, Shelf, ShelfId, ShelfToken},
     user::UserId,
@@ -31,17 +30,6 @@ pub trait ShelfRepository: Send + Sync {
         start_id: Option<BookId>,
         page_size: Option<u64>,
     ) -> Result<Vec<BookShelf>, Error>;
-
-    // Smart shelf queries
-    async fn books_for_filter(
-        &self,
-        transaction: &dyn Transaction,
-        filter: &BookFilter,
-        user_id: UserId,
-        start_id: Option<BookId>,
-        page_size: Option<u64>,
-    ) -> Result<Vec<Book>, Error>;
-    async fn count_for_filter(&self, transaction: &dyn Transaction, filter: &BookFilter, user_id: UserId) -> Result<u64, Error>;
 
     // Device-linked shelf lookup
     async fn find_by_device_id(&self, transaction: &dyn Transaction, device_id: DeviceId) -> Result<Option<Shelf>, Error>;

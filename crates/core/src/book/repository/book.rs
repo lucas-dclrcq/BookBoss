@@ -46,7 +46,6 @@ pub trait BookRepository: Send + Sync {
     async fn delete_book(&self, transaction: &dyn Transaction, book_id: BookId) -> Result<(), Error>;
     async fn delete_book_authors(&self, transaction: &dyn Transaction, book_id: BookId) -> Result<(), Error>;
     async fn delete_book_identifiers(&self, transaction: &dyn Transaction, book_id: BookId) -> Result<(), Error>;
-    async fn count_available_books(&self, transaction: &dyn Transaction) -> Result<u64, Error>;
     async fn count_books_for_author(&self, transaction: &dyn Transaction, author_id: AuthorId) -> Result<u64, Error>;
     async fn genres_for_book(&self, transaction: &dyn Transaction, book_id: BookId) -> Result<Vec<Genre>, Error>;
     async fn tags_for_book(&self, transaction: &dyn Transaction, book_id: BookId) -> Result<Vec<Tag>, Error>;
