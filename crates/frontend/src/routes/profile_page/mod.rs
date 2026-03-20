@@ -682,19 +682,20 @@ fn OpdsSectionContent() -> Element {
                     }
                 }
 
-                div {
-                    span { class: "block text-sm font-medium text-gray-700 mb-1", "Username" }
-                    code { class: "text-sm bg-gray-50 rounded px-3 py-1.5 border border-gray-200 text-gray-900 select-all inline-block",
-                        "{info.username}"
-                    }
-                }
-
-                div {
-                    span { class: "block text-sm font-medium text-gray-700 mb-1", "Password" }
-                    div { class: "flex items-center gap-2",
-                        code { class: "text-sm bg-gray-50 rounded px-3 py-1.5 border border-gray-200 text-gray-900 select-all font-mono",
-                            "{password}"
+                div { class: "flex items-start justify-between gap-4",
+                    div {
+                        span { class: "block text-sm font-medium text-gray-700 mb-1", "Username" }
+                        code { class: "text-sm bg-gray-50 rounded px-3 py-1.5 border border-gray-200 text-gray-900 select-all inline-block",
+                            "{info.username}"
                         }
+                    }
+
+                    div {
+                        span { class: "block text-sm font-medium text-gray-700 mb-1", "Password" }
+                        div { class: "flex items-center gap-2",
+                            code { class: "text-sm bg-gray-50 rounded px-3 py-1.5 border border-gray-200 text-gray-900 select-all font-mono",
+                                "{password}"
+                            }
                         button {
                             class: "px-2 py-1.5 text-xs font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50",
                             onclick: move |_| {
@@ -728,6 +729,7 @@ fn OpdsSectionContent() -> Element {
                             if regenerating() { "Regenerating…" } else { "Regenerate" }
                         }
                     }
+                }
                 }
 
                 if let Some(err) = error_msg() {
