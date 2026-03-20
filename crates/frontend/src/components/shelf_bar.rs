@@ -263,7 +263,10 @@ pub(crate) fn ShelfBar(
 
         // Static shelf modal
         if show_modal() {
-            div { class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+            div {
+                class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+                tabindex: -1,
+                onkeydown: move |e| { if e.key() == Key::Escape { show_modal.set(false); } },
                 div { class: "bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4",
                     h2 { class: "text-lg font-semibold text-gray-900 mb-4", "New Shelf" }
 
@@ -339,7 +342,10 @@ pub(crate) fn ShelfBar(
 
         // Smart shelf modal
         if show_smart_modal() {
-            div { class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+            div {
+                class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+                tabindex: -1,
+                onkeydown: move |e| { if e.key() == Key::Escape { show_smart_modal.set(false); } },
                 div { class: "bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl mx-4 max-h-[85vh] overflow-y-auto",
                     h2 { class: "text-lg font-semibold text-gray-900 mb-4", "New Smart Shelf" }
 

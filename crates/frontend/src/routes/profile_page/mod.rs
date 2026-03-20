@@ -565,7 +565,11 @@ fn ProfileSectionContent() -> Element {
 
         // ── Change Password modal ─────────────────────────────────────────
         if pw_modal_open() {
-            div { class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+            div {
+                class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+                tabindex: -1,
+                onmounted: move |e| async move { let _ = e.set_focus(true).await; },
+                onkeydown: move |e| { if e.key() == Key::Escape { close_pw_modal(); } },
                 div { class: "bg-white rounded-2xl shadow-xl w-full max-w-sm p-6",
                     h3 { class: "text-base font-semibold text-gray-900 mb-4", "Change Password" }
 

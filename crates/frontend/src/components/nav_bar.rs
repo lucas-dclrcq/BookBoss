@@ -216,7 +216,10 @@ fn AboutModal(on_close: EventHandler<()>) -> Element {
     rsx! {
         div {
             class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+            tabindex: -1,
+            onmounted: move |e| async move { let _ = e.set_focus(true).await; },
             onclick: move |_| on_close(()),
+            onkeydown: move |e| { if e.key() == Key::Escape { on_close(()); } },
             div {
                 class: "bg-white rounded-xl shadow-xl w-full max-w-md mx-4",
                 onclick: |e| e.stop_propagation(),

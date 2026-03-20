@@ -432,7 +432,10 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                 Some(Ok(book)) => rsx! {
                     // Delete confirmation modal
                     if show_confirm() {
-                        div { class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+                        div {
+                            class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+                            tabindex: -1,
+                            onkeydown: move |e| { if e.key() == Key::Escape { show_confirm.set(false); } },
                             div { class: "bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4",
                                 h2 { class: "text-lg font-semibold text-gray-900 mb-2", "Delete Book?" }
                                 p { class: "text-sm text-gray-600 mb-6",

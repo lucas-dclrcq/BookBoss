@@ -452,7 +452,11 @@ pub(crate) fn UsersSection(is_super_admin: bool, current_user_token: String) -> 
 
         // ── Delete confirmation dialog ──────────────────────────────────────
         if let Some(target) = delete_target() {
-            div { class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+            div {
+                class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+                tabindex: -1,
+                onmounted: move |e| async move { let _ = e.set_focus(true).await; },
+                onkeydown: move |e| { if e.key() == Key::Escape { delete_target.set(None); } },
                 div { class: "bg-white rounded-2xl shadow-xl w-full max-w-sm p-6",
                     h3 { class: "text-base font-semibold text-gray-900 mb-2", "Delete User" }
                     p { class: "text-sm text-gray-600 mb-6",
@@ -554,7 +558,15 @@ fn UserModal(editing: Option<UserAdminRow>, is_super_admin: bool, on_close: Even
     ];
 
     rsx! {
-        div { class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+        div {
+            class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+            tabindex: -1,
+            onmounted: move |e| async move { let _ = e.set_focus(true).await; },
+            onkeydown: move |e| {
+                if e.key() == Key::Escape {
+                    on_close.call(());
+                }
+            },
             div { class: "bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto",
                 div { class: "p-6",
                     h3 { class: "text-base font-semibold text-gray-900 mb-5",

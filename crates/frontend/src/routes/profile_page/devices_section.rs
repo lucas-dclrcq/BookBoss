@@ -106,7 +106,11 @@ pub(super) fn DevicesSectionContent() -> Element {
 
         // ── Force-resync confirmation dialog ──────────────────────────────
         if let Some(target) = reset_target() {
-            div { class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+            div {
+                class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+                tabindex: -1,
+                onmounted: move |e| async move { let _ = e.set_focus(true).await; },
+                onkeydown: move |e| { if e.key() == Key::Escape { reset_target.set(None); } },
                 div { class: "bg-white rounded-2xl shadow-xl w-full max-w-sm p-6",
                     h3 { class: "text-base font-semibold text-gray-900 mb-2",
                         "Force resync \"{target.name}\"?"
@@ -152,7 +156,11 @@ pub(super) fn DevicesSectionContent() -> Element {
 
         // ── Delete confirmation dialog ─────────────────────────────────────
         if let Some(target) = delete_target() {
-            div { class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+            div {
+                class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+                tabindex: -1,
+                onmounted: move |e| async move { let _ = e.set_focus(true).await; },
+                onkeydown: move |e| { if e.key() == Key::Escape { delete_target.set(None); } },
                 div { class: "bg-white rounded-2xl shadow-xl w-full max-w-sm p-6",
                     h3 { class: "text-base font-semibold text-gray-900 mb-2",
                         "Delete device \"{target.name}\"?"
@@ -385,7 +393,11 @@ fn DeviceModal(mode: ModalMode, on_close: EventHandler<()>, on_saved: EventHandl
     let submit_label = if is_edit { "Save" } else { "Add Device" };
 
     rsx! {
-        div { class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+        div {
+            class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+            tabindex: -1,
+            onmounted: move |e| async move { let _ = e.set_focus(true).await; },
+            onkeydown: move |e| { if e.key() == Key::Escape { on_close(()) } },
             div { class: "bg-white rounded-2xl shadow-xl w-full max-w-sm p-6",
                 h3 { class: "text-base font-semibold text-gray-900 mb-4", { title } }
 
