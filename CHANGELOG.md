@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0](https://github.com/szinn/BookBoss/compare/v0.4.6..v0.5.0) - 2026-03-20
+
+### Features
+
+- _(api)_ Add OPDS OpenSearch endpoint (M13.6) - ([9008733](https://github.com/szinn/BookBoss/commit/900873347a6a6c7b80fb9266ecf395aa19ab9b80))
+- _(frontend)_ Redesign DeviceCard layout - ([89359cb](https://github.com/szinn/BookBoss/commit/89359cb24f5f9e360bd57686b7db7fb7a4aa47ad))
+
+### Bug Fixes
+
+- _(frontend)_ Use stable key for chip_input spans - ([5cec235](https://github.com/szinn/BookBoss/commit/5cec2356dbcfbb5fb9880e14924488174a567952))
+- _(frontend)_ Use FrontendConfig as an extension - ([3a51c7f](https://github.com/szinn/BookBoss/commit/3a51c7f3873be4cce306ebfd9527f171ef89ea83))
+
+### Refactor
+
+- _(core)_ Consolidate test mock infrastructure - ([40e2e37](https://github.com/szinn/BookBoss/commit/40e2e37646094ffaa46915ff62716957e34896d2))
+- _(core)_ Introduce LibraryRepository for catalog-level queries - ([df7c970](https://github.com/szinn/BookBoss/commit/df7c970a40725aa3167655aa0b8885d75712a0e2))
+- _(core,frontend)_ Remove auto-read threshold and Reading settings - ([ee45fef](https://github.com/szinn/BookBoss/commit/ee45fef2dea7267cfc474b478d82ce140abc5b16))
+- _(frontend)_ Move OPDS regenerate button inline with password - ([8bbc164](https://github.com/szinn/BookBoss/commit/8bbc164048f141285fcc061f1f2830e217bd69b4))
+- _(frontend)_ Move device list above OPDS section - ([ae537d4](https://github.com/szinn/BookBoss/commit/ae537d400390cff3dcba2e119e826e4eed7f7c3a))
+
 ## [0.4.6](https://github.com/szinn/BookBoss/compare/v0.4.4..v0.4.6) - 2026-03-19
 
 ### Features
