@@ -158,45 +158,16 @@ impl BookService for BookServiceImpl {
 
 #[cfg(test)]
 mod tests {
-    use std::{any::Any, sync::Arc};
+    use std::sync::Arc;
 
     use super::{BookService, BookServiceImpl};
     use crate::{
         Error, RepositoryError,
-        auth::repository::MockSessionRepository,
         book::{
             Author, AuthorId, AuthorToken, Book, BookAuthor, BookFile, BookId, BookIdentifier, BookQuery, BookStatus, BookToken, Series, SeriesId, SeriesToken,
-            repository::{
-                author::MockAuthorRepository, book::MockBookRepository, genre::MockGenreRepository, publisher::MockPublisherRepository,
-                series::MockSeriesRepository, tag::MockTagRepository,
-            },
+            repository::{author::MockAuthorRepository, book::MockBookRepository, series::MockSeriesRepository},
         },
-        device::repository::device::MockDeviceRepository,
-        import::repository::import_job::MockImportJobRepository,
-        jobs::repository::MockJobRepository,
-        library::MockLibraryRepository,
-        reading::repository::user_book_metadata::MockUserBookMetadataRepository,
-        repository::{MockRepository, RepositoryServiceBuilder, Transaction},
-        shelf::repository::shelf::MockShelfRepository,
-        user::repository::{user::MockUserRepository, user_settings::MockUserSettingRepository},
     };
-
-    // ─── Mock Transaction ────────────────────────────────────────────────────
-
-    struct MockTransaction;
-
-    #[async_trait::async_trait]
-    impl Transaction for MockTransaction {
-        fn as_any(&self) -> &dyn Any {
-            self
-        }
-        async fn commit(self: Box<Self>) -> Result<(), Error> {
-            Ok(())
-        }
-        async fn rollback(self: Box<Self>) -> Result<(), Error> {
-            Ok(())
-        }
-    }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
@@ -212,34 +183,12 @@ mod tests {
         Series::fake(id, name)
     }
 
-    fn make_mock_repo() -> MockRepository {
-        let mut r = MockRepository::new();
-        r.expect_begin()
-            .returning(|| Box::pin(async { Ok(Box::new(MockTransaction) as Box<dyn Transaction>) }));
-        r.expect_begin_read_only()
-            .returning(|| Box::pin(async { Ok(Box::new(MockTransaction) as Box<dyn Transaction>) }));
-        r
-    }
-
     fn create_service(book_repo: MockBookRepository, author_repo: MockAuthorRepository, series_repo: MockSeriesRepository) -> BookServiceImpl {
         let repository_service = Arc::new(
-            RepositoryServiceBuilder::default()
-                .repository(Arc::new(make_mock_repo()))
-                .session_repository(Arc::new(MockSessionRepository::new()))
-                .user_repository(Arc::new(MockUserRepository::new()))
-                .user_setting_repository(Arc::new(MockUserSettingRepository::new()))
+            crate::repository::testing::default_repository_service_builder()
                 .author_repository(Arc::new(author_repo))
                 .series_repository(Arc::new(series_repo))
-                .publisher_repository(Arc::new(MockPublisherRepository::new()))
-                .genre_repository(Arc::new(MockGenreRepository::new()))
-                .tag_repository(Arc::new(MockTagRepository::new()))
                 .book_repository(Arc::new(book_repo))
-                .import_job_repository(Arc::new(MockImportJobRepository::new()))
-                .job_repository(Arc::new(MockJobRepository::new()))
-                .library_repository(Arc::new(MockLibraryRepository::new()))
-                .shelf_repository(Arc::new(MockShelfRepository::new()))
-                .user_book_metadata_repository(Arc::new(MockUserBookMetadataRepository::new()))
-                .device_repository(Arc::new(MockDeviceRepository::new()))
                 .build()
                 .expect("all fields provided"),
         );

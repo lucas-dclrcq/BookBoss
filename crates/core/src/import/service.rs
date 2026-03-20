@@ -82,77 +82,22 @@ impl ImportJobService for ImportJobServiceImpl {
 
 #[cfg(test)]
 mod tests {
-    use std::{any::Any, sync::Arc};
+    use std::sync::Arc;
 
     use chrono::Utc;
 
     use super::{ImportJobService, ImportJobServiceImpl};
     use crate::{
         Error, RepositoryError,
-        auth::repository::MockSessionRepository,
-        book::repository::{
-            author::MockAuthorRepository, book::MockBookRepository, genre::MockGenreRepository, publisher::MockPublisherRepository,
-            series::MockSeriesRepository, tag::MockTagRepository,
-        },
-        device::repository::device::MockDeviceRepository,
         import::{ImportJob, ImportJobId, ImportJobToken, ImportStatus, repository::import_job::MockImportJobRepository},
-        jobs::repository::MockJobRepository,
-        library::MockLibraryRepository,
-        reading::repository::user_book_metadata::MockUserBookMetadataRepository,
-        repository::{MockRepository, RepositoryServiceBuilder, Transaction},
-        shelf::repository::shelf::MockShelfRepository,
-        user::repository::{user::MockUserRepository, user_settings::MockUserSettingRepository},
     };
-
-    // ─── Mock Transaction ─────────────────────────────────────────────────────
-
-    struct MockTransaction;
-
-    #[async_trait::async_trait]
-    impl Transaction for MockTransaction {
-        fn as_any(&self) -> &dyn Any {
-            self
-        }
-
-        async fn commit(self: Box<Self>) -> Result<(), Error> {
-            Ok(())
-        }
-
-        async fn rollback(self: Box<Self>) -> Result<(), Error> {
-            Ok(())
-        }
-    }
 
     // ─── Helper ───────────────────────────────────────────────────────────────
 
-    fn make_mock_repo() -> MockRepository {
-        let mut r = MockRepository::new();
-        r.expect_begin()
-            .returning(|| Box::pin(async { Ok(Box::new(MockTransaction) as Box<dyn Transaction>) }));
-        r.expect_begin_read_only()
-            .returning(|| Box::pin(async { Ok(Box::new(MockTransaction) as Box<dyn Transaction>) }));
-        r
-    }
-
     fn create_service(mock: MockImportJobRepository) -> ImportJobServiceImpl {
         let repository_service = Arc::new(
-            RepositoryServiceBuilder::default()
-                .repository(Arc::new(make_mock_repo()))
-                .session_repository(Arc::new(MockSessionRepository::new()))
-                .user_repository(Arc::new(MockUserRepository::new()))
-                .user_setting_repository(Arc::new(MockUserSettingRepository::new()))
-                .author_repository(Arc::new(MockAuthorRepository::new()))
-                .series_repository(Arc::new(MockSeriesRepository::new()))
-                .publisher_repository(Arc::new(MockPublisherRepository::new()))
-                .genre_repository(Arc::new(MockGenreRepository::new()))
-                .tag_repository(Arc::new(MockTagRepository::new()))
-                .book_repository(Arc::new(MockBookRepository::new()))
+            crate::repository::testing::default_repository_service_builder()
                 .import_job_repository(Arc::new(mock))
-                .job_repository(Arc::new(MockJobRepository::new()))
-                .library_repository(Arc::new(MockLibraryRepository::new()))
-                .shelf_repository(Arc::new(MockShelfRepository::new()))
-                .user_book_metadata_repository(Arc::new(MockUserBookMetadataRepository::new()))
-                .device_repository(Arc::new(MockDeviceRepository::new()))
                 .build()
                 .expect("all fields provided"),
         );
