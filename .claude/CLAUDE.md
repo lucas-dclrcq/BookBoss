@@ -99,7 +99,7 @@ for environment variable setup and SeaORM adapter patterns.
 2. `just clippy` — lint (run separately from fmt, not chained)
 3. `just component-tests` — verify tests pass
 4. `jj desc -m "type(scope): description\n\nbody"` — update working copy description
-5. Update `.scratchpad/implementation-plan.md` — mark completed tasks `✓` / `[x]`, note partial work in later tasks
+5. Update `.scratchpad/feature-{slug}.md` — if working from a feature/bug file, mark completed tasks and note partial work; rename prefix to `completed-` when the feature is fully done
 
 ## Testing
 
