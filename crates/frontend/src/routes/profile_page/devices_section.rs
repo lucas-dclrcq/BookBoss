@@ -226,7 +226,7 @@ fn DeviceCard(device: DeviceRow, on_edit: EventHandler<()>, on_delete: EventHand
 
     rsx! {
         div { class: "rounded-lg border border-gray-200 bg-white px-4 py-3 flex flex-col gap-2",
-            // Row 1: name + type badge + actions
+            // Row 1: name + type badge | last synced + actions
             div { class: "flex items-center justify-between",
                 div { class: "flex items-center gap-2",
                     span { class: "text-sm font-semibold text-gray-900", "{device.name}" }
@@ -234,7 +234,30 @@ fn DeviceCard(device: DeviceRow, on_edit: EventHandler<()>, on_delete: EventHand
                         { device_type_label(&device.device_type) }
                     }
                 }
-                div { class: "flex items-center gap-1",
+                div { class: "flex items-center gap-3",
+                    {
+                        let synced = device.last_synced_at.clone();
+                        if synced == "Never" {
+                            rsx! {
+                                span { class: "text-xs text-gray-500",
+                                    "Last synced: "
+                                    span { class: "text-gray-700", "Never" }
+                                }
+                            }
+                        } else {
+                            rsx! {
+                                span { class: "text-xs text-gray-500",
+                                    "Last synced: "
+                                    button {
+                                        class: "text-gray-700 hover:text-indigo-600 transition-colors cursor-pointer",
+                                        title: "Reset sync — clears sync state so all books re-download on next Kobo sync",
+                                        onclick: move |_| on_reset(()),
+                                        "{synced}"
+                                    }
+                                }
+                            }
+                        }
+                    }
                     button {
                         class: "p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded",
                         title: "Edit",
@@ -268,61 +291,43 @@ fn DeviceCard(device: DeviceRow, on_edit: EventHandler<()>, on_delete: EventHand
                 }
             }
 
-            // Row 3: on removal · last synced · sync token (click to copy URL)
-            div { class: "flex items-center gap-4 text-xs text-gray-500",
+            // Row 3: on removal (left) · device token/URL (right)
+            div { class: "flex items-center justify-between text-xs text-gray-500",
                 span {
                     span { "On removal: " }
                     span { class: "text-gray-700", { removal_label(&device.on_removal_action) } }
                 }
-                span { "·" }
-                {
-                    let synced = device.last_synced_at.clone();
-                    if synced == "Never" {
-                        rsx! {
-                            span { "Last synced: " }
-                            span { class: "text-gray-700", "Never" }
-                        }
-                    } else {
-                        rsx! {
-                            span { "Last synced: " }
-                            button {
-                                class: "text-gray-700 hover:text-indigo-600 transition-colors cursor-pointer",
-                                title: "Reset sync — clears sync state so all books re-download on next Kobo sync",
-                                onclick: move |_| on_reset(()),
-                                "{synced}"
-                            }
-                        }
-                    }
-                }
-                span { "·" }
                 {
                     let url = device.sync_url.clone();
                     let token_display = device.sync_token_display.clone();
                     rsx! {
-                        button {
-                            class: "font-mono text-gray-700 hover:text-indigo-600 transition-colors cursor-pointer min-w-[8ch] text-center",
-                            title: "Copies URL for Kobo sync",
-                            onclick: move |_| {
-                                let url = url.clone();
-                                spawn(async move {
-                                    // navigator.clipboard requires HTTPS or localhost;
-                                    // use execCommand fallback which works over plain HTTP.
-                                    document::eval(&format!(
-                                        "var t=document.createElement('textarea');\
-                                         t.value='{url}';\
-                                         t.style.cssText='position:fixed;opacity:0';\
-                                         document.body.appendChild(t);\
-                                         t.select();\
-                                         document.execCommand('copy');\
-                                         document.body.removeChild(t);"
-                                    ));
-                                    copied.set(true);
-                                    let mut timer = document::eval("setTimeout(() => dioxus.send(true), 1500)");
-                                    let _ = timer.recv::<bool>().await;
-                                    copied.set(false);
-                                });
-                            },
-                            if copied() { "✓" } else { "{token_display}" }
+                        span {
+                            "Device token/URL: "
+                            button {
+                                class: "font-mono text-gray-700 hover:text-indigo-600 transition-colors cursor-pointer min-w-[8ch]",
+                                title: "Copies URL for Kobo sync",
+                                onclick: move |_| {
+                                    let url = url.clone();
+                                    spawn(async move {
+                                        // navigator.clipboard requires HTTPS or localhost;
+                                        // use execCommand fallback which works over plain HTTP.
+                                        document::eval(&format!(
+                                            "var t=document.createElement('textarea');\
+                                             t.value='{url}';\
+                                             t.style.cssText='position:fixed;opacity:0';\
+                                             document.body.appendChild(t);\
+                                             t.select();\
+                                             document.execCommand('copy');\
+                                             document.body.removeChild(t);"
+                                        ));
+                                        copied.set(true);
+                                        let mut timer = document::eval("setTimeout(() => dioxus.send(true), 1500)");
+                                        let _ = timer.recv::<bool>().await;
+                                        copied.set(false);
+                                    });
+                                },
+                                if copied() { "✓" } else { "{token_display}" }
+                            }
                         }
                     }
                 }
