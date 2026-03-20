@@ -259,6 +259,32 @@ similar.opt-level = 3
 # proptest-state-machine.opt-level = 3
 # rand_chacha.opt-level = 3
 
+# Workspace crates: keep at opt-level 1 so incremental dev builds stay fast
+[profile.dev.package.bb-api]
+opt-level = 1
+[profile.dev.package.bb-core]
+opt-level = 1
+[profile.dev.package.bb-database]
+opt-level = 1
+[profile.dev.package.bb-formats]
+opt-level = 1
+[profile.dev.package.bb-frontend]
+opt-level = 1
+[profile.dev.package.bb-import]
+opt-level = 1
+[profile.dev.package.bb-metadata]
+opt-level = 1
+[profile.dev.package.bb-storage]
+opt-level = 1
+[profile.dev.package.bb-utils]
+opt-level = 1
+[profile.dev.package.bookboss]
+opt-level = 1
+[profile.dev.package.integration-tests]
+opt-level = 1
+[profile.dev.package.integration]
+opt-level = 1
+
 [profile.dev.package."*"]
 opt-level = 2
 
