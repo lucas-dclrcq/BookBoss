@@ -300,7 +300,7 @@ impl ShelfRepository for ShelfRepositoryAdapter {
 
         let mut query = prelude::Books::find()
             .filter(books::Column::Status.eq("available"))
-            .filter(build_condition(filter, user_id))
+            .filter(build_condition(filter, user_id).map_err(bb_core::Error::RepositoryError)?)
             .order_by_asc(books::Column::Id);
 
         if let Some(start_id) = start_id {
@@ -319,7 +319,7 @@ impl ShelfRepository for ShelfRepositoryAdapter {
 
         let query = prelude::Books::find()
             .filter(books::Column::Status.eq("available"))
-            .filter(build_condition(filter, user_id));
+            .filter(build_condition(filter, user_id).map_err(bb_core::Error::RepositoryError)?);
 
         Ok(query.count(transaction).await.map_err(handle_dberr)?)
     }

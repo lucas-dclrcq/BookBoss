@@ -16,6 +16,8 @@
 //! | GET    | `/opds/authors/:id`               | Author books (acq feed)  |
 //! | GET    | `/opds/series`                    | Series (nav feed)        |
 //! | GET    | `/opds/series/:id`                | Series books (acq feed)  |
+//! | GET    | `/opds/search`                    | Search results (acq feed)|
+//! | GET    | `/opds/search/description.xml`    | OpenSearch descriptor    |
 //! | GET    | `/opds/covers/:book_token`        | Cover image              |
 //! | GET    | `/opds/download/:book_token/:fmt` | Book file download       |
 
@@ -32,6 +34,8 @@ pub fn opds_router() -> Router {
         .route("/opds", routing::get(feeds::root))
         .route("/opds/", routing::get(feeds::root))
         .route("/opds/all", routing::get(feeds::all_books))
+        .route("/opds/search", routing::get(feeds::search))
+        .route("/opds/search/description.xml", routing::get(feeds::search_description))
         .route("/opds/shelves", routing::get(feeds::shelves))
         .route("/opds/shelves/{shelf_token}", routing::get(feeds::shelf_books))
         .route("/opds/authors", routing::get(feeds::authors))

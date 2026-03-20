@@ -1,4 +1,5 @@
 use bb_core::{
+    RepositoryError,
     filter::{ACTIVE_STATUSES, BookFilter, DateOp, EntityRef, FilterCondition, FilterReadStatus, FilterRule, NumericOp, SetOp, TextOp},
     user::UserId,
 };
@@ -18,14 +19,17 @@ use crate::entities::{authors, book_authors, book_genres, book_tags, books, user
 /// The resulting condition can be passed directly to `.filter()` on any SeaORM
 /// query that operates on the `books` table.  All relation-based rules use
 /// subqueries so no extra JOINs are required on the outer query.
-pub(crate) fn build_condition(filter: &BookFilter, user_id: UserId) -> Condition {
+///
+/// Returns `Err` if the filter contains a user-scoped rule (e.g. `ReadStatus`)
+/// and `user_id` is `0` (the sentinel for "no user context").
+pub(crate) fn build_condition(filter: &BookFilter, user_id: UserId) -> Result<Condition, RepositoryError> {
     match filter {
         BookFilter::Group(group) => {
             let base = match group.condition {
                 FilterCondition::And => Condition::all(),
                 FilterCondition::Or => Condition::any(),
             };
-            group.items.iter().fold(base, |acc, item| acc.add(build_condition(item, user_id)))
+            group.items.iter().try_fold(base, |acc, item| Ok(acc.add(build_condition(item, user_id)?)))
         }
         BookFilter::Rule(rule) => rule_condition(rule, user_id),
     }
@@ -34,19 +38,19 @@ pub(crate) fn build_condition(filter: &BookFilter, user_id: UserId) -> Condition
 // ── Rule dispatch
 // ─────────────────────────────────────────────────────────────
 
-fn rule_condition(rule: &FilterRule, user_id: UserId) -> Condition {
+fn rule_condition(rule: &FilterRule, user_id: UserId) -> Result<Condition, RepositoryError> {
     match rule {
-        FilterRule::TitleText { op, value } => title_text_condition(op, value),
-        FilterRule::AuthorText { op, value } => author_text_condition(op, value),
-        FilterRule::Author { op, values } => author_condition(op, values),
-        FilterRule::Series { op, values } => series_condition(op, values),
-        FilterRule::Genre { op, values } => genre_condition(op, values),
-        FilterRule::Tag { op, values } => tag_condition(op, values),
-        FilterRule::Publisher { op, values } => publisher_condition(op, values),
-        FilterRule::Language { op, values } => language_condition(op, values),
+        FilterRule::TitleText { op, value } => Ok(title_text_condition(op, value)),
+        FilterRule::AuthorText { op, value } => Ok(author_text_condition(op, value)),
+        FilterRule::Author { op, values } => Ok(author_condition(op, values)),
+        FilterRule::Series { op, values } => Ok(series_condition(op, values)),
+        FilterRule::Genre { op, values } => Ok(genre_condition(op, values)),
+        FilterRule::Tag { op, values } => Ok(tag_condition(op, values)),
+        FilterRule::Publisher { op, values } => Ok(publisher_condition(op, values)),
+        FilterRule::Language { op, values } => Ok(language_condition(op, values)),
         FilterRule::ReadStatus { op, values } => read_status_condition(op, values, user_id),
-        FilterRule::Rating { op, value } => rating_condition(op, *value),
-        FilterRule::DateAdded { op, value } => date_added_condition(op, *value),
+        FilterRule::Rating { op, value } => Ok(rating_condition(op, *value)),
+        FilterRule::DateAdded { op, value } => Ok(date_added_condition(op, *value)),
     }
 }
 
@@ -337,7 +341,12 @@ fn language_condition(op: &SetOp, values: &[String]) -> Condition {
 // ── ReadStatus rule
 // ───────────────────────────────────────────────────────────
 
-fn read_status_condition(op: &SetOp, values: &[FilterReadStatus], user_id: UserId) -> Condition {
+fn read_status_condition(op: &SetOp, values: &[FilterReadStatus], user_id: UserId) -> Result<Condition, RepositoryError> {
+    if user_id == 0 {
+        return Err(RepositoryError::Constraint(
+            "ReadStatus filter requires a valid user context (user_id must not be 0)".to_string(),
+        ));
+    }
     let statuses = expand_read_statuses(values);
     let unread_included = statuses.contains(&"unread");
 
@@ -361,11 +370,11 @@ fn read_status_condition(op: &SetOp, values: &[FilterReadStatus], user_id: UserI
         q
     };
 
-    match op {
+    Ok(match op {
         // IncludesAll degrades to IncludesAny: a book has exactly one read status.
         SetOp::IncludesAny | SetOp::IncludesAll => {
             if statuses.is_empty() {
-                return never();
+                return Ok(never());
             }
             if unread_included {
                 // No UBM row (implicit unread) OR UBM row with a matching status
@@ -378,7 +387,7 @@ fn read_status_condition(op: &SetOp, values: &[FilterReadStatus], user_id: UserI
         }
         SetOp::ExcludesAll => {
             if statuses.is_empty() {
-                return Condition::all();
+                return Ok(Condition::all());
             }
             if unread_included {
                 // A book with no UBM row is effectively "unread" → it IS in the excluded
@@ -397,7 +406,7 @@ fn read_status_condition(op: &SetOp, values: &[FilterReadStatus], user_id: UserI
         SetOp::IsEmpty => Condition::all().add(books::Column::Id.not_in_subquery(ubm_for_user())),
         // IsNotEmpty: at least one UBM row exists (user has interacted with the book)
         SetOp::IsNotEmpty => Condition::all().add(books::Column::Id.in_subquery(ubm_for_user())),
-    }
+    })
 }
 
 /// Expand [`FilterReadStatus::Active`] to its constituent statuses and

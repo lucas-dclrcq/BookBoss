@@ -7,8 +7,9 @@ use async_trait::async_trait;
 
 use crate::{
     Error,
-    book::{BookId, BookToken, FileFormat, IdentifierType},
+    book::{Book, BookId, BookToken, FileFormat, IdentifierType},
     conversion::ConversionService,
+    filter::BookFilter,
     import::{ImportJob, ImportJobToken},
     library::{LibraryService, LibraryStats},
     pipeline::{BookEdit, PipelineService, ProviderBook},
@@ -119,6 +120,9 @@ pub struct NopLibraryService;
 #[async_trait]
 impl LibraryService for NopLibraryService {
     async fn library_stats(&self) -> Result<LibraryStats, Error> {
+        unimplemented!("NopLibraryService")
+    }
+    async fn search_books(&self, _filter: &BookFilter, _start_id: Option<BookId>, _page_size: Option<u64>) -> Result<Vec<Book>, Error> {
         unimplemented!("NopLibraryService")
     }
     async fn delete_book(&self, _token: &BookToken) -> Result<(), Error> {

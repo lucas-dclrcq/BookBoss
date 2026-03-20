@@ -12,6 +12,7 @@ use axum::{
 use bb_core::{
     CoreServices,
     book::{AuthorToken, Book, BookQuery, BookStatus, BookToken, FileFormat, FileRole, SeriesToken},
+    filter::{BookFilter, FilterRule, TextOp},
     shelf::ShelfType,
 };
 use chrono::Utc;
@@ -26,6 +27,12 @@ const PAGE_SIZE: u64 = 50;
 
 #[derive(Deserialize)]
 pub struct PaginationParams {
+    pub start: Option<u64>,
+}
+
+#[derive(Deserialize)]
+pub struct SearchParams {
+    pub q: Option<String>,
     pub start: Option<u64>,
 }
 
@@ -46,6 +53,11 @@ pub async fn root(opds_user: OpdsUser) -> Response {
     let feed = AtomFeed::new("urn:bookboss:opds:root", "BookBoss Catalog", now)
         .with_link(AtomLink::new(rel::SELF, "/opds/").with_type(mime::NAVIGATION))
         .with_link(AtomLink::new(rel::START, "/opds/").with_type(mime::NAVIGATION))
+        .with_link(
+            AtomLink::new(rel::SEARCH, "/opds/search/description.xml")
+                .with_type(mime::OPENSEARCH)
+                .with_title("Search BookBoss"),
+        )
         .with_entry(
             AtomEntry::new("urn:bookboss:opds:all", "All Books", now)
                 .with_content("Browse all books in the library")
@@ -437,6 +449,89 @@ pub async fn series_books(
     match feed.to_xml() {
         Ok(xml) => xml_response(xml),
         Err(_) => error_response(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+/// `GET /opds/search/description.xml` — OpenSearch description document.
+pub async fn search_description(_opds_user: OpdsUser) -> Response {
+    let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">
+  <ShortName>BookBoss</ShortName>
+  <Description>Search the BookBoss library by title or author</Description>
+  <Url type="application/atom+xml;profile=opds-catalog;kind=acquisition"
+       template="/opds/search?q={searchTerms}&amp;start={startIndex?}"/>
+</OpenSearchDescription>"#;
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, HeaderValue::from_static(mime::OPENSEARCH))
+        .header(header::CACHE_CONTROL, HeaderValue::from_static("private, no-cache"))
+        .body(Body::from(xml))
+        .unwrap()
+}
+
+/// `GET /opds/search?q=...` — Search acquisition feed.
+pub async fn search(opds_user: OpdsUser, Query(params): Query<SearchParams>, Extension(core_services): Extension<Arc<CoreServices>>) -> Response {
+    let _ = &opds_user;
+    let now = Utc::now();
+
+    let q = match params.q.as_deref().filter(|s| !s.is_empty()) {
+        Some(q) => q.to_string(),
+        None => {
+            return xml_response(
+                AtomFeed::new("urn:bookboss:opds:search", "Search Results", now)
+                    .with_link(AtomLink::new(rel::SELF, "/opds/search").with_type(mime::ACQUISITION))
+                    .with_link(AtomLink::new(rel::START, "/opds/").with_type(mime::NAVIGATION))
+                    .to_xml()
+                    .unwrap_or_default(),
+            );
+        }
+    };
+
+    let filter = BookFilter::Rule(FilterRule::TitleText {
+        op: TextOp::Contains,
+        value: q.clone(),
+    })
+    .or(BookFilter::Rule(FilterRule::AuthorText {
+        op: TextOp::Contains,
+        value: q.clone(),
+    }));
+
+    let books = match core_services.library_service.search_books(&filter, params.start, Some(PAGE_SIZE + 1)).await {
+        Ok(b) => b,
+        Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR),
+    };
+
+    let has_next = books.len() as u64 > PAGE_SIZE;
+    let page_books = if has_next { &books[..PAGE_SIZE as usize] } else { &books };
+
+    let self_url = format_search_url(&q, params.start);
+    let mut feed = AtomFeed::new("urn:bookboss:opds:search", format!("Search: {q}"), now)
+        .with_link(AtomLink::new(rel::SELF, &self_url).with_type(mime::ACQUISITION))
+        .with_link(AtomLink::new(rel::START, "/opds/").with_type(mime::NAVIGATION));
+
+    if has_next {
+        if let Some(last) = page_books.last() {
+            feed = feed.with_link(AtomLink::new(rel::NEXT, format_search_url(&q, Some(last.id + 1))).with_type(mime::ACQUISITION));
+        }
+    }
+
+    for book in page_books {
+        let entry = book_to_entry(book, &core_services).await;
+        feed = feed.with_entry(entry);
+    }
+
+    match feed.to_xml() {
+        Ok(xml) => xml_response(xml),
+        Err(_) => error_response(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+fn format_search_url(q: &str, start: Option<u64>) -> String {
+    let encoded_q = q.replace('&', "%26").replace(' ', "+");
+    match start {
+        Some(s) => format!("/opds/search?q={encoded_q}&start={s}"),
+        None => format!("/opds/search?q={encoded_q}"),
     }
 }
 

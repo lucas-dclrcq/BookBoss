@@ -20,6 +20,7 @@ pub mod rel {
     pub const START: &str = "start";
     pub const SUBSECTION: &str = "subsection";
     pub const NEXT: &str = "next";
+    pub const SEARCH: &str = "search";
     pub const ACQUISITION: &str = "http://opds-spec.org/acquisition";
     pub const IMAGE: &str = "http://opds-spec.org/image";
     pub const THUMBNAIL: &str = "http://opds-spec.org/image/thumbnail";
@@ -30,6 +31,7 @@ pub mod mime {
     pub const NAVIGATION: &str = "application/atom+xml;profile=opds-catalog;kind=navigation";
     pub const ACQUISITION: &str = "application/atom+xml;profile=opds-catalog;kind=acquisition";
     pub const ATOM_XML: &str = "application/atom+xml";
+    pub const OPENSEARCH: &str = "application/opensearchdescription+xml";
 }
 
 /// A link in an Atom feed or entry.

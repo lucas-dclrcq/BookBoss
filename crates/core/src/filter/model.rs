@@ -39,6 +39,19 @@ impl BookFilter {
             items: vec![self, other],
         })
     }
+
+    /// Returns `true` if this filter (or any nested sub-filter) contains a
+    /// rule that requires a specific user context to evaluate (e.g.
+    /// `ReadStatus`).
+    ///
+    /// Use this to guard APIs that apply a filter without a user identity.
+    pub fn contains_user_scoped_rules(&self) -> bool {
+        match self {
+            BookFilter::Rule(FilterRule::ReadStatus { .. }) => true,
+            BookFilter::Rule(_) => false,
+            BookFilter::Group(group) => group.items.iter().any(|f| f.contains_user_scoped_rules()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
