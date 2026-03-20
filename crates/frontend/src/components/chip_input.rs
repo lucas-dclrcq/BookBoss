@@ -69,7 +69,7 @@ pub(crate) fn ChipInput(mut values: Signal<Vec<String>>, options: Vec<String>, p
                             "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700 border border-gray-300"
                         };
                         rsx! {
-                            span { key: "{i}", class: "{chip_class}",
+                            span { key: "{label}", class: "{chip_class}",
                                 "{label}"
                                 if is_new {
                                     span { class: "font-semibold ml-0.5 text-green-700", "new" }

@@ -74,6 +74,7 @@ pub(super) fn DevicesSectionContent() -> Element {
                     let d_reset = device.clone();
                     rsx! {
                         DeviceCard {
+                            key: "{device.token}",
                             device: d,
                             on_edit: move |_| modal.set(Some(ModalMode::Edit(d_edit.clone()))),
                             on_delete: move |_| {
