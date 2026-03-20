@@ -59,7 +59,7 @@ use {
     axum::http::Method,
     axum_session_auth::{Auth, Rights},
     bb_core::book::{AuthorToken, BookToken, FileRole, SeriesToken},
-    bb_core::reading::{AUTO_READ_THRESHOLD_KEY, DEFAULT_AUTO_READ_THRESHOLD, ReadStatus, UserBookMetadata},
+    bb_core::reading::{ReadStatus, UserBookMetadata},
     bb_core::{CoreServices, types::Capability, user::UserId},
     std::str::FromStr,
     std::sync::Arc,
@@ -83,18 +83,6 @@ pub(crate) fn to_reading_state_dto(meta: &UserBookMetadata) -> ReadingStateDto {
         times_read: meta.times_read,
         notes: meta.notes.clone(),
     }
-}
-
-#[cfg(feature = "server")]
-async fn load_threshold(user_id: UserId, core_services: &CoreServices) -> Option<u16> {
-    core_services
-        .user_setting_service
-        .get(user_id, AUTO_READ_THRESHOLD_KEY)
-        .await
-        .ok()
-        .flatten()
-        .and_then(|s| s.value.parse::<u16>().ok())
-        .or(Some(DEFAULT_AUTO_READ_THRESHOLD))
 }
 
 // ---------------------------------------------------------------------------
@@ -320,10 +308,9 @@ async fn update_reading_progress(token: String, progress_pct: u8) -> Result<Read
         .ok_or_else(|| ServerFnError::new("Book not found"))?;
 
     let progress_bps = u16::from(progress_pct) * 100;
-    let threshold = load_threshold(user_id, &core_services).await;
     let meta = core_services
         .reading_service
-        .update_progress(user_id, book.id, progress_bps, None, threshold)
+        .update_progress(user_id, book.id, progress_bps, None)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 

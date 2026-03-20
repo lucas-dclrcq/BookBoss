@@ -10,7 +10,6 @@ use {
     bb_core::{
         CoreServices,
         device::{DeviceToken, OnRemovalAction},
-        reading::{AUTO_READ_THRESHOLD_KEY, DEFAULT_AUTO_READ_THRESHOLD},
         types::{Capability, EmailAddress},
         user::User,
     },
@@ -29,11 +28,6 @@ use crate::Route;
 struct ProfileInfo {
     full_name: String,
     email: String,
-}
-
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-struct ReadingSettings {
-    auto_read_threshold_pct: u8,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -191,47 +185,6 @@ async fn update_profile(full_name: String, email: String) -> Result<(), ServerFn
             email_address,
             ..existing
         })
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
-
-    Ok(())
-}
-
-#[get(
-    "/api/v1/settings/reading",
-    auth_session: axum::Extension<AuthSession>,
-    core_services: axum::Extension<Arc<CoreServices>>
-)]
-async fn get_reading_settings() -> Result<ReadingSettings, ServerFnError> {
-    let user_id = authenticated_user(&auth_session)?.id();
-    let setting = core_services
-        .user_setting_service
-        .get(user_id, AUTO_READ_THRESHOLD_KEY)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
-
-    let threshold_bps = setting.and_then(|s| s.value.parse::<u16>().ok()).unwrap_or(DEFAULT_AUTO_READ_THRESHOLD);
-
-    #[expect(clippy::cast_possible_truncation, reason = "bps / 100 gives 0–100 percentage; always fits u8")]
-    let auto_read_threshold_pct = (threshold_bps / 100) as u8;
-    Ok(ReadingSettings { auto_read_threshold_pct })
-}
-
-#[post(
-    "/api/v1/settings/reading/auto-read-threshold",
-    auth_session: axum::Extension<AuthSession>,
-    core_services: axum::Extension<Arc<CoreServices>>
-)]
-async fn save_auto_read_threshold(threshold_pct: u8) -> Result<(), ServerFnError> {
-    let user_id = authenticated_user(&auth_session)?.id();
-
-    if threshold_pct > 100 {
-        return Err(ServerFnError::new("Threshold must be between 0 and 100"));
-    }
-    let bps = u16::from(threshold_pct) * 100;
-    core_services
-        .user_setting_service
-        .set(user_id, AUTO_READ_THRESHOLD_KEY, &bps.to_string())
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
@@ -487,14 +440,6 @@ pub(crate) fn ProfilePage() -> Element {
 
                 hr { class: "border-gray-200" }
 
-                // ── Reading ───────────────────────────────────────────────
-                section {
-                    h2 { class: "text-lg font-semibold text-gray-900 mb-4", "Reading" }
-                    ReadingSectionContent {}
-                }
-
-                hr { class: "border-gray-200" }
-
                 // ── My Devices ────────────────────────────────────────────
                 section {
                     DevicesSectionContent {}
@@ -510,75 +455,6 @@ pub(crate) fn ProfilePage() -> Element {
 }
 
 // ---------------------------------------------------------------------------
-// Reading section
-// ---------------------------------------------------------------------------
-
-#[component]
-fn ReadingSectionContent() -> Element {
-    let settings = use_server_future(get_reading_settings)?;
-    let mut threshold = use_signal(|| 95u8);
-    let mut saving = use_signal(|| false);
-    let mut saved = use_signal(|| false);
-
-    use_effect(move || {
-        if let Some(Ok(s)) = settings() {
-            threshold.set(s.auto_read_threshold_pct);
-        }
-    });
-
-    rsx! {
-        div { class: "rounded-lg border border-gray-200 bg-white divide-y divide-gray-100",
-            div { class: "px-4 py-4",
-                label { class: "block text-sm font-medium text-gray-900 mb-1",
-                    "Auto-read threshold"
-                }
-                p { class: "text-xs text-gray-500 mb-3",
-                    "Automatically mark a book as Read when progress reaches this percentage."
-                }
-                div { class: "flex items-center gap-4",
-                    input {
-                        r#type: "range",
-                        min: "0",
-                        max: "100",
-                        value: threshold,
-                        class: "flex-1 accent-indigo-600",
-                        oninput: move |e| {
-                            saved.set(false);
-                            if let Ok(v) = e.value().parse::<u8>() {
-                                threshold.set(v);
-                            }
-                        },
-                    }
-                    span { class: "text-sm font-medium text-gray-900 w-12 text-right",
-                        "{threshold}%"
-                    }
-                }
-                div { class: "flex items-center justify-end gap-3 mt-3",
-                    if saved() {
-                        span { class: "text-xs text-green-600", "Saved!" }
-                    }
-                    button {
-                        class: "px-3 py-1.5 text-sm font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50",
-                        disabled: saving(),
-                        onclick: move |_| {
-                            let pct = threshold();
-                            saving.set(true);
-                            saved.set(false);
-                            spawn(async move {
-                                if save_auto_read_threshold(pct).await.is_ok() {
-                                    saved.set(true);
-                                }
-                                saving.set(false);
-                            });
-                        },
-                        if saving() { "Saving…" } else { "Save" }
-                    }
-                }
-            }
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Profile section
 // ---------------------------------------------------------------------------

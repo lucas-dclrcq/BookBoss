@@ -1,8 +1,4 @@
-use bb_core::{
-    Error,
-    book::BookStatus,
-    reading::{ReadStatus, service::DEFAULT_AUTO_READ_THRESHOLD},
-};
+use bb_core::{Error, book::BookStatus, reading::ReadStatus};
 
 use crate::{fixtures, setup};
 
@@ -74,12 +70,7 @@ async fn update_progress_transitions_unread_to_reading() {
     let ctx = setup().await;
     let (user_id, book_id) = setup_user_and_book(&ctx).await;
 
-    let state = ctx
-        .services
-        .reading_service
-        .update_progress(user_id, book_id, 500, None, Some(DEFAULT_AUTO_READ_THRESHOLD))
-        .await
-        .unwrap();
+    let state = ctx.services.reading_service.update_progress(user_id, book_id, 500, None).await.unwrap();
 
     assert_eq!(
         state.read_status,
@@ -90,40 +81,6 @@ async fn update_progress_transitions_unread_to_reading() {
 }
 
 #[tokio::test]
-async fn update_progress_auto_advances_to_read_at_threshold() {
-    let ctx = setup().await;
-    let (user_id, book_id) = setup_user_and_book(&ctx).await;
-    ctx.services.reading_service.set_status(user_id, book_id, ReadStatus::Reading).await.unwrap();
-
-    let state = ctx
-        .services
-        .reading_service
-        .update_progress(user_id, book_id, DEFAULT_AUTO_READ_THRESHOLD, None, Some(DEFAULT_AUTO_READ_THRESHOLD))
-        .await
-        .unwrap();
-
-    assert_eq!(state.read_status, ReadStatus::Read, "reaching the threshold should auto-advance to Read");
-    assert_eq!(state.times_read, 1);
-}
-
-#[tokio::test]
-async fn update_progress_no_auto_advance_when_threshold_disabled() {
-    let ctx = setup().await;
-    let (user_id, book_id) = setup_user_and_book(&ctx).await;
-    ctx.services.reading_service.set_status(user_id, book_id, ReadStatus::Reading).await.unwrap();
-
-    // Passing None disables auto-advance
-    let state = ctx
-        .services
-        .reading_service
-        .update_progress(user_id, book_id, 10_000, None, None)
-        .await
-        .unwrap();
-
-    assert_eq!(state.read_status, ReadStatus::Reading, "auto-advance disabled — should stay Reading at 100%");
-}
-
-#[tokio::test]
 async fn update_progress_stores_position_token() {
     let ctx = setup().await;
     let (user_id, book_id) = setup_user_and_book(&ctx).await;
@@ -131,7 +88,7 @@ async fn update_progress_stores_position_token() {
     let state = ctx
         .services
         .reading_service
-        .update_progress(user_id, book_id, 1000, Some("epubcfi(/6/4!/4/2/2:0)".to_string()), None)
+        .update_progress(user_id, book_id, 1000, Some("epubcfi(/6/4!/4/2/2:0)".to_string()))
         .await
         .unwrap();
 

@@ -11,20 +11,6 @@ use crate::{
     with_read_only_transaction, with_transaction,
 };
 
-/// User setting key for the auto-read threshold.
-///
-/// Stored as a basis-point string (e.g. `"9500"` = 95%). Use
-/// `DEFAULT_AUTO_READ_THRESHOLD` when the key is absent.
-pub const AUTO_READ_THRESHOLD_KEY: &str = "reading.auto_read_threshold";
-
-/// Default auto-read threshold in basis points (9500 = 95%).
-///
-/// When progress reaches or exceeds this value the service automatically
-/// transitions a book from `Reading` to `Read`. Callers may supply a
-/// per-user override via `set_status` / `update_progress`; passing `None`
-/// disables auto-advance entirely.
-pub const DEFAULT_AUTO_READ_THRESHOLD: u16 = 9500;
-
 // ── Trait ─────────────────────────────────────────────────────────────────────
 
 #[async_trait::async_trait]
@@ -41,16 +27,7 @@ pub trait ReadingService: Send + Sync {
     /// Records reading progress and automatically manages status transitions.
     ///
     /// - Unread → Reading on the first progress update.
-    /// - Reading → Read when `progress_bps` meets or exceeds
-    ///   `auto_read_threshold`.
-    async fn update_progress(
-        &self,
-        user_id: UserId,
-        book_id: BookId,
-        progress_bps: u16,
-        position_token: Option<String>,
-        auto_read_threshold: Option<u16>,
-    ) -> Result<UserBookMetadata, Error>;
+    async fn update_progress(&self, user_id: UserId, book_id: BookId, progress_bps: u16, position_token: Option<String>) -> Result<UserBookMetadata, Error>;
 
     /// Sets a personal star rating (1–5). Returns a validation error for values
     /// outside that range.
@@ -199,14 +176,7 @@ impl ReadingService for ReadingServiceImpl {
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    async fn update_progress(
-        &self,
-        user_id: UserId,
-        book_id: BookId,
-        progress_bps: u16,
-        position_token: Option<String>,
-        auto_read_threshold: Option<u16>,
-    ) -> Result<UserBookMetadata, Error> {
+    async fn update_progress(&self, user_id: UserId, book_id: BookId, progress_bps: u16, position_token: Option<String>) -> Result<UserBookMetadata, Error> {
         with_transaction!(self, user_book_metadata_repository, |tx| {
             let now = Utc::now();
 
@@ -223,15 +193,6 @@ impl ReadingService for ReadingServiceImpl {
             current.progress_percentage = Some(progress_bps);
             current.position_token = position_token;
             current.last_progress_at = Some(now);
-
-            // Auto-advance to Read if threshold is met.
-            if matches!(current.read_status, ReadStatus::Reading | ReadStatus::Rereading) {
-                if let Some(threshold) = auto_read_threshold {
-                    if progress_bps >= threshold {
-                        current = apply_transition(current, ReadStatus::Read);
-                    }
-                }
-            }
 
             user_book_metadata_repository.upsert(tx, current).await
         })
@@ -501,7 +462,7 @@ mod tests {
         mock.expect_find_by_user_and_book().returning(|_, _, _| Box::pin(async { Ok(None) }));
         mock.expect_upsert().returning(|_, s| Box::pin(async { Ok(s) }));
         let svc = create_service(mock);
-        let result = svc.update_progress(1, 1, 1000, None, None).await.unwrap();
+        let result = svc.update_progress(1, 1, 1000, None).await.unwrap();
         assert_eq!(result.read_status, ReadStatus::Reading);
         assert_eq!(result.progress_percentage, Some(1000));
         assert!(result.date_started.is_some());
@@ -509,7 +470,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_update_progress_on_reading_stays_reading_below_threshold() {
+    async fn test_update_progress_on_reading_stays_reading_at_full_progress() {
         let existing = state(1, 1, ReadStatus::Reading);
         let mut mock = MockUserBookMetadataRepository::new();
         mock.expect_find_by_user_and_book().returning(move |_, _, _| {
@@ -518,24 +479,9 @@ mod tests {
         });
         mock.expect_upsert().returning(|_, s| Box::pin(async { Ok(s) }));
         let svc = create_service(mock);
-        let result = svc.update_progress(1, 1, 5000, None, Some(9500)).await.unwrap();
+        let result = svc.update_progress(1, 1, 10_000, None).await.unwrap();
         assert_eq!(result.read_status, ReadStatus::Reading);
-        assert_eq!(result.progress_percentage, Some(5000));
-    }
-
-    #[tokio::test]
-    async fn test_update_progress_meets_threshold_transitions_to_read() {
-        let existing = state(1, 1, ReadStatus::Reading);
-        let mut mock = MockUserBookMetadataRepository::new();
-        mock.expect_find_by_user_and_book().returning(move |_, _, _| {
-            let existing = existing.clone();
-            Box::pin(async move { Ok(Some(existing)) })
-        });
-        mock.expect_upsert().returning(|_, s| Box::pin(async { Ok(s) }));
-        let svc = create_service(mock);
-        let result = svc.update_progress(1, 1, 9500, None, Some(9500)).await.unwrap();
-        assert_eq!(result.read_status, ReadStatus::Read);
-        assert_eq!(result.times_read, 1);
+        assert_eq!(result.progress_percentage, Some(10_000));
     }
 
     // ─── set_rating ──────────────────────────────────────────────────────────
