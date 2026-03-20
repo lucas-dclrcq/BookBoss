@@ -710,31 +710,28 @@ fn OpdsSectionContent() -> Element {
                             },
                             if copied() { "Copied!" } else { "Copy" }
                         }
+                        button {
+                            class: "px-2 py-1.5 text-xs font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50",
+                            disabled: regenerating(),
+                            onclick: move |_| {
+                                regenerating.set(true);
+                                error_msg.set(None);
+                                copied.set(false);
+                                spawn(async move {
+                                    match regenerate_opds_password().await {
+                                        Ok(pw) => password.set(pw),
+                                        Err(e) => error_msg.set(Some(e.to_string())),
+                                    }
+                                    regenerating.set(false);
+                                });
+                            },
+                            if regenerating() { "Regenerating…" } else { "Regenerate" }
+                        }
                     }
                 }
 
                 if let Some(err) = error_msg() {
                     p { class: "text-xs text-red-600", "{err}" }
-                }
-
-                div { class: "flex justify-end",
-                    button {
-                        class: "px-3 py-1.5 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50",
-                        disabled: regenerating(),
-                        onclick: move |_| {
-                            regenerating.set(true);
-                            error_msg.set(None);
-                            copied.set(false);
-                            spawn(async move {
-                                match regenerate_opds_password().await {
-                                    Ok(pw) => password.set(pw),
-                                    Err(e) => error_msg.set(Some(e.to_string())),
-                                }
-                                regenerating.set(false);
-                            });
-                        },
-                        if regenerating() { "Regenerating…" } else { "Regenerate Password" }
-                    }
                 }
             }
         }
