@@ -495,15 +495,15 @@ pub(crate) fn ProfilePage() -> Element {
 
                 hr { class: "border-gray-200" }
 
-                // ── OPDS ─────────────────────────────────────────────────
-                OpdsSectionContent {}
-
-                hr { class: "border-gray-200" }
-
                 // ── My Devices ────────────────────────────────────────────
                 section {
                     DevicesSectionContent {}
                 }
+
+                hr { class: "border-gray-200" }
+
+                // ── OPDS ─────────────────────────────────────────────────
+                OpdsSectionContent {}
             }
         }
     }
