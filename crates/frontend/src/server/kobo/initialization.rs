@@ -63,7 +63,7 @@ pub async fn handle(kobo: KoboDevice, method: Method, req_headers: HeaderMap, bo
     let store_result = proxy::proxy_to_store("/v1/initialization", method, &req_headers, body).await;
 
     // 2. Build the response JSON.
-    let response_json = build_response_json(store_result, base, t);
+    let response_json = build_response_json(store_result.as_ref(), base, t);
 
     // 4. x-kobo-apitoken header is required by the Kobo firmware.
     let mut headers = HeaderMap::new();
@@ -77,8 +77,8 @@ pub async fn handle(kobo: KoboDevice, method: Method, req_headers: HeaderMap, bo
 /// If the store returned a parseable response, patch `Resources` in-place
 /// and return the store's full JSON (preserving any extra fields). Otherwise
 /// fall back to our own minimal response shape.
-fn build_response_json(store_result: Option<(axum::http::StatusCode, HeaderMap, Bytes)>, base: &str, t: &str) -> Value {
-    if let Some((status, _, ref store_bytes)) = store_result {
+fn build_response_json(store_result: Option<&(axum::http::StatusCode, HeaderMap, Bytes)>, base: &str, t: &str) -> Value {
+    if let Some((status, _, store_bytes)) = store_result {
         if !status.is_success() {
             tracing::warn!(%status, "Kobo store init returned error status; using fallback resources");
         } else if let Ok(mut store_json) = serde_json::from_slice::<Value>(store_bytes) {
