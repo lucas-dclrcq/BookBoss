@@ -14,8 +14,11 @@ by a flexible database layer that supports PostgreSQL, MySQL, MariaDB, and SQLit
 - View book detail pages with full metadata (description, genres, tags, language, publication date, identifiers)
 - View author detail pages listing all their books
 - View series detail pages listing all books in a series
+- Sort books by date added, title, and author
 - Edit book metadata (title, author, series, publisher, genres, tags, description, identifiers, cover)
 - Delete books from the library
+- Search bar allows searching from the displayed list of books. Can add author: title: series: genre: tag:
+  for extra refinement
 
 ### Import
 
@@ -45,7 +48,11 @@ by a flexible database layer that supports PostgreSQL, MySQL, MariaDB, and SQLit
 - Download book files directly to the device (EPUB and KEPUB)
 - Reset sync state to force a full re-sync
 - Copy device sync URL to clipboard from the profile page
-- Kobo-initiated book removal handled — deleted books re-sync on next connection
+- Kobo-initiated book removal handled — user-defined action on what to do
+
+### OPDS browsing
+
+- Each user gets a custom login for OPDS browsing
 
 ### User & Admin
 
@@ -85,6 +92,7 @@ Edit the encrypted `config.sops.env` file. Required variables:
 | Variable                             | Purpose                                               |
 | ------------------------------------ | ----------------------------------------------------- |
 | `BOOKBOSS__DATABASE__DATABASE_URL`   | SeaORM connection string (Postgres / MySQL / SQLite)  |
+| `BOOKBOSS__ENCRYPTION_SECRET`        | Used for encrypting data in the database              |
 | `BOOKBOSS__LIBRARY__LIBRARY_PATH`    | Where approved book files are stored                  |
 | `BOOKBOSS__IMPORT__BOOKDROP_PATH`    | Drop e-book files here to trigger the import pipeline |
 | `BOOKBOSS__FRONTEND__LISTEN_IP`      | Server listen address (default `0.0.0.0`)             |
