@@ -20,6 +20,28 @@ pub(super) struct OlIdentifiers {
     pub openlibrary: Option<Vec<String>>,
 }
 
+/// Top-level response from `/search.json`.
+#[derive(Debug, Deserialize)]
+pub(super) struct OlSearchResponse {
+    pub docs: Vec<OlSearchDoc>,
+}
+
+/// A single result document from `/search.json`.
+///
+/// Field completeness varies; all are optional.
+#[derive(Debug, Deserialize)]
+pub(super) struct OlSearchDoc {
+    pub title: Option<String>,
+    /// Flat list of author name strings (not objects).
+    pub author_name: Option<Vec<String>>,
+    /// All ISBNs associated with the work (mix of ISBN-10 and ISBN-13).
+    pub isbn: Option<Vec<String>>,
+    pub first_publish_year: Option<i32>,
+    pub publisher: Option<Vec<String>>,
+    /// Cover image ID — used to construct the cover URL.
+    pub cover_i: Option<i64>,
+}
+
 /// Subset of the Open Library Books API response (`jscmd=data`) used by the
 /// adapter.
 ///

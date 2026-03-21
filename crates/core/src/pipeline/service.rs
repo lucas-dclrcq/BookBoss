@@ -332,7 +332,10 @@ impl PipelineService for PipelineServiceImpl {
                     tracing::debug!(provider = name, title_score = t_score, author_score = a_score, score, "provider result scored");
                     if score >= MATCH_THRESHOLD {
                         let priority = provider_priority(name);
-                        #[allow(clippy::float_cmp, reason = "scores are computed by the same deterministic formula; exact equality is intentional")]
+                        #[allow(
+                            clippy::float_cmp,
+                            reason = "scores are computed by the same deterministic formula; exact equality is intentional"
+                        )]
                         let is_better = score > best_score || (score == best_score && priority < best_priority);
                         if is_better {
                             best_score = score;
