@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     Route,
-    components::{BookFilter, BookGrid, BookGridContext, FilterBuilder, FilterEntityOptions, ShelfBar, default_book_filter},
+    components::{BookFilter, BookGrid, BookGridContext, FilterBuilder, FilterEntityOptions, ShelfBar, default_book_filter, filter_books_by_search},
     routes::books_page::BookSummary,
 };
 
@@ -544,9 +544,12 @@ pub(crate) fn ShelfPage(token: String) -> Element {
         }
     };
 
-    // Merged book list: first page + any load-more pages.
+    // Merged book list: first page + any load-more pages, filtered by search.
     let first_books = books_resource().and_then(Result::ok).map(|p| p.books).unwrap_or_default();
-    let all_books: Vec<BookSummary> = first_books.into_iter().chain(extra_books()).collect();
+    let merged: Vec<BookSummary> = first_books.into_iter().chain(extra_books()).collect();
+    let query = crate::components::SEARCH_TEXT();
+    let all_books = filter_books_by_search(merged, &query);
+    let has_search = !query.trim().is_empty();
     let has_more = next_cursor().is_some();
 
     rsx! {
@@ -590,9 +593,15 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                         rsx! {
                             div { class: "flex-1 flex flex-col items-center justify-center py-20 text-center",
                                 p { class: "text-gray-400 text-sm",
-                                    if current_is_smart { "No books match this filter." } else { "No books on this shelf yet." }
+                                    if has_search {
+                                        "No books match your search."
+                                    } else if current_is_smart {
+                                        "No books match this filter."
+                                    } else {
+                                        "No books on this shelf yet."
+                                    }
                                 }
-                                if is_own && !current_is_smart {
+                                if !has_search && is_own && !current_is_smart {
                                     p { class: "text-gray-300 text-xs mt-1",
                                         "Drag a book here or open any book and use \"Add to Shelf\"."
                                     }

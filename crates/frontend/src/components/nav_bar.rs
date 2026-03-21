@@ -22,6 +22,7 @@ async fn trigger_bookdrop_scan() -> Result<(), ServerFnError> {
     Ok(())
 }
 
+use super::SEARCH_TEXT;
 use crate::Route;
 
 #[get("/api/v1/incoming/pending_count", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
@@ -339,6 +340,12 @@ pub(crate) fn NavBar() -> Element {
     let navigator = use_navigator();
     let mut user_menu_open = use_signal(|| false);
     let mut show_about = use_signal(|| false);
+    let route = use_route::<Route>();
+
+    let search_active = matches!(
+        route,
+        Route::BooksPage | Route::ShelfPage { .. } | Route::AuthorDetailPage { .. } | Route::SeriesDetailPage { .. }
+    );
 
     let on_logout = move |_| {
         user_menu_open.set(false);
@@ -349,8 +356,8 @@ pub(crate) fn NavBar() -> Element {
     };
 
     rsx! {
-        nav { class: "bg-indigo-700 text-white px-6 py-3 flex items-center justify-between shadow-sm",
-            div { class: "flex items-center gap-6",
+        nav { class: "bg-indigo-700 text-white px-6 py-3 flex items-center shadow-sm gap-4",
+            div { class: "flex items-center gap-6 shrink-0",
                 button {
                     class: "flex items-center cursor-pointer hover:opacity-80",
                     title: "About",
@@ -373,7 +380,54 @@ pub(crate) fn NavBar() -> Element {
                     ConversionBadge {}
                 }
             }
-            div { class: "flex items-center gap-4",
+            div { class: "flex-1 flex justify-center",
+                if search_active {
+                    div { class: "relative w-full max-w-md",
+                        // Search icon
+                        svg {
+                            class: "absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none",
+                            xmlns: "http://www.w3.org/2000/svg",
+                            fill: "none",
+                            view_box: "0 0 24 24",
+                            stroke_width: "2",
+                            stroke: "currentColor",
+                            path {
+                                stroke_linecap: "round",
+                                stroke_linejoin: "round",
+                                d: "m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z",
+                            }
+                        }
+                        input {
+                            class: "w-full pl-9 pr-8 py-1.5 rounded text-sm text-gray-900 bg-white/90 placeholder-gray-400 outline-none focus:bg-white focus:ring-2 focus:ring-indigo-300",
+                            r#type: "text",
+                            placeholder: "Search books…",
+                            value: SEARCH_TEXT(),
+                            oninput: move |e| *SEARCH_TEXT.write() = e.value(),
+                        }
+                        // Clear button
+                        if !SEARCH_TEXT().is_empty() {
+                            button {
+                                class: "absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer",
+                                onclick: move |_| *SEARCH_TEXT.write() = String::new(),
+                                svg {
+                                    class: "w-4 h-4",
+                                    xmlns: "http://www.w3.org/2000/svg",
+                                    fill: "none",
+                                    view_box: "0 0 24 24",
+                                    stroke_width: "2",
+                                    stroke: "currentColor",
+                                    path {
+                                        stroke_linecap: "round",
+                                        stroke_linejoin: "round",
+                                        d: "M6 18 18 6M6 6l12 12",
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            div { class: "flex items-center gap-4 shrink-0",
                 SuspenseBoundary {
                     fallback: |_| rsx! {},
                     AdminSettingsButton {}

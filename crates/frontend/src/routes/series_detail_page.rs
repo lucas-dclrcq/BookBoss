@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     Route,
-    components::{BookGrid, BookGridContext},
+    components::{BookGrid, BookGridContext, filter_books_by_search},
     routes::books_page::BookSummary,
 };
 
@@ -82,30 +82,37 @@ pub(crate) fn SeriesDetailPage(token: String) -> Element {
                 Some(Err(e)) => rsx! {
                     div { class: "text-red-600 text-sm", "Failed to load series: {e}" }
                 },
-                Some(Ok(series)) => rsx! {
-                    Link {
-                        to: Route::BooksPage {},
-                        class: "inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 mb-6",
-                        "← Library"
-                    }
-
-                    h1 { class: "text-2xl font-bold text-gray-900 mb-2", "{series.name}" }
-
-                    if let Some(ref desc) = series.description {
-                        p { class: "text-sm text-gray-600 leading-relaxed mb-6 max-w-prose", "{desc}" }
-                    }
-
-                    if !series.books.is_empty() {
-                        h2 { class: "text-xs font-semibold uppercase tracking-wider text-gray-500 mb-4",
-                            "Books"
+                Some(Ok(series)) => {
+                    let query = crate::components::SEARCH_TEXT();
+                    let filtered_books = filter_books_by_search(series.books, &query);
+                    let has_search = !query.trim().is_empty();
+                    rsx! {
+                        Link {
+                            to: Route::BooksPage {},
+                            class: "inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 mb-6",
+                            "← Library"
                         }
-                        BookGrid {
-                            books: series.books,
-                            context: BookGridContext::ReadOnly {
-                                current_author_token: None,
-                                current_series_token: Some(series.token.clone()),
-                            },
-                            on_action: |()| {},
+
+                        h1 { class: "text-2xl font-bold text-gray-900 mb-2", "{series.name}" }
+
+                        if let Some(ref desc) = series.description {
+                            p { class: "text-sm text-gray-600 leading-relaxed mb-6 max-w-prose", "{desc}" }
+                        }
+
+                        if filtered_books.is_empty() && has_search {
+                            p { class: "text-gray-400 text-sm mt-4", "No books match your search." }
+                        } else if !filtered_books.is_empty() {
+                            h2 { class: "text-xs font-semibold uppercase tracking-wider text-gray-500 mb-4",
+                                "Books"
+                            }
+                            BookGrid {
+                                books: filtered_books,
+                                context: BookGridContext::ReadOnly {
+                                    current_author_token: None,
+                                    current_series_token: Some(series.token.clone()),
+                                },
+                                on_action: |()| {},
+                            }
                         }
                     }
                 },

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     Route,
-    components::{BookGrid, BookGridContext, ShelfBar},
+    components::{BookGrid, BookGridContext, ShelfBar, filter_books_by_search},
     routes::{
         book_detail_page::ReadingStateDto,
         shelf_page::{ShelfSummary, list_all_accessible_shelves},
@@ -25,6 +25,8 @@ pub(crate) struct BookSummary {
     pub series_token: Option<String>,
     pub series_name: Option<String>,
     pub series_number: Option<String>,
+    pub genres: Vec<String>,
+    pub tags: Vec<String>,
     pub reading_state: Option<ReadingStateDto>,
 }
 
@@ -104,10 +106,22 @@ pub(crate) async fn hydrate_books(
         }
     }
 
+    // Load genres and tags per book.
+    let mut book_genres: Vec<Vec<String>> = Vec::with_capacity(books.len());
+    let mut book_tags: Vec<Vec<String>> = Vec::with_capacity(books.len());
+    for book in books {
+        let genres = book_service.genres_for_book(book.id).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        book_genres.push(genres.into_iter().map(|g| g.name).collect());
+
+        let tags = book_service.tags_for_book(book.id).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        book_tags.push(tags.into_iter().map(|t| t.name).collect());
+    }
+
     let summaries = books
         .iter()
         .zip(book_author_pairs.iter())
-        .map(|(book, author_pairs)| {
+        .enumerate()
+        .map(|(idx, (book, author_pairs))| {
             let mut sorted = author_pairs.clone();
             sorted.sort_by_key(|&(order, _)| order);
             let authors = sorted
@@ -131,6 +145,8 @@ pub(crate) async fn hydrate_books(
                 series_token,
                 series_name,
                 series_number: book.series_number.as_ref().map(std::string::ToString::to_string),
+                genres: book_genres[idx].clone(),
+                tags: book_tags[idx].clone(),
                 reading_state: reading_map.and_then(|m| m.get(&book.id).cloned()),
             }
         })
@@ -198,7 +214,6 @@ pub(crate) fn BooksPage() -> Element {
     let mut page_data = use_server_future(list_books)?;
     let shelves_resource = use_server_future(list_all_accessible_shelves)?;
     let shelves: Vec<ShelfSummary> = shelves_resource().and_then(std::result::Result::ok).unwrap_or_default();
-
     rsx! {
         match page_data() {
             None => rsx! {
@@ -211,19 +226,31 @@ pub(crate) fn BooksPage() -> Element {
                     "Failed to load books: {e}"
                 }
             },
-            Some(Ok(ListBooksResponse { books, can_delete_books, currently_reading })) => rsx! {
-                div { class: "flex-1 flex flex-col overflow-hidden",
-                    ShelfBar {
-                        shelves,
-                        current_shelf_token: None,
-                        on_edit_shelf: |()| {},
-                        on_delete_shelf: |()| {},
-                    }
-                    CurrentlyReadingSection { books: currently_reading }
-                    BookGrid {
-                        books,
-                        context: BookGridContext::AllBooks { can_delete: can_delete_books },
-                        on_action: move |()| page_data.restart(),
+            Some(Ok(ListBooksResponse { books, can_delete_books, currently_reading })) => {
+                let query = crate::components::SEARCH_TEXT();
+                let filtered_books = filter_books_by_search(books, &query);
+                let filtered_reading = filter_books_by_search(currently_reading, &query);
+                let has_search = !query.trim().is_empty();
+                rsx! {
+                    div { class: "flex-1 flex flex-col overflow-hidden",
+                        ShelfBar {
+                            shelves,
+                            current_shelf_token: None,
+                            on_edit_shelf: |()| {},
+                            on_delete_shelf: |()| {},
+                        }
+                        CurrentlyReadingSection { books: filtered_reading }
+                        if filtered_books.is_empty() && has_search {
+                            div { class: "flex-1 flex items-center justify-center text-gray-400 text-sm",
+                                "No books match your search."
+                            }
+                        } else {
+                            BookGrid {
+                                books: filtered_books,
+                                context: BookGridContext::AllBooks { can_delete: can_delete_books },
+                                on_action: move |()| page_data.restart(),
+                            }
+                        }
                     }
                 }
             },
