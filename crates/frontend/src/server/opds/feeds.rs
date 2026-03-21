@@ -98,14 +98,11 @@ pub async fn all_books(opds_user: OpdsUser, Query(params): Query<PaginationParam
         ..Default::default()
     };
 
-    let books = match core_services.book_service.list_books(&filter, params.start, Some(PAGE_SIZE + 1)).await {
-        Ok(b) => b,
-        Err(_) => {
-            return Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(axum::body::Body::empty())
-                .unwrap();
-        }
+    let Ok(books) = core_services.book_service.list_books(&filter, params.start, Some(PAGE_SIZE + 1)).await else {
+        return Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .body(axum::body::Body::empty())
+            .unwrap();
     };
 
     let has_next = books.len() as u64 > PAGE_SIZE;
@@ -139,14 +136,11 @@ pub async fn all_books(opds_user: OpdsUser, Query(params): Query<PaginationParam
 pub async fn shelves(opds_user: OpdsUser, Extension(core_services): Extension<Arc<CoreServices>>) -> Response {
     let now = Utc::now();
 
-    let shelf_list = match core_services.shelf_service.list_shelves_for_user(opds_user.user.id).await {
-        Ok(s) => s,
-        Err(_) => {
-            return Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(axum::body::Body::empty())
-                .unwrap();
-        }
+    let Ok(shelf_list) = core_services.shelf_service.list_shelves_for_user(opds_user.user.id).await else {
+        return Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .body(axum::body::Body::empty())
+            .unwrap();
     };
 
     let mut feed = AtomFeed::new("urn:bookboss:opds:shelves", "Shelves", now)
@@ -221,9 +215,8 @@ pub async fn shelf_books(
         Err(_) => return error_response(StatusCode::BAD_REQUEST),
     };
 
-    let shelf = match core_services.shelf_service.get_shelf(&shelf_token, user_id).await {
-        Ok(s) => s,
-        Err(_) => return error_response(StatusCode::NOT_FOUND),
+    let Ok(shelf) = core_services.shelf_service.get_shelf(&shelf_token, user_id).await else {
+        return error_response(StatusCode::NOT_FOUND);
     };
 
     let books: Vec<Book> = if shelf.shelf_type == ShelfType::Smart {
@@ -236,13 +229,12 @@ pub async fn shelf_books(
             Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR),
         }
     } else {
-        let entries = match core_services
+        let Ok(entries) = core_services
             .shelf_service
             .books_for_shelf(&shelf_token, user_id, params.start, Some(PAGE_SIZE + 1))
             .await
-        {
-            Ok(e) => e,
-            Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR),
+        else {
+            return error_response(StatusCode::INTERNAL_SERVER_ERROR);
         };
         let mut result = Vec::with_capacity(entries.len());
         for entry in &entries {
@@ -283,9 +275,8 @@ pub async fn authors(opds_user: OpdsUser, Query(params): Query<PaginationParams>
     let _ = &opds_user;
     let now = Utc::now();
 
-    let author_list = match core_services.book_service.list_authors(params.start, Some(PAGE_SIZE + 1)).await {
-        Ok(a) => a,
-        Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR),
+    let Ok(author_list) = core_services.book_service.list_authors(params.start, Some(PAGE_SIZE + 1)).await else {
+        return error_response(StatusCode::INTERNAL_SERVER_ERROR);
     };
 
     let has_next = author_list.len() as u64 > PAGE_SIZE;
@@ -335,9 +326,8 @@ pub async fn author_books(
         ..Default::default()
     };
 
-    let books = match core_services.book_service.list_books(&filter, params.start, Some(PAGE_SIZE + 1)).await {
-        Ok(b) => b,
-        Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR),
+    let Ok(books) = core_services.book_service.list_books(&filter, params.start, Some(PAGE_SIZE + 1)).await else {
+        return error_response(StatusCode::INTERNAL_SERVER_ERROR);
     };
 
     let has_next = books.len() as u64 > PAGE_SIZE;
@@ -370,9 +360,8 @@ pub async fn series_list(opds_user: OpdsUser, Query(params): Query<PaginationPar
     let _ = &opds_user;
     let now = Utc::now();
 
-    let all_series = match core_services.book_service.list_series(params.start, Some(PAGE_SIZE + 1)).await {
-        Ok(s) => s,
-        Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR),
+    let Ok(all_series) = core_services.book_service.list_series(params.start, Some(PAGE_SIZE + 1)).await else {
+        return error_response(StatusCode::INTERNAL_SERVER_ERROR);
     };
 
     let has_next = all_series.len() as u64 > PAGE_SIZE;
@@ -422,9 +411,8 @@ pub async fn series_books(
         ..Default::default()
     };
 
-    let books = match core_services.book_service.list_books(&filter, params.start, Some(PAGE_SIZE + 1)).await {
-        Ok(b) => b,
-        Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR),
+    let Ok(books) = core_services.book_service.list_books(&filter, params.start, Some(PAGE_SIZE + 1)).await else {
+        return error_response(StatusCode::INTERNAL_SERVER_ERROR);
     };
 
     let has_next = books.len() as u64 > PAGE_SIZE;
@@ -497,9 +485,8 @@ pub async fn search(opds_user: OpdsUser, Query(params): Query<SearchParams>, Ext
         value: q.clone(),
     }));
 
-    let books = match core_services.library_service.search_books(&filter, params.start, Some(PAGE_SIZE + 1)).await {
-        Ok(b) => b,
-        Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR),
+    let Ok(books) = core_services.library_service.search_books(&filter, params.start, Some(PAGE_SIZE + 1)).await else {
+        return error_response(StatusCode::INTERNAL_SERVER_ERROR);
     };
 
     let has_next = books.len() as u64 > PAGE_SIZE;
@@ -644,9 +631,8 @@ pub async fn serve_download(
         Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR),
     };
 
-    let files = match core_services.book_service.files_for_book(book.id).await {
-        Ok(f) => f,
-        Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR),
+    let Ok(files) = core_services.book_service.files_for_book(book.id).await else {
+        return error_response(StatusCode::INTERNAL_SERVER_ERROR);
     };
 
     let enriched_file = files.iter().find(|f| f.format == format && f.file_role == FileRole::Enriched);

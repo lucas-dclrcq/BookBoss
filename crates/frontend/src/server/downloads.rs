@@ -36,9 +36,8 @@ pub(crate) async fn serve_book_file(
         Err(_) => return Response::builder().status(StatusCode::BAD_REQUEST).body(Body::empty()).unwrap(),
     };
 
-    let format = match format_str.to_lowercase().parse::<FileFormat>() {
-        Ok(f) => f,
-        Err(_) => return Response::builder().status(StatusCode::BAD_REQUEST).body(Body::empty()).unwrap(),
+    let Ok(format) = format_str.to_lowercase().parse::<FileFormat>() else {
+        return Response::builder().status(StatusCode::BAD_REQUEST).body(Body::empty()).unwrap();
     };
 
     let book = match core_services.book_service.find_book_by_token(&token).await {

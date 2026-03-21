@@ -38,9 +38,8 @@ pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>
     };
 
     // 1. Parse format from path param — only epub and kepub are served via Kobo.
-    let format = match format_str.parse::<FileFormat>() {
-        Ok(f @ (FileFormat::Epub | FileFormat::Kepub)) => f,
-        _ => return StatusCode::NOT_FOUND.into_response(),
+    let Ok(format @ (FileFormat::Epub | FileFormat::Kepub)) = format_str.parse::<FileFormat>() else {
+        return StatusCode::NOT_FOUND.into_response();
     };
 
     // 2. Parse the BookToken from the encoded portion (no prefix).

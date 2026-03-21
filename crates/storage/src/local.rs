@@ -53,13 +53,11 @@ fn normalize_jpeg(data: &[u8]) -> Vec<u8> {
     const MAX_H: u32 = 1536;
     const QUALITY: u8 = 85;
 
-    let reader = match ImageReader::new(std::io::Cursor::new(data)).with_guessed_format() {
-        Ok(r) => r,
-        Err(_) => return data.to_vec(),
+    let Ok(reader) = ImageReader::new(std::io::Cursor::new(data)).with_guessed_format() else {
+        return data.to_vec();
     };
-    let img = match reader.decode() {
-        Ok(i) => i,
-        Err(_) => return data.to_vec(),
+    let Ok(img) = reader.decode() else {
+        return data.to_vec();
     };
 
     let img = if img.width() > MAX_W || img.height() > MAX_H {
