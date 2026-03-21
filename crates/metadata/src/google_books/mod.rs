@@ -7,14 +7,20 @@ use bb_core::{
     import::ImportSource,
     pipeline::{ExtractedAuthor, ExtractedIdentifier, ExtractedMetadata, MetadataProvider, ProviderBook},
 };
-use model::{VolumeInfo, VolumeList};
+use bb_utils::similarity::{author_similarity, combined_score, title_similarity};
+use model::{Volume, VolumeInfo, VolumeList};
 use tracing::warn;
+
+/// Minimum combined similarity score for an ISBN search result to be accepted
+/// without falling back to a title search.
+const CANDIDATE_THRESHOLD: f32 = 0.5;
 
 /// Metadata provider backed by the Google Books Volumes API.
 ///
-/// Performs ISBN lookup via `q=isbn:{isbn}`, maps the first result to
-/// [`ProviderBook`], and fetches cover art bytes internally. Returns `None`
-/// when no ISBN is available or Google Books has no matching record.
+/// Tries ISBN lookup first. If the result's title/author score falls below
+/// [`CANDIDATE_THRESHOLD`], or no ISBN is available, falls back to a title
+/// search returning up to 10 candidates which are scored and the best is
+/// returned. Returns `None` when neither strategy finds a result.
 pub struct GoogleBooksAdapter {
     client: reqwest::Client,
     api_token: String,
@@ -164,21 +170,12 @@ impl GoogleBooksAdapter {
             }
         }
     }
-}
 
-#[async_trait]
-impl MetadataProvider for GoogleBooksAdapter {
-    fn name(&self) -> &'static str {
-        "Google Books"
-    }
-
-    async fn enrich(&self, extracted: &ExtractedMetadata) -> Result<Option<ProviderBook>, Error> {
-        let Some(isbn) = Self::find_isbn(extracted) else {
-            return Ok(None);
-        };
-
+    /// Searches Google Books by ISBN; returns the first matching volume or
+    /// `None`.
+    async fn search_isbn(&self, isbn: &str) -> Result<Option<Volume>, Error> {
         let url = format!("{}/volumes?q=isbn:{isbn}&key={}", self.base_url, self.api_token);
-
+        let start = std::time::Instant::now();
         let response: VolumeList = self
             .client
             .get(&url)
@@ -188,19 +185,132 @@ impl MetadataProvider for GoogleBooksAdapter {
             .json()
             .await
             .map_err(|e| Error::Infrastructure(format!("Google Books response parse failed: {e}")))?;
+        tracing::debug!(isbn, elapsed_ms = start.elapsed().as_millis(), "Google Books ISBN search completed");
+        Ok(response.items.and_then(|mut items| items.drain(..).next()))
+    }
 
-        let Some(volume) = response.items.and_then(|mut items| items.drain(..).next()) else {
-            return Ok(None);
+    /// Searches Google Books by title; returns up to 10 candidate volumes.
+    ///
+    /// Uses [`reqwest::Url`] to properly percent-encode the title.
+    async fn search_title(&self, title: &str) -> Result<Vec<Volume>, Error> {
+        let mut url = reqwest::Url::parse(&format!("{}/volumes", self.base_url))
+            .map_err(|e| Error::Infrastructure(format!("Google Books URL construction failed: {e}")))?;
+        url.query_pairs_mut()
+            .append_pair("q", &format!("intitle:{title}"))
+            .append_pair("key", &self.api_token)
+            .append_pair("maxResults", "10");
+        let start = std::time::Instant::now();
+        let response: VolumeList = self
+            .client
+            .get(url)
+            .send()
+            .await
+            .map_err(|e| Error::Infrastructure(format!("Google Books request failed: {e}")))?
+            .json()
+            .await
+            .map_err(|e| Error::Infrastructure(format!("Google Books response parse failed: {e}")))?;
+        tracing::debug!(title, elapsed_ms = start.elapsed().as_millis(), "Google Books title search completed");
+        Ok(response.items.unwrap_or_default())
+    }
+
+    /// Scores a candidate volume against an extracted title and primary author.
+    /// Uses `0.5` as a neutral author score when either side is missing.
+    fn score_candidate(volume: &Volume, title: Option<&str>, author: Option<&str>) -> f32 {
+        let t_score = match (title, volume.volume_info.title.as_deref()) {
+            (Some(a), Some(b)) => title_similarity(a, b),
+            _ => 0.0,
+        };
+        let a_score = match (author, volume.volume_info.authors.as_deref().and_then(|a| a.first())) {
+            (Some(a), Some(b)) => author_similarity(a, b),
+            _ => 0.5,
+        };
+        combined_score(t_score, a_score)
+    }
+}
+
+#[async_trait]
+impl MetadataProvider for GoogleBooksAdapter {
+    fn name(&self) -> &'static str {
+        "Google Books"
+    }
+
+    async fn enrich(&self, extracted: &ExtractedMetadata) -> Result<Option<ProviderBook>, Error> {
+        let isbn = Self::find_isbn(extracted);
+        let title = extracted.title.as_deref();
+        let author = extracted
+            .authors
+            .as_deref()
+            .and_then(|a| a.iter().min_by_key(|a| a.sort_order))
+            .map(|a| a.name.as_str());
+
+        let mut title_search_performed = false;
+
+        // ── Step 1: ISBN search ───────────────────────────────────────────────
+        let isbn_volume = if let Some(ref isbn_str) = isbn {
+            self.search_isbn(isbn_str).await?
+        } else {
+            None
         };
 
-        let metadata = Self::map_to_extracted(&volume.id, &volume.volume_info);
-        let cover_bytes = self.fetch_cover(&volume.volume_info).await;
+        // ── Step 2: Validate ISBN result against embedded title/author ────────
+        //
+        // If no title is available there is nothing to validate against, so the
+        // ISBN result is accepted as-is (the pipeline will score it 0.0 and
+        // reject it anyway). If validation fails, fall through to title search.
+        let best_volume = match (isbn_volume, title) {
+            (Some(vol), Some(t)) => {
+                let score = Self::score_candidate(&vol, Some(t), author);
+                if score >= CANDIDATE_THRESHOLD {
+                    Some(vol)
+                } else {
+                    tracing::debug!(score, "Google Books ISBN result score too low; falling back to title search");
+                    None
+                }
+            }
+            (Some(vol), None) => Some(vol),
+            (None, _) => None,
+        };
 
-        Ok(Some(ProviderBook {
-            metadata,
-            cover_bytes,
-            source: ImportSource::GoogleBooks,
-        }))
+        // ── Step 3: Title search fallback ─────────────────────────────────────
+        let best_volume = if best_volume.is_none() {
+            if let Some(title_str) = title {
+                title_search_performed = true;
+                let candidates = self.search_title(title_str).await?;
+                tracing::debug!(candidates = candidates.len(), "Google Books title search returned candidates");
+                candidates.into_iter().max_by(|a, b| {
+                    let sa = Self::score_candidate(a, title, author);
+                    let sb = Self::score_candidate(b, title, author);
+                    sa.partial_cmp(&sb).unwrap_or(std::cmp::Ordering::Equal)
+                })
+            } else {
+                None
+            }
+        } else {
+            best_volume
+        };
+
+        // ── Log summary and return ─────────────────────────────────────────────
+        let final_score = best_volume.as_ref().map(|v| Self::score_candidate(v, title, author));
+        tracing::debug!(
+            isbn = ?isbn,
+            title = ?title,
+            title_search_performed,
+            score = ?final_score,
+            "Google Books enrichment completed"
+        );
+
+        match best_volume {
+            Some(volume) => {
+                let metadata = Self::map_to_extracted(&volume.id, &volume.volume_info);
+                let cover_bytes = self.fetch_cover(&volume.volume_info).await;
+                Ok(Some(ProviderBook {
+                    metadata,
+                    cover_bytes,
+                    source: ImportSource::GoogleBooks,
+                }))
+            }
+            None => Ok(None),
+        }
     }
 }
 
@@ -221,6 +331,34 @@ mod tests {
             }]),
             ..Default::default()
         }
+    }
+
+    fn extracted_with_isbn_and_title(isbn: &str, title: &str, author: &str) -> ExtractedMetadata {
+        ExtractedMetadata {
+            title: Some(title.to_string()),
+            authors: Some(vec![ExtractedAuthor {
+                name: author.to_string(),
+                role: Some(AuthorRole::Author),
+                sort_order: 0,
+            }]),
+            identifiers: Some(vec![ExtractedIdentifier {
+                identifier_type: IdentifierType::Isbn13,
+                value: isbn.to_string(),
+            }]),
+            ..Default::default()
+        }
+    }
+
+    fn volume_item(id: &str, title: &str, author: &str, isbn: &str) -> serde_json::Value {
+        serde_json::json!({
+            "id": id,
+            "volumeInfo": {
+                "title": title,
+                "authors": [author],
+                "industryIdentifiers": [{"type": "ISBN_13", "identifier": isbn}],
+                "imageLinks": null
+            }
+        })
     }
 
     fn volume_response(isbn: &str, cover_url: &str) -> serde_json::Value {
@@ -247,6 +385,10 @@ mod tests {
         })
     }
 
+    fn empty_response() -> serde_json::Value {
+        serde_json::json!({"totalItems": 0})
+    }
+
     #[tokio::test]
     async fn enrich_returns_none_when_no_isbn() {
         let adapter = GoogleBooksAdapter::new("token");
@@ -260,9 +402,7 @@ mod tests {
 
         Mock::given(method("GET"))
             .and(path("/volumes"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "totalItems": 0
-            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(empty_response()))
             .mount(&server)
             .await;
 
@@ -275,8 +415,6 @@ mod tests {
     async fn enrich_maps_book_fields() {
         let server = MockServer::start().await;
         let isbn = "9780765326355";
-        // Thumbnail URL points at mock server; zoom=1 so fetch_cover replaces it with
-        // zoom=0.
         let cover_url = format!("{}/cover?id=abc123&zoom=1", server.uri());
 
         Mock::given(method("GET"))
@@ -293,6 +431,7 @@ mod tests {
             .mount(&server)
             .await;
 
+        // No title in extracted — ISBN result accepted without validation.
         let adapter = GoogleBooksAdapter::with_base_url("token", server.uri());
         let result = adapter.enrich(&extracted_with_isbn13(isbn)).await.unwrap();
         let book = result.expect("expected ProviderBook");
@@ -318,6 +457,114 @@ mod tests {
         );
 
         assert_eq!(book.cover_bytes.as_deref(), Some(b"fake-cover".as_slice()));
+    }
+
+    #[tokio::test]
+    async fn enrich_accepts_isbn_result_when_title_matches() {
+        let server = MockServer::start().await;
+        let isbn = "9780765326355";
+        let cover_url = format!("{}/cover?id=abc123", server.uri());
+
+        Mock::given(method("GET"))
+            .and(path("/volumes"))
+            .and(query_param("q", format!("isbn:{isbn}")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(volume_response(isbn, &cover_url)))
+            .mount(&server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/cover"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(b"fake-cover".to_vec()))
+            .mount(&server)
+            .await;
+
+        let extracted = extracted_with_isbn_and_title(isbn, "The Way of Kings", "Brandon Sanderson");
+        let adapter = GoogleBooksAdapter::with_base_url("token", server.uri());
+        let result = adapter.enrich(&extracted).await.unwrap();
+        assert_eq!(result.expect("expected ProviderBook").metadata.title.as_deref(), Some("The Way of Kings"));
+        // Only one volumes request (no title search fallback).
+        assert_eq!(
+            server.received_requests().await.unwrap().iter().filter(|r| r.url.path() == "/volumes").count(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn enrich_falls_back_to_title_search_when_isbn_is_wrong_book() {
+        let server = MockServer::start().await;
+        let isbn = "9781250281470";
+
+        // ISBN search returns the wrong book.
+        Mock::given(method("GET"))
+            .and(path("/volumes"))
+            .and(query_param("q", format!("isbn:{isbn}")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "totalItems": 1,
+                "items": [volume_item("bad1", "Some Completely Different Book", "Wrong Author", isbn)]
+            })))
+            .mount(&server)
+            .await;
+
+        // Title search returns the correct book.
+        Mock::given(method("GET"))
+            .and(path("/volumes"))
+            .and(query_param("q", "intitle:The Correct Book Title"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "totalItems": 1,
+                "items": [volume_item("good1", "The Correct Book Title", "Right Author", "9780000000001")]
+            })))
+            .mount(&server)
+            .await;
+
+        let extracted = extracted_with_isbn_and_title(isbn, "The Correct Book Title", "Right Author");
+        let adapter = GoogleBooksAdapter::with_base_url("token", server.uri());
+        let result = adapter.enrich(&extracted).await.unwrap();
+        let book = result.expect("expected ProviderBook");
+
+        assert_eq!(book.metadata.title.as_deref(), Some("The Correct Book Title"));
+        assert_eq!(
+            server.received_requests().await.unwrap().iter().filter(|r| r.url.path() == "/volumes").count(),
+            2
+        );
+    }
+
+    #[tokio::test]
+    async fn enrich_picks_best_candidate_from_title_search() {
+        let server = MockServer::start().await;
+
+        // No ISBN — goes straight to title search; returns two candidates.
+        Mock::given(method("GET"))
+            .and(path("/volumes"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "totalItems": 2,
+                "items": [
+                    volume_item("1", "The Hobbit", "Wrong Author", "9780000000001"),
+                    volume_item("2", "The Hobbit", "J.R.R. Tolkien", "9780000000002")
+                ]
+            })))
+            .mount(&server)
+            .await;
+
+        let extracted = ExtractedMetadata {
+            title: Some("The Hobbit".to_string()),
+            authors: Some(vec![ExtractedAuthor {
+                name: "J.R.R. Tolkien".to_string(),
+                role: Some(AuthorRole::Author),
+                sort_order: 0,
+            }]),
+            ..Default::default()
+        };
+
+        let adapter = GoogleBooksAdapter::with_base_url("token", server.uri());
+        let result = adapter.enrich(&extracted).await.unwrap();
+        let book = result.expect("expected ProviderBook");
+
+        let identifiers = book.metadata.identifiers.as_ref().expect("expected identifiers");
+        assert!(
+            identifiers
+                .iter()
+                .any(|id| id.identifier_type == IdentifierType::GoogleBooks && id.value == "2")
+        );
     }
 
     #[test]

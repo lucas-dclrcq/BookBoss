@@ -191,6 +191,17 @@ fn detect_cover_filename(data: &[u8]) -> &'static str {
     }
 }
 
+/// Priority order for breaking ties between providers with equal scores.
+/// Lower value = preferred. Unknown providers fall back to `u8::MAX`.
+fn provider_priority(name: &str) -> u8 {
+    match name {
+        "Hardcover" => 0,
+        "Google Books" => 1,
+        "Open Library" => 2,
+        _ => u8::MAX,
+    }
+}
+
 /// Normalize a name string: trim edges and collapse interior whitespace runs
 /// to a single space. Ensures "A  B" and "A B" resolve to the same author.
 fn normalize_name(s: &str) -> String {
@@ -304,6 +315,7 @@ impl PipelineService for PipelineServiceImpl {
                     .map(|a| a.name.as_str());
                 let mut best_idx: Option<usize> = None;
                 let mut best_score: f32 = -1.0;
+                let mut best_priority = u8::MAX;
                 for (i, (name, pb)) in provider_results.iter().enumerate() {
                     let t_score = match (extracted_title, pb.metadata.title.as_deref()) {
                         (Some(ext), Some(prov)) => title_similarity(ext, prov),
@@ -318,9 +330,15 @@ impl PipelineService for PipelineServiceImpl {
                     };
                     let score = combined_score(t_score, a_score);
                     tracing::debug!(provider = name, title_score = t_score, author_score = a_score, score, "provider result scored");
-                    if score >= MATCH_THRESHOLD && score > best_score {
-                        best_score = score;
-                        best_idx = Some(i);
+                    if score >= MATCH_THRESHOLD {
+                        let priority = provider_priority(name);
+                        #[allow(clippy::float_cmp, reason = "scores are computed by the same deterministic formula; exact equality is intentional")]
+                        let is_better = score > best_score || (score == best_score && priority < best_priority);
+                        if is_better {
+                            best_score = score;
+                            best_priority = priority;
+                            best_idx = Some(i);
+                        }
                     }
                 }
 
