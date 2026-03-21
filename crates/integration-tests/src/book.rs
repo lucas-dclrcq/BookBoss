@@ -39,10 +39,7 @@ async fn list_books_filters_by_status() {
     fixtures::insert_book(&ctx.repos, "Available Book", BookStatus::Available).await;
     fixtures::insert_book(&ctx.repos, "Incoming Book", BookStatus::Incoming).await;
 
-    let filter = BookQuery {
-        status: Some(BookStatus::Available),
-        ..Default::default()
-    };
+    let filter = BookQuery::default();
     let books = ctx.services.book_service.list_books(&filter, None, None).await.unwrap();
 
     assert_eq!(books.len(), 1);

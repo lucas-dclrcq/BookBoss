@@ -44,7 +44,7 @@ use {
     axum_session_auth::{Auth, Rights},
     bb_core::{
         CoreServices,
-        book::{AuthorToken, Book, BookQuery, BookStatus, SeriesToken},
+        book::{AuthorToken, Book, BookQuery, SeriesToken},
         reading::ReadStatus,
         types::Capability,
     },
@@ -151,10 +151,7 @@ async fn list_books() -> Result<ListBooksResponse, ServerFnError> {
         .validate(&current_user, &Method::POST, None)
         .await;
 
-    let filter = BookQuery {
-        status: Some(BookStatus::Available),
-        ..Default::default()
-    };
+    let filter = BookQuery::default();
     let books = core_services
         .book_service
         .list_books(&filter, None, None)

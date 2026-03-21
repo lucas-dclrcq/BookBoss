@@ -161,14 +161,12 @@ impl BookRepository for BookRepositoryAdapter {
 
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
-        let mut query = prelude::Books::find().order_by_asc(books::Column::Id);
+        let mut query = prelude::Books::find()
+            .filter(books::Column::Status.eq("available"))
+            .order_by_asc(books::Column::Id);
 
         if let Some(start_id) = start_id {
             query = query.filter(books::Column::Id.gte(start_id as i64));
-        }
-
-        if let Some(status) = &filter.status {
-            query = query.filter(books::Column::Status.eq(status.as_str()));
         }
 
         if let Some(series_id) = filter.series_id {
@@ -891,10 +889,7 @@ mod tests {
             .await
             .unwrap();
 
-        let filter = BookQuery {
-            status: Some(BookStatus::Available),
-            ..Default::default()
-        };
+        let filter = BookQuery::default();
         let results = svc.book_repository().list_books(&*tx, &filter, None, None).await.unwrap();
 
         assert_eq!(results.len(), 1);

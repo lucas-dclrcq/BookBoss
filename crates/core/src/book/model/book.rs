@@ -103,10 +103,11 @@ impl FromStr for BookStatus {
 
 /// Filter criteria for listing books.
 ///
-/// All set fields are `ANDed` together. An empty filter returns all books.
+/// Only `Available` books are returned — status is not a caller-controlled
+/// dimension. All set fields are `ANDed` together. An empty filter returns
+/// all available books.
 #[derive(Debug, Clone, Default)]
 pub struct BookQuery {
-    pub status: Option<BookStatus>,
     pub series_id: Option<SeriesId>,
     pub author_id: Option<AuthorId>,
     pub genre_id: Option<GenreId>,

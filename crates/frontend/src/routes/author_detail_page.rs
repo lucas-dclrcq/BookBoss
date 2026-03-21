@@ -20,7 +20,7 @@ use {
     crate::routes::{books_page::hydrate_books, server_helpers::authenticated_user},
     crate::server::AuthSession,
     bb_core::CoreServices,
-    bb_core::book::{AuthorToken, BookQuery, BookStatus},
+    bb_core::book::{AuthorToken, BookQuery},
     std::str::FromStr,
     std::sync::Arc,
 };
@@ -41,7 +41,6 @@ async fn get_author(token: String) -> Result<AuthorPageData, ServerFnError> {
 
     let filter = BookQuery {
         author_id: Some(author.id),
-        status: Some(BookStatus::Available),
         ..Default::default()
     };
     let books = book_service

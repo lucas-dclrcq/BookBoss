@@ -11,7 +11,7 @@ use axum::{
 };
 use bb_core::{
     CoreServices,
-    book::{AuthorToken, Book, BookQuery, BookStatus, BookToken, FileFormat, FileRole, SeriesToken},
+    book::{AuthorToken, Book, BookQuery, BookToken, FileFormat, FileRole, SeriesToken},
     filter::{BookFilter, FilterRule, TextOp},
     shelf::ShelfType,
 };
@@ -93,10 +93,7 @@ pub async fn all_books(opds_user: OpdsUser, Query(params): Query<PaginationParam
     let _ = &opds_user;
     let now = Utc::now();
 
-    let filter = BookQuery {
-        status: Some(BookStatus::Available),
-        ..Default::default()
-    };
+    let filter = BookQuery::default();
 
     let Ok(books) = core_services.book_service.list_books(&filter, params.start, Some(PAGE_SIZE + 1)).await else {
         return Response::builder()
@@ -321,7 +318,6 @@ pub async fn author_books(
     };
 
     let filter = BookQuery {
-        status: Some(BookStatus::Available),
         author_id: Some(author_id),
         ..Default::default()
     };
@@ -406,7 +402,6 @@ pub async fn series_books(
     };
 
     let filter = BookQuery {
-        status: Some(BookStatus::Available),
         series_id: Some(series_id),
         ..Default::default()
     };

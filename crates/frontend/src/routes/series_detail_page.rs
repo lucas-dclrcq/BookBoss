@@ -20,7 +20,7 @@ use {
     crate::routes::{books_page::hydrate_books, server_helpers::authenticated_user},
     crate::server::AuthSession,
     bb_core::CoreServices,
-    bb_core::book::{BookQuery, BookStatus, SeriesToken},
+    bb_core::book::{BookQuery, SeriesToken},
     std::str::FromStr,
     std::sync::Arc,
 };
@@ -41,7 +41,6 @@ async fn get_series(token: String) -> Result<SeriesPageData, ServerFnError> {
 
     let filter = BookQuery {
         series_id: Some(series.id),
-        status: Some(BookStatus::Available),
         ..Default::default()
     };
     let mut books = book_service
