@@ -123,7 +123,7 @@ fn IncomingBadge() -> Element {
         {count_opt.map(|count| {
             let on_incoming_page = route == Route::IncomingPage {};
             rsx! {
-                div { class: "flex items-center gap-1",
+                div { class: "flex items-center gap-2",
                     Link { to: Route::IncomingPage {}, class: "relative text-sm hover:text-indigo-200 flex items-center gap-1.5",
                         "Incoming"
                         if count > 0 {
