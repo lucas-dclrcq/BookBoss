@@ -11,6 +11,7 @@ repository = { workspace = true }
 
 [dependencies]
 bb-core.workspace = true
+bb-utils.workspace = true
 
 async-trait.workspace = true
 chrono.workspace = true

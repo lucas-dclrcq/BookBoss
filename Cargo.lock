@@ -888,6 +888,7 @@ version = "0.5.1"
 dependencies = [
  "async-trait",
  "bb-core",
+ "bb-utils",
  "chrono",
  "reqwest 0.13.2",
  "rust_decimal",

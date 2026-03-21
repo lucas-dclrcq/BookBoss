@@ -7,16 +7,21 @@ use bb_core::{
     import::ImportSource,
     pipeline::{ExtractedAuthor, ExtractedIdentifier, ExtractedMetadata, MetadataProvider, ProviderBook},
 };
+use bb_utils::similarity::{author_similarity, combined_score, title_similarity};
 use model::{GraphQlResponse, HcBookDocument};
 use rust_decimal::Decimal;
 use tracing::warn;
 
+/// Minimum combined similarity score for an ISBN search result to be accepted
+/// without falling back to a title search.
+const CANDIDATE_THRESHOLD: f32 = 0.5;
+
 /// Metadata provider backed by the Hardcover GraphQL API.
 ///
-/// Performs ISBN lookup via the `search` query with `query_type: "ISBN"`,
-/// maps the first result to [`ProviderBook`], and fetches cover art bytes
-/// internally. Returns `None` when no ISBN is available or Hardcover has
-/// no matching record.
+/// Tries ISBN lookup first. If the result's title/author score falls below
+/// [`CANDIDATE_THRESHOLD`], or no ISBN is available, falls back to a title
+/// search returning up to 10 candidates which are scored and the best
+/// is returned. Returns `None` when neither strategy finds a result.
 pub struct HardcoverAdapter {
     client: reqwest::Client,
     api_token: String,
@@ -176,21 +181,12 @@ impl HardcoverAdapter {
             }
         }
     }
-}
 
-#[async_trait]
-impl MetadataProvider for HardcoverAdapter {
-    fn name(&self) -> &'static str {
-        "Hardcover"
-    }
-
-    async fn enrich(&self, extracted: &ExtractedMetadata) -> Result<Option<ProviderBook>, Error> {
-        let Some(isbn) = Self::find_isbn(extracted) else {
-            return Ok(None);
-        };
-
+    /// Searches Hardcover by ISBN; returns the first matching document or
+    /// `None`.
+    async fn search_isbn(&self, isbn: &str) -> Result<Option<HcBookDocument>, Error> {
         let query = format!(r#"query ISBNLookup {{ search(query: "{isbn}", query_type: "ISBN", per_page: 1, page: 1) {{ results }} }}"#);
-
+        let start = std::time::Instant::now();
         let response: GraphQlResponse = self
             .client
             .post(&self.base_url)
@@ -202,20 +198,129 @@ impl MetadataProvider for HardcoverAdapter {
             .json()
             .await
             .map_err(|e| Error::Infrastructure(format!("Hardcover response parse failed: {e}")))?;
+        tracing::debug!(isbn, elapsed_ms = start.elapsed().as_millis(), "Hardcover ISBN search completed");
+        Ok(response.data.search.results.hits.and_then(|mut h| h.drain(..).next()).map(|h| h.document))
+    }
 
-        let Some(hit) = response.data.search.results.hits.and_then(|mut h| h.drain(..).next()) else {
-            return Ok(None);
+    /// Searches Hardcover by title; returns up to 10 candidate documents.
+    async fn search_title(&self, title: &str) -> Result<Vec<HcBookDocument>, Error> {
+        let escaped = title.replace('\\', "\\\\").replace('"', "\\\"");
+        let query = format!(r#"query TitleLookup {{ search(query: "{escaped}", query_type: "DEFAULT", per_page: 10, page: 1) {{ results }} }}"#);
+        let start = std::time::Instant::now();
+        let response: GraphQlResponse = self
+            .client
+            .post(&self.base_url)
+            .bearer_auth(&self.api_token)
+            .json(&serde_json::json!({ "query": query }))
+            .send()
+            .await
+            .map_err(|e| Error::Infrastructure(format!("Hardcover request failed: {e}")))?
+            .json()
+            .await
+            .map_err(|e| Error::Infrastructure(format!("Hardcover response parse failed: {e}")))?;
+        tracing::debug!(title, elapsed_ms = start.elapsed().as_millis(), "Hardcover title search completed");
+        Ok(response.data.search.results.hits.unwrap_or_default().into_iter().map(|h| h.document).collect())
+    }
+
+    /// Scores a candidate document against an extracted title and primary
+    /// author. Uses `0.5` as a neutral author score when either side is
+    /// missing.
+    fn score_candidate(doc: &HcBookDocument, title: Option<&str>, author: Option<&str>) -> f32 {
+        let t_score = match (title, doc.title.as_deref()) {
+            (Some(a), Some(b)) => title_similarity(a, b),
+            _ => 0.0,
+        };
+        let a_score = match (author, doc.contributions.as_ref().and_then(|c| c.first()).and_then(|c| c.author.as_ref())) {
+            (Some(a), Some(b)) => author_similarity(a, &b.name),
+            _ => 0.5,
+        };
+        combined_score(t_score, a_score)
+    }
+}
+
+#[async_trait]
+impl MetadataProvider for HardcoverAdapter {
+    fn name(&self) -> &'static str {
+        "Hardcover"
+    }
+
+    async fn enrich(&self, extracted: &ExtractedMetadata) -> Result<Option<ProviderBook>, Error> {
+        let isbn = Self::find_isbn(extracted);
+        let title = extracted.title.as_deref();
+        let author = extracted
+            .authors
+            .as_deref()
+            .and_then(|a| a.iter().min_by_key(|a| a.sort_order))
+            .map(|a| a.name.as_str());
+
+        let mut title_search_performed = false;
+
+        // ── Step 1: ISBN search ───────────────────────────────────────────────
+        let isbn_doc = if let Some(ref isbn_str) = isbn {
+            self.search_isbn(isbn_str).await?
+        } else {
+            None
         };
 
-        let doc = &hit.document;
-        let metadata = Self::map_to_extracted(doc);
-        let cover_bytes = self.fetch_cover(doc).await;
+        // ── Step 2: Validate ISBN result against embedded title/author ────────
+        //
+        // If no title is available there is nothing to validate against, so the
+        // ISBN result is accepted as-is (the pipeline will score it 0.0 and
+        // reject it anyway). If validation fails, fall through to title search.
+        let best_doc = match (isbn_doc, title) {
+            (Some(doc), Some(t)) => {
+                let score = Self::score_candidate(&doc, Some(t), author);
+                if score >= CANDIDATE_THRESHOLD {
+                    Some(doc)
+                } else {
+                    tracing::debug!(score, "Hardcover ISBN result score too low; falling back to title search");
+                    None
+                }
+            }
+            (Some(doc), None) => Some(doc),
+            (None, _) => None,
+        };
 
-        Ok(Some(ProviderBook {
-            metadata,
-            cover_bytes,
-            source: ImportSource::Hardcover,
-        }))
+        // ── Step 3: Title search fallback ─────────────────────────────────────
+        let best_doc = if best_doc.is_none() {
+            if let Some(title_str) = title {
+                title_search_performed = true;
+                let candidates = self.search_title(title_str).await?;
+                tracing::debug!(candidates = candidates.len(), "Hardcover title search returned candidates");
+                candidates.into_iter().max_by(|a, b| {
+                    let sa = Self::score_candidate(a, title, author);
+                    let sb = Self::score_candidate(b, title, author);
+                    sa.partial_cmp(&sb).unwrap_or(std::cmp::Ordering::Equal)
+                })
+            } else {
+                None
+            }
+        } else {
+            best_doc
+        };
+
+        // ── Log summary and return ─────────────────────────────────────────────
+        let final_score = best_doc.as_ref().map(|doc| Self::score_candidate(doc, title, author));
+        tracing::debug!(
+            isbn = ?isbn,
+            title = ?title,
+            title_search_performed,
+            score = ?final_score,
+            "Hardcover enrichment completed"
+        );
+
+        match best_doc {
+            Some(doc) => {
+                let metadata = Self::map_to_extracted(&doc);
+                let cover_bytes = self.fetch_cover(&doc).await;
+                Ok(Some(ProviderBook {
+                    metadata,
+                    cover_bytes,
+                    source: ImportSource::Hardcover,
+                }))
+            }
+            None => Ok(None),
+        }
     }
 }
 
@@ -236,6 +341,51 @@ mod tests {
             }]),
             ..Default::default()
         }
+    }
+
+    fn extracted_with_isbn_and_title(isbn: &str, title: &str, author: &str) -> ExtractedMetadata {
+        ExtractedMetadata {
+            title: Some(title.to_string()),
+            authors: Some(vec![ExtractedAuthor {
+                name: author.to_string(),
+                role: Some(AuthorRole::Author),
+                sort_order: 0,
+            }]),
+            identifiers: Some(vec![ExtractedIdentifier {
+                identifier_type: IdentifierType::Isbn13,
+                value: isbn.to_string(),
+            }]),
+            ..Default::default()
+        }
+    }
+
+    fn book_document(id: &str, title: &str, author: &str, isbn: &str) -> serde_json::Value {
+        serde_json::json!({
+            "id": id,
+            "title": title,
+            "description": "A great book",
+            "author_names": [author],
+            "contribution_types": ["Author"],
+            "contributions": [{"author": {"name": author}}],
+            "image": {"url": null},
+            "isbns": [isbn],
+            "release_year": 2010,
+            "series_names": [],
+            "featured_series": null
+        })
+    }
+
+    fn search_response_for(doc: &serde_json::Value) -> serde_json::Value {
+        serde_json::json!({
+            "data": {
+                "search": {
+                    "results": {
+                        "found": 1,
+                        "hits": [{"document": doc}]
+                    }
+                }
+            }
+        })
     }
 
     fn search_response(isbn: &str) -> serde_json::Value {
@@ -269,6 +419,12 @@ mod tests {
         })
     }
 
+    fn empty_search_response() -> serde_json::Value {
+        serde_json::json!({
+            "data": {"search": {"results": {"found": 0, "hits": []}}}
+        })
+    }
+
     #[tokio::test]
     async fn enrich_returns_none_when_no_isbn() {
         let adapter = HardcoverAdapter::new("token");
@@ -282,9 +438,7 @@ mod tests {
 
         Mock::given(method("POST"))
             .and(path("/"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "data": {"search": {"results": {"found": 0, "hits": []}}}
-            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(empty_search_response()))
             .mount(&server)
             .await;
 
@@ -305,6 +459,7 @@ mod tests {
             .mount(&server)
             .await;
 
+        // No title in extracted — ISBN result accepted without validation.
         let adapter = HardcoverAdapter::with_base_url("token", server.uri());
         let result = adapter.enrich(&extracted_with_isbn13(isbn)).await.unwrap();
         let book = result.expect("expected ProviderBook");
@@ -327,6 +482,109 @@ mod tests {
                 .iter()
                 .any(|id| id.identifier_type == IdentifierType::Hardcover && id.value == "12345")
         );
+    }
+
+    #[tokio::test]
+    async fn enrich_accepts_isbn_result_when_title_matches() {
+        let server = MockServer::start().await;
+        let isbn = "9780765326355";
+
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(search_response(isbn)))
+            .mount(&server)
+            .await;
+
+        let extracted = extracted_with_isbn_and_title(isbn, "The Way of Kings", "Brandon Sanderson");
+        let adapter = HardcoverAdapter::with_base_url("token", server.uri());
+        let result = adapter.enrich(&extracted).await.unwrap();
+        let book = result.expect("expected ProviderBook");
+
+        assert_eq!(book.metadata.title.as_deref(), Some("The Way of Kings"));
+        // Only one request should have been made (no title search fallback).
+        assert_eq!(server.received_requests().await.unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn enrich_falls_back_to_title_search_when_isbn_is_wrong_book() {
+        let server = MockServer::start().await;
+        let isbn = "9781250281470";
+
+        // ISBN search returns the wrong book.
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(search_response_for(&book_document(
+                "99999",
+                "Some Completely Different Book",
+                "Wrong Author",
+                isbn,
+            ))))
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+
+        // Title search returns the correct book.
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(search_response_for(&book_document(
+                "11111",
+                "The Correct Book Title",
+                "Right Author",
+                "9780000000001",
+            ))))
+            .mount(&server)
+            .await;
+
+        let extracted = extracted_with_isbn_and_title(isbn, "The Correct Book Title", "Right Author");
+        let adapter = HardcoverAdapter::with_base_url("token", server.uri());
+        let result = adapter.enrich(&extracted).await.unwrap();
+        let book = result.expect("expected ProviderBook");
+
+        assert_eq!(book.metadata.title.as_deref(), Some("The Correct Book Title"));
+        // Two requests should have been made: ISBN search + title search fallback.
+        assert_eq!(server.received_requests().await.unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn enrich_picks_best_candidate_from_title_search() {
+        let server = MockServer::start().await;
+
+        // No ISBN — goes straight to title search; returns two candidates.
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": {
+                    "search": {
+                        "results": {
+                            "found": 2,
+                            "hits": [
+                                {"document": book_document("1", "The Hobbit", "Wrong Author", "9780000000001")},
+                                {"document": book_document("2", "The Hobbit", "J.R.R. Tolkien", "9780000000002")}
+                            ]
+                        }
+                    }
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        let extracted = ExtractedMetadata {
+            title: Some("The Hobbit".to_string()),
+            authors: Some(vec![ExtractedAuthor {
+                name: "J.R.R. Tolkien".to_string(),
+                role: Some(AuthorRole::Author),
+                sort_order: 0,
+            }]),
+            ..Default::default()
+        };
+
+        let adapter = HardcoverAdapter::with_base_url("token", server.uri());
+        let result = adapter.enrich(&extracted).await.unwrap();
+        let book = result.expect("expected ProviderBook");
+
+        // The candidate with the matching author should win.
+        let identifiers = book.metadata.identifiers.as_ref().expect("expected identifiers");
+        assert!(identifiers.iter().any(|id| id.identifier_type == IdentifierType::Hardcover && id.value == "2"));
     }
 
     #[test]
