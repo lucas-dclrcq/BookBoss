@@ -143,13 +143,7 @@ impl BookRepository for BookRepositoryAdapter {
         self.find_by_id(transaction, token.id()).await
     }
 
-    async fn list_books(
-        &self,
-        transaction: &dyn Transaction,
-        filter: &BookQuery,
-        start_id: Option<BookId>,
-        page_size: Option<u64>,
-    ) -> Result<Vec<Book>, Error> {
+    async fn list_books(&self, transaction: &dyn Transaction, filter: &BookQuery, offset: Option<u64>, page_size: Option<u64>) -> Result<Vec<Book>, Error> {
         const DEFAULT_PAGE_SIZE: u64 = 50;
         const MAX_PAGE_SIZE: u64 = 50;
 
@@ -161,13 +155,7 @@ impl BookRepository for BookRepositoryAdapter {
 
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
-        let mut query = prelude::Books::find()
-            .filter(books::Column::Status.eq("available"))
-            .order_by_asc(books::Column::Id);
-
-        if let Some(start_id) = start_id {
-            query = query.filter(books::Column::Id.gte(start_id as i64));
-        }
+        let mut query = prelude::Books::find().filter(books::Column::Status.eq("available"));
 
         if let Some(series_id) = filter.series_id {
             query = query.filter(books::Column::SeriesId.eq(series_id as i64));
@@ -196,6 +184,10 @@ impl BookRepository for BookRepositoryAdapter {
                 .and_where(book_tags::Column::TagId.eq(tag_id as i64));
             query = query.filter(books::Column::Id.in_subquery(subq));
         }
+
+        let query = crate::sort::apply_book_sort(query, filter.sort);
+
+        let mut query = if let Some(offset) = offset { query.offset(offset) } else { query };
 
         let page_size = page_size.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE);
         query = query.limit(page_size);
@@ -1032,7 +1024,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_list_books_start_id_filters() {
+    async fn test_list_books_offset_skips_rows() {
         let svc = setup().await;
         let tx = svc.repository().begin().await.unwrap();
 
@@ -1040,11 +1032,9 @@ mod tests {
         svc.book_repository().add_book(&*tx, new_book("Book B")).await.unwrap();
 
         let all = svc.book_repository().list_books(&*tx, &BookQuery::default(), None, None).await.unwrap();
-        let result = svc
-            .book_repository()
-            .list_books(&*tx, &BookQuery::default(), Some(all[1].id), None)
-            .await
-            .unwrap();
+        assert_eq!(all.len(), 2);
+
+        let result = svc.book_repository().list_books(&*tx, &BookQuery::default(), Some(1), None).await.unwrap();
 
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].id, all[1].id);

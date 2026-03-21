@@ -28,6 +28,7 @@ pub(crate) struct BookSummary {
     pub genres: Vec<String>,
     pub tags: Vec<String>,
     pub reading_state: Option<ReadingStateDto>,
+    pub created_at: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -40,6 +41,7 @@ pub(crate) struct ListBooksResponse {
 
 #[cfg(feature = "server")]
 use {
+    crate::components::to_core_sort,
     crate::routes::{book_detail_page::to_reading_state_dto, server_helpers::authenticated_user},
     crate::server::{AuthSession, AuthUser, BackendSessionPool},
     axum::http::Method,
@@ -148,6 +150,7 @@ pub(crate) async fn hydrate_books(
                 genres: book_genres[idx].clone(),
                 tags: book_tags[idx].clone(),
                 reading_state: reading_map.and_then(|m| m.get(&book.id).cloned()),
+                created_at: book.created_at.to_rfc3339(),
             }
         })
         .collect();
@@ -155,8 +158,8 @@ pub(crate) async fn hydrate_books(
     Ok(summaries)
 }
 
-#[get("/api/v1/books", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
-async fn list_books() -> Result<ListBooksResponse, ServerFnError> {
+#[post("/api/v1/books", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
+async fn list_books(sort: crate::components::SortOrder) -> Result<ListBooksResponse, ServerFnError> {
     use std::collections::HashMap;
 
     let current_user = authenticated_user(&auth_session)?;
@@ -167,7 +170,10 @@ async fn list_books() -> Result<ListBooksResponse, ServerFnError> {
         .validate(&current_user, &Method::POST, None)
         .await;
 
-    let filter = BookQuery::default();
+    let filter = BookQuery {
+        sort: Some(to_core_sort(sort)),
+        ..Default::default()
+    };
     let books = core_services
         .book_service
         .list_books(&filter, None, None)
@@ -211,7 +217,10 @@ async fn list_books() -> Result<ListBooksResponse, ServerFnError> {
 #[component]
 pub(crate) fn BooksPage() -> Element {
     use_context_provider(|| Signal::new(None::<String>)); // DraggedBookToken
-    let mut page_data = use_server_future(list_books)?;
+    let mut page_data = use_server_future(move || {
+        let sort = crate::components::SORT_ORDER();
+        list_books(sort)
+    })?;
     let shelves_resource = use_server_future(list_all_accessible_shelves)?;
     let shelves: Vec<ShelfSummary> = shelves_resource().and_then(std::result::Result::ok).unwrap_or_default();
     rsx! {

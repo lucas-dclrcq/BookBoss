@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 
 use crate::{
     Route,
-    components::{BookFilter, DraggedBookToken, FilterBuilder, FilterEntityOptions, default_book_filter, filter_to_summary},
+    components::{BookFilter, DraggedBookToken, FilterBuilder, FilterEntityOptions, SortControl, default_book_filter, filter_to_summary},
     routes::shelf_page::{ShelfSummary, add_book_to_shelf, create_shelf, create_smart_shelf, get_filter_entity_options},
 };
 
@@ -230,9 +230,10 @@ pub(crate) fn ShelfBar(
                 }
             }
 
-            // Edit / Delete for the current own shelf — pushed to far right
-            if current_is_own {
-                div { class: "flex items-center gap-2 shrink-0 ml-auto",
+            // Sort control + Edit/Delete — pushed to far right
+            div { class: "flex items-center gap-2 shrink-0 ml-auto",
+                SortControl {}
+                if current_is_own {
                     button {
                         class: "text-sm text-gray-500 hover:text-indigo-600",
                         onclick: move |_| on_edit_shelf.call(()),

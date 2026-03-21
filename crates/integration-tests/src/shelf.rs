@@ -105,7 +105,12 @@ async fn smart_shelf_title_contains_filter() {
         .await
         .unwrap();
 
-    let books = ctx.services.shelf_service.books_for_filter(&shelf_token, user.id, None, None).await.unwrap();
+    let books = ctx
+        .services
+        .shelf_service
+        .books_for_filter(&shelf_token, user.id, None, None, None)
+        .await
+        .unwrap();
     assert_eq!(books.len(), 1);
     assert_eq!(books[0].title, "Dune");
 }
@@ -129,7 +134,12 @@ async fn smart_shelf_title_does_not_contain_filter() {
         .await
         .unwrap();
 
-    let books = ctx.services.shelf_service.books_for_filter(&shelf_token, user.id, None, None).await.unwrap();
+    let books = ctx
+        .services
+        .shelf_service
+        .books_for_filter(&shelf_token, user.id, None, None, None)
+        .await
+        .unwrap();
     assert_eq!(books.len(), 2);
     assert!(!books.iter().any(|b| b.title == "Dune"), "Dune must be excluded");
 }
@@ -163,7 +173,12 @@ async fn smart_shelf_and_filter_requires_both_conditions() {
         .await
         .unwrap();
 
-    let books = ctx.services.shelf_service.books_for_filter(&shelf_token, user.id, None, None).await.unwrap();
+    let books = ctx
+        .services
+        .shelf_service
+        .books_for_filter(&shelf_token, user.id, None, None, None)
+        .await
+        .unwrap();
     assert_eq!(books.len(), 1);
     assert_eq!(books[0].title, "Dune Messiah");
 }
@@ -197,7 +212,12 @@ async fn smart_shelf_or_filter_accepts_either_condition() {
         .await
         .unwrap();
 
-    let books = ctx.services.shelf_service.books_for_filter(&shelf_token, user.id, None, None).await.unwrap();
+    let books = ctx
+        .services
+        .shelf_service
+        .books_for_filter(&shelf_token, user.id, None, None, None)
+        .await
+        .unwrap();
     assert_eq!(books.len(), 2);
     let titles: Vec<&str> = books.iter().map(|b| b.title.as_str()).collect();
     assert!(titles.contains(&"Dune"), "Dune must be included");
@@ -224,7 +244,12 @@ async fn count_for_filter_matches_books_for_filter_length() {
         .await
         .unwrap();
 
-    let books = ctx.services.shelf_service.books_for_filter(&shelf_token, user.id, None, None).await.unwrap();
+    let books = ctx
+        .services
+        .shelf_service
+        .books_for_filter(&shelf_token, user.id, None, None, None)
+        .await
+        .unwrap();
     let count = ctx.services.shelf_service.count_for_filter(&shelf_token, user.id).await.unwrap();
 
     assert_eq!(count, books.len() as u64, "count_for_filter must match books_for_filter length");

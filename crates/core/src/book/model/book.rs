@@ -101,6 +101,36 @@ impl FromStr for BookStatus {
     }
 }
 
+// ── Sort types ──────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum BookSortField {
+    DateAdded,
+    Title,
+    AuthorTitle,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum SortDirection {
+    Asc,
+    Desc,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct BookSortOrder {
+    pub field: BookSortField,
+    pub direction: SortDirection,
+}
+
+impl Default for BookSortOrder {
+    fn default() -> Self {
+        Self {
+            field: BookSortField::DateAdded,
+            direction: SortDirection::Desc,
+        }
+    }
+}
+
 /// Filter criteria for listing books.
 ///
 /// Only `Available` books are returned — status is not a caller-controlled
@@ -112,6 +142,7 @@ pub struct BookQuery {
     pub author_id: Option<AuthorId>,
     pub genre_id: Option<GenreId>,
     pub tag_id: Option<TagId>,
+    pub sort: Option<BookSortOrder>,
 }
 
 #[derive(Debug, Clone, Builder)]

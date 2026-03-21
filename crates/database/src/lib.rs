@@ -36,6 +36,7 @@ mod entities;
 mod filter;
 mod migrations;
 mod repository;
+mod sort;
 mod transaction;
 
 use crate::{

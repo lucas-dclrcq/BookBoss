@@ -95,7 +95,8 @@ pub async fn all_books(opds_user: OpdsUser, Query(params): Query<PaginationParam
 
     let filter = BookQuery::default();
 
-    let Ok(books) = core_services.book_service.list_books(&filter, params.start, Some(PAGE_SIZE + 1)).await else {
+    let offset = params.start;
+    let Ok(books) = core_services.book_service.list_books(&filter, offset, Some(PAGE_SIZE + 1)).await else {
         return Response::builder()
             .status(StatusCode::INTERNAL_SERVER_ERROR)
             .body(axum::body::Body::empty())
@@ -106,13 +107,12 @@ pub async fn all_books(opds_user: OpdsUser, Query(params): Query<PaginationParam
     let page_books = if has_next { &books[..PAGE_SIZE as usize] } else { &books };
 
     let mut feed = AtomFeed::new("urn:bookboss:opds:all", "All Books", now)
-        .with_link(AtomLink::new(rel::SELF, format_all_url(params.start)).with_type(mime::ACQUISITION))
+        .with_link(AtomLink::new(rel::SELF, format_all_url(offset)).with_type(mime::ACQUISITION))
         .with_link(AtomLink::new(rel::START, "/opds/").with_type(mime::NAVIGATION));
 
     if has_next {
-        if let Some(last) = page_books.last() {
-            feed = feed.with_link(AtomLink::new(rel::NEXT, format_all_url(Some(last.id + 1))).with_type(mime::ACQUISITION));
-        }
+        let next_offset = offset.unwrap_or(0) + PAGE_SIZE;
+        feed = feed.with_link(AtomLink::new(rel::NEXT, format_all_url(Some(next_offset))).with_type(mime::ACQUISITION));
     }
 
     for book in page_books {
@@ -216,10 +216,11 @@ pub async fn shelf_books(
         return error_response(StatusCode::NOT_FOUND);
     };
 
+    let offset = params.start;
     let books: Vec<Book> = if shelf.shelf_type == ShelfType::Smart {
         match core_services
             .shelf_service
-            .books_for_filter(&shelf_token, user_id, params.start, Some(PAGE_SIZE + 1))
+            .books_for_filter(&shelf_token, user_id, offset, Some(PAGE_SIZE + 1), None)
             .await
         {
             Ok(b) => b,
@@ -228,7 +229,7 @@ pub async fn shelf_books(
     } else {
         let Ok(entries) = core_services
             .shelf_service
-            .books_for_shelf(&shelf_token, user_id, params.start, Some(PAGE_SIZE + 1))
+            .books_for_shelf(&shelf_token, user_id, offset, Some(PAGE_SIZE + 1))
             .await
         else {
             return error_response(StatusCode::INTERNAL_SERVER_ERROR);
@@ -245,15 +246,14 @@ pub async fn shelf_books(
     let has_next = books.len() as u64 > PAGE_SIZE;
     let page_books = if has_next { &books[..PAGE_SIZE as usize] } else { &books };
 
-    let self_url = format_shelf_url(&shelf_token_str, params.start);
+    let self_url = format_shelf_url(&shelf_token_str, offset);
     let mut feed = AtomFeed::new(format!("urn:bookboss:shelf:{}", shelf.token), &shelf.name, now)
         .with_link(AtomLink::new(rel::SELF, &self_url).with_type(mime::ACQUISITION))
         .with_link(AtomLink::new(rel::START, "/opds/").with_type(mime::NAVIGATION));
 
     if has_next {
-        if let Some(last) = page_books.last() {
-            feed = feed.with_link(AtomLink::new(rel::NEXT, format_shelf_url(&shelf_token_str, Some(last.id + 1))).with_type(mime::ACQUISITION));
-        }
+        let next_offset = offset.unwrap_or(0) + PAGE_SIZE;
+        feed = feed.with_link(AtomLink::new(rel::NEXT, format_shelf_url(&shelf_token_str, Some(next_offset))).with_type(mime::ACQUISITION));
     }
 
     for book in page_books {
@@ -322,7 +322,8 @@ pub async fn author_books(
         ..Default::default()
     };
 
-    let Ok(books) = core_services.book_service.list_books(&filter, params.start, Some(PAGE_SIZE + 1)).await else {
+    let offset = params.start;
+    let Ok(books) = core_services.book_service.list_books(&filter, offset, Some(PAGE_SIZE + 1)).await else {
         return error_response(StatusCode::INTERNAL_SERVER_ERROR);
     };
 
@@ -331,13 +332,12 @@ pub async fn author_books(
     let base_url = format!("/opds/authors/{author_id}");
 
     let mut feed = AtomFeed::new(format!("urn:bookboss:author:{}", author.token), &author.name, now)
-        .with_link(AtomLink::new(rel::SELF, format_paginated_url(&base_url, params.start)).with_type(mime::ACQUISITION))
+        .with_link(AtomLink::new(rel::SELF, format_paginated_url(&base_url, offset)).with_type(mime::ACQUISITION))
         .with_link(AtomLink::new(rel::START, "/opds/").with_type(mime::NAVIGATION));
 
     if has_next {
-        if let Some(last) = page_books.last() {
-            feed = feed.with_link(AtomLink::new(rel::NEXT, format_paginated_url(&base_url, Some(last.id + 1))).with_type(mime::ACQUISITION));
-        }
+        let next_offset = offset.unwrap_or(0) + PAGE_SIZE;
+        feed = feed.with_link(AtomLink::new(rel::NEXT, format_paginated_url(&base_url, Some(next_offset))).with_type(mime::ACQUISITION));
     }
 
     for book in page_books {
@@ -406,7 +406,8 @@ pub async fn series_books(
         ..Default::default()
     };
 
-    let Ok(books) = core_services.book_service.list_books(&filter, params.start, Some(PAGE_SIZE + 1)).await else {
+    let offset = params.start;
+    let Ok(books) = core_services.book_service.list_books(&filter, offset, Some(PAGE_SIZE + 1)).await else {
         return error_response(StatusCode::INTERNAL_SERVER_ERROR);
     };
 
@@ -415,13 +416,12 @@ pub async fn series_books(
     let base_url = format!("/opds/series/{series_id}");
 
     let mut feed = AtomFeed::new(format!("urn:bookboss:series:{}", series.token), &series.name, now)
-        .with_link(AtomLink::new(rel::SELF, format_paginated_url(&base_url, params.start)).with_type(mime::ACQUISITION))
+        .with_link(AtomLink::new(rel::SELF, format_paginated_url(&base_url, offset)).with_type(mime::ACQUISITION))
         .with_link(AtomLink::new(rel::START, "/opds/").with_type(mime::NAVIGATION));
 
     if has_next {
-        if let Some(last) = page_books.last() {
-            feed = feed.with_link(AtomLink::new(rel::NEXT, format_paginated_url(&base_url, Some(last.id + 1))).with_type(mime::ACQUISITION));
-        }
+        let next_offset = offset.unwrap_or(0) + PAGE_SIZE;
+        feed = feed.with_link(AtomLink::new(rel::NEXT, format_paginated_url(&base_url, Some(next_offset))).with_type(mime::ACQUISITION));
     }
 
     for book in page_books {
@@ -480,22 +480,22 @@ pub async fn search(opds_user: OpdsUser, Query(params): Query<SearchParams>, Ext
         value: q.clone(),
     }));
 
-    let Ok(books) = core_services.library_service.search_books(&filter, params.start, Some(PAGE_SIZE + 1)).await else {
+    let offset = params.start;
+    let Ok(books) = core_services.library_service.search_books(&filter, offset, Some(PAGE_SIZE + 1)).await else {
         return error_response(StatusCode::INTERNAL_SERVER_ERROR);
     };
 
     let has_next = books.len() as u64 > PAGE_SIZE;
     let page_books = if has_next { &books[..PAGE_SIZE as usize] } else { &books };
 
-    let self_url = format_search_url(&q, params.start);
+    let self_url = format_search_url(&q, offset);
     let mut feed = AtomFeed::new("urn:bookboss:opds:search", format!("Search: {q}"), now)
         .with_link(AtomLink::new(rel::SELF, &self_url).with_type(mime::ACQUISITION))
         .with_link(AtomLink::new(rel::START, "/opds/").with_type(mime::NAVIGATION));
 
     if has_next {
-        if let Some(last) = page_books.last() {
-            feed = feed.with_link(AtomLink::new(rel::NEXT, format_search_url(&q, Some(last.id + 1))).with_type(mime::ACQUISITION));
-        }
+        let next_offset = offset.unwrap_or(0) + PAGE_SIZE;
+        feed = feed.with_link(AtomLink::new(rel::NEXT, format_search_url(&q, Some(next_offset))).with_type(mime::ACQUISITION));
     }
 
     for book in page_books {

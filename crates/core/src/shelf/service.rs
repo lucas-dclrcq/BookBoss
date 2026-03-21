@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     Error, RepositoryError,
-    book::{Book, BookId, BookToken},
+    book::{Book, BookToken},
     device::{Device, DeviceId},
     filter::BookFilter,
     repository::RepositoryService,
@@ -35,7 +35,7 @@ pub trait ShelfService: Send + Sync {
     ///
     /// Owners can access private shelves; other users may only access public
     /// shelves.
-    async fn books_for_shelf(&self, token: &ShelfToken, user_id: UserId, start_id: Option<u64>, page_size: Option<u64>) -> Result<Vec<BookShelf>, Error>;
+    async fn books_for_shelf(&self, token: &ShelfToken, user_id: UserId, offset: Option<u64>, page_size: Option<u64>) -> Result<Vec<BookShelf>, Error>;
 
     /// Returns all shelves owned by the given user.
     async fn list_shelves_for_user(&self, user_id: UserId) -> Result<Vec<Shelf>, Error>;
@@ -75,7 +75,14 @@ pub trait ShelfService: Send + Sync {
     ///
     /// Only callable for smart shelves. Owners can access private shelves;
     /// other users may only access public shelves.
-    async fn books_for_filter(&self, token: &ShelfToken, user_id: UserId, start_id: Option<BookId>, page_size: Option<u64>) -> Result<Vec<Book>, Error>;
+    async fn books_for_filter(
+        &self,
+        token: &ShelfToken,
+        user_id: UserId,
+        offset: Option<u64>,
+        page_size: Option<u64>,
+        sort: Option<crate::book::BookSortOrder>,
+    ) -> Result<Vec<Book>, Error>;
 
     /// Returns the total number of books matching this smart shelf's filter.
     ///
@@ -257,7 +264,7 @@ impl ShelfService for ShelfServiceImpl {
     }
 
     // #[tracing::instrument(level = "trace", skip(self))]
-    async fn books_for_shelf(&self, token: &ShelfToken, user_id: UserId, start_id: Option<u64>, page_size: Option<u64>) -> Result<Vec<BookShelf>, Error> {
+    async fn books_for_shelf(&self, token: &ShelfToken, user_id: UserId, offset: Option<u64>, page_size: Option<u64>) -> Result<Vec<BookShelf>, Error> {
         let token = *token;
 
         with_read_only_transaction!(self, shelf_repository, |tx| {
@@ -270,7 +277,7 @@ impl ShelfService for ShelfServiceImpl {
                 return Err(Error::Validation("this shelf is private".to_string()));
             }
 
-            shelf_repository.books_for_shelf(tx, current_shelf.id, start_id, page_size).await
+            shelf_repository.books_for_shelf(tx, current_shelf.id, offset, page_size).await
         })
     }
 
@@ -405,7 +412,14 @@ impl ShelfService for ShelfServiceImpl {
     }
 
     // #[tracing::instrument(level = "trace", skip(self))]
-    async fn books_for_filter(&self, token: &ShelfToken, user_id: UserId, start_id: Option<BookId>, page_size: Option<u64>) -> Result<Vec<Book>, Error> {
+    async fn books_for_filter(
+        &self,
+        token: &ShelfToken,
+        user_id: UserId,
+        offset: Option<u64>,
+        page_size: Option<u64>,
+        sort: Option<crate::book::BookSortOrder>,
+    ) -> Result<Vec<Book>, Error> {
         let token = *token;
 
         with_read_only_transaction!(self, shelf_repository, library_repository, |tx| {
@@ -426,7 +440,7 @@ impl ShelfService for ShelfServiceImpl {
                 .filter_criteria
                 .ok_or_else(|| Error::Validation("smart shelf has no filter criteria".to_string()))?;
 
-            library_repository.books_for_filter(tx, &filter, user_id, start_id, page_size).await
+            library_repository.books_for_filter(tx, &filter, user_id, offset, page_size, sort).await
         })
     }
 

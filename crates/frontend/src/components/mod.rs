@@ -8,6 +8,7 @@ mod nav_bar;
 mod register_admin_form;
 mod search;
 mod shelf_bar;
+mod sort_control;
 
 pub(crate) use app_layout::AppLayout;
 pub(crate) use autocomplete_input::AutocompleteInput;
@@ -19,3 +20,6 @@ pub(crate) use nav_bar::NavBar;
 pub(crate) use register_admin_form::RegisterAdminForm;
 pub(crate) use search::{SEARCH_TEXT, filter_books_by_search};
 pub(crate) use shelf_bar::ShelfBar;
+#[cfg(feature = "server")]
+pub(crate) use sort_control::to_core_sort;
+pub(crate) use sort_control::{SORT_ORDER, SortControl, SortOrder, sort_books_client_side};

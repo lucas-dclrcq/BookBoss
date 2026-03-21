@@ -14,8 +14,7 @@ pub trait BookRepository: Send + Sync {
     async fn update_book(&self, transaction: &dyn Transaction, book: Book) -> Result<Book, Error>;
     async fn find_by_id(&self, transaction: &dyn Transaction, id: BookId) -> Result<Option<Book>, Error>;
     async fn find_by_token(&self, transaction: &dyn Transaction, token: &BookToken) -> Result<Option<Book>, Error>;
-    async fn list_books(&self, transaction: &dyn Transaction, filter: &BookQuery, start_id: Option<BookId>, page_size: Option<u64>)
-    -> Result<Vec<Book>, Error>;
+    async fn list_books(&self, transaction: &dyn Transaction, filter: &BookQuery, offset: Option<u64>, page_size: Option<u64>) -> Result<Vec<Book>, Error>;
     async fn authors_for_book(&self, transaction: &dyn Transaction, book_id: BookId) -> Result<Vec<BookAuthor>, Error>;
     async fn files_for_book(&self, transaction: &dyn Transaction, book_id: BookId) -> Result<Vec<BookFile>, Error>;
     async fn identifiers_for_book(&self, transaction: &dyn Transaction, book_id: BookId) -> Result<Vec<BookIdentifier>, Error>;

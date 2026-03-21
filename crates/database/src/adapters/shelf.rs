@@ -248,7 +248,7 @@ impl ShelfRepository for ShelfRepositoryAdapter {
         &self,
         transaction: &dyn Transaction,
         shelf_id: ShelfId,
-        start_id: Option<BookId>,
+        offset: Option<u64>,
         page_size: Option<u64>,
     ) -> Result<Vec<BookShelf>, Error> {
         const DEFAULT_PAGE_SIZE: u64 = 50;
@@ -266,8 +266,8 @@ impl ShelfRepository for ShelfRepositoryAdapter {
             .filter(book_shelves::Column::ShelfId.eq(shelf_id as i64))
             .order_by_asc(book_shelves::Column::BookId);
 
-        if let Some(start_id) = start_id {
-            query = query.filter(book_shelves::Column::BookId.gte(start_id as i64));
+        if let Some(offset) = offset {
+            query = query.offset(offset);
         }
 
         let page_size = page_size.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE);
@@ -801,12 +801,7 @@ mod tests {
         let page1 = svc.shelf_repository().books_for_shelf(&*tx, shelf.id, None, Some(2)).await.unwrap();
         assert_eq!(page1.len(), 2);
 
-        let last_id = page1.last().unwrap().book_id;
-        let page2 = svc
-            .shelf_repository()
-            .books_for_shelf(&*tx, shelf.id, Some(last_id + 1), Some(2))
-            .await
-            .unwrap();
+        let page2 = svc.shelf_repository().books_for_shelf(&*tx, shelf.id, Some(2), Some(2)).await.unwrap();
         assert_eq!(page2.len(), 1);
     }
 
@@ -822,7 +817,7 @@ mod tests {
         let tx = svc.repository().begin().await.unwrap();
         let books = svc
             .library_repository()
-            .books_for_filter(&*tx, &empty_and_filter(), user_id, None, None)
+            .books_for_filter(&*tx, &empty_and_filter(), user_id, None, None, None)
             .await
             .unwrap();
 
@@ -837,7 +832,7 @@ mod tests {
 
         assert!(matches!(
             svc.library_repository()
-                .books_for_filter(&*tx, &empty_and_filter(), user_id, None, Some(0))
+                .books_for_filter(&*tx, &empty_and_filter(), user_id, None, Some(0), None)
                 .await,
             Err(bb_core::Error::InvalidPageSize(0))
         ));
@@ -857,7 +852,11 @@ mod tests {
             value: "dun".to_owned(),
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc
+            .library_repository()
+            .books_for_filter(&*tx, &filter, user_id, None, None, None)
+            .await
+            .unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, dune);
@@ -876,7 +875,11 @@ mod tests {
             value: "DUNE".to_owned(),
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc
+            .library_repository()
+            .books_for_filter(&*tx, &filter, user_id, None, None, None)
+            .await
+            .unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, dune);
@@ -894,7 +897,11 @@ mod tests {
             value: "Dune".to_owned(),
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc
+            .library_repository()
+            .books_for_filter(&*tx, &filter, user_id, None, None, None)
+            .await
+            .unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, dune);
@@ -955,7 +962,11 @@ mod tests {
             }],
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc
+            .library_repository()
+            .books_for_filter(&*tx, &filter, user_id, None, None, None)
+            .await
+            .unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, dune.id);
@@ -1010,7 +1021,11 @@ mod tests {
             values: vec![],
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc
+            .library_repository()
+            .books_for_filter(&*tx, &filter, user_id, None, None, None)
+            .await
+            .unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, standalone);
@@ -1037,7 +1052,11 @@ mod tests {
             }],
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc
+            .library_repository()
+            .books_for_filter(&*tx, &filter, user_id, None, None, None)
+            .await
+            .unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, dune);
@@ -1070,7 +1089,11 @@ mod tests {
             ],
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc
+            .library_repository()
+            .books_for_filter(&*tx, &filter, user_id, None, None, None)
+            .await
+            .unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, co_authored);
@@ -1094,7 +1117,11 @@ mod tests {
             }],
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc
+            .library_repository()
+            .books_for_filter(&*tx, &filter, user_id, None, None, None)
+            .await
+            .unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, foundation);
@@ -1114,7 +1141,11 @@ mod tests {
             value: "herbert".to_owned(),
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc
+            .library_repository()
+            .books_for_filter(&*tx, &filter, user_id, None, None, None)
+            .await
+            .unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, dune);
@@ -1139,7 +1170,11 @@ mod tests {
             }],
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc
+            .library_repository()
+            .books_for_filter(&*tx, &filter, user_id, None, None, None)
+            .await
+            .unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, dune);
@@ -1164,7 +1199,11 @@ mod tests {
             }],
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc
+            .library_repository()
+            .books_for_filter(&*tx, &filter, user_id, None, None, None)
+            .await
+            .unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, dune);
@@ -1185,7 +1224,11 @@ mod tests {
             values: vec![FilterReadStatus::Reading],
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc
+            .library_repository()
+            .books_for_filter(&*tx, &filter, user_id, None, None, None)
+            .await
+            .unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, reading_book);
@@ -1205,7 +1248,11 @@ mod tests {
             values: vec![FilterReadStatus::Unread],
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc
+            .library_repository()
+            .books_for_filter(&*tx, &filter, user_id, None, None, None)
+            .await
+            .unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, unread_book);
@@ -1227,7 +1274,11 @@ mod tests {
             values: vec![FilterReadStatus::Active],
         });
         let tx = svc.repository().begin().await.unwrap();
-        let mut books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let mut books = svc
+            .library_repository()
+            .books_for_filter(&*tx, &filter, user_id, None, None, None)
+            .await
+            .unwrap();
         books.sort_by_key(|b| b.id);
 
         let ids: Vec<u64> = books.iter().map(|b| b.id).collect();
@@ -1250,7 +1301,11 @@ mod tests {
             values: vec![FilterReadStatus::Reading],
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc
+            .library_repository()
+            .books_for_filter(&*tx, &filter, user_id, None, None, None)
+            .await
+            .unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, unread);
@@ -1268,7 +1323,11 @@ mod tests {
 
         let filter = BookFilter::Rule(FilterRule::Rating { op: NumericOp::Gte, value: 4 });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc
+            .library_repository()
+            .books_for_filter(&*tx, &filter, user_id, None, None, None)
+            .await
+            .unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, high);
@@ -1299,7 +1358,11 @@ mod tests {
             ],
         });
         let tx = svc.repository().begin().await.unwrap();
-        let mut books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let mut books = svc
+            .library_repository()
+            .books_for_filter(&*tx, &filter, user_id, None, None, None)
+            .await
+            .unwrap();
         books.sort_by_key(|b| b.id);
 
         let ids: Vec<u64> = books.iter().map(|b| b.id).collect();
@@ -1330,7 +1393,11 @@ mod tests {
             }],
         }));
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc
+            .library_repository()
+            .books_for_filter(&*tx, &filter, user_id, None, None, None)
+            .await
+            .unwrap();
 
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].id, dune);
@@ -1347,7 +1414,11 @@ mod tests {
             items: vec![],
         });
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc
+            .library_repository()
+            .books_for_filter(&*tx, &filter, user_id, None, None, None)
+            .await
+            .unwrap();
 
         assert!(books.is_empty());
     }
@@ -1364,7 +1435,11 @@ mod tests {
 
         let filter = empty_and_filter();
         let tx = svc.repository().begin().await.unwrap();
-        let books = svc.library_repository().books_for_filter(&*tx, &filter, user_id, None, None).await.unwrap();
+        let books = svc
+            .library_repository()
+            .books_for_filter(&*tx, &filter, user_id, None, None, None)
+            .await
+            .unwrap();
         let count = svc.library_repository().count_for_filter(&*tx, &filter, user_id).await.unwrap();
 
         assert_eq!(count, books.len() as u64);

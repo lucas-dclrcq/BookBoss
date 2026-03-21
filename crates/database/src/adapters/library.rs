@@ -1,12 +1,12 @@
 use bb_core::{
     Error,
-    book::{Book, BookId},
+    book::{Book, BookSortOrder},
     filter::BookFilter,
     library::LibraryRepository,
     repository::Transaction,
     user::UserId,
 };
-use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect};
+use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QuerySelect};
 
 use crate::{
     entities::{books, prelude},
@@ -46,8 +46,9 @@ impl LibraryRepository for LibraryRepositoryAdapter {
         transaction: &dyn Transaction,
         filter: &BookFilter,
         user_id: UserId,
-        start_id: Option<BookId>,
+        offset: Option<u64>,
         page_size: Option<u64>,
+        sort: Option<BookSortOrder>,
     ) -> Result<Vec<Book>, Error> {
         const DEFAULT_PAGE_SIZE: u64 = 50;
         const MAX_PAGE_SIZE: u64 = 50;
@@ -60,14 +61,13 @@ impl LibraryRepository for LibraryRepositoryAdapter {
 
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
-        let mut query = prelude::Books::find()
+        let query = prelude::Books::find()
             .filter(books::Column::Status.eq("available"))
-            .filter(build_condition(filter, user_id).map_err(bb_core::Error::RepositoryError)?)
-            .order_by_asc(books::Column::Id);
+            .filter(build_condition(filter, user_id).map_err(bb_core::Error::RepositoryError)?);
 
-        if let Some(start_id) = start_id {
-            query = query.filter(books::Column::Id.gte(start_id as i64));
-        }
+        let query = crate::sort::apply_book_sort(query, sort);
+
+        let mut query = if let Some(offset) = offset { query.offset(offset) } else { query };
 
         let page_size = page_size.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE);
         query = query.limit(page_size);

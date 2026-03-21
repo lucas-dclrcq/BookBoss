@@ -12,7 +12,7 @@ use crate::{
 
 #[async_trait::async_trait]
 pub trait BookService: Send + Sync {
-    async fn list_books(&self, filter: &BookQuery, start_id: Option<BookId>, page_size: Option<u64>) -> Result<Vec<Book>, Error>;
+    async fn list_books(&self, filter: &BookQuery, offset: Option<u64>, page_size: Option<u64>) -> Result<Vec<Book>, Error>;
     async fn find_book_by_token(&self, token: &BookToken) -> Result<Option<Book>, Error>;
     async fn authors_for_book(&self, book_id: BookId) -> Result<Vec<BookAuthor>, Error>;
     async fn files_for_book(&self, book_id: BookId) -> Result<Vec<BookFile>, Error>;
@@ -45,9 +45,9 @@ impl BookServiceImpl {
 #[async_trait::async_trait]
 impl BookService for BookServiceImpl {
     // #[tracing::instrument(level = "trace", skip(self, filter))]
-    async fn list_books(&self, filter: &BookQuery, start_id: Option<BookId>, page_size: Option<u64>) -> Result<Vec<Book>, Error> {
+    async fn list_books(&self, filter: &BookQuery, offset: Option<u64>, page_size: Option<u64>) -> Result<Vec<Book>, Error> {
         let filter = filter.clone();
-        with_read_only_transaction!(self, book_repository, |tx| book_repository.list_books(tx, &filter, start_id, page_size).await)
+        with_read_only_transaction!(self, book_repository, |tx| book_repository.list_books(tx, &filter, offset, page_size).await)
     }
 
     // #[tracing::instrument(level = "trace", skip(self, token))]

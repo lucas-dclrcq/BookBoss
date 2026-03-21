@@ -27,7 +27,7 @@ pub trait ShelfRepository: Send + Sync {
         &self,
         transaction: &dyn Transaction,
         shelf_id: ShelfId,
-        start_id: Option<BookId>,
+        offset: Option<u64>,
         page_size: Option<u64>,
     ) -> Result<Vec<BookShelf>, Error>;
 

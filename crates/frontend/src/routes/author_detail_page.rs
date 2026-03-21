@@ -20,7 +20,7 @@ use {
     crate::routes::{books_page::hydrate_books, server_helpers::authenticated_user},
     crate::server::AuthSession,
     bb_core::CoreServices,
-    bb_core::book::{AuthorToken, BookQuery},
+    bb_core::book::{AuthorToken, BookQuery, BookSortField, BookSortOrder, SortDirection},
     std::str::FromStr,
     std::sync::Arc,
 };
@@ -41,6 +41,10 @@ async fn get_author(token: String) -> Result<AuthorPageData, ServerFnError> {
 
     let filter = BookQuery {
         author_id: Some(author.id),
+        sort: Some(BookSortOrder {
+            field: BookSortField::Title,
+            direction: SortDirection::Asc,
+        }),
         ..Default::default()
     };
     let books = book_service

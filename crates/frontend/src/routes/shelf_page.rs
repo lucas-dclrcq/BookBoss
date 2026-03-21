@@ -3,7 +3,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     Route,
-    components::{BookFilter, BookGrid, BookGridContext, FilterBuilder, FilterEntityOptions, ShelfBar, default_book_filter, filter_books_by_search},
+    components::{
+        BookFilter, BookGrid, BookGridContext, FilterBuilder, FilterEntityOptions, SORT_ORDER, ShelfBar, default_book_filter, filter_books_by_search,
+        sort_books_client_side,
+    },
     routes::books_page::BookSummary,
 };
 
@@ -15,9 +18,8 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct ShelfBooksPage {
     pub books: Vec<BookSummary>,
-    /// Last `book_id` seen; pass as `cursor` to fetch the next page.
-    /// `None` when there are no more results.
-    pub next_cursor: Option<u64>,
+    /// Offset for the next page. `None` when there are no more results.
+    pub next_offset: Option<u64>,
 }
 
 /// Lightweight shelf descriptor returned by list and create operations.
@@ -46,6 +48,7 @@ pub(crate) struct ShelfSummary {
 
 #[cfg(feature = "server")]
 use {
+    crate::components::to_core_sort,
     crate::routes::{books_page::hydrate_books, server_helpers::authenticated_user},
     crate::server::AuthSession,
     bb_core::{
@@ -390,16 +393,22 @@ pub(crate) async fn list_all_accessible_shelves() -> Result<Vec<ShelfSummary>, S
 /// Returns a paginated list of books on a shelf, with author and series data
 /// hydrated.
 ///
-/// `cursor` is the last `book_id` seen (exclusive lower bound for the next
-/// page). `page_size` defaults to 48 when `None`.
+/// `offset` is the number of rows to skip. `page_size` defaults to 48 when
+/// `None`. `sort` is applied server-side for smart shelves.
 ///
-/// Smart shelves use the shelf's filter; manual shelves use the junction table.
+/// Smart shelves use the shelf's filter; manual shelves return all books
+/// (client-side sorting handles manual shelves).
 #[post(
     "/api/v1/shelves/books/list",
     auth_session: axum::Extension<AuthSession>,
     core_services: axum::Extension<Arc<CoreServices>>
 )]
-pub(crate) async fn books_for_shelf(token: String, cursor: Option<u64>, page_size: Option<u64>) -> Result<ShelfBooksPage, ServerFnError> {
+pub(crate) async fn books_for_shelf(
+    token: String,
+    offset: Option<u64>,
+    page_size: Option<u64>,
+    sort: Option<crate::components::SortOrder>,
+) -> Result<ShelfBooksPage, ServerFnError> {
     const PAGE_SIZE: u64 = 48;
 
     let user_id = authenticated_user(&auth_session)?.id();
@@ -417,15 +426,25 @@ pub(crate) async fn books_for_shelf(token: String, cursor: Option<u64>, page_siz
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    // Fetch books: smart → filter query; manual → junction table + book lookup.
-    let books: Vec<Book> = if shelf.shelf_type == ShelfType::Smart {
-        shelf_service
-            .books_for_filter(&shelf_token, user_id, cursor, Some(effective_page_size))
+    // Fetch books: smart → filter query with server-side sort;
+    // manual → all books (no pagination, client sorts).
+    let (books, next_offset) = if shelf.shelf_type == ShelfType::Smart {
+        let core_sort = sort.map(to_core_sort);
+        let rows: Vec<Book> = shelf_service
+            .books_for_filter(&shelf_token, user_id, offset, Some(effective_page_size), core_sort)
             .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        let next = if rows.len() as u64 >= effective_page_size {
+            Some(offset.unwrap_or(0) + rows.len() as u64)
+        } else {
+            None
+        };
+        (rows, next)
     } else {
+        // Manual shelves: load all entries — they're small/curated.
         let shelf_entries = shelf_service
-            .books_for_shelf(&shelf_token, user_id, cursor, Some(effective_page_size))
+            .books_for_shelf(&shelf_token, user_id, None, None)
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?;
 
@@ -438,20 +457,13 @@ pub(crate) async fn books_for_shelf(token: String, cursor: Option<u64>, page_siz
                 .ok_or_else(|| ServerFnError::new("Book not found"))?;
             books.push(book);
         }
-        books
-    };
-
-    // Determine cursor for the next page.
-    let next_cursor = if books.len() as u64 >= effective_page_size {
-        books.last().map(|b| b.id)
-    } else {
-        None
+        (books, None)
     };
 
     if books.is_empty() {
         return Ok(ShelfBooksPage {
             books: vec![],
-            next_cursor: None,
+            next_offset: None,
         });
     }
 
@@ -459,7 +471,7 @@ pub(crate) async fn books_for_shelf(token: String, cursor: Option<u64>, page_siz
 
     Ok(ShelfBooksPage {
         books: book_summaries,
-        next_cursor,
+        next_offset,
     })
 }
 
@@ -502,23 +514,24 @@ pub(crate) fn ShelfPage(token: String) -> Element {
     }
     let mut books_resource = use_server_future(move || {
         let tok = token_sig();
-        books_for_shelf(tok, None, None)
+        let sort = SORT_ORDER();
+        books_for_shelf(tok, None, None, Some(sort))
     })?;
 
     // Accumulated load-more books (first page comes from books_resource).
     let mut extra_books: Signal<Vec<BookSummary>> = use_signal(Vec::new);
-    let mut next_cursor: Signal<Option<u64>> = use_signal(|| None);
+    let mut next_offset: Signal<Option<u64>> = use_signal(|| None);
     let mut loading_more = use_signal(|| false);
     let mut load_more_error: Signal<Option<String>> = use_signal(|| None);
 
-    // Sync cursor from first page; reset accumulated state when token/data changes.
+    // Sync offset from first page; reset accumulated state when token/data changes.
     use_effect(move || {
         let _ = token_sig(); // subscribe to token changes
         extra_books.set(vec![]);
         load_more_error.set(None);
         match books_resource() {
-            Some(Ok(ref page)) => next_cursor.set(page.next_cursor),
-            Some(Err(_)) | None => next_cursor.set(None),
+            Some(Ok(ref page)) => next_offset.set(page.next_offset),
+            Some(Err(_)) | None => next_offset.set(None),
         }
     });
 
@@ -544,13 +557,16 @@ pub(crate) fn ShelfPage(token: String) -> Element {
         }
     };
 
-    // Merged book list: first page + any load-more pages, filtered by search.
+    // Merged book list: first page + any load-more pages.
+    // Manual shelves: client-side sort; smart shelves: already sorted server-side.
     let first_books = books_resource().and_then(Result::ok).map(|p| p.books).unwrap_or_default();
+    let is_manual = current_shelf.as_ref().is_some_and(|s| !s.is_smart);
     let merged: Vec<BookSummary> = first_books.into_iter().chain(extra_books()).collect();
+    let sorted = if is_manual { sort_books_client_side(merged, SORT_ORDER()) } else { merged };
     let query = crate::components::SEARCH_TEXT();
-    let all_books = filter_books_by_search(merged, &query);
+    let all_books = filter_books_by_search(sorted, &query);
     let has_search = !query.trim().is_empty();
-    let has_more = next_cursor().is_some();
+    let has_more = next_offset().is_some();
 
     rsx! {
         div { class: "flex-1 flex flex-col overflow-hidden",
@@ -628,13 +644,13 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                                                 let tok = token.clone();
                                                 move |_| {
                                                     let tok = tok.clone();
-                                                    let cursor = next_cursor();
+                                                    let off = next_offset();
                                                     loading_more.set(true);
                                                     load_more_error.set(None);
                                                     spawn(async move {
-                                                        match books_for_shelf(tok, cursor, None).await {
+                                                        match books_for_shelf(tok, off, None, Some(SORT_ORDER())).await {
                                                             Ok(page) => {
-                                                                next_cursor.set(page.next_cursor);
+                                                                next_offset.set(page.next_offset);
                                                                 extra_books.write().extend(page.books);
                                                                 loading_more.set(false);
                                                             }

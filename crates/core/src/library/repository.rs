@@ -1,6 +1,6 @@
 use crate::{
     Error,
-    book::{Book, BookId},
+    book::{Book, BookSortOrder},
     filter::BookFilter,
     repository::Transaction,
     user::UserId,
@@ -21,8 +21,9 @@ pub trait LibraryRepository: Send + Sync {
         transaction: &dyn Transaction,
         filter: &BookFilter,
         user_id: UserId,
-        start_id: Option<BookId>,
+        offset: Option<u64>,
         page_size: Option<u64>,
+        sort: Option<BookSortOrder>,
     ) -> Result<Vec<Book>, Error>;
 
     /// Returns the total count of books matching the given filter.

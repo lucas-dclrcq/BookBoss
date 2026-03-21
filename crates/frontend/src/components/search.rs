@@ -217,6 +217,7 @@ mod tests {
             genres: genres.iter().map(std::string::ToString::to_string).collect(),
             tags: tags.iter().map(std::string::ToString::to_string).collect(),
             reading_state: None,
+            created_at: String::new(),
         }
     }
 

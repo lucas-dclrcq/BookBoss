@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     Error, RepositoryError,
-    book::{Book, BookId, BookToken, FileRole},
+    book::{Book, BookToken, FileRole},
     filter::BookFilter,
     repository::{RepositoryService, read_only_transaction, transaction},
     storage::LibraryStore,
@@ -25,7 +25,7 @@ pub trait LibraryService: Send + Sync {
     /// Only supports library-level (non-user-scoped) filter rules. Returns
     /// `Err` if the filter contains user-scoped rules such as `ReadStatus` —
     /// use a user-aware search method for those.
-    async fn search_books(&self, filter: &BookFilter, start_id: Option<BookId>, page_size: Option<u64>) -> Result<Vec<Book>, Error>;
+    async fn search_books(&self, filter: &BookFilter, offset: Option<u64>, page_size: Option<u64>) -> Result<Vec<Book>, Error>;
 
     /// Permanently deletes a book and its files from the library.
     ///
@@ -63,7 +63,7 @@ impl LibraryService for LibraryServiceImpl {
         .await
     }
 
-    async fn search_books(&self, filter: &BookFilter, start_id: Option<BookId>, page_size: Option<u64>) -> Result<Vec<Book>, Error> {
+    async fn search_books(&self, filter: &BookFilter, offset: Option<u64>, page_size: Option<u64>) -> Result<Vec<Book>, Error> {
         if filter.contains_user_scoped_rules() {
             return Err(Error::Validation(
                 "library search does not support user-scoped filter rules such as ReadStatus".to_string(),
@@ -72,7 +72,7 @@ impl LibraryService for LibraryServiceImpl {
         let filter = filter.clone();
         let library_repo = self.repository_service.library_repository().clone();
         read_only_transaction(&**self.repository_service.repository(), |tx| {
-            Box::pin(async move { library_repo.books_for_filter(tx, &filter, 0, start_id, page_size).await })
+            Box::pin(async move { library_repo.books_for_filter(tx, &filter, 0, offset, page_size, None).await })
         })
         .await
     }

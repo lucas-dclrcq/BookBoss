@@ -2,7 +2,13 @@ use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
 use crate::server::AuthSession;
-use crate::{Route, components::NavBar};
+use crate::{
+    Route,
+    components::{
+        NavBar,
+        sort_control::{SORT_ORDER, get_sort_preference},
+    },
+};
 
 #[get("/api/v1/check_auth", auth_session: axum::Extension<AuthSession>)]
 async fn check_auth() -> Result<bool, ServerFnError> {
@@ -14,6 +20,16 @@ pub(crate) fn AppLayout() -> Element {
     // Shared counter bumped after approve/reject so NavBar re-fetches the pending
     // count.
     use_context_provider(|| Signal::new(0u32));
+
+    // Load persisted sort preference once; write to global signal.
+    let sort_pref = use_server_future(get_sort_preference);
+    use_effect(move || {
+        if let Ok(res) = sort_pref {
+            if let Some(Ok(Some(order))) = res() {
+                *SORT_ORDER.write() = order;
+            }
+        }
+    });
 
     rsx! {
         document::Stylesheet { href: asset!("/assets/tailwind.css") }
