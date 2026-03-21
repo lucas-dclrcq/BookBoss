@@ -40,24 +40,24 @@ pub(crate) fn build_condition(filter: &BookFilter, user_id: UserId) -> Result<Co
 
 fn rule_condition(rule: &FilterRule, user_id: UserId) -> Result<Condition, RepositoryError> {
     match rule {
-        FilterRule::TitleText { op, value } => Ok(title_text_condition(op, value)),
-        FilterRule::AuthorText { op, value } => Ok(author_text_condition(op, value)),
-        FilterRule::Author { op, values } => Ok(author_condition(op, values)),
-        FilterRule::Series { op, values } => Ok(series_condition(op, values)),
-        FilterRule::Genre { op, values } => Ok(genre_condition(op, values)),
-        FilterRule::Tag { op, values } => Ok(tag_condition(op, values)),
-        FilterRule::Publisher { op, values } => Ok(publisher_condition(op, values)),
-        FilterRule::Language { op, values } => Ok(language_condition(op, values)),
-        FilterRule::ReadStatus { op, values } => read_status_condition(op, values, user_id),
-        FilterRule::Rating { op, value } => Ok(rating_condition(op, *value)),
-        FilterRule::DateAdded { op, value } => Ok(date_added_condition(op, *value)),
+        FilterRule::TitleText { op, value } => Ok(title_text_condition(*op, value)),
+        FilterRule::AuthorText { op, value } => Ok(author_text_condition(*op, value)),
+        FilterRule::Author { op, values } => Ok(author_condition(*op, values)),
+        FilterRule::Series { op, values } => Ok(series_condition(*op, values)),
+        FilterRule::Genre { op, values } => Ok(genre_condition(*op, values)),
+        FilterRule::Tag { op, values } => Ok(tag_condition(*op, values)),
+        FilterRule::Publisher { op, values } => Ok(publisher_condition(*op, values)),
+        FilterRule::Language { op, values } => Ok(language_condition(*op, values)),
+        FilterRule::ReadStatus { op, values } => read_status_condition(*op, values, user_id),
+        FilterRule::Rating { op, value } => Ok(rating_condition(*op, *value)),
+        FilterRule::DateAdded { op, value } => Ok(date_added_condition(*op, *value)),
     }
 }
 
 // ── Text rules
 // ────────────────────────────────────────────────────────────────
 
-fn title_text_condition(op: &TextOp, value: &str) -> Condition {
+fn title_text_condition(op: TextOp, value: &str) -> Condition {
     let lower_col = Expr::expr(Func::lower(Expr::col(books::Column::Title)));
     match op {
         TextOp::Contains => Condition::all().add(lower_col.binary(BinOper::Like, Expr::value(format!("%{}%", value.to_lowercase())))),
@@ -72,7 +72,7 @@ fn title_text_condition(op: &TextOp, value: &str) -> Condition {
 }
 
 /// Books that have at least one author whose name matches the text rule.
-fn author_text_condition(op: &TextOp, value: &str) -> Condition {
+fn author_text_condition(op: TextOp, value: &str) -> Condition {
     // Inner subquery: author IDs matching the name condition
     let author_ids_subq = |bin_op: BinOper, pattern: String| {
         let mut q = Query::select();
@@ -137,7 +137,7 @@ fn author_text_condition(op: &TextOp, value: &str) -> Condition {
 // ── Junction table rules (Author, Genre, Tag)
 // ─────────────────────────────────
 
-fn author_condition(op: &SetOp, values: &[EntityRef]) -> Condition {
+fn author_condition(op: SetOp, values: &[EntityRef]) -> Condition {
     let ids: Vec<i64> = values.iter().map(|e| e.id).collect();
 
     // SELECT book_id FROM book_authors WHERE author_id IN (ids)
@@ -168,7 +168,7 @@ fn author_condition(op: &SetOp, values: &[EntityRef]) -> Condition {
     junction_set_condition(op, ids, any_subq, one_subq, all_subq)
 }
 
-fn genre_condition(op: &SetOp, values: &[EntityRef]) -> Condition {
+fn genre_condition(op: SetOp, values: &[EntityRef]) -> Condition {
     let ids: Vec<i64> = values.iter().map(|e| e.id).collect();
 
     let any_subq = |ids: Vec<i64>| {
@@ -196,7 +196,7 @@ fn genre_condition(op: &SetOp, values: &[EntityRef]) -> Condition {
     junction_set_condition(op, ids, any_subq, one_subq, all_subq)
 }
 
-fn tag_condition(op: &SetOp, values: &[EntityRef]) -> Condition {
+fn tag_condition(op: SetOp, values: &[EntityRef]) -> Condition {
     let ids: Vec<i64> = values.iter().map(|e| e.id).collect();
 
     let any_subq = |ids: Vec<i64>| {
@@ -233,7 +233,7 @@ fn tag_condition(op: &SetOp, values: &[EntityRef]) -> Condition {
 /// - `all_subq()`    — returns `SELECT book_id FROM junction` (all
 ///   associations)
 fn junction_set_condition(
-    op: &SetOp,
+    op: SetOp,
     ids: Vec<i64>,
     any_subq: impl Fn(Vec<i64>) -> sea_orm::sea_query::SelectStatement,
     one_subq: impl Fn(i64) -> sea_orm::sea_query::SelectStatement,
@@ -266,7 +266,7 @@ fn junction_set_condition(
 
 // ── Direct FK rules (Series, Publisher) ──────────────────────────────────────
 
-fn series_condition(op: &SetOp, values: &[EntityRef]) -> Condition {
+fn series_condition(op: SetOp, values: &[EntityRef]) -> Condition {
     let ids: Vec<i64> = values.iter().map(|e| e.id).collect();
     // Series is a single-value FK; IncludesAll degrades to IncludesAny.
     match op {
@@ -290,7 +290,7 @@ fn series_condition(op: &SetOp, values: &[EntityRef]) -> Condition {
     }
 }
 
-fn publisher_condition(op: &SetOp, values: &[EntityRef]) -> Condition {
+fn publisher_condition(op: SetOp, values: &[EntityRef]) -> Condition {
     let ids: Vec<i64> = values.iter().map(|e| e.id).collect();
     // Publisher is a single-value FK; IncludesAll degrades to IncludesAny.
     match op {
@@ -316,7 +316,7 @@ fn publisher_condition(op: &SetOp, values: &[EntityRef]) -> Condition {
 // ── Language rule (string set on a nullable column)
 // ───────────────────────────
 
-fn language_condition(op: &SetOp, values: &[String]) -> Condition {
+fn language_condition(op: SetOp, values: &[String]) -> Condition {
     let vals: Vec<String> = values.to_vec();
     match op {
         SetOp::IncludesAny | SetOp::IncludesAll => {
@@ -341,7 +341,7 @@ fn language_condition(op: &SetOp, values: &[String]) -> Condition {
 // ── ReadStatus rule
 // ───────────────────────────────────────────────────────────
 
-fn read_status_condition(op: &SetOp, values: &[FilterReadStatus], user_id: UserId) -> Result<Condition, RepositoryError> {
+fn read_status_condition(op: SetOp, values: &[FilterReadStatus], user_id: UserId) -> Result<Condition, RepositoryError> {
     if user_id == 0 {
         return Err(RepositoryError::Constraint(
             "ReadStatus filter requires a valid user context (user_id must not be 0)".to_string(),
@@ -443,7 +443,7 @@ fn filter_read_status_to_str(s: &FilterReadStatus) -> &'static str {
 // ── Numeric / date rules
 // ──────────────────────────────────────────────────────
 
-fn rating_condition(op: &NumericOp, value: u8) -> Condition {
+fn rating_condition(op: NumericOp, value: u8) -> Condition {
     let val = i16::from(value);
     let expr = match op {
         NumericOp::Eq => books::Column::Rating.eq(val),
@@ -456,7 +456,7 @@ fn rating_condition(op: &NumericOp, value: u8) -> Condition {
     Condition::all().add(expr)
 }
 
-fn date_added_condition(op: &DateOp, value: Option<DateTime<chrono::Utc>>) -> Condition {
+fn date_added_condition(op: DateOp, value: Option<DateTime<chrono::Utc>>) -> Condition {
     match op {
         DateOp::Before => match value {
             Some(dt) => Condition::all().add(books::Column::CreatedAt.lt(dt.fixed_offset())),

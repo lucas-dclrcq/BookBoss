@@ -142,7 +142,7 @@ pub(super) enum KoboSyncItem {
 
 /// Returns the Kobo-facing ID for a book: the encoded portion of the token
 /// without the `BK_` prefix.
-pub(super) fn book_uuid_from_token(token: &BookToken) -> String {
+pub(super) fn book_uuid_from_token(token: BookToken) -> String {
     token.encoded_id()
 }
 
@@ -189,7 +189,7 @@ pub(super) fn select_best_file(files: &[BookFile]) -> Option<&BookFile> {
 /// if a best file is provided. Used by both the library sync and per-book
 /// metadata endpoints.
 pub(super) fn build_book_metadata(book: &Book, file: Option<&BookFile>, sync_token: &str, base: &str) -> KoboBookMetadata {
-    let uuid = book_uuid_from_token(&book.token);
+    let uuid = book_uuid_from_token(book.token);
 
     let download_urls = if let Some(file) = file {
         let (format_str, kobo_format) = match file.format {
@@ -244,7 +244,7 @@ pub(super) fn build_book_metadata(book: &Book, file: Option<&BookFile>, sync_tok
 
 pub(super) fn build_new_entitlement(entry: &BookSyncEntry, sync_token: &str, base: &str, reading_state: Option<&UserBookMetadata>) -> KoboSyncItem {
     let book = &entry.book;
-    let uuid = book_uuid_from_token(&book.token);
+    let uuid = book_uuid_from_token(book.token);
     let created = book.created_at.to_rfc3339();
     let last_modified = book.updated_at.to_rfc3339();
 
@@ -262,7 +262,7 @@ pub(super) fn build_new_entitlement(entry: &BookSyncEntry, sync_token: &str, bas
 /// whose file or metadata has changed (upgrade to KEPUB, metadata edit, etc.).
 pub(super) fn build_changed_entitlement(entry: &BookSyncEntry, sync_token: &str, base: &str, reading_state: Option<&UserBookMetadata>) -> KoboSyncItem {
     let book = &entry.book;
-    let uuid = book_uuid_from_token(&book.token);
+    let uuid = book_uuid_from_token(book.token);
     let created = book.created_at.to_rfc3339();
     let last_modified = book.updated_at.to_rfc3339();
 
