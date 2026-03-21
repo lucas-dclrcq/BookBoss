@@ -258,6 +258,11 @@ pub async fn set_job_status(repos: &RepositoryService, job: ImportJob, status: I
     result
 }
 
+pub async fn find_book_by_id(repos: &RepositoryService, id: BookId) -> Option<Book> {
+    let tx = repos.repository().begin_read_only().await.expect("begin read-only tx");
+    repos.book_repository().find_by_id(&*tx, id).await.expect("find_by_id")
+}
+
 pub async fn find_job_by_id(repos: &RepositoryService, id: ImportJobId) -> Option<ImportJob> {
     let tx = repos.repository().begin_read_only().await.expect("begin read-only tx");
     repos.import_job_repository().find_by_id(&*tx, id).await.expect("find_by_id")

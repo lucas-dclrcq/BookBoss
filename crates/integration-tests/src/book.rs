@@ -47,10 +47,11 @@ async fn list_books_filters_by_status() {
 }
 
 #[tokio::test]
-async fn list_books_returns_all_without_filter() {
+async fn list_books_returns_all_available_without_filter() {
     let ctx = setup().await;
     fixtures::insert_book(&ctx.repos, "Book A", BookStatus::Available).await;
-    fixtures::insert_book(&ctx.repos, "Book B", BookStatus::Incoming).await;
+    fixtures::insert_book(&ctx.repos, "Book B", BookStatus::Available).await;
+    fixtures::insert_book(&ctx.repos, "Book C", BookStatus::Incoming).await;
 
     let books = ctx.services.book_service.list_books(&BookQuery::default(), None, None).await.unwrap();
 

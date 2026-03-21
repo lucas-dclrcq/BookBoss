@@ -66,8 +66,7 @@ async fn process_job_creates_book_with_incoming_status() {
     let updated = svc.pipeline_service.process_job(job).await.unwrap();
 
     let book_id = updated.candidate_book_id.expect("candidate_book_id set");
-    let books = svc.book_service.list_books(&BookQuery::default(), None, None).await.unwrap();
-    let book = books.iter().find(|b| b.id == book_id).expect("book found");
+    let book = fixtures::find_book_by_id(&ctx.repos, book_id).await.expect("book found");
     assert_eq!(book.status, BookStatus::Incoming);
     assert_eq!(book.title, "The Test Book");
 }
@@ -81,8 +80,7 @@ async fn process_job_creates_author_from_metadata() {
     let updated = svc.pipeline_service.process_job(job).await.unwrap();
 
     let book_id = updated.candidate_book_id.expect("candidate_book_id set");
-    let books = svc.book_service.list_books(&BookQuery::default(), None, None).await.unwrap();
-    let book = books.iter().find(|b| b.id == book_id).expect("book found");
+    let book = fixtures::find_book_by_id(&ctx.repos, book_id).await.expect("book found");
     let authors = svc.book_service.authors_for_book(book.id).await.unwrap();
     assert_eq!(authors.len(), 1);
     // Verify the linked author is "Test Author" by looking up by author_id
@@ -133,8 +131,7 @@ async fn process_job_uses_filename_as_fallback_title() {
     let updated = svc.pipeline_service.process_job(job).await.unwrap();
 
     let book_id = updated.candidate_book_id.expect("candidate_book_id set");
-    let books = svc.book_service.list_books(&BookQuery::default(), None, None).await.unwrap();
-    let book = books.iter().find(|b| b.id == book_id).expect("book found");
+    let book = fixtures::find_book_by_id(&ctx.repos, book_id).await.expect("book found");
     // file_path is "/watch/hash_no_title.epub" → stem is "hash_no_title"
     assert_eq!(book.title, "hash_no_title");
 }
@@ -148,14 +145,12 @@ async fn reject_job_removes_candidate_book() {
     let svc = fixtures::pipeline_services(&ctx, stub_metadata());
     let job = fixtures::insert_import_job(&ctx.repos, "hash_reject_book").await;
     let job = svc.pipeline_service.process_job(job).await.unwrap();
-    let book_token = {
-        let books = svc.book_service.list_books(&BookQuery::default(), None, None).await.unwrap();
-        books.first().expect("book exists").token
-    };
+    let book_id = job.candidate_book_id.expect("candidate_book_id set");
+    let book = fixtures::find_book_by_id(&ctx.repos, book_id).await.expect("book exists");
 
     svc.pipeline_service.reject_job(job.token).await.unwrap();
 
-    let found = svc.book_service.find_book_by_token(&book_token).await.unwrap();
+    let found = svc.book_service.find_book_by_token(&book.token).await.unwrap();
     assert!(found.is_none(), "book should be deleted after reject");
 }
 
@@ -226,10 +221,9 @@ async fn approve_job_transitions_book_to_available() {
     let svc = fixtures::pipeline_services(&ctx, stub_metadata());
     let job = fixtures::insert_import_job(&ctx.repos, "hash_approve_available").await;
     let job = svc.pipeline_service.process_job(job).await.unwrap();
-    let book_token = {
-        let books = svc.book_service.list_books(&BookQuery::default(), None, None).await.unwrap();
-        books.first().expect("book exists").token
-    };
+    let book_id = job.candidate_book_id.expect("candidate_book_id set");
+    let book = fixtures::find_book_by_id(&ctx.repos, book_id).await.expect("book exists");
+    let book_token = book.token;
     let edit = minimal_edit("Approved Book", "Test Author");
 
     svc.pipeline_service.approve_job(job.token, edit, &std::env::temp_dir()).await.unwrap();
