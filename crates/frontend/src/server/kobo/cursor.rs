@@ -28,7 +28,7 @@ const PREFIX: &str = "BB1";
 /// initial sync. A `last_book_id` of `0` (produced when `after_book_id` is
 /// `None`) indicates the first page.
 pub fn encode(since: Option<DateTime<Utc>>, after_book_id: Option<BookId>) -> String {
-    let ts = since.map(|t| t.timestamp_millis()).unwrap_or(0);
+    let ts = since.map_or(0, |t| t.timestamp_millis());
     let id = after_book_id.unwrap_or(0);
     format!("{PREFIX}:{ts}:{id}")
 }

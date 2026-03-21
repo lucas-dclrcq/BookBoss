@@ -267,7 +267,7 @@ pub(super) fn build_kobo_state(state: &bb_core::reading::UserBookMetadata) -> se
         ReadStatus::Read => (100.0f64, None),
         ReadStatus::Unread => (0.0f64, None),
         _ => {
-            let p = state.progress_percentage.map(|v| v as f64 / 100.0).unwrap_or(0.0);
+            let p = state.progress_percentage.map_or(0.0, |v| v as f64 / 100.0);
             let loc = match (&state.position_type, &state.position_token) {
                 (Some(t), Some(v)) if !t.is_empty() && !v.is_empty() => Some(json!({
                     "Type": t,

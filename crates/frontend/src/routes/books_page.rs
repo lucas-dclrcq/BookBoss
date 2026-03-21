@@ -122,8 +122,7 @@ pub(crate) async fn hydrate_books(
             let (series_token, series_name) = book
                 .series_id
                 .and_then(|sid| series_map.get(&sid))
-                .map(|(tok, name)| (Some(tok.clone()), Some(name.clone())))
-                .unwrap_or((None, None));
+                .map_or((None, None), |(tok, name)| (Some(tok.clone()), Some(name.clone())));
             BookSummary {
                 token: book.token.to_string(),
                 title: book.title.clone(),
