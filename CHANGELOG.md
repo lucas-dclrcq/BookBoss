@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1](https://github.com/szinn/BookBoss/compare/v0.5.0..v0.5.1) - 2026-03-21
+
+### Features
+
+- _(core,database,frontend)_ Add sortable book display with sort control UI - ([52f1956](https://github.com/szinn/BookBoss/commit/52f1956360fb9ead55c676859454644274604c2b))
+- _(frontend)_ Add search bar to NavBar for live client-side book filtering - ([8852f48](https://github.com/szinn/BookBoss/commit/8852f48fb97268779bec81d234a295b1107f0a85))
+- _(frontend)_ Dismiss all modals on Escape key - ([c56da4a](https://github.com/szinn/BookBoss/commit/c56da4aa3739f014af816b1cf6e745fc15c76e9e))
+- _(import)_ Disconnect bookdrop scanner from timer; add UI refresh button - ([bf2cf5b](https://github.com/szinn/BookBoss/commit/bf2cf5b9d504cd591fdce8358a7969bf328703a7))
+
+### Bug Fixes
+
+- _(database,frontend)_ Pass trivially-copy op types by value - ([a0d2dc9](https://github.com/szinn/BookBoss/commit/a0d2dc97b4f483eec0f4ce19c09ca8b9bafbcf37))
+- _(frontend)_ Increase spacing before recheck button in Incoming nav item - ([eda5543](https://github.com/szinn/BookBoss/commit/eda554336286b2183f0022c3ce82af5d4ef5f290))
+- _(frontend)_ Replace map().unwrap_or() with map_or() - ([2d3e813](https://github.com/szinn/BookBoss/commit/2d3e813ab8cc32c7475df09453c0443bd80b3093))
+- _(storage,frontend)_ Rewrite match-to-return as let...else - ([68d6989](https://github.com/szinn/BookBoss/commit/68d6989d6401652658c8bd86f806a3faf8fc600c))
+
+### Refactor
+
+- _(core)_ Replace Nop mocks with mockall in test_support - ([beb2c3f](https://github.com/szinn/BookBoss/commit/beb2c3f68712cc206aee407dd3fb989ce4f8984a))
+- _(core)_ Introduce JobService port for background job enqueueing - ([6f35a68](https://github.com/szinn/BookBoss/commit/6f35a6854d553d79d05f454f58d0c4cdc5c58405))
+- _(core)_ Introduce ExternalServices builder for create_services - ([9fe82bb](https://github.com/szinn/BookBoss/commit/9fe82bbf17d9482e174ac7c48bd327b96c3bcac5))
+- _(core,database,frontend)_ Remove status from BookQuery; enforce available in adapter - ([7358ace](https://github.com/szinn/BookBoss/commit/7358ace5c4b6b1ab85b244e71aa6204e35e6fd9c))
+- _(frontend)_ Display OPDS username and password on the same line - ([dd384dc](https://github.com/szinn/BookBoss/commit/dd384dc71479f3dde37ecc5f3cd9f5261d12696c))
+- _(import)_ Remove RepositoryService from bb-import adapters - ([0f132a0](https://github.com/szinn/BookBoss/commit/0f132a0db752a9d20b7ff23ce6e872464a1fa017))
+
+### Miscellaneous Tasks
+
+- _(build)_ Opt-level=1 for all workspace crates in dev profile - ([7af6d83](https://github.com/szinn/BookBoss/commit/7af6d8356e0515ee7e96bbbd5e157b0921e7149b))
+
 ## [0.5.0](https://github.com/szinn/BookBoss/compare/v0.4.6..v0.5.0) - 2026-03-20
 
 ### Features
