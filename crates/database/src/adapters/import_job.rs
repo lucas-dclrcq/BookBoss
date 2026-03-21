@@ -120,7 +120,7 @@ impl ImportJobRepository for ImportJobRepositoryAdapter {
             .map(Into::into))
     }
 
-    async fn find_by_token(&self, transaction: &dyn Transaction, token: &ImportJobToken) -> Result<Option<ImportJob>, Error> {
+    async fn find_by_token(&self, transaction: &dyn Transaction, token: ImportJobToken) -> Result<Option<ImportJob>, Error> {
         self.find_by_id(transaction, token.id()).await
     }
 
@@ -311,7 +311,7 @@ mod tests {
         let tx = svc.repository().begin().await.unwrap();
 
         let inserted = svc.import_job_repository().add_job(&*tx, new_job("/watch/dune.epub")).await.unwrap();
-        let result = svc.import_job_repository().find_by_token(&*tx, &inserted.token).await;
+        let result = svc.import_job_repository().find_by_token(&*tx, inserted.token).await;
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap().unwrap().id, inserted.id);

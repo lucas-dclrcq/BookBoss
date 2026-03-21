@@ -31,7 +31,7 @@ pub trait DeviceService: Send + Sync {
     ///
     /// Returns `NotFound` if the token does not exist or belongs to another
     /// user.
-    async fn get_device(&self, token: &DeviceToken, user_id: UserId) -> Result<Device, Error>;
+    async fn get_device(&self, token: DeviceToken, user_id: UserId) -> Result<Device, Error>;
 
     /// Creates a new device and a companion private smart shelf (atomically).
     ///
@@ -44,14 +44,14 @@ pub trait DeviceService: Send + Sync {
     ///
     /// If the name changes the companion shelf (if any) is renamed to match
     /// within the same transaction.
-    async fn update_device(&self, token: &DeviceToken, name: String, on_removal_action: OnRemovalAction, user_id: UserId) -> Result<(), Error>;
+    async fn update_device(&self, token: DeviceToken, name: String, on_removal_action: OnRemovalAction, user_id: UserId) -> Result<(), Error>;
 
     /// Deletes a device.
     ///
     /// When `delete_companion_shelf` is `true` the linked shelf is deleted
     /// first; otherwise it survives as a regular unlinked smart shelf (the FK
     /// is cleared automatically by `ON DELETE SET NULL`).
-    async fn delete_device(&self, token: &DeviceToken, delete_companion_shelf: bool, user_id: UserId) -> Result<(), Error>;
+    async fn delete_device(&self, token: DeviceToken, delete_companion_shelf: bool, user_id: UserId) -> Result<(), Error>;
 
     /// Returns the companion shelf linked to the given device, if one exists.
     async fn get_companion_shelf(&self, device_id: DeviceId) -> Result<Option<Shelf>, Error>;
@@ -94,14 +94,14 @@ pub trait DeviceService: Send + Sync {
     /// Used by the Kobo sync extractor where the token itself is the
     /// authentication credential. Returns `None` if no device with that token
     /// exists.
-    async fn find_device_by_token(&self, token: &DeviceToken) -> Result<Option<Device>, Error>;
+    async fn find_device_by_token(&self, token: DeviceToken) -> Result<Option<Device>, Error>;
 
     /// Clears all `DeviceBook` records for a device, forcing a full resync on
     /// the next Kobo library sync. Also resets `last_synced_at` to `None`.
     ///
     /// Returns `NotFound` if the token does not exist or belongs to another
     /// user.
-    async fn reset_device_sync(&self, token: &DeviceToken, user_id: UserId) -> Result<(), Error>;
+    async fn reset_device_sync(&self, token: DeviceToken, user_id: UserId) -> Result<(), Error>;
 
     /// Removes a single `DeviceBook` record for the given device and book.
     ///
@@ -177,12 +177,10 @@ impl DeviceService for DeviceServiceImpl {
     }
 
     // #[tracing::instrument(level = "trace", skip(self))]
-    async fn get_device(&self, token: &DeviceToken, user_id: UserId) -> Result<Device, Error> {
-        let token = *token;
-
+    async fn get_device(&self, token: DeviceToken, user_id: UserId) -> Result<Device, Error> {
         with_read_only_transaction!(self, device_repository, |tx| {
             let device = device_repository
-                .find_by_token(tx, &token)
+                .find_by_token(tx, token)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
@@ -235,16 +233,14 @@ impl DeviceService for DeviceServiceImpl {
     }
 
     // #[tracing::instrument(level = "trace", skip(self))]
-    async fn update_device(&self, token: &DeviceToken, name: String, on_removal_action: OnRemovalAction, user_id: UserId) -> Result<(), Error> {
+    async fn update_device(&self, token: DeviceToken, name: String, on_removal_action: OnRemovalAction, user_id: UserId) -> Result<(), Error> {
         if name.trim().is_empty() {
             return Err(Error::Validation("device name must not be empty".to_string()));
         }
 
-        let token = *token;
-
         with_transaction!(self, device_repository, shelf_repository, |tx| {
             let device = device_repository
-                .find_by_token(tx, &token)
+                .find_by_token(tx, token)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
@@ -273,12 +269,10 @@ impl DeviceService for DeviceServiceImpl {
     }
 
     // #[tracing::instrument(level = "trace", skip(self))]
-    async fn delete_device(&self, token: &DeviceToken, delete_companion_shelf: bool, user_id: UserId) -> Result<(), Error> {
-        let token = *token;
-
+    async fn delete_device(&self, token: DeviceToken, delete_companion_shelf: bool, user_id: UserId) -> Result<(), Error> {
         with_transaction!(self, device_repository, shelf_repository, |tx| {
             let device = device_repository
-                .find_by_token(tx, &token)
+                .find_by_token(tx, token)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
@@ -539,16 +533,14 @@ impl DeviceService for DeviceServiceImpl {
     }
 
     // #[tracing::instrument(level = "trace", skip(self))]
-    async fn find_device_by_token(&self, token: &DeviceToken) -> Result<Option<Device>, Error> {
-        let token = *token;
-        with_read_only_transaction!(self, device_repository, |tx| device_repository.find_by_token(tx, &token).await)
+    async fn find_device_by_token(&self, token: DeviceToken) -> Result<Option<Device>, Error> {
+        with_read_only_transaction!(self, device_repository, |tx| device_repository.find_by_token(tx, token).await)
     }
 
-    async fn reset_device_sync(&self, token: &DeviceToken, user_id: UserId) -> Result<(), Error> {
-        let token = *token;
+    async fn reset_device_sync(&self, token: DeviceToken, user_id: UserId) -> Result<(), Error> {
         with_transaction!(self, device_repository, |tx| {
             let device = device_repository
-                .find_by_token(tx, &token)
+                .find_by_token(tx, token)
                 .await?
                 .filter(|d| d.owner_id == user_id)
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
@@ -767,7 +759,7 @@ mod tests {
         });
         let svc = create_service(device_repo, MockShelfRepository::new(), MockUserRepository::new());
 
-        let result = svc.get_device(&token, 1).await.unwrap();
+        let result = svc.get_device(token, 1).await.unwrap();
 
         assert_eq!(result.id, device_id);
     }
@@ -779,7 +771,7 @@ mod tests {
         device_repo.expect_find_by_token().returning(|_, _| Box::pin(async { Ok(None) }));
         let svc = create_service(device_repo, MockShelfRepository::new(), MockUserRepository::new());
 
-        let result = svc.get_device(&token, 1).await;
+        let result = svc.get_device(token, 1).await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::NotFound))));
     }
@@ -795,7 +787,7 @@ mod tests {
         });
         let svc = create_service(device_repo, MockShelfRepository::new(), MockUserRepository::new());
 
-        let result = svc.get_device(&token, 2).await; // user 2 requests
+        let result = svc.get_device(token, 2).await; // user 2 requests
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::NotFound))));
     }
@@ -871,7 +863,7 @@ mod tests {
         });
         let svc = create_service(device_repo, shelf_repo, MockUserRepository::new());
 
-        let result = svc.update_device(&token, "New Name".to_string(), OnRemovalAction::Nothing, 1).await;
+        let result = svc.update_device(token, "New Name".to_string(), OnRemovalAction::Nothing, 1).await;
 
         result.unwrap();
     }
@@ -895,7 +887,7 @@ mod tests {
         let svc = create_service(device_repo, MockShelfRepository::new(), MockUserRepository::new());
 
         // Same name as current — shelf rename should not be attempted
-        let result = svc.update_device(&token, "My Device".to_string(), OnRemovalAction::MarkRead, 1).await;
+        let result = svc.update_device(token, "My Device".to_string(), OnRemovalAction::MarkRead, 1).await;
 
         result.unwrap();
     }
@@ -911,7 +903,7 @@ mod tests {
         });
         let svc = create_service(device_repo, MockShelfRepository::new(), MockUserRepository::new());
 
-        let result = svc.update_device(&token, "New Name".to_string(), OnRemovalAction::Nothing, 2).await;
+        let result = svc.update_device(token, "New Name".to_string(), OnRemovalAction::Nothing, 2).await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::NotFound))));
     }
@@ -938,7 +930,7 @@ mod tests {
         shelf_repo.expect_delete_shelf().returning(|_, _| Box::pin(async { Ok(()) }));
         let svc = create_service(device_repo, shelf_repo, MockUserRepository::new());
 
-        let result = svc.delete_device(&token, true, 1).await;
+        let result = svc.delete_device(token, true, 1).await;
 
         result.unwrap();
     }
@@ -955,7 +947,7 @@ mod tests {
         device_repo.expect_delete_device().returning(|_, _| Box::pin(async { Ok(()) }));
         let svc = create_service(device_repo, MockShelfRepository::new(), MockUserRepository::new());
 
-        let result = svc.delete_device(&token, false, 1).await;
+        let result = svc.delete_device(token, false, 1).await;
 
         result.unwrap();
     }
@@ -971,7 +963,7 @@ mod tests {
         });
         let svc = create_service(device_repo, MockShelfRepository::new(), MockUserRepository::new());
 
-        let result = svc.delete_device(&token, false, 2).await;
+        let result = svc.delete_device(token, false, 2).await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::NotFound))));
     }

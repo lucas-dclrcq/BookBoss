@@ -87,7 +87,7 @@ pub(crate) async fn hydrate_books(
     let mut author_map: HashMap<u64, (String, String)> = HashMap::new();
     for author_id in all_author_ids {
         if let Some(a) = book_service
-            .find_author_by_token(&AuthorToken::new(author_id))
+            .find_author_by_token(AuthorToken::new(author_id))
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?
         {
@@ -100,7 +100,7 @@ pub(crate) async fn hydrate_books(
     let mut series_map: HashMap<u64, (String, String)> = HashMap::new();
     for series_id in unique_series {
         if let Some(s) = book_service
-            .find_series_by_token(&SeriesToken::new(series_id))
+            .find_series_by_token(SeriesToken::new(series_id))
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?
         {

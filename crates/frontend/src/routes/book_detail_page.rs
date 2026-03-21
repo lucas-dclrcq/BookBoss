@@ -97,7 +97,7 @@ async fn get_book(token: String) -> Result<BookDetail, ServerFnError> {
     let book_token = BookToken::from_str(&token).map_err(|_| ServerFnError::new("Invalid book token"))?;
 
     let book = book_service
-        .find_book_by_token(&book_token)
+        .find_book_by_token(book_token)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?
         .ok_or_else(|| ServerFnError::new("Book not found"))?;
@@ -116,7 +116,7 @@ async fn get_book(token: String) -> Result<BookDetail, ServerFnError> {
     for ba in &book_author_links {
         if let std::collections::hash_map::Entry::Vacant(e) = author_map.entry(ba.author_id) {
             if let Some(author) = book_service
-                .find_author_by_token(&AuthorToken::new(ba.author_id))
+                .find_author_by_token(AuthorToken::new(ba.author_id))
                 .await
                 .map_err(|e| ServerFnError::new(e.to_string()))?
             {
@@ -142,7 +142,7 @@ async fn get_book(token: String) -> Result<BookDetail, ServerFnError> {
     // Fetch series name and token if needed
     let (series_token, series_name) = if let Some(series_id) = book.series_id {
         let series = book_service
-            .find_series_by_token(&SeriesToken::new(series_id))
+            .find_series_by_token(SeriesToken::new(series_id))
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?;
         match series {
@@ -249,7 +249,7 @@ pub(crate) async fn delete_library_book(token: String) -> Result<(), ServerFnErr
 
     core_services
         .library_service
-        .delete_book(&book_token)
+        .delete_book(book_token)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))
 }
@@ -264,7 +264,7 @@ async fn set_reading_status(token: String, status: String) -> Result<ReadingStat
     let book_token = BookToken::from_str(&token).map_err(|_| ServerFnError::new("Invalid book token"))?;
     let book = core_services
         .book_service
-        .find_book_by_token(&book_token)
+        .find_book_by_token(book_token)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?
         .ok_or_else(|| ServerFnError::new("Book not found"))?;
@@ -302,7 +302,7 @@ async fn update_reading_progress(token: String, progress_pct: u8) -> Result<Read
     let book_token = BookToken::from_str(&token).map_err(|_| ServerFnError::new("Invalid book token"))?;
     let book = core_services
         .book_service
-        .find_book_by_token(&book_token)
+        .find_book_by_token(book_token)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?
         .ok_or_else(|| ServerFnError::new("Book not found"))?;
@@ -327,7 +327,7 @@ async fn set_personal_rating(token: String, rating: u8) -> Result<ReadingStateDt
     let book_token = BookToken::from_str(&token).map_err(|_| ServerFnError::new("Invalid book token"))?;
     let book = core_services
         .book_service
-        .find_book_by_token(&book_token)
+        .find_book_by_token(book_token)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?
         .ok_or_else(|| ServerFnError::new("Book not found"))?;
@@ -351,7 +351,7 @@ async fn clear_personal_rating(token: String) -> Result<ReadingStateDto, ServerF
     let book_token = BookToken::from_str(&token).map_err(|_| ServerFnError::new("Invalid book token"))?;
     let book = core_services
         .book_service
-        .find_book_by_token(&book_token)
+        .find_book_by_token(book_token)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?
         .ok_or_else(|| ServerFnError::new("Book not found"))?;
@@ -375,7 +375,7 @@ async fn save_reading_notes(token: String, notes: String) -> Result<ReadingState
     let book_token = BookToken::from_str(&token).map_err(|_| ServerFnError::new("Invalid book token"))?;
     let book = core_services
         .book_service
-        .find_book_by_token(&book_token)
+        .find_book_by_token(book_token)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?
         .ok_or_else(|| ServerFnError::new("Book not found"))?;

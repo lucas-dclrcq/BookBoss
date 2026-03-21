@@ -153,14 +153,14 @@ pub(super) async fn get_review_data(job_token: String) -> Result<BookReviewData,
     let pipeline_service = &core_services.pipeline_service;
 
     let job = import_service
-        .find_by_token(&token)
+        .find_by_token(token)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?
         .ok_or_else(|| ServerFnError::new("Job not found"))?;
 
     let book_id = job.candidate_book_id.ok_or_else(|| ServerFnError::new("No candidate book"))?;
     let book = book_service
-        .find_book_by_token(&BookToken::new(book_id))
+        .find_book_by_token(BookToken::new(book_id))
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?
         .ok_or_else(|| ServerFnError::new("Book not found"))?;
@@ -174,7 +174,7 @@ pub(super) async fn get_review_data(job_token: String) -> Result<BookReviewData,
     let mut author_names = Vec::with_capacity(book_author_links.len());
     for ba in &book_author_links {
         if let Some(author) = book_service
-            .find_author_by_token(&AuthorToken::new(ba.author_id))
+            .find_author_by_token(AuthorToken::new(ba.author_id))
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?
         {
@@ -185,7 +185,7 @@ pub(super) async fn get_review_data(job_token: String) -> Result<BookReviewData,
     // Series name
     let series_name = if let Some(sid) = book.series_id {
         book_service
-            .find_series_by_token(&SeriesToken::new(sid))
+            .find_series_by_token(SeriesToken::new(sid))
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?
             .map(|s| s.name)
@@ -197,7 +197,7 @@ pub(super) async fn get_review_data(job_token: String) -> Result<BookReviewData,
     // Publisher name
     let publisher_name = if let Some(pid) = book.publisher_id {
         book_service
-            .find_publisher_by_token(&PublisherToken::new(pid))
+            .find_publisher_by_token(PublisherToken::new(pid))
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?
             .map(|p| p.name)
@@ -224,7 +224,7 @@ pub(super) async fn get_review_data(job_token: String) -> Result<BookReviewData,
 
     // Read cover file to determine dimensions.
     let cover_dimensions = if let Some(filename) = &book.cover_path {
-        let path = core_services.library_store.cover_path(&book.token, filename);
+        let path = core_services.library_store.cover_path(book.token, filename);
         tokio::fs::read(&path).await.ok().and_then(|b| image_dimensions(&b))
     } else {
         None
@@ -414,7 +414,7 @@ pub(crate) async fn get_book_for_edit(book_token: String) -> Result<BookReviewDa
 
     let token = BookToken::from_str(&book_token).map_err(|_| ServerFnError::new("Invalid book token"))?;
     let book = book_service
-        .find_book_by_token(&token)
+        .find_book_by_token(token)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?
         .ok_or_else(|| ServerFnError::new("Book not found"))?;
@@ -428,7 +428,7 @@ pub(crate) async fn get_book_for_edit(book_token: String) -> Result<BookReviewDa
     let mut author_names = Vec::with_capacity(book_author_links.len());
     for ba in &book_author_links {
         if let Some(author) = book_service
-            .find_author_by_token(&AuthorToken::new(ba.author_id))
+            .find_author_by_token(AuthorToken::new(ba.author_id))
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?
         {
@@ -439,7 +439,7 @@ pub(crate) async fn get_book_for_edit(book_token: String) -> Result<BookReviewDa
     // Series name
     let series_name = if let Some(sid) = book.series_id {
         book_service
-            .find_series_by_token(&SeriesToken::new(sid))
+            .find_series_by_token(SeriesToken::new(sid))
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?
             .map(|s| s.name)
@@ -451,7 +451,7 @@ pub(crate) async fn get_book_for_edit(book_token: String) -> Result<BookReviewDa
     // Publisher name
     let publisher_name = if let Some(pid) = book.publisher_id {
         book_service
-            .find_publisher_by_token(&PublisherToken::new(pid))
+            .find_publisher_by_token(PublisherToken::new(pid))
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?
             .map(|p| p.name)
@@ -478,7 +478,7 @@ pub(crate) async fn get_book_for_edit(book_token: String) -> Result<BookReviewDa
 
     // Cover dimensions
     let cover_dimensions = if let Some(filename) = &book.cover_path {
-        let path = core_services.library_store.cover_path(&book.token, filename);
+        let path = core_services.library_store.cover_path(book.token, filename);
         tokio::fs::read(&path).await.ok().and_then(|b| image_dimensions(&b))
     } else {
         None
@@ -606,7 +606,7 @@ pub(super) async fn save_library_book(book_token: String, fields: BookEditFields
     let temp_dir = std::env::temp_dir();
     core_services
         .pipeline_service
-        .edit_book(&token, edit, &book_token, &temp_dir)
+        .edit_book(token, edit, &book_token, &temp_dir)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 

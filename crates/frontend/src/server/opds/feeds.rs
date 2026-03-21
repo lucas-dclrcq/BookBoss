@@ -212,7 +212,7 @@ pub async fn shelf_books(
         Err(_) => return error_response(StatusCode::BAD_REQUEST),
     };
 
-    let Ok(shelf) = core_services.shelf_service.get_shelf(&shelf_token, user_id).await else {
+    let Ok(shelf) = core_services.shelf_service.get_shelf(shelf_token, user_id).await else {
         return error_response(StatusCode::NOT_FOUND);
     };
 
@@ -220,7 +220,7 @@ pub async fn shelf_books(
     let books: Vec<Book> = if shelf.shelf_type == ShelfType::Smart {
         match core_services
             .shelf_service
-            .books_for_filter(&shelf_token, user_id, offset, Some(PAGE_SIZE + 1), None)
+            .books_for_filter(shelf_token, user_id, offset, Some(PAGE_SIZE + 1), None)
             .await
         {
             Ok(b) => b,
@@ -229,14 +229,14 @@ pub async fn shelf_books(
     } else {
         let Ok(entries) = core_services
             .shelf_service
-            .books_for_shelf(&shelf_token, user_id, offset, Some(PAGE_SIZE + 1))
+            .books_for_shelf(shelf_token, user_id, offset, Some(PAGE_SIZE + 1))
             .await
         else {
             return error_response(StatusCode::INTERNAL_SERVER_ERROR);
         };
         let mut result = Vec::with_capacity(entries.len());
         for entry in &entries {
-            if let Ok(Some(book)) = core_services.book_service.find_book_by_token(&BookToken::new(entry.book_id)).await {
+            if let Ok(Some(book)) = core_services.book_service.find_book_by_token(BookToken::new(entry.book_id)).await {
                 result.push(book);
             }
         }
@@ -311,7 +311,7 @@ pub async fn author_books(
     let _ = &opds_user;
     let now = Utc::now();
 
-    let author = match core_services.book_service.find_author_by_token(&AuthorToken::new(author_id)).await {
+    let author = match core_services.book_service.find_author_by_token(AuthorToken::new(author_id)).await {
         Ok(Some(a)) => a,
         Ok(None) => return error_response(StatusCode::NOT_FOUND),
         Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR),
@@ -395,7 +395,7 @@ pub async fn series_books(
     let _ = &opds_user;
     let now = Utc::now();
 
-    let series = match core_services.book_service.find_series_by_token(&SeriesToken::new(series_id)).await {
+    let series = match core_services.book_service.find_series_by_token(SeriesToken::new(series_id)).await {
         Ok(Some(s)) => s,
         Ok(None) => return error_response(StatusCode::NOT_FOUND),
         Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR),
@@ -546,7 +546,7 @@ async fn book_to_entry(book: &Book, core_services: &Arc<CoreServices>) -> AtomEn
     }
 
     for ba in &book_authors {
-        if let Ok(Some(author)) = core_services.book_service.find_author_by_token(&AuthorToken::new(ba.author_id)).await {
+        if let Ok(Some(author)) = core_services.book_service.find_author_by_token(AuthorToken::new(ba.author_id)).await {
             entry = entry.with_author(&author.name);
         }
     }
@@ -567,7 +567,7 @@ pub async fn serve_cover(Path(book_token_str): Path<String>, _opds_user: OpdsUse
         Err(_) => return error_response(StatusCode::BAD_REQUEST),
     };
 
-    let book = match core_services.book_service.find_book_by_token(&token).await {
+    let book = match core_services.book_service.find_book_by_token(token).await {
         Ok(Some(b)) => b,
         Ok(None) => return error_response(StatusCode::NOT_FOUND),
         Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR),
@@ -582,7 +582,7 @@ pub async fn serve_cover(Path(book_token_str): Path<String>, _opds_user: OpdsUse
             .unwrap();
     };
 
-    let path = core_services.library_store.cover_path(&token, &filename);
+    let path = core_services.library_store.cover_path(token, &filename);
 
     match tokio::fs::read(&path).await {
         Ok(data) => {
@@ -620,7 +620,7 @@ pub async fn serve_download(
         Err(_) => return error_response(StatusCode::BAD_REQUEST),
     };
 
-    let book = match core_services.book_service.find_book_by_token(&token).await {
+    let book = match core_services.book_service.find_book_by_token(token).await {
         Ok(Some(b)) => b,
         Ok(None) => return error_response(StatusCode::NOT_FOUND),
         Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR),

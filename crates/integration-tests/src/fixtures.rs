@@ -28,28 +28,28 @@ impl LibraryStore for SilentLibraryStore {
     fn resolve(&self, _relative_path: &str) -> PathBuf {
         PathBuf::new()
     }
-    fn cover_path(&self, _token: &BookToken, _filename: &str) -> PathBuf {
+    fn cover_path(&self, _token: BookToken, _filename: &str) -> PathBuf {
         PathBuf::new()
     }
-    fn metadata_path(&self, _token: &BookToken) -> PathBuf {
+    fn metadata_path(&self, _token: BookToken) -> PathBuf {
         PathBuf::new()
     }
     async fn store_original_file(&self, _source_hash: &str, original_filename: &str, _source: &Path) -> Result<String, Error> {
         Ok(format!("Originals/{original_filename}"))
     }
-    async fn store_book_file(&self, token: &BookToken, slug: &str, _format: FileFormat, _source: &Path) -> Result<String, Error> {
+    async fn store_book_file(&self, token: BookToken, slug: &str, _format: FileFormat, _source: &Path) -> Result<String, Error> {
         Ok(format!("{token}/{slug}.epub"))
     }
-    async fn store_cover(&self, _token: &BookToken, _filename: &str, _data: &[u8]) -> Result<(), Error> {
+    async fn store_cover(&self, _token: BookToken, _filename: &str, _data: &[u8]) -> Result<(), Error> {
         Ok(())
     }
-    async fn store_metadata(&self, _token: &BookToken, _sidecar: &BookSidecar) -> Result<(), Error> {
+    async fn store_metadata(&self, _token: BookToken, _sidecar: &BookSidecar) -> Result<(), Error> {
         Ok(())
     }
-    async fn rename_book_files(&self, _token: &BookToken, _old_slug: &str, _new_slug: &str) -> Result<(), Error> {
+    async fn rename_book_files(&self, _token: BookToken, _old_slug: &str, _new_slug: &str) -> Result<(), Error> {
         Ok(())
     }
-    async fn delete_book(&self, _token: &BookToken) -> Result<(), Error> {
+    async fn delete_book(&self, _token: BookToken) -> Result<(), Error> {
         Ok(())
     }
     async fn delete_original_file(&self, _relative_path: &str) -> Result<(), Error> {

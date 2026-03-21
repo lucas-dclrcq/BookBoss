@@ -20,28 +20,28 @@ pub trait ShelfService: Send + Sync {
     async fn create_manual_shelf(&self, owner_id: UserId, name: String, visibility: ShelfVisibility) -> Result<ShelfToken, Error>;
 
     /// Renames a shelf. Only the owner may rename.
-    async fn rename_shelf(&self, token: &ShelfToken, new_name: String, user_id: UserId) -> Result<(), Error>;
+    async fn rename_shelf(&self, token: ShelfToken, new_name: String, user_id: UserId) -> Result<(), Error>;
 
     /// Deletes a shelf. Only the owner may delete.
-    async fn delete_shelf(&self, token: &ShelfToken, user_id: UserId) -> Result<(), Error>;
+    async fn delete_shelf(&self, token: ShelfToken, user_id: UserId) -> Result<(), Error>;
 
     /// Adds a book to a shelf. Only the owner may add books.
-    async fn add_book_to_shelf(&self, shelf_token: &ShelfToken, book_token: &BookToken, user_id: UserId) -> Result<(), Error>;
+    async fn add_book_to_shelf(&self, shelf_token: ShelfToken, book_token: BookToken, user_id: UserId) -> Result<(), Error>;
 
     /// Removes a book from a shelf. Only the owner may remove books.
-    async fn remove_book_from_shelf(&self, shelf_token: &ShelfToken, book_token: &BookToken, user_id: UserId) -> Result<(), Error>;
+    async fn remove_book_from_shelf(&self, shelf_token: ShelfToken, book_token: BookToken, user_id: UserId) -> Result<(), Error>;
 
     /// Returns paginated books for a shelf.
     ///
     /// Owners can access private shelves; other users may only access public
     /// shelves.
-    async fn books_for_shelf(&self, token: &ShelfToken, user_id: UserId, offset: Option<u64>, page_size: Option<u64>) -> Result<Vec<BookShelf>, Error>;
+    async fn books_for_shelf(&self, token: ShelfToken, user_id: UserId, offset: Option<u64>, page_size: Option<u64>) -> Result<Vec<BookShelf>, Error>;
 
     /// Returns all shelves owned by the given user.
     async fn list_shelves_for_user(&self, user_id: UserId) -> Result<Vec<Shelf>, Error>;
 
     /// Updates the visibility of a shelf. Only the owner may change visibility.
-    async fn set_visibility(&self, token: &ShelfToken, visibility: ShelfVisibility, user_id: UserId) -> Result<(), Error>;
+    async fn set_visibility(&self, token: ShelfToken, visibility: ShelfVisibility, user_id: UserId) -> Result<(), Error>;
 
     /// Returns all public shelves not owned by the given user, sorted by name.
     async fn list_public_shelves(&self, user_id: UserId) -> Result<Vec<Shelf>, Error>;
@@ -51,13 +51,13 @@ pub trait ShelfService: Send + Sync {
     /// Owners can access private shelves; other users may only access public
     /// shelves. Returns `NotFound` for missing shelves and a validation error
     /// for private shelves the requester does not own.
-    async fn get_shelf(&self, token: &ShelfToken, user_id: UserId) -> Result<Shelf, Error>;
+    async fn get_shelf(&self, token: ShelfToken, user_id: UserId) -> Result<Shelf, Error>;
 
     /// Updates the name and visibility of a shelf in a single transaction.
     ///
     /// Only the owner may update. Returns an error if the name is empty or
     /// another shelf owned by the same user already has that name.
-    async fn update_shelf(&self, token: &ShelfToken, new_name: String, visibility: ShelfVisibility, user_id: UserId) -> Result<(), Error>;
+    async fn update_shelf(&self, token: ShelfToken, new_name: String, visibility: ShelfVisibility, user_id: UserId) -> Result<(), Error>;
 
     /// Creates a new smart shelf for the given user with the provided filter.
     ///
@@ -69,7 +69,7 @@ pub trait ShelfService: Send + Sync {
     ///
     /// Only the owner may update. Returns an error if the shelf is not a smart
     /// shelf or the caller does not own it.
-    async fn update_shelf_filter(&self, token: &ShelfToken, filter: BookFilter, user_id: UserId) -> Result<(), Error>;
+    async fn update_shelf_filter(&self, token: ShelfToken, filter: BookFilter, user_id: UserId) -> Result<(), Error>;
 
     /// Returns paginated books matching this smart shelf's filter.
     ///
@@ -77,7 +77,7 @@ pub trait ShelfService: Send + Sync {
     /// other users may only access public shelves.
     async fn books_for_filter(
         &self,
-        token: &ShelfToken,
+        token: ShelfToken,
         user_id: UserId,
         offset: Option<u64>,
         page_size: Option<u64>,
@@ -87,7 +87,7 @@ pub trait ShelfService: Send + Sync {
     /// Returns the total number of books matching this smart shelf's filter.
     ///
     /// Only callable for smart shelves the caller can access.
-    async fn count_for_filter(&self, token: &ShelfToken, user_id: UserId) -> Result<u64, Error>;
+    async fn count_for_filter(&self, token: ShelfToken, user_id: UserId) -> Result<u64, Error>;
 
     /// Creates a private smart shelf linked to a device, with a default filter
     /// of `ReadStatus IncludesAny [Active]`.
@@ -145,17 +145,16 @@ impl ShelfService for ShelfServiceImpl {
     }
 
     // #[tracing::instrument(level = "trace", skip(self))]
-    async fn rename_shelf(&self, token: &ShelfToken, new_name: String, user_id: UserId) -> Result<(), Error> {
+    async fn rename_shelf(&self, token: ShelfToken, new_name: String, user_id: UserId) -> Result<(), Error> {
         if new_name.trim().is_empty() {
             return Err(Error::Validation("shelf name must not be empty".to_string()));
         }
 
-        let token = *token;
         let new_name_lower = new_name.to_lowercase();
 
         with_transaction!(self, shelf_repository, device_repository, |tx| {
             let existing_shelf = shelf_repository
-                .find_by_token(tx, &token)
+                .find_by_token(tx, token)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
@@ -186,12 +185,10 @@ impl ShelfService for ShelfServiceImpl {
     }
 
     // #[tracing::instrument(level = "trace", skip(self))]
-    async fn delete_shelf(&self, token: &ShelfToken, user_id: UserId) -> Result<(), Error> {
-        let token = *token;
-
+    async fn delete_shelf(&self, token: ShelfToken, user_id: UserId) -> Result<(), Error> {
         with_transaction!(self, shelf_repository, |tx| {
             let shelf_to_delete = shelf_repository
-                .find_by_token(tx, &token)
+                .find_by_token(tx, token)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
@@ -204,13 +201,10 @@ impl ShelfService for ShelfServiceImpl {
     }
 
     // #[tracing::instrument(level = "trace", skip(self))]
-    async fn add_book_to_shelf(&self, shelf_token: &ShelfToken, book_token: &BookToken, user_id: UserId) -> Result<(), Error> {
-        let shelf_token = *shelf_token;
-        let book_token = *book_token;
-
+    async fn add_book_to_shelf(&self, shelf_token: ShelfToken, book_token: BookToken, user_id: UserId) -> Result<(), Error> {
         with_transaction!(self, shelf_repository, book_repository, |tx| {
             let target_shelf = shelf_repository
-                .find_by_token(tx, &shelf_token)
+                .find_by_token(tx, shelf_token)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
@@ -219,7 +213,7 @@ impl ShelfService for ShelfServiceImpl {
             }
 
             let book = book_repository
-                .find_by_token(tx, &book_token)
+                .find_by_token(tx, book_token)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
@@ -240,13 +234,10 @@ impl ShelfService for ShelfServiceImpl {
     }
 
     // #[tracing::instrument(level = "trace", skip(self))]
-    async fn remove_book_from_shelf(&self, shelf_token: &ShelfToken, book_token: &BookToken, user_id: UserId) -> Result<(), Error> {
-        let shelf_token = *shelf_token;
-        let book_token = *book_token;
-
+    async fn remove_book_from_shelf(&self, shelf_token: ShelfToken, book_token: BookToken, user_id: UserId) -> Result<(), Error> {
         with_transaction!(self, shelf_repository, book_repository, |tx| {
             let current_shelf = shelf_repository
-                .find_by_token(tx, &shelf_token)
+                .find_by_token(tx, shelf_token)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
@@ -255,7 +246,7 @@ impl ShelfService for ShelfServiceImpl {
             }
 
             let book = book_repository
-                .find_by_token(tx, &book_token)
+                .find_by_token(tx, book_token)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
@@ -264,12 +255,10 @@ impl ShelfService for ShelfServiceImpl {
     }
 
     // #[tracing::instrument(level = "trace", skip(self))]
-    async fn books_for_shelf(&self, token: &ShelfToken, user_id: UserId, offset: Option<u64>, page_size: Option<u64>) -> Result<Vec<BookShelf>, Error> {
-        let token = *token;
-
+    async fn books_for_shelf(&self, token: ShelfToken, user_id: UserId, offset: Option<u64>, page_size: Option<u64>) -> Result<Vec<BookShelf>, Error> {
         with_read_only_transaction!(self, shelf_repository, |tx| {
             let current_shelf = shelf_repository
-                .find_by_token(tx, &token)
+                .find_by_token(tx, token)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
@@ -292,12 +281,10 @@ impl ShelfService for ShelfServiceImpl {
     }
 
     // #[tracing::instrument(level = "trace", skip(self))]
-    async fn get_shelf(&self, token: &ShelfToken, user_id: UserId) -> Result<Shelf, Error> {
-        let token = *token;
-
+    async fn get_shelf(&self, token: ShelfToken, user_id: UserId) -> Result<Shelf, Error> {
         with_read_only_transaction!(self, shelf_repository, |tx| {
             let target_shelf = shelf_repository
-                .find_by_token(tx, &token)
+                .find_by_token(tx, token)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
@@ -310,17 +297,16 @@ impl ShelfService for ShelfServiceImpl {
     }
 
     // #[tracing::instrument(level = "trace", skip(self))]
-    async fn update_shelf(&self, token: &ShelfToken, new_name: String, visibility: ShelfVisibility, user_id: UserId) -> Result<(), Error> {
+    async fn update_shelf(&self, token: ShelfToken, new_name: String, visibility: ShelfVisibility, user_id: UserId) -> Result<(), Error> {
         if new_name.trim().is_empty() {
             return Err(Error::Validation("shelf name must not be empty".to_string()));
         }
 
-        let token = *token;
         let new_name_lower = new_name.to_lowercase();
 
         with_transaction!(self, shelf_repository, device_repository, |tx| {
             let target_shelf = shelf_repository
-                .find_by_token(tx, &token)
+                .find_by_token(tx, token)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
@@ -384,12 +370,10 @@ impl ShelfService for ShelfServiceImpl {
     }
 
     // #[tracing::instrument(level = "trace", skip(self))]
-    async fn update_shelf_filter(&self, token: &ShelfToken, filter: BookFilter, user_id: UserId) -> Result<(), Error> {
-        let token = *token;
-
+    async fn update_shelf_filter(&self, token: ShelfToken, filter: BookFilter, user_id: UserId) -> Result<(), Error> {
         with_transaction!(self, shelf_repository, |tx| {
             let target_shelf = shelf_repository
-                .find_by_token(tx, &token)
+                .find_by_token(tx, token)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
@@ -414,17 +398,15 @@ impl ShelfService for ShelfServiceImpl {
     // #[tracing::instrument(level = "trace", skip(self))]
     async fn books_for_filter(
         &self,
-        token: &ShelfToken,
+        token: ShelfToken,
         user_id: UserId,
         offset: Option<u64>,
         page_size: Option<u64>,
         sort: Option<crate::book::BookSortOrder>,
     ) -> Result<Vec<Book>, Error> {
-        let token = *token;
-
         with_read_only_transaction!(self, shelf_repository, library_repository, |tx| {
             let target_shelf = shelf_repository
-                .find_by_token(tx, &token)
+                .find_by_token(tx, token)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
@@ -445,12 +427,10 @@ impl ShelfService for ShelfServiceImpl {
     }
 
     // #[tracing::instrument(level = "trace", skip(self))]
-    async fn count_for_filter(&self, token: &ShelfToken, user_id: UserId) -> Result<u64, Error> {
-        let token = *token;
-
+    async fn count_for_filter(&self, token: ShelfToken, user_id: UserId) -> Result<u64, Error> {
         with_read_only_transaction!(self, shelf_repository, library_repository, |tx| {
             let target_shelf = shelf_repository
-                .find_by_token(tx, &token)
+                .find_by_token(tx, token)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
@@ -471,12 +451,10 @@ impl ShelfService for ShelfServiceImpl {
     }
 
     // #[tracing::instrument(level = "trace", skip(self))]
-    async fn set_visibility(&self, token: &ShelfToken, visibility: ShelfVisibility, user_id: UserId) -> Result<(), Error> {
-        let token = *token;
-
+    async fn set_visibility(&self, token: ShelfToken, visibility: ShelfVisibility, user_id: UserId) -> Result<(), Error> {
         with_transaction!(self, shelf_repository, |tx| {
             let target_shelf = shelf_repository
-                .find_by_token(tx, &token)
+                .find_by_token(tx, token)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
@@ -664,7 +642,7 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.rename_shelf(&token, "New Name".to_string(), 1).await;
+        let result = svc.rename_shelf(token, "New Name".to_string(), 1).await;
 
         result.unwrap();
     }
@@ -674,7 +652,7 @@ mod tests {
         let svc = create_service(MockShelfRepository::new(), MockBookRepository::new());
         let token = ShelfToken::new(1);
 
-        let result = svc.rename_shelf(&token, String::new(), 1).await;
+        let result = svc.rename_shelf(token, String::new(), 1).await;
 
         assert!(matches!(result, Err(Error::Validation(_))));
     }
@@ -686,7 +664,7 @@ mod tests {
         shelf_repo.expect_find_by_token().returning(|_, _| Box::pin(async { Ok(None) }));
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.rename_shelf(&token, "New Name".to_string(), 1).await;
+        let result = svc.rename_shelf(token, "New Name".to_string(), 1).await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::NotFound))));
     }
@@ -702,7 +680,7 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.rename_shelf(&token, "New Name".to_string(), 2).await; // user 2
+        let result = svc.rename_shelf(token, "New Name".to_string(), 2).await; // user 2
 
         assert!(matches!(result, Err(Error::Validation(_))));
     }
@@ -727,7 +705,7 @@ mod tests {
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
         // Rename current shelf to the name of the other shelf
-        let result = svc.rename_shelf(&token, "Other Shelf".to_string(), 1).await;
+        let result = svc.rename_shelf(token, "Other Shelf".to_string(), 1).await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::Conflict))));
     }
@@ -756,7 +734,7 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.rename_shelf(&token, "My Shelf".to_string(), 1).await;
+        let result = svc.rename_shelf(token, "My Shelf".to_string(), 1).await;
 
         result.unwrap();
     }
@@ -774,7 +752,7 @@ mod tests {
         let svc = create_service(shelf_repo, MockBookRepository::new());
         let token = ShelfToken::new(1);
 
-        let result = svc.delete_shelf(&token, 1).await;
+        let result = svc.delete_shelf(token, 1).await;
 
         result.unwrap();
     }
@@ -786,7 +764,7 @@ mod tests {
         shelf_repo.expect_find_by_token().returning(|_, _| Box::pin(async { Ok(None) }));
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.delete_shelf(&token, 1).await;
+        let result = svc.delete_shelf(token, 1).await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::NotFound))));
     }
@@ -802,7 +780,7 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.delete_shelf(&token, 2).await; // user 2
+        let result = svc.delete_shelf(token, 2).await; // user 2
 
         assert!(matches!(result, Err(Error::Validation(_))));
     }
@@ -827,7 +805,7 @@ mod tests {
         });
         let svc = create_service(shelf_repo, book_repo);
 
-        let result = svc.add_book_to_shelf(&ShelfToken::new(1), &BookToken::new(1), 1).await;
+        let result = svc.add_book_to_shelf(ShelfToken::new(1), BookToken::new(1), 1).await;
 
         result.unwrap();
     }
@@ -838,7 +816,7 @@ mod tests {
         shelf_repo.expect_find_by_token().returning(|_, _| Box::pin(async { Ok(None) }));
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.add_book_to_shelf(&ShelfToken::new(1), &BookToken::new(1), 1).await;
+        let result = svc.add_book_to_shelf(ShelfToken::new(1), BookToken::new(1), 1).await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::NotFound))));
     }
@@ -854,7 +832,7 @@ mod tests {
         book_repo.expect_find_by_token().returning(|_, _| Box::pin(async { Ok(None) }));
         let svc = create_service(shelf_repo, book_repo);
 
-        let result = svc.add_book_to_shelf(&ShelfToken::new(1), &BookToken::new(99), 1).await;
+        let result = svc.add_book_to_shelf(ShelfToken::new(1), BookToken::new(99), 1).await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::NotFound))));
     }
@@ -868,7 +846,7 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.add_book_to_shelf(&ShelfToken::new(1), &BookToken::new(1), 2).await; // user 2
+        let result = svc.add_book_to_shelf(ShelfToken::new(1), BookToken::new(1), 2).await; // user 2
 
         assert!(matches!(result, Err(Error::Validation(_))));
     }
@@ -897,7 +875,7 @@ mod tests {
         });
         let svc = create_service(shelf_repo, book_repo);
 
-        let result = svc.remove_book_from_shelf(&ShelfToken::new(1), &BookToken::new(1), 1).await;
+        let result = svc.remove_book_from_shelf(ShelfToken::new(1), BookToken::new(1), 1).await;
 
         result.unwrap();
     }
@@ -911,7 +889,7 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.remove_book_from_shelf(&ShelfToken::new(1), &BookToken::new(1), 2).await;
+        let result = svc.remove_book_from_shelf(ShelfToken::new(1), BookToken::new(1), 2).await;
 
         assert!(matches!(result, Err(Error::Validation(_))));
     }
@@ -934,7 +912,7 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.books_for_shelf(&token, 1, None, None).await;
+        let result = svc.books_for_shelf(token, 1, None, None).await;
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap().len(), 1);
@@ -953,7 +931,7 @@ mod tests {
         shelf_repo.expect_books_for_shelf().returning(|_, _, _, _| Box::pin(async { Ok(vec![]) }));
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.books_for_shelf(&token, 2, None, None).await; // user 2 accessing user 1's public shelf
+        let result = svc.books_for_shelf(token, 2, None, None).await; // user 2 accessing user 1's public shelf
 
         result.unwrap();
     }
@@ -969,7 +947,7 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.books_for_shelf(&token, 2, None, None).await; // user 2 accessing user 1's private shelf
+        let result = svc.books_for_shelf(token, 2, None, None).await; // user 2 accessing user 1's private shelf
 
         assert!(matches!(result, Err(Error::Validation(_))));
     }
@@ -981,7 +959,7 @@ mod tests {
         shelf_repo.expect_find_by_token().returning(|_, _| Box::pin(async { Ok(None) }));
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.books_for_shelf(&token, 1, None, None).await;
+        let result = svc.books_for_shelf(token, 1, None, None).await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::NotFound))));
     }
@@ -1020,7 +998,7 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.set_visibility(&token, ShelfVisibility::Public, 1).await;
+        let result = svc.set_visibility(token, ShelfVisibility::Public, 1).await;
 
         result.unwrap();
     }
@@ -1032,7 +1010,7 @@ mod tests {
         shelf_repo.expect_find_by_token().returning(|_, _| Box::pin(async { Ok(None) }));
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.set_visibility(&token, ShelfVisibility::Public, 1).await;
+        let result = svc.set_visibility(token, ShelfVisibility::Public, 1).await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::NotFound))));
     }
@@ -1048,7 +1026,7 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.set_visibility(&token, ShelfVisibility::Public, 2).await; // user 2
+        let result = svc.set_visibility(token, ShelfVisibility::Public, 2).await; // user 2
 
         assert!(matches!(result, Err(Error::Validation(_))));
     }
@@ -1088,7 +1066,7 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.get_shelf(&token, 1).await;
+        let result = svc.get_shelf(token, 1).await;
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap().visibility, ShelfVisibility::Private);
@@ -1105,7 +1083,7 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.get_shelf(&token, 2).await; // user 2
+        let result = svc.get_shelf(token, 2).await; // user 2
 
         assert!(matches!(result, Err(Error::Validation(_))));
     }
@@ -1121,7 +1099,7 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.get_shelf(&token, 2).await; // user 2
+        let result = svc.get_shelf(token, 2).await; // user 2
 
         result.unwrap();
     }
@@ -1149,7 +1127,7 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.update_shelf(&token, "Renamed".to_string(), ShelfVisibility::Public, 1).await;
+        let result = svc.update_shelf(token, "Renamed".to_string(), ShelfVisibility::Public, 1).await;
 
         result.unwrap();
     }
@@ -1159,7 +1137,7 @@ mod tests {
         let svc = create_service(MockShelfRepository::new(), MockBookRepository::new());
         let token = ShelfToken::new(1);
 
-        let result = svc.update_shelf(&token, "  ".to_string(), ShelfVisibility::Private, 1).await;
+        let result = svc.update_shelf(token, "  ".to_string(), ShelfVisibility::Private, 1).await;
 
         assert!(matches!(result, Err(Error::Validation(_))));
     }
@@ -1171,7 +1149,7 @@ mod tests {
         shelf_repo.expect_find_by_token().returning(|_, _| Box::pin(async { Ok(None) }));
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.update_shelf(&token, "New Name".to_string(), ShelfVisibility::Private, 1).await;
+        let result = svc.update_shelf(token, "New Name".to_string(), ShelfVisibility::Private, 1).await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::NotFound))));
     }
@@ -1187,7 +1165,7 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.update_shelf(&token, "New Name".to_string(), ShelfVisibility::Private, 2).await; // user 2
+        let result = svc.update_shelf(token, "New Name".to_string(), ShelfVisibility::Private, 2).await; // user 2
 
         assert!(matches!(result, Err(Error::Validation(_))));
     }
@@ -1211,7 +1189,7 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.update_shelf(&token, "Other Shelf".to_string(), ShelfVisibility::Public, 1).await;
+        let result = svc.update_shelf(token, "Other Shelf".to_string(), ShelfVisibility::Public, 1).await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::Conflict))));
     }
@@ -1242,7 +1220,7 @@ mod tests {
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
         // Same name, different visibility — must not conflict with itself
-        let result = svc.update_shelf(&token, "My Shelf".to_string(), ShelfVisibility::Public, 1).await;
+        let result = svc.update_shelf(token, "My Shelf".to_string(), ShelfVisibility::Public, 1).await;
 
         result.unwrap();
     }
@@ -1329,7 +1307,7 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.update_shelf_filter(&token, simple_filter(), 1).await;
+        let result = svc.update_shelf_filter(token, simple_filter(), 1).await;
 
         result.unwrap();
     }
@@ -1345,7 +1323,7 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.update_shelf_filter(&token, simple_filter(), 99).await;
+        let result = svc.update_shelf_filter(token, simple_filter(), 99).await;
 
         assert!(matches!(result, Err(Error::Validation(_))));
     }
@@ -1361,7 +1339,7 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.update_shelf_filter(&token, simple_filter(), 1).await;
+        let result = svc.update_shelf_filter(token, simple_filter(), 1).await;
 
         assert!(matches!(result, Err(Error::Validation(_))));
     }

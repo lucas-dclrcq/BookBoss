@@ -101,7 +101,7 @@ impl PublisherRepository for PublisherRepositoryAdapter {
             .map(Into::into))
     }
 
-    async fn find_by_token(&self, transaction: &dyn Transaction, token: &PublisherToken) -> Result<Option<Publisher>, Error> {
+    async fn find_by_token(&self, transaction: &dyn Transaction, token: PublisherToken) -> Result<Option<Publisher>, Error> {
         self.find_by_id(transaction, token.id()).await
     }
 
@@ -234,7 +234,7 @@ mod tests {
             .add_publisher(&*tx, NewPublisher { name: "Tor Books".into() })
             .await
             .unwrap();
-        let result = svc.publisher_repository().find_by_token(&*tx, &inserted.token).await;
+        let result = svc.publisher_repository().find_by_token(&*tx, inserted.token).await;
 
         assert_eq!(result.unwrap().unwrap().id, inserted.id);
     }
@@ -246,7 +246,7 @@ mod tests {
 
         assert!(
             svc.publisher_repository()
-                .find_by_token(&*tx, &PublisherToken::new(999))
+                .find_by_token(&*tx, PublisherToken::new(999))
                 .await
                 .unwrap()
                 .is_none()

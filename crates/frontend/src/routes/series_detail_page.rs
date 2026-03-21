@@ -34,7 +34,7 @@ async fn get_series(token: String) -> Result<SeriesPageData, ServerFnError> {
     let series_token = SeriesToken::from_str(&token).map_err(|_| ServerFnError::new("Invalid series token"))?;
 
     let series = book_service
-        .find_series_by_token(&series_token)
+        .find_series_by_token(series_token)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?
         .ok_or_else(|| ServerFnError::new("Series not found"))?;

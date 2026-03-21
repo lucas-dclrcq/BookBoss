@@ -50,7 +50,7 @@ pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>
     tracing::debug!(device_id = kobo.device.id, book_token = %token, format = ?format, "Download book requested");
 
     // 3. Look up the book.
-    let book = match core_services.book_service.find_book_by_token(&token).await {
+    let book = match core_services.book_service.find_book_by_token(token).await {
         Ok(Some(b)) => b,
         Ok(None) => return StatusCode::NOT_FOUND.into_response(),
         Err(e) => {

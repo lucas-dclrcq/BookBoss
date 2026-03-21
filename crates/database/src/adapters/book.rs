@@ -139,7 +139,7 @@ impl BookRepository for BookRepositoryAdapter {
             .map(Into::into))
     }
 
-    async fn find_by_token(&self, transaction: &dyn Transaction, token: &BookToken) -> Result<Option<Book>, Error> {
+    async fn find_by_token(&self, transaction: &dyn Transaction, token: BookToken) -> Result<Option<Book>, Error> {
         self.find_by_id(transaction, token.id()).await
     }
 
@@ -720,7 +720,7 @@ mod tests {
         let tx = svc.repository().begin().await.unwrap();
 
         let inserted = svc.book_repository().add_book(&*tx, new_book("Dune")).await.unwrap();
-        let result = svc.book_repository().find_by_token(&*tx, &inserted.token).await;
+        let result = svc.book_repository().find_by_token(&*tx, inserted.token).await;
 
         assert_eq!(result.unwrap().unwrap().id, inserted.id);
     }
@@ -730,7 +730,7 @@ mod tests {
         let svc = setup().await;
         let tx = svc.repository().begin().await.unwrap();
 
-        assert!(svc.book_repository().find_by_token(&*tx, &BookToken::new(999)).await.unwrap().is_none());
+        assert!(svc.book_repository().find_by_token(&*tx, BookToken::new(999)).await.unwrap().is_none());
     }
 
     // ─── update_book ─────────────────────────────────────────────────────────

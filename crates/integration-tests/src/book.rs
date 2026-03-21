@@ -7,7 +7,7 @@ async fn book_created_and_found_by_token() {
     let ctx = setup().await;
     let book = fixtures::insert_book(&ctx.repos, "Dune", BookStatus::Available).await;
 
-    let found = ctx.services.book_service.find_book_by_token(&book.token).await.unwrap();
+    let found = ctx.services.book_service.find_book_by_token(book.token).await.unwrap();
 
     assert!(found.is_some());
     assert_eq!(found.unwrap().title, "Dune");
@@ -18,7 +18,7 @@ async fn find_book_by_token_returns_none_for_unknown_token() {
     let ctx = setup().await;
     let fake_token = bb_core::book::BookToken::new(999_999);
 
-    let found = ctx.services.book_service.find_book_by_token(&fake_token).await.unwrap();
+    let found = ctx.services.book_service.find_book_by_token(fake_token).await.unwrap();
 
     assert!(found.is_none());
 }

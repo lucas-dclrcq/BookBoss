@@ -79,12 +79,12 @@ impl LibraryStore for LocalLibraryStore {
         self.library_path.join(relative_path)
     }
 
-    fn cover_path(&self, token: &BookToken, filename: &str) -> PathBuf {
-        self.book_dir(*token).join(filename)
+    fn cover_path(&self, token: BookToken, filename: &str) -> PathBuf {
+        self.book_dir(token).join(filename)
     }
 
-    fn metadata_path(&self, token: &BookToken) -> PathBuf {
-        self.book_dir(*token).join("metadata.opf")
+    fn metadata_path(&self, token: BookToken) -> PathBuf {
+        self.book_dir(token).join("metadata.opf")
     }
 
     async fn store_original_file(&self, source_hash: &str, original_filename: &str, source: &Path) -> Result<String, Error> {
@@ -121,21 +121,21 @@ impl LibraryStore for LocalLibraryStore {
         Ok(format!("Originals/{original_filename}"))
     }
 
-    async fn store_book_file(&self, token: &BookToken, slug: &str, format: FileFormat, source: &Path) -> Result<String, Error> {
-        let book_dir = self.book_dir(*token);
+    async fn store_book_file(&self, token: BookToken, slug: &str, format: FileFormat, source: &Path) -> Result<String, Error> {
+        let book_dir = self.book_dir(token);
         tokio::fs::create_dir_all(&book_dir).await.map_err(io_err)?;
-        let dest = self.book_file_path(*token, slug, &format);
+        let dest = self.book_file_path(token, slug, &format);
         // Try rename first (fast, same filesystem)
         if tokio::fs::rename(source, &dest).await.is_err() {
             // Fall back to copy then remove source
             tokio::fs::copy(source, &dest).await.map_err(io_err)?;
             let _ = tokio::fs::remove_file(source).await;
         }
-        Ok(Self::book_file_rel_path(*token, slug, &format))
+        Ok(Self::book_file_rel_path(token, slug, &format))
     }
 
-    async fn store_cover(&self, token: &BookToken, filename: &str, data: &[u8]) -> Result<(), Error> {
-        let book_dir = self.book_dir(*token);
+    async fn store_cover(&self, token: BookToken, filename: &str, data: &[u8]) -> Result<(), Error> {
+        let book_dir = self.book_dir(token);
         tokio::fs::create_dir_all(&book_dir).await.map_err(io_err)?;
         let cover_path = self.cover_path(token, filename);
 
@@ -153,8 +153,8 @@ impl LibraryStore for LocalLibraryStore {
         Ok(())
     }
 
-    async fn store_metadata(&self, token: &BookToken, sidecar: &BookSidecar) -> Result<(), Error> {
-        let book_dir = self.book_dir(*token);
+    async fn store_metadata(&self, token: BookToken, sidecar: &BookSidecar) -> Result<(), Error> {
+        let book_dir = self.book_dir(token);
         tokio::fs::create_dir_all(&book_dir).await.map_err(io_err)?;
         let bytes = bb_formats::opf::write_sidecar(sidecar).map_err(|e| Error::Infrastructure(e.to_string()))?;
         let metadata_path = self.metadata_path(token);
@@ -162,8 +162,8 @@ impl LibraryStore for LocalLibraryStore {
         Ok(())
     }
 
-    async fn rename_book_files(&self, token: &BookToken, old_slug: &str, new_slug: &str) -> Result<(), Error> {
-        let book_dir = self.book_dir(*token);
+    async fn rename_book_files(&self, token: BookToken, old_slug: &str, new_slug: &str) -> Result<(), Error> {
+        let book_dir = self.book_dir(token);
         let prefix = format!("{old_slug}.");
         let mut entries = tokio::fs::read_dir(&book_dir).await.map_err(io_err)?;
         while let Some(entry) = entries.next_entry().await.map_err(io_err)? {
@@ -177,8 +177,8 @@ impl LibraryStore for LocalLibraryStore {
         Ok(())
     }
 
-    async fn delete_book(&self, token: &BookToken) -> Result<(), Error> {
-        let book_dir = self.book_dir(*token);
+    async fn delete_book(&self, token: BookToken) -> Result<(), Error> {
+        let book_dir = self.book_dir(token);
         match tokio::fs::remove_dir_all(&book_dir).await {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -243,7 +243,7 @@ mod tests {
         let source = dir.path().join("source.epub");
         tokio::fs::write(&source, b"epub content").await.unwrap();
 
-        let rel_path = store.store_book_file(&token, "my-book", FileFormat::Epub, &source).await.unwrap();
+        let rel_path = store.store_book_file(token, "my-book", FileFormat::Epub, &source).await.unwrap();
 
         let expected = store.resolve(&rel_path);
         assert!(expected.exists(), "book file should exist at {expected:?}");
@@ -260,7 +260,7 @@ mod tests {
         let source = dir.path().join("source.epub");
         tokio::fs::write(&source, b"epub content").await.unwrap();
 
-        let rel_path = store.store_book_file(&token, "my-book", FileFormat::Epub, &source).await.unwrap();
+        let rel_path = store.store_book_file(token, "my-book", FileFormat::Epub, &source).await.unwrap();
 
         assert_eq!(rel_path, format!("{token}/my-book.epub"));
     }
@@ -286,9 +286,9 @@ mod tests {
         let token = test_token();
 
         let data = b"fake jpeg bytes";
-        store.store_cover(&token, "cover.jpg", data).await.unwrap();
+        store.store_cover(token, "cover.jpg", data).await.unwrap();
 
-        let cover = store.cover_path(&token, "cover.jpg");
+        let cover = store.cover_path(token, "cover.jpg");
         assert!(cover.exists(), "cover.jpg should exist");
         let contents = tokio::fs::read(&cover).await.unwrap();
         assert_eq!(contents, data);
@@ -301,9 +301,9 @@ mod tests {
         let token = test_token();
         let sidecar = minimal_sidecar();
 
-        store.store_metadata(&token, &sidecar).await.unwrap();
+        store.store_metadata(token, &sidecar).await.unwrap();
 
-        let meta_path = store.metadata_path(&token);
+        let meta_path = store.metadata_path(token);
         assert!(meta_path.exists(), "metadata.opf should exist");
         let bytes = tokio::fs::read(&meta_path).await.unwrap();
         let parsed = bb_formats::opf::parse_sidecar(&bytes).expect("should be parseable OPF");
@@ -323,7 +323,7 @@ mod tests {
         tokio::fs::write(book_dir.join("old-slug.pdf"), b"pdf").await.unwrap();
         tokio::fs::write(book_dir.join("cover.jpg"), b"cover").await.unwrap();
 
-        store.rename_book_files(&token, "old-slug", "new-slug").await.unwrap();
+        store.rename_book_files(token, "old-slug", "new-slug").await.unwrap();
 
         assert!(book_dir.join("new-slug.epub").exists(), "epub should be renamed");
         assert!(book_dir.join("new-slug.pdf").exists(), "pdf should be renamed");
@@ -343,10 +343,10 @@ mod tests {
         tokio::fs::create_dir_all(&book_dir).await.unwrap();
         tokio::fs::write(book_dir.join("test.epub"), b"data").await.unwrap();
 
-        store.delete_book(&token).await.unwrap();
+        store.delete_book(token).await.unwrap();
         assert!(!book_dir.exists(), "book dir should be removed");
 
         // Second call is a no-op
-        store.delete_book(&token).await.unwrap();
+        store.delete_book(token).await.unwrap();
     }
 }

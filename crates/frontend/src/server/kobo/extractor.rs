@@ -48,7 +48,7 @@ impl<S: Send + Sync> FromRequestParts<S> for KoboDevice {
         // 4. Look up the device — the token itself is the auth credential.
         let device = core_services
             .device_service
-            .find_device_by_token(&device_token)
+            .find_device_by_token(device_token)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
             .ok_or(StatusCode::UNAUTHORIZED)?;

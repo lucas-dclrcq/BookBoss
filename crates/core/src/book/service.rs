@@ -13,15 +13,15 @@ use crate::{
 #[async_trait::async_trait]
 pub trait BookService: Send + Sync {
     async fn list_books(&self, filter: &BookQuery, offset: Option<u64>, page_size: Option<u64>) -> Result<Vec<Book>, Error>;
-    async fn find_book_by_token(&self, token: &BookToken) -> Result<Option<Book>, Error>;
+    async fn find_book_by_token(&self, token: BookToken) -> Result<Option<Book>, Error>;
     async fn authors_for_book(&self, book_id: BookId) -> Result<Vec<BookAuthor>, Error>;
     async fn files_for_book(&self, book_id: BookId) -> Result<Vec<BookFile>, Error>;
     async fn identifiers_for_book(&self, book_id: BookId) -> Result<Vec<BookIdentifier>, Error>;
     async fn list_authors(&self, start_id: Option<AuthorId>, page_size: Option<u64>) -> Result<Vec<Author>, Error>;
-    async fn find_author_by_token(&self, token: &AuthorToken) -> Result<Option<Author>, Error>;
+    async fn find_author_by_token(&self, token: AuthorToken) -> Result<Option<Author>, Error>;
     async fn list_series(&self, start_id: Option<SeriesId>, page_size: Option<u64>) -> Result<Vec<Series>, Error>;
-    async fn find_series_by_token(&self, token: &SeriesToken) -> Result<Option<Series>, Error>;
-    async fn find_publisher_by_token(&self, token: &crate::book::PublisherToken) -> Result<Option<crate::book::Publisher>, Error>;
+    async fn find_series_by_token(&self, token: SeriesToken) -> Result<Option<Series>, Error>;
+    async fn find_publisher_by_token(&self, token: crate::book::PublisherToken) -> Result<Option<crate::book::Publisher>, Error>;
     async fn genres_for_book(&self, book_id: BookId) -> Result<Vec<Genre>, Error>;
     async fn tags_for_book(&self, book_id: BookId) -> Result<Vec<Tag>, Error>;
     async fn list_all_genres(&self) -> Result<Vec<Genre>, Error>;
@@ -51,9 +51,8 @@ impl BookService for BookServiceImpl {
     }
 
     // #[tracing::instrument(level = "trace", skip(self, token))]
-    async fn find_book_by_token(&self, token: &BookToken) -> Result<Option<Book>, Error> {
-        let token = *token;
-        with_read_only_transaction!(self, book_repository, |tx| book_repository.find_by_token(tx, &token).await)
+    async fn find_book_by_token(&self, token: BookToken) -> Result<Option<Book>, Error> {
+        with_read_only_transaction!(self, book_repository, |tx| book_repository.find_by_token(tx, token).await)
     }
 
     // #[tracing::instrument(level = "trace", skip(self))]
@@ -77,9 +76,8 @@ impl BookService for BookServiceImpl {
     }
 
     // #[tracing::instrument(level = "trace", skip(self, token))]
-    async fn find_author_by_token(&self, token: &AuthorToken) -> Result<Option<Author>, Error> {
-        let token = *token;
-        with_read_only_transaction!(self, author_repository, |tx| author_repository.find_by_token(tx, &token).await)
+    async fn find_author_by_token(&self, token: AuthorToken) -> Result<Option<Author>, Error> {
+        with_read_only_transaction!(self, author_repository, |tx| author_repository.find_by_token(tx, token).await)
     }
 
     // #[tracing::instrument(level = "trace", skip(self))]
@@ -88,14 +86,12 @@ impl BookService for BookServiceImpl {
     }
 
     // #[tracing::instrument(level = "trace", skip(self, token))]
-    async fn find_series_by_token(&self, token: &SeriesToken) -> Result<Option<Series>, Error> {
-        let token = *token;
-        with_read_only_transaction!(self, series_repository, |tx| series_repository.find_by_token(tx, &token).await)
+    async fn find_series_by_token(&self, token: SeriesToken) -> Result<Option<Series>, Error> {
+        with_read_only_transaction!(self, series_repository, |tx| series_repository.find_by_token(tx, token).await)
     }
 
-    async fn find_publisher_by_token(&self, token: &crate::book::PublisherToken) -> Result<Option<crate::book::Publisher>, Error> {
-        let token = *token;
-        with_read_only_transaction!(self, publisher_repository, |tx| publisher_repository.find_by_token(tx, &token).await)
+    async fn find_publisher_by_token(&self, token: crate::book::PublisherToken) -> Result<Option<crate::book::Publisher>, Error> {
+        with_read_only_transaction!(self, publisher_repository, |tx| publisher_repository.find_by_token(tx, token).await)
     }
 
     // #[tracing::instrument(level = "trace", skip(self))]
@@ -258,7 +254,7 @@ mod tests {
         });
         let svc = default_service_with_book_repo(book_repo);
 
-        let result = svc.find_book_by_token(&token).await;
+        let result = svc.find_book_by_token(token).await;
 
         assert!(result.is_ok());
         let found = result.unwrap().unwrap();
@@ -273,7 +269,7 @@ mod tests {
         let svc = default_service_with_book_repo(book_repo);
 
         let token = BookToken::generate();
-        let result = svc.find_book_by_token(&token).await;
+        let result = svc.find_book_by_token(token).await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
@@ -288,7 +284,7 @@ mod tests {
         let svc = default_service_with_book_repo(book_repo);
 
         let token = BookToken::generate();
-        let result = svc.find_book_by_token(&token).await;
+        let result = svc.find_book_by_token(token).await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::Database(_)))));
     }
@@ -468,7 +464,7 @@ mod tests {
         });
         let svc = create_service(MockBookRepository::new(), author_repo, MockSeriesRepository::new());
 
-        let result = svc.find_author_by_token(&token).await;
+        let result = svc.find_author_by_token(token).await;
 
         assert!(result.is_ok());
         let found = result.unwrap().unwrap();
@@ -482,7 +478,7 @@ mod tests {
         author_repo.expect_find_by_token().returning(|_, _| Box::pin(async { Ok(None) }));
         let svc = create_service(MockBookRepository::new(), author_repo, MockSeriesRepository::new());
 
-        let result = svc.find_author_by_token(&AuthorToken::generate()).await;
+        let result = svc.find_author_by_token(AuthorToken::generate()).await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
@@ -546,7 +542,7 @@ mod tests {
         });
         let svc = create_service(MockBookRepository::new(), MockAuthorRepository::new(), series_repo);
 
-        let result = svc.find_series_by_token(&token).await;
+        let result = svc.find_series_by_token(token).await;
 
         assert!(result.is_ok());
         let found = result.unwrap().unwrap();
@@ -560,7 +556,7 @@ mod tests {
         series_repo.expect_find_by_token().returning(|_, _| Box::pin(async { Ok(None) }));
         let svc = create_service(MockBookRepository::new(), MockAuthorRepository::new(), series_repo);
 
-        let result = svc.find_series_by_token(&SeriesToken::generate()).await;
+        let result = svc.find_series_by_token(SeriesToken::generate()).await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());

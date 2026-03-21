@@ -10,6 +10,7 @@ use crate::{
 
 #[async_trait]
 #[cfg_attr(any(test, feature = "test-support"), mockall::automock)]
+#[allow(unused_lifetimes, reason = "async_trait + mockall expansion emits a spurious 'life0 parameter")]
 pub trait LibraryStore: Send + Sync {
     // ── Path resolution (sync, no I/O) ──────────────────────────────────────
 
@@ -19,11 +20,11 @@ pub trait LibraryStore: Send + Sync {
 
     /// Returns the path to a book's cover image:
     /// `{library}/BK_{token}/{filename}`.
-    fn cover_path(&self, token: &BookToken, filename: &str) -> PathBuf;
+    fn cover_path(&self, token: BookToken, filename: &str) -> PathBuf;
 
     /// Returns the path to a book's sidecar:
     /// `{library}/BK_{token}/metadata.opf`.
-    fn metadata_path(&self, token: &BookToken) -> PathBuf;
+    fn metadata_path(&self, token: BookToken) -> PathBuf;
 
     // ── Filesystem I/O (async) ───────────────────────────────────────────────
 
@@ -39,22 +40,22 @@ pub trait LibraryStore: Send + Sync {
     /// Moves or copies the source file into the book's enriched directory.
     /// Returns the library-root-relative path of the stored file
     /// (e.g. `"BK_XXXXX/black-ice-brad-thor.epub"`).
-    async fn store_book_file(&self, token: &BookToken, slug: &str, format: FileFormat, source: &Path) -> Result<String, Error>;
+    async fn store_book_file(&self, token: BookToken, slug: &str, format: FileFormat, source: &Path) -> Result<String, Error>;
 
     /// Writes raw bytes as the book's cover image. `filename` determines the
     /// file name within the book's directory (e.g. `"cover.jpg"`).
-    async fn store_cover(&self, token: &BookToken, filename: &str, data: &[u8]) -> Result<(), Error>;
+    async fn store_cover(&self, token: BookToken, filename: &str, data: &[u8]) -> Result<(), Error>;
 
     /// Serialises `sidecar` and writes it as `metadata.opf` in the book's
     /// directory.
-    async fn store_metadata(&self, token: &BookToken, sidecar: &BookSidecar) -> Result<(), Error>;
+    async fn store_metadata(&self, token: BookToken, sidecar: &BookSidecar) -> Result<(), Error>;
 
     /// Renames all `{old_slug}.*` files in the book's directory to
     /// `{new_slug}.*`.
-    async fn rename_book_files(&self, token: &BookToken, old_slug: &str, new_slug: &str) -> Result<(), Error>;
+    async fn rename_book_files(&self, token: BookToken, old_slug: &str, new_slug: &str) -> Result<(), Error>;
 
     /// Removes the book's entire directory and all its contents.
-    async fn delete_book(&self, token: &BookToken) -> Result<(), Error>;
+    async fn delete_book(&self, token: BookToken) -> Result<(), Error>;
 
     /// Removes a file by its library-root-relative path. No-op if the file
     /// does not exist.

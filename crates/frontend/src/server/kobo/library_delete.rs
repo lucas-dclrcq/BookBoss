@@ -24,7 +24,7 @@ pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>
 
     tracing::debug!(device_id = kobo.device.id, book_token = %token, "delete book from device");
 
-    let book = match core_services.book_service.find_book_by_token(&token).await {
+    let book = match core_services.book_service.find_book_by_token(token).await {
         Ok(Some(b)) => b,
         Ok(None) => return StatusCode::OK.into_response(), // idempotent
         Err(e) => {

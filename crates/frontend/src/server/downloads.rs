@@ -40,7 +40,7 @@ pub(crate) async fn serve_book_file(
         return Response::builder().status(StatusCode::BAD_REQUEST).body(Body::empty()).unwrap();
     };
 
-    let book = match core_services.book_service.find_book_by_token(&token).await {
+    let book = match core_services.book_service.find_book_by_token(token).await {
         Ok(Some(b)) => b,
         Ok(None) => return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap(),
         Err(_) => return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap(),

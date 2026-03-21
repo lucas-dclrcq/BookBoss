@@ -101,7 +101,7 @@ impl GenreRepository for GenreRepositoryAdapter {
             .map(Into::into))
     }
 
-    async fn find_by_token(&self, transaction: &dyn Transaction, token: &GenreToken) -> Result<Option<Genre>, Error> {
+    async fn find_by_token(&self, transaction: &dyn Transaction, token: GenreToken) -> Result<Option<Genre>, Error> {
         self.find_by_id(transaction, token.id()).await
     }
 
@@ -245,7 +245,7 @@ mod tests {
         let tx = svc.repository().begin().await.unwrap();
 
         let inserted = svc.genre_repository().add_genre(&*tx, NewGenre { name: "Horror".into() }).await.unwrap();
-        let result = svc.genre_repository().find_by_token(&*tx, &inserted.token).await;
+        let result = svc.genre_repository().find_by_token(&*tx, inserted.token).await;
 
         assert_eq!(result.unwrap().unwrap().id, inserted.id);
     }
@@ -255,7 +255,7 @@ mod tests {
         let svc = setup().await;
         let tx = svc.repository().begin().await.unwrap();
 
-        assert!(svc.genre_repository().find_by_token(&*tx, &GenreToken::new(999)).await.unwrap().is_none());
+        assert!(svc.genre_repository().find_by_token(&*tx, GenreToken::new(999)).await.unwrap().is_none());
     }
 
     // ─── find_by_name ────────────────────────────────────────────────────────

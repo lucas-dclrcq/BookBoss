@@ -68,7 +68,7 @@ pub trait PipelineService: Send + Sync {
     /// `cover_key` is the key used to look up any fetched cover bytes in the
     /// temp store (written there by `fetch_from_provider`). File renames and
     /// sidecar rewrites are performed when the title or primary author changes.
-    async fn edit_book(&self, book_token: &BookToken, edit: BookEdit, cover_key: &str, temp_dir: &std::path::Path) -> Result<(), Error>;
+    async fn edit_book(&self, book_token: BookToken, edit: BookEdit, cover_key: &str, temp_dir: &std::path::Path) -> Result<(), Error>;
 }
 
 pub struct PipelineServiceImpl {
@@ -520,12 +520,12 @@ impl PipelineService for PipelineServiceImpl {
             book_slug(&book.title, first_author)
         };
         self.library_store
-            .store_book_file(&book.token, &slug, updated_job.file_format.clone(), &path)
+            .store_book_file(book.token, &slug, updated_job.file_format.clone(), &path)
             .await?;
 
         // ── 13. Store cover image ──────────────────────────────────────────────
         if let (Some(filename), Some(data)) = (&cover_filename, &cover_bytes) {
-            self.library_store.store_cover(&book.token, filename, data).await?;
+            self.library_store.store_cover(book.token, filename, data).await?;
         }
 
         // ── 14. Write metadata sidecar ────────────────────────────────────────
@@ -551,7 +551,7 @@ impl PipelineService for PipelineServiceImpl {
                 hash: updated_job.file_hash.clone(),
             }],
         };
-        self.library_store.store_metadata(&book.token, &sidecar).await?;
+        self.library_store.store_metadata(book.token, &sidecar).await?;
 
         Ok(updated_job)
     }
@@ -616,9 +616,8 @@ impl PipelineService for PipelineServiceImpl {
     async fn approve_job(&self, job_token: ImportJobToken, edit: BookEdit, temp_dir: &std::path::Path) -> Result<(), Error> {
         // ── 1. Load job and guard status ──────────────────────────────────────
         let import_job_repo = self.repository_service.import_job_repository().clone();
-        let jt = job_token;
         let job = read_only_transaction(&**self.repository_service.repository(), |tx| {
-            Box::pin(async move { import_job_repo.find_by_token(tx, &jt).await })
+            Box::pin(async move { import_job_repo.find_by_token(tx, job_token).await })
         })
         .await?
         .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
@@ -810,7 +809,7 @@ impl PipelineService for PipelineServiceImpl {
 
         // ── 5. Store fetched cover ────────────────────────────────────────────
         if let Some((cover_bytes, cover_filename)) = cover_data {
-            self.library_store.store_cover(&book.token, &cover_filename, &cover_bytes).await?;
+            self.library_store.store_cover(book.token, &cover_filename, &cover_bytes).await?;
             // Clean up temp file
             let cover_path = temp_dir.join("bookboss-covers").join(job_token.to_string());
             let _ = tokio::fs::remove_file(&cover_path).await;
@@ -821,7 +820,7 @@ impl PipelineService for PipelineServiceImpl {
         let new_slug = book_slug(&normalize_name(&edit.title), new_first_author.as_deref());
 
         if old_slug != new_slug {
-            self.library_store.rename_book_files(&book.token, &old_slug, &new_slug).await?;
+            self.library_store.rename_book_files(book.token, &old_slug, &new_slug).await?;
 
             // Update DB paths for enriched files to match the new slug.
             let book_repo_rename = self.repository_service.book_repository().clone();
@@ -906,7 +905,7 @@ impl PipelineService for PipelineServiceImpl {
                 })
                 .unwrap_or_default(),
         };
-        self.library_store.store_metadata(&book.token, &sidecar).await?;
+        self.library_store.store_metadata(book.token, &sidecar).await?;
 
         // ── 8. Enqueue EPUB enrichment ────────────────────────────────────────
         self.conversion_service.queue_enrich_epub(book_id).await?;
@@ -915,14 +914,16 @@ impl PipelineService for PipelineServiceImpl {
     }
 
     #[tracing::instrument(level = "trace", skip(self, edit, temp_dir), fields(bookToken = %book_token))]
-    async fn edit_book(&self, book_token: &BookToken, edit: BookEdit, cover_key: &str, temp_dir: &std::path::Path) -> Result<(), Error> {
+    async fn edit_book(&self, book_token: BookToken, edit: BookEdit, cover_key: &str, temp_dir: &std::path::Path) -> Result<(), Error> {
         // ── 1. Load book and compute old slug for rename detection ─────────────
         let book_repo = self.repository_service.book_repository().clone();
-        let bt = *book_token;
         let (book, old_authors) = read_only_transaction(&**self.repository_service.repository(), |tx| {
             let br = book_repo.clone();
             Box::pin(async move {
-                let book = br.find_by_token(tx, &bt).await?.ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
+                let book = br
+                    .find_by_token(tx, book_token)
+                    .await?
+                    .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
                 let book_id = book.id;
                 let authors = br.authors_for_book(tx, book_id).await?;
                 Ok::<_, Error>((book, authors))
@@ -1089,7 +1090,7 @@ impl PipelineService for PipelineServiceImpl {
 
         // ── 4. Store fetched cover ─────────────────────────────────────────────
         if let Some((cover_bytes, cover_filename)) = cover_data {
-            self.library_store.store_cover(&book.token, &cover_filename, &cover_bytes).await?;
+            self.library_store.store_cover(book.token, &cover_filename, &cover_bytes).await?;
             let cover_path = temp_dir.join("bookboss-covers").join(cover_key);
             let _ = tokio::fs::remove_file(&cover_path).await;
         }
@@ -1099,7 +1100,7 @@ impl PipelineService for PipelineServiceImpl {
         let new_slug = book_slug(&normalize_name(&edit.title), new_first_author.as_deref());
 
         if old_slug != new_slug {
-            self.library_store.rename_book_files(&book.token, &old_slug, &new_slug).await?;
+            self.library_store.rename_book_files(book.token, &old_slug, &new_slug).await?;
 
             // Update DB paths for enriched files to match the new slug.
             let book_repo_rename = self.repository_service.book_repository().clone();
@@ -1184,7 +1185,7 @@ impl PipelineService for PipelineServiceImpl {
                 })
                 .unwrap_or_default(),
         };
-        self.library_store.store_metadata(&book.token, &sidecar).await?;
+        self.library_store.store_metadata(book.token, &sidecar).await?;
 
         // ── 7. Enqueue EPUB enrichment ────────────────────────────────────────
         self.conversion_service.queue_enrich_epub(book_id).await?;
@@ -1196,7 +1197,7 @@ impl PipelineService for PipelineServiceImpl {
     async fn reject_job(&self, job_token: ImportJobToken) -> Result<(), Error> {
         let import_job_repo = self.repository_service.import_job_repository().clone();
         let job = read_only_transaction(&**self.repository_service.repository(), |tx| {
-            Box::pin(async move { import_job_repo.find_by_token(tx, &job_token).await })
+            Box::pin(async move { import_job_repo.find_by_token(tx, job_token).await })
         })
         .await?
         .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
@@ -1260,7 +1261,7 @@ impl PipelineService for PipelineServiceImpl {
 
         // Delete library files after all DB work is done.
         if let Some(token) = book_token {
-            self.library_store.delete_book(&token).await?;
+            self.library_store.delete_book(token).await?;
         }
         for filename in original_filenames {
             self.library_store.delete_original_file(&filename).await?;

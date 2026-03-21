@@ -368,7 +368,7 @@ async fn update_device_for_profile(token: String, name: String, on_removal_actio
 
     core_services
         .device_service
-        .update_device(&device_token, name, action, user_id)
+        .update_device(device_token, name, action, user_id)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
@@ -387,7 +387,7 @@ async fn delete_device_for_profile(token: String, delete_shelf: bool) -> Result<
 
     core_services
         .device_service
-        .delete_device(&device_token, delete_shelf, user_id)
+        .delete_device(device_token, delete_shelf, user_id)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
@@ -406,7 +406,7 @@ async fn reset_device_sync_for_profile(token: String) -> Result<(), ServerFnErro
 
     core_services
         .device_service
-        .reset_device_sync(&device_token, user_id)
+        .reset_device_sync(device_token, user_id)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 

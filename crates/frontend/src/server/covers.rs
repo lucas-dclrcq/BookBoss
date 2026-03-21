@@ -35,7 +35,7 @@ pub(crate) async fn serve_cover(
         Err(_) => return Response::builder().status(StatusCode::BAD_REQUEST).body(Body::empty()).unwrap(),
     };
 
-    let book = match core_services.book_service.find_book_by_token(&token).await {
+    let book = match core_services.book_service.find_book_by_token(token).await {
         Ok(Some(b)) => b,
         Ok(None) => return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap(),
         Err(_) => return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap(),
@@ -50,7 +50,7 @@ pub(crate) async fn serve_cover(
             .unwrap();
     };
 
-    let path = core_services.library_store.cover_path(&token, &filename);
+    let path = core_services.library_store.cover_path(token, &filename);
 
     let (data, content_type) = match tokio::fs::read(&path).await {
         Ok(d) => (d, content_type_for_filename(&filename)),

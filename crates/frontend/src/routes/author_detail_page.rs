@@ -34,7 +34,7 @@ async fn get_author(token: String) -> Result<AuthorPageData, ServerFnError> {
     let author_token = AuthorToken::from_str(&token).map_err(|_| ServerFnError::new("Invalid author token"))?;
 
     let author = book_service
-        .find_author_by_token(&author_token)
+        .find_author_by_token(author_token)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?
         .ok_or_else(|| ServerFnError::new("Author not found"))?;

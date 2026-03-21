@@ -52,7 +52,7 @@ async fn list_incoming_books() -> Result<Vec<IncomingBookSummary>, ServerFnError
     for job in jobs {
         let (title, author_names, cover_path) = if let Some(book_id) = job.candidate_book_id {
             match book_service
-                .find_book_by_token(&BookToken::new(book_id))
+                .find_book_by_token(BookToken::new(book_id))
                 .await
                 .map_err(|e| ServerFnError::new(e.to_string()))?
             {
@@ -61,7 +61,7 @@ async fn list_incoming_books() -> Result<Vec<IncomingBookSummary>, ServerFnError
                     let mut names = Vec::new();
                     for ba in &book_authors {
                         if let Some(author) = book_service
-                            .find_author_by_token(&AuthorToken::new(ba.author_id))
+                            .find_author_by_token(AuthorToken::new(ba.author_id))
                             .await
                             .map_err(|e| ServerFnError::new(e.to_string()))?
                         {

@@ -16,7 +16,7 @@ async fn job_created_and_found_by_token() {
     let ctx = setup().await;
     let job = fixtures::insert_import_job(&ctx.repos, "abc123").await;
 
-    let found = ctx.services.import_job_service.find_by_token(&job.token).await.unwrap();
+    let found = ctx.services.import_job_service.find_by_token(job.token).await.unwrap();
 
     assert!(found.is_some());
     assert_eq!(found.unwrap().file_hash, "abc123");
@@ -27,7 +27,7 @@ async fn find_by_token_returns_none_for_unknown_token() {
     let ctx = setup().await;
     let fake_token = bb_core::import::ImportJobToken::new(999_999);
 
-    let found = ctx.services.import_job_service.find_by_token(&fake_token).await.unwrap();
+    let found = ctx.services.import_job_service.find_by_token(fake_token).await.unwrap();
 
     assert!(found.is_none());
 }

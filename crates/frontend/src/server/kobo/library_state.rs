@@ -111,7 +111,7 @@ pub(super) async fn handle_get(kobo: KoboDevice, Path(params): Path<HashMap<Stri
 
     tracing::debug!(device_id = kobo.device.id, book_token = %token, "Retrieve book state");
 
-    let book = match core_services.book_service.find_book_by_token(&token).await {
+    let book = match core_services.book_service.find_book_by_token(token).await {
         Ok(Some(b)) => b,
         Ok(None) => return Json(json!([])).into_response(),
         Err(e) => {
@@ -173,7 +173,7 @@ pub(super) async fn handle_put(
 
     tracing::debug!(device_id = kobo.device.id, book_token = %token, state_info = ?item, "set book state");
 
-    let book = match core_services.book_service.find_book_by_token(&token).await {
+    let book = match core_services.book_service.find_book_by_token(token).await {
         Ok(Some(b)) => b,
         Ok(None) => return StatusCode::OK.into_response(),
         Err(e) => {

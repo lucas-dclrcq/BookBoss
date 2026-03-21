@@ -89,7 +89,7 @@ impl JobHandler for ConvertKepubHandler {
         let slug = book_slug(&book.title, first_author_name.as_deref());
 
         // ── 6. Move converted file into the library ───────────────────────────
-        let kepub_path = self.library_store.store_book_file(&book.token, &slug, FileFormat::Kepub, &temp_path).await?;
+        let kepub_path = self.library_store.store_book_file(book.token, &slug, FileFormat::Kepub, &temp_path).await?;
 
         // ── 7. Upsert the Enriched Kepub book_file record ────────────────────
         let book_repo = self.repository_service.book_repository().clone();

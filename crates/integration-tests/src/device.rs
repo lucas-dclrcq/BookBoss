@@ -17,7 +17,7 @@ async fn create_device_returns_token() {
         .await
         .unwrap();
 
-    let device = ctx.services.device_service.get_device(&token, user.id).await.unwrap();
+    let device = ctx.services.device_service.get_device(token, user.id).await.unwrap();
     assert_eq!(device.name, "My Kobo");
     assert_eq!(device.device_type, "kobo");
     assert_eq!(device.owner_id, user.id);
@@ -35,7 +35,7 @@ async fn create_device_creates_companion_shelf() {
         .await
         .unwrap();
 
-    let device = ctx.services.device_service.get_device(&token, user.id).await.unwrap();
+    let device = ctx.services.device_service.get_device(token, user.id).await.unwrap();
     let companion = ctx.services.device_service.get_companion_shelf(device.id).await.unwrap();
     assert!(companion.is_some(), "companion shelf must be created with the device");
     let shelf = companion.unwrap();
@@ -106,7 +106,7 @@ async fn get_device_fails_for_other_user() {
         .await
         .unwrap();
 
-    let result = ctx.services.device_service.get_device(&token, bob.id).await;
+    let result = ctx.services.device_service.get_device(token, bob.id).await;
 
     assert!(
         matches!(result, Err(Error::RepositoryError(RepositoryError::NotFound))),
@@ -127,15 +127,15 @@ async fn update_device_renames_device_and_companion_shelf() {
         .create_device(user.id, "Old Name".to_string(), "kobo".to_string(), OnRemovalAction::Nothing)
         .await
         .unwrap();
-    let device = ctx.services.device_service.get_device(&token, user.id).await.unwrap();
+    let device = ctx.services.device_service.get_device(token, user.id).await.unwrap();
 
     ctx.services
         .device_service
-        .update_device(&token, "New Name".to_string(), OnRemovalAction::MarkRead, user.id)
+        .update_device(token, "New Name".to_string(), OnRemovalAction::MarkRead, user.id)
         .await
         .unwrap();
 
-    let updated = ctx.services.device_service.get_device(&token, user.id).await.unwrap();
+    let updated = ctx.services.device_service.get_device(token, user.id).await.unwrap();
     assert_eq!(updated.name, "New Name");
     assert_eq!(updated.on_removal_action, OnRemovalAction::MarkRead);
     // Companion shelf should also be renamed
@@ -157,7 +157,7 @@ async fn delete_device_removes_it_from_list() {
         .await
         .unwrap();
 
-    ctx.services.device_service.delete_device(&token, true, user.id).await.unwrap();
+    ctx.services.device_service.delete_device(token, true, user.id).await.unwrap();
 
     let devices = ctx.services.device_service.list_devices_for_user(user.id).await.unwrap();
     assert!(devices.is_empty(), "device should be gone after deletion");
@@ -173,10 +173,10 @@ async fn delete_device_with_companion_shelf_removes_shelf() {
         .create_device(user.id, "Temp Device".to_string(), "kobo".to_string(), OnRemovalAction::Nothing)
         .await
         .unwrap();
-    let device = ctx.services.device_service.get_device(&token, user.id).await.unwrap();
+    let device = ctx.services.device_service.get_device(token, user.id).await.unwrap();
     let device_id = device.id;
 
-    ctx.services.device_service.delete_device(&token, true, user.id).await.unwrap();
+    ctx.services.device_service.delete_device(token, true, user.id).await.unwrap();
 
     let companion = ctx.services.device_service.get_companion_shelf(device_id).await.unwrap();
     assert!(companion.is_none(), "companion shelf should be deleted when delete_companion_shelf=true");

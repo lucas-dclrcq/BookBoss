@@ -32,7 +32,7 @@ pub trait LibraryService: Send + Sync {
     /// Removes all DB records (book, authors/identifiers join rows, and orphan
     /// authors with no remaining books) then deletes the book directory from
     /// the library store.
-    async fn delete_book(&self, book_token: &BookToken) -> Result<(), Error>;
+    async fn delete_book(&self, book_token: BookToken) -> Result<(), Error>;
 }
 
 pub struct LibraryServiceImpl {
@@ -77,8 +77,7 @@ impl LibraryService for LibraryServiceImpl {
         .await
     }
 
-    async fn delete_book(&self, book_token: &BookToken) -> Result<(), Error> {
-        let token = *book_token;
+    async fn delete_book(&self, book_token: BookToken) -> Result<(), Error> {
         let book_repo = self.repository_service.book_repository().clone();
         let author_repo = self.repository_service.author_repository().clone();
         let job_repo = self.repository_service.import_job_repository().clone();
@@ -88,7 +87,10 @@ impl LibraryService for LibraryServiceImpl {
             let ar = author_repo.clone();
             let jr = job_repo.clone();
             Box::pin(async move {
-                let book = br.find_by_token(tx, &token).await?.ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
+                let book = br
+                    .find_by_token(tx, book_token)
+                    .await?
+                    .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
                 let author_links = br.authors_for_book(tx, book.id).await?;
                 let author_ids: Vec<u64> = author_links.iter().map(|a| a.author_id).collect();
@@ -122,7 +124,7 @@ impl LibraryService for LibraryServiceImpl {
         })
         .await?;
 
-        self.library_store.delete_book(&token).await?;
+        self.library_store.delete_book(book_token).await?;
         for filename in original_filenames {
             self.library_store.delete_original_file(&filename).await?;
         }
@@ -254,7 +256,7 @@ mod tests {
         );
         let token = BookToken::new(99);
 
-        let result = svc.delete_book(&token).await;
+        let result = svc.delete_book(token).await;
 
         assert!(
             matches!(result, Err(Error::RepositoryError(RepositoryError::NotFound))),
@@ -287,7 +289,7 @@ mod tests {
         let svc = create_service(book_repo, MockAuthorRepository::new(), job_repo, MockLibraryRepository::new(), store);
         let token = BookToken::new(book_id);
 
-        svc.delete_book(&token).await.unwrap();
+        svc.delete_book(token).await.unwrap();
     }
 
     #[tokio::test]
@@ -328,7 +330,7 @@ mod tests {
         let svc = create_service(book_repo, author_repo, job_repo, MockLibraryRepository::new(), store);
         let token = BookToken::new(book_id);
 
-        svc.delete_book(&token).await.unwrap();
+        svc.delete_book(token).await.unwrap();
         // `.times(1)` on `delete_author` verifies the orphan was deleted when
         // the mock is dropped
     }
@@ -367,7 +369,7 @@ mod tests {
         let svc = create_service(book_repo, author_repo, job_repo, MockLibraryRepository::new(), store);
         let token = BookToken::new(book_id);
 
-        svc.delete_book(&token).await.unwrap();
+        svc.delete_book(token).await.unwrap();
     }
 
     #[tokio::test]
@@ -405,7 +407,7 @@ mod tests {
         let svc = create_service(book_repo, MockAuthorRepository::new(), job_repo, MockLibraryRepository::new(), store);
         let token = BookToken::new(book_id);
 
-        svc.delete_book(&token).await.unwrap();
+        svc.delete_book(token).await.unwrap();
         // `.times(1)` on `delete_job` verifies the linked job was deleted when
         // the mock is dropped
     }
@@ -445,7 +447,7 @@ mod tests {
         let svc = create_service(book_repo, MockAuthorRepository::new(), job_repo, MockLibraryRepository::new(), store);
         let token = BookToken::new(book_id);
 
-        svc.delete_book(&token).await.unwrap();
+        svc.delete_book(token).await.unwrap();
         // `.times(1)` on `delete_original_file` verifies the file was removed
         // from the store
     }

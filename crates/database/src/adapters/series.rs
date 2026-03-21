@@ -106,7 +106,7 @@ impl SeriesRepository for SeriesRepositoryAdapter {
             .map(Into::into))
     }
 
-    async fn find_by_token(&self, transaction: &dyn Transaction, token: &SeriesToken) -> Result<Option<Series>, Error> {
+    async fn find_by_token(&self, transaction: &dyn Transaction, token: SeriesToken) -> Result<Option<Series>, Error> {
         self.find_by_id(transaction, token.id()).await
     }
 
@@ -301,7 +301,7 @@ mod tests {
             .await
             .unwrap();
 
-        let result = svc.series_repository().find_by_token(&*tx, &inserted.token).await;
+        let result = svc.series_repository().find_by_token(&*tx, inserted.token).await;
 
         assert_eq!(result.unwrap().unwrap().id, inserted.id);
     }
@@ -311,7 +311,7 @@ mod tests {
         let svc = setup().await;
         let tx = svc.repository().begin().await.unwrap();
 
-        assert!(svc.series_repository().find_by_token(&*tx, &SeriesToken::new(999)).await.unwrap().is_none());
+        assert!(svc.series_repository().find_by_token(&*tx, SeriesToken::new(999)).await.unwrap().is_none());
     }
 
     // ─── list_series ─────────────────────────────────────────────────────────

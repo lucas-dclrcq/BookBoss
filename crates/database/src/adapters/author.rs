@@ -106,7 +106,7 @@ impl AuthorRepository for AuthorRepositoryAdapter {
             .map(Into::into))
     }
 
-    async fn find_by_token(&self, transaction: &dyn Transaction, token: &AuthorToken) -> Result<Option<Author>, Error> {
+    async fn find_by_token(&self, transaction: &dyn Transaction, token: AuthorToken) -> Result<Option<Author>, Error> {
         self.find_by_id(transaction, token.id()).await
     }
 
@@ -302,7 +302,7 @@ mod tests {
             .await
             .unwrap();
 
-        let result = svc.author_repository().find_by_token(&*tx, &inserted.token).await;
+        let result = svc.author_repository().find_by_token(&*tx, inserted.token).await;
 
         assert!(result.is_ok());
         let author = result.unwrap().unwrap();
@@ -316,7 +316,7 @@ mod tests {
         let svc = setup().await;
         let tx = svc.repository().begin().await.unwrap();
         let token = AuthorToken::new(999);
-        let result = svc.author_repository().find_by_token(&*tx, &token).await;
+        let result = svc.author_repository().find_by_token(&*tx, token).await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());

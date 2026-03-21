@@ -37,9 +37,9 @@ async fn add_book_to_manual_shelf_and_retrieve() {
         .await
         .unwrap();
 
-    ctx.services.shelf_service.add_book_to_shelf(&shelf_token, &book.token, user.id).await.unwrap();
+    ctx.services.shelf_service.add_book_to_shelf(shelf_token, book.token, user.id).await.unwrap();
 
-    let entries = ctx.services.shelf_service.books_for_shelf(&shelf_token, user.id, None, None).await.unwrap();
+    let entries = ctx.services.shelf_service.books_for_shelf(shelf_token, user.id, None, None).await.unwrap();
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].book_id, book.id);
 }
@@ -55,15 +55,15 @@ async fn remove_book_from_manual_shelf() {
         .create_manual_shelf(user.id, "To Remove".to_string(), ShelfVisibility::Private)
         .await
         .unwrap();
-    ctx.services.shelf_service.add_book_to_shelf(&shelf_token, &book.token, user.id).await.unwrap();
+    ctx.services.shelf_service.add_book_to_shelf(shelf_token, book.token, user.id).await.unwrap();
 
     ctx.services
         .shelf_service
-        .remove_book_from_shelf(&shelf_token, &book.token, user.id)
+        .remove_book_from_shelf(shelf_token, book.token, user.id)
         .await
         .unwrap();
 
-    let entries = ctx.services.shelf_service.books_for_shelf(&shelf_token, user.id, None, None).await.unwrap();
+    let entries = ctx.services.shelf_service.books_for_shelf(shelf_token, user.id, None, None).await.unwrap();
     assert!(entries.is_empty(), "book should be removed from shelf");
 }
 
@@ -78,7 +78,7 @@ async fn delete_shelf_removes_it_from_list() {
         .await
         .unwrap();
 
-    ctx.services.shelf_service.delete_shelf(&token, user.id).await.unwrap();
+    ctx.services.shelf_service.delete_shelf(token, user.id).await.unwrap();
 
     let shelves = ctx.services.shelf_service.list_shelves_for_user(user.id).await.unwrap();
     assert!(!shelves.iter().any(|s| s.token == token), "deleted shelf must not appear in list");
@@ -108,7 +108,7 @@ async fn smart_shelf_title_contains_filter() {
     let books = ctx
         .services
         .shelf_service
-        .books_for_filter(&shelf_token, user.id, None, None, None)
+        .books_for_filter(shelf_token, user.id, None, None, None)
         .await
         .unwrap();
     assert_eq!(books.len(), 1);
@@ -137,7 +137,7 @@ async fn smart_shelf_title_does_not_contain_filter() {
     let books = ctx
         .services
         .shelf_service
-        .books_for_filter(&shelf_token, user.id, None, None, None)
+        .books_for_filter(shelf_token, user.id, None, None, None)
         .await
         .unwrap();
     assert_eq!(books.len(), 2);
@@ -176,7 +176,7 @@ async fn smart_shelf_and_filter_requires_both_conditions() {
     let books = ctx
         .services
         .shelf_service
-        .books_for_filter(&shelf_token, user.id, None, None, None)
+        .books_for_filter(shelf_token, user.id, None, None, None)
         .await
         .unwrap();
     assert_eq!(books.len(), 1);
@@ -215,7 +215,7 @@ async fn smart_shelf_or_filter_accepts_either_condition() {
     let books = ctx
         .services
         .shelf_service
-        .books_for_filter(&shelf_token, user.id, None, None, None)
+        .books_for_filter(shelf_token, user.id, None, None, None)
         .await
         .unwrap();
     assert_eq!(books.len(), 2);
@@ -247,10 +247,10 @@ async fn count_for_filter_matches_books_for_filter_length() {
     let books = ctx
         .services
         .shelf_service
-        .books_for_filter(&shelf_token, user.id, None, None, None)
+        .books_for_filter(shelf_token, user.id, None, None, None)
         .await
         .unwrap();
-    let count = ctx.services.shelf_service.count_for_filter(&shelf_token, user.id).await.unwrap();
+    let count = ctx.services.shelf_service.count_for_filter(shelf_token, user.id).await.unwrap();
 
     assert_eq!(count, books.len() as u64, "count_for_filter must match books_for_filter length");
     assert_eq!(count, 2);
@@ -276,6 +276,6 @@ async fn smart_shelf_language_filter() {
         .unwrap();
 
     // Verify the filter round-trips from the DB correctly
-    let shelf = ctx.services.shelf_service.get_shelf(&shelf_token, user.id).await.unwrap();
+    let shelf = ctx.services.shelf_service.get_shelf(shelf_token, user.id).await.unwrap();
     assert_eq!(shelf.filter_criteria.as_ref(), Some(&filter), "filter must round-trip through the DB");
 }

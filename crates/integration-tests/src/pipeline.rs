@@ -150,7 +150,7 @@ async fn reject_job_removes_candidate_book() {
 
     svc.pipeline_service.reject_job(job.token).await.unwrap();
 
-    let found = svc.book_service.find_book_by_token(&book.token).await.unwrap();
+    let found = svc.book_service.find_book_by_token(book.token).await.unwrap();
     assert!(found.is_none(), "book should be deleted after reject");
 }
 
@@ -228,7 +228,7 @@ async fn approve_job_transitions_book_to_available() {
 
     svc.pipeline_service.approve_job(job.token, edit, &std::env::temp_dir()).await.unwrap();
 
-    let book = svc.book_service.find_book_by_token(&book_token).await.unwrap().expect("book found");
+    let book = svc.book_service.find_book_by_token(book_token).await.unwrap().expect("book found");
     assert_eq!(book.status, BookStatus::Available);
     assert_eq!(book.title, "Approved Book");
 }

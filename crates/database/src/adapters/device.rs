@@ -141,7 +141,7 @@ impl DeviceRepository for DeviceRepositoryAdapter {
             .map(Into::into))
     }
 
-    async fn find_by_token(&self, transaction: &dyn Transaction, token: &DeviceToken) -> Result<Option<Device>, Error> {
+    async fn find_by_token(&self, transaction: &dyn Transaction, token: DeviceToken) -> Result<Option<Device>, Error> {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
         Ok(prelude::Devices::find()
@@ -381,7 +381,7 @@ mod tests {
         tx.commit().await.unwrap();
 
         let tx = svc.repository().begin_read_only().await.unwrap();
-        let found = svc.device_repository().find_by_token(&*tx, &device.token).await.unwrap();
+        let found = svc.device_repository().find_by_token(&*tx, device.token).await.unwrap();
         assert!(found.is_some());
         assert_eq!(found.unwrap().name, "My Kobo");
     }
@@ -407,7 +407,7 @@ mod tests {
         let tx = svc.repository().begin_read_only().await.unwrap();
         let ghost = bb_core::device::DeviceToken::new(999_999);
 
-        let found = svc.device_repository().find_by_token(&*tx, &ghost).await.unwrap();
+        let found = svc.device_repository().find_by_token(&*tx, ghost).await.unwrap();
 
         assert!(found.is_none());
     }

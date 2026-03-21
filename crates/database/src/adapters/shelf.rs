@@ -167,7 +167,7 @@ impl ShelfRepository for ShelfRepositoryAdapter {
             .map(Into::into))
     }
 
-    async fn find_by_token(&self, transaction: &dyn Transaction, token: &ShelfToken) -> Result<Option<Shelf>, Error> {
+    async fn find_by_token(&self, transaction: &dyn Transaction, token: ShelfToken) -> Result<Option<Shelf>, Error> {
         self.find_by_id(transaction, token.id()).await
     }
 
@@ -549,7 +549,7 @@ mod tests {
         let tx = svc.repository().begin().await.unwrap();
 
         let shelf = svc.shelf_repository().add_shelf(&*tx, manual_shelf(user_id, "To Read")).await.unwrap();
-        let found = svc.shelf_repository().find_by_token(&*tx, &shelf.token).await.unwrap();
+        let found = svc.shelf_repository().find_by_token(&*tx, shelf.token).await.unwrap();
 
         assert!(found.is_some());
         assert_eq!(found.unwrap().id, shelf.id);

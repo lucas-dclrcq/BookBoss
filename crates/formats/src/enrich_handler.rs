@@ -90,7 +90,7 @@ impl JobHandler for EnrichEpubHandler {
 
         // ── 3. Load cover bytes (non-fatal if missing) ────────────────────────
         let cover_bytes: Option<Vec<u8>> = if let Some(cover_filename) = &book.cover_path {
-            let cover_path = self.library_store.cover_path(&book.token, cover_filename);
+            let cover_path = self.library_store.cover_path(book.token, cover_filename);
             match tokio::fs::read(&cover_path).await {
                 Ok(data) => Some(data),
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -168,7 +168,7 @@ impl JobHandler for EnrichEpubHandler {
             .len() as i64;
 
         // ── 8. Move enriched file into the library ────────────────────────────
-        let enriched_path = self.library_store.store_book_file(&book.token, &slug, FileFormat::Epub, &temp_path).await?;
+        let enriched_path = self.library_store.store_book_file(book.token, &slug, FileFormat::Epub, &temp_path).await?;
 
         // ── 9. Upsert the Enriched book_file record ───────────────────────────
         let book_repo = self.repository_service.book_repository().clone();

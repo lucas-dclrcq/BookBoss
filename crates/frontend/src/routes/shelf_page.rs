@@ -181,7 +181,7 @@ pub(crate) async fn update_smart_shelf_filter(token: String, filter_json: String
 
     core_services
         .shelf_service
-        .update_shelf_filter(&shelf_token, filter, user_id)
+        .update_shelf_filter(shelf_token, filter, user_id)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))
 }
@@ -199,7 +199,7 @@ pub(crate) async fn delete_shelf(token: String) -> Result<(), ServerFnError> {
 
     core_services
         .shelf_service
-        .delete_shelf(&shelf_token, user_id)
+        .delete_shelf(shelf_token, user_id)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))
 }
@@ -218,7 +218,7 @@ pub(crate) async fn add_book_to_shelf(shelf_token: String, book_token: String) -
 
     core_services
         .shelf_service
-        .add_book_to_shelf(&shelf, &book, user_id)
+        .add_book_to_shelf(shelf, book, user_id)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))
 }
@@ -237,7 +237,7 @@ pub(crate) async fn remove_book_from_shelf(shelf_token: String, book_token: Stri
 
     core_services
         .shelf_service
-        .remove_book_from_shelf(&shelf, &book, user_id)
+        .remove_book_from_shelf(shelf, book, user_id)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))
 }
@@ -257,7 +257,7 @@ pub(crate) async fn update_shelf(token: String, name: String, visibility: String
 
     core_services
         .shelf_service
-        .update_shelf(&shelf_token, name, vis, user_id)
+        .update_shelf(shelf_token, name, vis, user_id)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))
 }
@@ -354,7 +354,7 @@ pub(crate) async fn list_all_accessible_shelves() -> Result<Vec<ShelfSummary>, S
             None
         };
         let count = if is_smart {
-            shelf_service.count_for_filter(&s.token, user_id).await.ok()
+            shelf_service.count_for_filter(s.token, user_id).await.ok()
         } else {
             None
         };
@@ -422,7 +422,7 @@ pub(crate) async fn books_for_shelf(
 
     // Load the shelf to determine if it's smart or manual.
     let shelf = shelf_service
-        .get_shelf(&shelf_token, user_id)
+        .get_shelf(shelf_token, user_id)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
@@ -431,7 +431,7 @@ pub(crate) async fn books_for_shelf(
     let (books, next_offset) = if shelf.shelf_type == ShelfType::Smart {
         let core_sort = sort.map(to_core_sort);
         let rows: Vec<Book> = shelf_service
-            .books_for_filter(&shelf_token, user_id, offset, Some(effective_page_size), core_sort)
+            .books_for_filter(shelf_token, user_id, offset, Some(effective_page_size), core_sort)
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?;
 
@@ -444,14 +444,14 @@ pub(crate) async fn books_for_shelf(
     } else {
         // Manual shelves: load all entries — they're small/curated.
         let shelf_entries = shelf_service
-            .books_for_shelf(&shelf_token, user_id, None, None)
+            .books_for_shelf(shelf_token, user_id, None, None)
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let mut books = Vec::with_capacity(shelf_entries.len());
         for entry in &shelf_entries {
             let book = book_service
-                .find_book_by_token(&BookToken::new(entry.book_id))
+                .find_book_by_token(BookToken::new(entry.book_id))
                 .await
                 .map_err(|e| ServerFnError::new(e.to_string()))?
                 .ok_or_else(|| ServerFnError::new("Book not found"))?;

@@ -23,9 +23,9 @@ async fn delete_book_removes_book_record() {
     let svc = library_services(&ctx);
     let book = fixtures::insert_book(&ctx.repos, "To Delete", BookStatus::Available).await;
 
-    svc.library_service.delete_book(&book.token).await.unwrap();
+    svc.library_service.delete_book(book.token).await.unwrap();
 
-    let found = svc.book_service.find_book_by_token(&book.token).await.unwrap();
+    let found = svc.book_service.find_book_by_token(book.token).await.unwrap();
     assert!(found.is_none());
 }
 
@@ -37,7 +37,7 @@ async fn delete_book_removes_linked_import_job() {
     let job = fixtures::insert_import_job(&ctx.repos, "job_hash_for_delete").await;
     let job = fixtures::link_job_to_book(&ctx.repos, job, book.id).await;
 
-    svc.library_service.delete_book(&book.token).await.unwrap();
+    svc.library_service.delete_book(book.token).await.unwrap();
 
     let found_job = fixtures::find_job_by_id(&ctx.repos, job.id).await;
     assert!(found_job.is_none(), "import job should be deleted with the book");
@@ -51,7 +51,7 @@ async fn delete_book_removes_orphan_author() {
     let author = fixtures::insert_author(&ctx.repos, "Orphan Author").await;
     fixtures::link_book_author(&ctx.repos, book.id, author.id).await;
 
-    svc.library_service.delete_book(&book.token).await.unwrap();
+    svc.library_service.delete_book(book.token).await.unwrap();
 
     // Author should be cleaned up because they have no other books
     let author_repo = ctx.repos.author_repository().clone();
@@ -74,7 +74,7 @@ async fn delete_book_preserves_author_with_other_books() {
     fixtures::link_book_author(&ctx.repos, book1.id, author.id).await;
     fixtures::link_book_author(&ctx.repos, book2.id, author.id).await;
 
-    svc.library_service.delete_book(&book1.token).await.unwrap();
+    svc.library_service.delete_book(book1.token).await.unwrap();
 
     // Author still has book2 — should not be deleted
     let author_repo = ctx.repos.author_repository().clone();
@@ -93,7 +93,7 @@ async fn delete_book_returns_not_found_for_missing_token() {
     let svc = library_services(&ctx);
     let ghost_token = bb_core::book::BookToken::new(999_999);
 
-    let result = svc.library_service.delete_book(&ghost_token).await;
+    let result = svc.library_service.delete_book(ghost_token).await;
 
     assert!(
         matches!(result, Err(bb_core::Error::RepositoryError(RepositoryError::NotFound))),
