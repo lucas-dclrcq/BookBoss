@@ -305,31 +305,42 @@ impl PipelineService for PipelineServiceImpl {
                     }
                 }
 
-                // Score each result against the embedded title and primary author;
-                // pick the highest combined scorer above MATCH_THRESHOLD.
+                // Score each result against the embedded title and primary author.
+                // Scores are stored in a parallel vec so they can be reused for
+                // both metadata selection and cover selection below.
                 let extracted_title = extracted.title.as_deref();
                 let extracted_author = extracted
                     .authors
                     .as_deref()
                     .and_then(|a| a.iter().min_by_key(|a| a.sort_order))
                     .map(|a| a.name.as_str());
+                let scores: Vec<f32> = provider_results
+                    .iter()
+                    .map(|(name, pb)| {
+                        let t_score = match (extracted_title, pb.metadata.title.as_deref()) {
+                            (Some(ext), Some(prov)) => title_similarity(ext, prov),
+                            _ => 0.0,
+                        };
+                        let a_score = match (
+                            extracted_author,
+                            pb.metadata.authors.as_deref().and_then(|a| a.iter().min_by_key(|a| a.sort_order)),
+                        ) {
+                            (Some(ext), Some(prov)) => author_similarity(ext, &prov.name),
+                            _ => 0.5,
+                        };
+                        let score = combined_score(t_score, a_score);
+                        tracing::debug!(provider = name, title_score = t_score, author_score = a_score, score, "provider result scored");
+                        score
+                    })
+                    .collect();
+
+                // Pick the highest-scoring result above MATCH_THRESHOLD,
+                // breaking ties by provider priority.
                 let mut best_idx: Option<usize> = None;
                 let mut best_score: f32 = -1.0;
                 let mut best_priority = u8::MAX;
-                for (i, (name, pb)) in provider_results.iter().enumerate() {
-                    let t_score = match (extracted_title, pb.metadata.title.as_deref()) {
-                        (Some(ext), Some(prov)) => title_similarity(ext, prov),
-                        _ => 0.0,
-                    };
-                    let a_score = match (
-                        extracted_author,
-                        pb.metadata.authors.as_deref().and_then(|a| a.iter().min_by_key(|a| a.sort_order)),
-                    ) {
-                        (Some(ext), Some(prov)) => author_similarity(ext, &prov.name),
-                        _ => 0.5,
-                    };
-                    let score = combined_score(t_score, a_score);
-                    tracing::debug!(provider = name, title_score = t_score, author_score = a_score, score, "provider result scored");
+                for (i, (name, _)) in provider_results.iter().enumerate() {
+                    let score = scores[i];
                     if score >= MATCH_THRESHOLD {
                         let priority = provider_priority(name);
                         #[allow(
@@ -345,18 +356,25 @@ impl PipelineService for PipelineServiceImpl {
                     }
                 }
 
-                // Cover: pick largest from any provider result.
+                // Cover: pick the largest image from the embedded EPUB cover and
+                // any provider that scored above MATCH_THRESHOLD. Covers from
+                // providers that failed to match are excluded.
                 let mut best_cover = embedded_cover;
                 let mut best_min_side = best_cover.as_deref().map_or(0, cover_min_side);
-                for (_, pb) in &provider_results {
-                    if let Some(cover) = &pb.cover_bytes {
-                        let min_side = cover_min_side(cover);
-                        if min_side > best_min_side {
-                            best_min_side = min_side;
-                            best_cover = Some(cover.clone());
+                let mut cover_source: Option<&str> = None;
+                for ((name, pb), &score) in provider_results.iter().zip(scores.iter()) {
+                    if score >= MATCH_THRESHOLD {
+                        if let Some(cover) = &pb.cover_bytes {
+                            let min_side = cover_min_side(cover);
+                            if min_side > best_min_side {
+                                best_min_side = min_side;
+                                best_cover = Some(cover.clone());
+                                cover_source = Some(name);
+                            }
                         }
                     }
                 }
+                tracing::debug!(provider = cover_source, min_side = best_min_side, "cover selected");
 
                 if let Some(idx) = best_idx {
                     let (source_name, pb) = provider_results.swap_remove(idx);
