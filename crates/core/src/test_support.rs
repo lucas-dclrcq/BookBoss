@@ -6,7 +6,7 @@ use std::{
 use async_trait::async_trait;
 
 use crate::{
-    Error,
+    Error, ExternalServicesBuilder,
     book::{Book, BookId, BookToken, FileFormat, IdentifierType},
     conversion::ConversionService,
     filter::BookFilter,
@@ -140,4 +140,19 @@ pub fn nop_import_scanner() -> Arc<dyn ImportScanner> {
     let mut mock = MockImportScanner::new();
     mock.expect_trigger_scan().returning(|| Box::pin(async {}));
     Arc::new(mock)
+}
+
+/// Returns an `ExternalServicesBuilder` pre-populated with nop implementations
+/// for all fields except `repository_service`, which callers must always
+/// provide.
+///
+/// Override individual fields for the service(s) under test before calling
+/// `.build()`.
+#[must_use]
+pub fn default_external_services_builder() -> ExternalServicesBuilder {
+    ExternalServicesBuilder::default()
+        .library_store(nop_library_store())
+        .pipeline_service(nop_pipeline_service())
+        .conversion_service(nop_conversion_service())
+        .import_scanner(nop_import_scanner())
 }

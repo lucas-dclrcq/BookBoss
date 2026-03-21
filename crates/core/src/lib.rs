@@ -18,6 +18,7 @@ pub mod user;
 
 use std::{sync::Arc, time::Duration};
 
+use derive_builder::Builder;
 pub use error::{Error, ErrorKind, RepositoryError};
 use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, SubsystemHandle};
 
@@ -41,6 +42,20 @@ use crate::{
 #[cfg(feature = "test-support")]
 pub mod test_support;
 
+/// All externally-provided adapter implementations required by `CoreServices`.
+///
+/// Use `ExternalServicesBuilder` to construct — all fields are required and
+/// `.build()` returns an error if any are missing.
+#[derive(Builder)]
+#[builder(pattern = "owned")]
+pub struct ExternalServices {
+    pub repository_service: Arc<RepositoryService>,
+    pub library_store: Arc<dyn LibraryStore>,
+    pub pipeline_service: Arc<dyn PipelineService>,
+    pub conversion_service: Arc<dyn ConversionService>,
+    pub import_scanner: Arc<dyn ImportScanner>,
+}
+
 pub struct CoreServices {
     pub auth_service: Arc<dyn AuthService>,
     pub user_service: Arc<dyn UserService>,
@@ -59,14 +74,14 @@ pub struct CoreServices {
 }
 
 impl CoreServices {
-    pub(crate) fn new(
-        repository_service: Arc<RepositoryService>,
-        library_store: Arc<dyn LibraryStore>,
-        pipeline_service: Arc<dyn PipelineService>,
-        conversion_service: Arc<dyn ConversionService>,
-        import_scanner: Arc<dyn ImportScanner>,
-        encryption_secret: &str,
-    ) -> Self {
+    pub(crate) fn new(external: ExternalServices, encryption_secret: &str) -> Self {
+        let ExternalServices {
+            repository_service,
+            library_store,
+            pipeline_service,
+            conversion_service,
+            import_scanner,
+        } = external;
         Self {
             auth_service: Arc::new(AuthServiceImpl::new(repository_service.clone())),
             user_service: Arc::new(UserServiceImpl::new(repository_service.clone())),
@@ -86,22 +101,8 @@ impl CoreServices {
     }
 }
 
-pub fn create_services(
-    repository_service: Arc<RepositoryService>,
-    library_store: Arc<dyn LibraryStore>,
-    pipeline_service: Arc<dyn PipelineService>,
-    conversion_service: Arc<dyn ConversionService>,
-    import_scanner: Arc<dyn ImportScanner>,
-    encryption_secret: &str,
-) -> Result<Arc<CoreServices>, Error> {
-    Ok(Arc::new(CoreServices::new(
-        repository_service,
-        library_store,
-        pipeline_service,
-        conversion_service,
-        import_scanner,
-        encryption_secret,
-    )))
+pub fn create_services(external: ExternalServices, encryption_secret: &str) -> Result<Arc<CoreServices>, Error> {
+    Ok(Arc::new(CoreServices::new(external, encryption_secret)))
 }
 
 pub struct CoreSubsystem {

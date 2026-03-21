@@ -7,11 +7,10 @@ pub async fn setup() -> TestContext {
     let db = Database::connect("sqlite::memory:").await.unwrap();
     let repository_service = create_repository_service(db).await.unwrap();
     let core_services = bb_core::create_services(
-        repository_service.clone(),
-        bb_core::test_support::nop_library_store(),
-        bb_core::test_support::nop_pipeline_service(),
-        bb_core::test_support::nop_conversion_service(),
-        bb_core::test_support::nop_import_scanner(),
+        bb_core::test_support::default_external_services_builder()
+            .repository_service(repository_service.clone())
+            .build()
+            .unwrap(),
         "test-encryption-secret",
     )
     .unwrap();

@@ -7,11 +7,11 @@ use crate::{fixtures, setup};
 /// without panicking on the no-op store.
 fn library_services(ctx: &crate::context::TestContext) -> std::sync::Arc<bb_core::CoreServices> {
     bb_core::create_services(
-        ctx.repos.clone(),
-        fixtures::silent_library_store(),
-        bb_core::test_support::nop_pipeline_service(),
-        bb_core::test_support::nop_conversion_service(),
-        bb_core::test_support::nop_import_scanner(),
+        bb_core::test_support::default_external_services_builder()
+            .repository_service(ctx.repos.clone())
+            .library_store(fixtures::silent_library_store())
+            .build()
+            .unwrap(),
         "test-encryption-secret",
     )
     .unwrap()

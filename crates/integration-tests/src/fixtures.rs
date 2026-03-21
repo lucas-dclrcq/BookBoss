@@ -118,11 +118,13 @@ pub fn pipeline_services(ctx: &crate::context::TestContext, metadata: ExtractedM
         silent_conversion_service(),
     ));
     bb_core::create_services(
-        ctx.repos.clone(),
-        silent_library_store(),
-        pipeline,
-        silent_conversion_service(),
-        bb_core::test_support::nop_import_scanner(),
+        bb_core::test_support::default_external_services_builder()
+            .repository_service(ctx.repos.clone())
+            .library_store(silent_library_store())
+            .pipeline_service(pipeline)
+            .conversion_service(silent_conversion_service())
+            .build()
+            .unwrap(),
         "test-encryption-secret",
     )
     .unwrap()
