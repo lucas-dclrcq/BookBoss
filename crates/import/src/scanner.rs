@@ -4,19 +4,11 @@ use std::{
     time::Duration,
 };
 
-use bb_core::{
-    Error,
-    book::FileFormat,
-    import::{ImportJobRepository, ImportScanner, NewImportJob},
-    jobs::{JobRepository, JobRepositoryExt},
-    repository::{Repository, transaction},
-};
+use bb_core::{Error, book::FileFormat, import::ImportJobService};
 use chrono::Utc;
 use sha2::{Digest, Sha256};
 use tokio::sync::mpsc;
 use tokio_graceful_shutdown::{IntoSubsystem, SubsystemHandle};
-
-use crate::handler::ProcessImportPayload;
 
 // ── Channel types ────────────────────────────────────────────────────────────
 
@@ -40,11 +32,18 @@ impl ScanTrigger {
 }
 
 #[async_trait::async_trait]
-impl ImportScanner for ScanTrigger {
+impl bb_core::import::ImportScanner for ScanTrigger {
     async fn trigger_scan(&self) {
         self.trigger();
     }
 }
+
+/// Opaque wrapper around the receiving end of the scan channel.
+///
+/// Passed to `create_import_subsystem` after the matching `ScanTrigger` has
+/// been handed to `CoreServices`. The inner `Receiver` is intentionally
+/// `pub(crate)` — external code has no meaningful operation to perform on it.
+pub struct ScanReceiver(pub(crate) mpsc::Receiver<ScanCommand>);
 
 // ── ScanWorker ───────────────────────────────────────────────────────────────
 
@@ -52,25 +51,15 @@ impl ImportScanner for ScanTrigger {
 pub(crate) struct ScanWorker {
     bookdrop_path: PathBuf,
     scan_rx: mpsc::Receiver<ScanCommand>,
-    repository: Arc<dyn Repository>,
-    import_job_repo: Arc<dyn ImportJobRepository>,
-    job_repo: Arc<dyn JobRepository>,
+    import_job_service: Arc<dyn ImportJobService>,
 }
 
 impl ScanWorker {
-    pub(crate) fn new(
-        bookdrop_path: PathBuf,
-        scan_rx: mpsc::Receiver<ScanCommand>,
-        repository: Arc<dyn Repository>,
-        import_job_repo: Arc<dyn ImportJobRepository>,
-        job_repo: Arc<dyn JobRepository>,
-    ) -> Self {
+    pub(crate) fn new(bookdrop_path: PathBuf, scan_rx: mpsc::Receiver<ScanCommand>, import_job_service: Arc<dyn ImportJobService>) -> Self {
         Self {
             bookdrop_path,
             scan_rx,
-            repository,
-            import_job_repo,
-            job_repo,
+            import_job_service,
         }
     }
 
@@ -128,43 +117,7 @@ impl ScanWorker {
         let file_path_str = path.to_string_lossy().into_owned();
         let detected_at = Utc::now();
 
-        let import_job_repo = self.import_job_repo.clone();
-        let job_repo = self.job_repo.clone();
-        let hash_clone = hash.clone();
-
-        let repository = self.repository.clone();
-        transaction(&*repository, |tx| {
-            let import_job_repo = import_job_repo.clone();
-            let job_repo = job_repo.clone();
-            let file_path_str = file_path_str.clone();
-            let hash = hash_clone.clone();
-
-            Box::pin(async move {
-                // Skip if this hash is already known (duplicate or already queued).
-                if import_job_repo.find_by_hash(tx, &hash).await?.is_some() {
-                    tracing::debug!(hash = %hash, "file already in import_jobs — skipping");
-                    return Ok(());
-                }
-
-                let job = import_job_repo
-                    .add_job(
-                        tx,
-                        NewImportJob {
-                            file_path: file_path_str,
-                            file_hash: hash,
-                            file_format: format,
-                            detected_at,
-                        },
-                    )
-                    .await?;
-
-                job_repo.enqueue(tx, &ProcessImportPayload { import_job_id: job.id }).await?;
-
-                tracing::info!(token = %job.token, "queued import job");
-                Ok(())
-            })
-        })
-        .await
+        self.import_job_service.queue_file_if_new(file_path_str, hash, format, detected_at).await
     }
 }
 
@@ -243,12 +196,16 @@ impl IntoSubsystem<Error> for LibraryScanner {
 
 // ── Channel factory ──────────────────────────────────────────────────────────
 
-/// Creates a matched `(ScanTrigger, mpsc::Receiver<ScanCommand>)` pair.
+/// Creates a matched `(ScanTrigger, ScanReceiver)` pair.
 ///
 /// Channel capacity is 1: at most one pending scan at a time.
-pub(crate) fn create_scan_channel() -> (ScanTrigger, mpsc::Receiver<ScanCommand>) {
+///
+/// Call this before building `CoreServices` so the `ScanTrigger` can be passed
+/// as `import_scanner`, then pass the `ScanReceiver` to
+/// `create_import_subsystem`.
+pub fn create_scan_trigger() -> (ScanTrigger, ScanReceiver) {
     let (tx, rx) = mpsc::channel(1);
-    (ScanTrigger { tx }, rx)
+    (ScanTrigger { tx }, ScanReceiver(rx))
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

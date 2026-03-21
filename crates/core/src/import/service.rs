@@ -1,22 +1,35 @@
 use std::sync::Arc;
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 
 use crate::{
     Error,
-    import::{ImportJob, ImportJobId, ImportJobToken, ImportStatus},
-    repository::RepositoryService,
+    book::FileFormat,
+    import::{ImportJob, ImportJobId, ImportJobToken, ImportStatus, NewImportJob, ProcessImportPayload},
+    jobs::JobRepositoryExt,
+    repository::{RepositoryService, read_only_transaction, transaction},
     user::UserId,
     with_read_only_transaction, with_transaction,
 };
 
 #[async_trait::async_trait]
+#[cfg_attr(any(test, feature = "test-support"), mockall::automock)]
+#[allow(unused_lifetimes, reason = "async_trait + mockall expansion emits a spurious 'life0 parameter")]
 pub trait ImportJobService: Send + Sync {
     async fn list_pending(&self, start_id: Option<ImportJobId>, page_size: Option<u64>) -> Result<Vec<ImportJob>, Error>;
     async fn list_needs_review(&self, start_id: Option<ImportJobId>, page_size: Option<u64>) -> Result<Vec<ImportJob>, Error>;
     async fn find_by_token(&self, token: &ImportJobToken) -> Result<Option<ImportJob>, Error>;
+    async fn find_by_id(&self, id: ImportJobId) -> Result<Option<ImportJob>, Error>;
     async fn approve_job(&self, job: ImportJob, reviewer_id: UserId) -> Result<ImportJob, Error>;
     async fn reject_job(&self, job: ImportJob, reviewer_id: UserId) -> Result<ImportJob, Error>;
+    /// Atomically: check for an existing job with this hash (skip if found),
+    /// create a new `ImportJob`, and enqueue a `ProcessImportPayload`
+    /// background task — all within one database transaction.
+    async fn queue_file_if_new(&self, file_path: String, file_hash: String, file_format: FileFormat, detected_at: DateTime<Utc>) -> Result<(), Error>;
+    /// On startup crash-recovery: resets any `Extracting`/`Identifying` jobs
+    /// back to `Pending`, then re-enqueues every `Pending` job so none are
+    /// lost if the queue lost its entries.
+    async fn recover_on_startup(&self) -> Result<(), Error>;
 }
 
 pub(crate) struct ImportJobServiceImpl {
@@ -51,6 +64,11 @@ impl ImportJobService for ImportJobServiceImpl {
         with_read_only_transaction!(self, import_job_repository, |tx| import_job_repository.find_by_token(tx, &token).await)
     }
 
+    #[tracing::instrument(level = "trace", skip(self))]
+    async fn find_by_id(&self, id: ImportJobId) -> Result<Option<ImportJob>, Error> {
+        with_read_only_transaction!(self, import_job_repository, |tx| { import_job_repository.find_by_id(tx, id).await })
+    }
+
     #[tracing::instrument(level = "trace", skip(self, job), fields(jobToken = %job.token))]
     async fn approve_job(&self, job: ImportJob, reviewer_id: UserId) -> Result<ImportJob, Error> {
         if job.status != ImportStatus::NeedsReview {
@@ -78,6 +96,88 @@ impl ImportJobService for ImportJobServiceImpl {
         };
         with_transaction!(self, import_job_repository, |tx| import_job_repository.update_job(tx, rejected).await)
     }
+
+    #[tracing::instrument(level = "trace", skip(self, file_path, file_hash))]
+    async fn queue_file_if_new(&self, file_path: String, file_hash: String, file_format: FileFormat, detected_at: DateTime<Utc>) -> Result<(), Error> {
+        with_transaction!(self, import_job_repository, job_repository, |tx| {
+            if import_job_repository.find_by_hash(tx, &file_hash).await?.is_some() {
+                tracing::debug!(hash = %file_hash, "file already in import_jobs — skipping");
+                return Ok(());
+            }
+            let job = import_job_repository
+                .add_job(
+                    tx,
+                    NewImportJob {
+                        file_path,
+                        file_hash,
+                        file_format,
+                        detected_at,
+                    },
+                )
+                .await?;
+            job_repository.enqueue(tx, &ProcessImportPayload { import_job_id: job.id }).await?;
+            tracing::info!(token = %job.token, "queued import job");
+            Ok(())
+        })
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    async fn recover_on_startup(&self) -> Result<(), Error> {
+        // Reset any import jobs left in Extracting/Identifying state from a previous
+        // crash.
+        let reset = with_transaction!(self, import_job_repository, |tx| {
+            import_job_repository.reset_in_progress_to_pending(tx).await
+        })?;
+        if reset > 0 {
+            tracing::warn!(count = reset, "reset in-progress import jobs to pending after startup");
+        }
+
+        // Re-enqueue all Pending jobs. Covers both the jobs reset above and any
+        // that lost their queue entry (e.g. exhausted retries, manual cleanup).
+        let mut enqueued: u64 = 0;
+        let mut next_id = None;
+        loop {
+            let import_job_repo = self.repository_service.import_job_repository().clone();
+            let ni = next_id;
+            let batch = read_only_transaction(&**self.repository_service.repository(), |tx| {
+                let import_job_repo = import_job_repo.clone();
+                Box::pin(async move { import_job_repo.list_by_status(tx, ImportStatus::Pending, ni, None).await })
+            })
+            .await?;
+
+            if batch.is_empty() {
+                break;
+            }
+
+            let exhausted = batch.len() < 50;
+            next_id = batch.last().map(|j| j.id + 1);
+            let ids: Vec<ImportJobId> = batch.iter().map(|j| j.id).collect();
+
+            let job_repo = self.repository_service.job_repository().clone();
+            transaction(&**self.repository_service.repository(), |tx| {
+                let job_repo = job_repo.clone();
+                let ids = ids.clone();
+                Box::pin(async move {
+                    for import_job_id in ids {
+                        job_repo.enqueue(tx, &ProcessImportPayload { import_job_id }).await?;
+                    }
+                    Ok(())
+                })
+            })
+            .await?;
+
+            enqueued += ids.len() as u64;
+            if exhausted {
+                break;
+            }
+        }
+
+        if enqueued > 0 {
+            tracing::info!(count = enqueued, "re-enqueued pending import jobs on startup");
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -90,6 +190,7 @@ mod tests {
     use crate::{
         Error, RepositoryError,
         import::{ImportJob, ImportJobId, ImportJobToken, ImportStatus, repository::import_job::MockImportJobRepository},
+        jobs::repository::MockJobRepository,
     };
 
     // ─── Helper ───────────────────────────────────────────────────────────────
@@ -98,6 +199,17 @@ mod tests {
         let repository_service = Arc::new(
             crate::repository::testing::default_repository_service_builder()
                 .import_job_repository(Arc::new(mock))
+                .build()
+                .expect("all fields provided"),
+        );
+        ImportJobServiceImpl::new(repository_service)
+    }
+
+    fn create_service_with_job_repo(import_mock: MockImportJobRepository, job_mock: MockJobRepository) -> ImportJobServiceImpl {
+        let repository_service = Arc::new(
+            crate::repository::testing::default_repository_service_builder()
+                .import_job_repository(Arc::new(import_mock))
+                .job_repository(Arc::new(job_mock))
                 .build()
                 .expect("all fields provided"),
         );
@@ -210,6 +322,96 @@ mod tests {
         let result = svc.find_by_token(&token).await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::Database(_)))));
+    }
+
+    // ─── find_by_id ───────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_find_by_id_found() {
+        let job = fake_job(ImportStatus::Pending);
+        let id = job.id;
+        let mut mock = MockImportJobRepository::new();
+        mock.expect_find_by_id().returning(move |_, _| {
+            let job = job.clone();
+            Box::pin(async move { Ok(Some(job)) })
+        });
+        let svc = create_service(mock);
+
+        let result = svc.find_by_id(id).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn test_find_by_id_not_found() {
+        let mut mock = MockImportJobRepository::new();
+        mock.expect_find_by_id().returning(|_, _| Box::pin(async { Ok(None) }));
+        let svc = create_service(mock);
+
+        let result = svc.find_by_id(999).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    // ─── queue_file_if_new ────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_queue_file_if_new_skips_existing_hash() {
+        let existing = fake_job(ImportStatus::Pending);
+        let mut import_mock = MockImportJobRepository::new();
+        import_mock.expect_find_by_hash().returning(move |_, _| {
+            let j = existing.clone();
+            Box::pin(async move { Ok(Some(j)) })
+        });
+        let job_mock = MockJobRepository::new(); // enqueue must NOT be called
+        let svc = create_service_with_job_repo(import_mock, job_mock);
+
+        let result = svc
+            .queue_file_if_new("/watch/test.epub".into(), "abc123".into(), crate::book::FileFormat::Epub, Utc::now())
+            .await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_queue_file_if_new_creates_and_enqueues() {
+        let job = fake_job(ImportStatus::Pending);
+        let mut import_mock = MockImportJobRepository::new();
+        import_mock.expect_find_by_hash().returning(|_, _| Box::pin(async { Ok(None) }));
+        import_mock.expect_add_job().returning(move |_, _| {
+            let j = job.clone();
+            Box::pin(async move { Ok(j) })
+        });
+        let mut job_mock = MockJobRepository::new();
+        job_mock.expect_enqueue_raw().returning(|_, _, _, _| {
+            Box::pin(async {
+                Ok(crate::jobs::model::Job {
+                    id: 1,
+                    job_type: "process_import".into(),
+                    payload: serde_json::Value::Null,
+                    status: crate::jobs::JobStatus::Pending,
+                    priority: 1,
+                    attempt: 0,
+                    max_attempts: 3,
+                    version: 1,
+                    scheduled_at: Utc::now(),
+                    started_at: None,
+                    completed_at: None,
+                    error_message: None,
+                    created_at: Utc::now(),
+                    updated_at: Utc::now(),
+                })
+            })
+        });
+        let svc = create_service_with_job_repo(import_mock, job_mock);
+
+        let result = svc
+            .queue_file_if_new("/watch/new.epub".into(), "newHash".into(), crate::book::FileFormat::Epub, Utc::now())
+            .await;
+
+        assert!(result.is_ok());
     }
 
     // ─── approve_job ──────────────────────────────────────────────────────────

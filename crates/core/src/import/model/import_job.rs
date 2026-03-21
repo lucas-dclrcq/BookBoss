@@ -131,3 +131,17 @@ pub struct NewImportJob {
     pub file_format: FileFormat,
     pub detected_at: DateTime<Utc>,
 }
+
+/// Job queue payload for processing a newly discovered import file.
+///
+/// Defined in `bb-core` (not `bb-import`) so that `ImportJobService` can
+/// enqueue it without depending on the adapter crate.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ProcessImportPayload {
+    pub import_job_id: ImportJobId,
+}
+
+impl crate::jobs::Enqueueable for ProcessImportPayload {
+    const JOB_TYPE: &'static str = "process_import";
+    const DEFAULT_PRIORITY: i16 = 1;
+}

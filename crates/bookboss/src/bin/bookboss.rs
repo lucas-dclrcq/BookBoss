@@ -148,7 +148,7 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     use bb_database::{create_repository_service, open_database};
     use bb_formats::{ConversionServiceImpl, ConvertKepubHandler, EnrichEpubHandler, EpubExtractor, recover_enrichments, recover_kepub_conversions};
     use bb_frontend::server::create_frontend_subsystem;
-    use bb_import::{ProcessImportHandler, create_import_subsystem};
+    use bb_import::{ProcessImportHandler, create_import_subsystem, create_scan_trigger};
     use bb_metadata::create_metadata_providers;
     use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, SubsystemHandle, Toplevel};
 
@@ -170,19 +170,32 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     let scan_interval = Duration::from_secs(config.import.scan_interval_secs);
     let worker_poll_interval = Duration::from_secs(config.import.worker_poll_interval_secs);
 
-    let (import_subsystem, scan_trigger) = create_import_subsystem(config.import.bookdrop_path.clone(), scan_interval, repository_service.clone());
+    // Create the scan channel before CoreServices so the trigger can be passed
+    // in as import_scanner, while the receiver goes to the import subsystem.
+    let (scan_trigger, scan_receiver) = create_scan_trigger();
     let external = ExternalServicesBuilder::default()
         .repository_service(repository_service.clone())
         .library_store(library_store)
         .pipeline_service(pipeline_service)
         .conversion_service(conversion_service)
-        .import_scanner(Arc::new(scan_trigger))
+        .import_scanner(Arc::new(scan_trigger.clone()))
         .build()
         .context("ExternalServices missing required field")?;
     let core_services = create_services(external, &config.encryption_secret).context("Couldn't create core services")?;
 
+    let import_subsystem = create_import_subsystem(
+        config.import.bookdrop_path.clone(),
+        scan_interval,
+        scan_trigger,
+        scan_receiver,
+        core_services.import_job_service.clone(),
+    );
+
     let mut registry = JobRegistry::new();
-    registry.register(ProcessImportHandler::new(repository_service.clone(), core_services.pipeline_service.clone()));
+    registry.register(ProcessImportHandler::new(
+        core_services.import_job_service.clone(),
+        core_services.pipeline_service.clone(),
+    ));
     registry.register(EnrichEpubHandler::new(repository_service.clone(), core_services.library_store.clone()));
     registry.register(ConvertKepubHandler::new(repository_service.clone(), core_services.library_store.clone()));
 

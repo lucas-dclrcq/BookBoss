@@ -1,25 +1,9 @@
 use std::sync::Arc;
 
-use bb_core::{
-    Error, RepositoryError,
-    import::ImportJobId,
-    jobs::{Enqueueable, JobHandler},
-    pipeline::PipelineService,
-    repository::{RepositoryService, read_only_transaction},
-};
-use serde::{Deserialize, Serialize};
-
-/// Payload for a `process_import` job. Contains only the import job id; the
-/// handler fetches the full `ImportJob` record before calling the pipeline.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProcessImportPayload {
-    pub import_job_id: ImportJobId,
-}
-
-impl Enqueueable for ProcessImportPayload {
-    const JOB_TYPE: &'static str = "process_import";
-    const DEFAULT_PRIORITY: i16 = 1;
-}
+// ProcessImportPayload is defined in bb-core so that ImportJobServiceImpl can
+// enqueue it without depending on bb-import. Re-export it here for convenience.
+pub use bb_core::import::ProcessImportPayload;
+use bb_core::{Error, RepositoryError, import::ImportJobService, jobs::JobHandler, pipeline::PipelineService};
 
 /// Handles `process_import` jobs by fetching the `ImportJob` and running it
 /// through the acquisition pipeline.
@@ -27,13 +11,13 @@ impl Enqueueable for ProcessImportPayload {
 /// `PipelineService::process_job` is responsible for all status transitions
 /// and DB writes — the handler does not write the updated job itself.
 pub struct ProcessImportHandler {
-    repository_service: Arc<RepositoryService>,
+    import_job_service: Arc<dyn ImportJobService>,
     pipeline: Arc<dyn PipelineService>,
 }
 
 impl ProcessImportHandler {
-    pub fn new(repository_service: Arc<RepositoryService>, pipeline: Arc<dyn PipelineService>) -> Self {
-        Self { repository_service, pipeline }
+    pub fn new(import_job_service: Arc<dyn ImportJobService>, pipeline: Arc<dyn PipelineService>) -> Self {
+        Self { import_job_service, pipeline }
     }
 }
 
@@ -42,17 +26,11 @@ impl JobHandler for ProcessImportHandler {
     type Payload = ProcessImportPayload;
 
     async fn handle(&self, payload: ProcessImportPayload) -> Result<(), Error> {
-        let import_job_id = payload.import_job_id;
-        let repo = self.repository_service.clone();
-        let repository = self.repository_service.repository().clone();
-
-        let job = read_only_transaction(&*repository, |tx| {
-            let repo = repo.clone();
-            Box::pin(async move { repo.import_job_repository().find_by_id(tx, import_job_id).await })
-        })
-        .await?;
-
-        let job = job.ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
+        let job = self
+            .import_job_service
+            .find_by_id(payload.import_job_id)
+            .await?
+            .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
         self.pipeline.process_job(job).await?;
 
@@ -62,6 +40,8 @@ impl JobHandler for ProcessImportHandler {
 
 #[cfg(test)]
 mod tests {
+    use bb_core::jobs::Enqueueable;
+
     use super::*;
 
     #[test]

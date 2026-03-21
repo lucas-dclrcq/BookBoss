@@ -10,7 +10,7 @@ use crate::{
     book::{Book, BookId, BookToken, FileFormat, IdentifierType},
     conversion::ConversionService,
     filter::BookFilter,
-    import::{ImportJob, ImportJobToken, ImportScanner, scanner::MockImportScanner},
+    import::{ImportJob, ImportJobService, ImportJobToken, ImportScanner, scanner::MockImportScanner, service::MockImportJobService},
     library::{LibraryService, LibraryStats},
     pipeline::{BookEdit, PipelineService, ProviderBook},
     storage::{BookSidecar, LibraryStore},
@@ -140,6 +140,16 @@ pub fn nop_import_scanner() -> Arc<dyn ImportScanner> {
     let mut mock = MockImportScanner::new();
     mock.expect_trigger_scan().returning(|| Box::pin(async {}));
     Arc::new(mock)
+}
+
+/// Returns a `MockImportJobService` with no expectations set.
+///
+/// Suitable for tests that wire up `CoreServices` but never exercise the
+/// import-job code path. Any unexpected call will panic, surfacing the
+/// missing expectation immediately.
+#[must_use]
+pub fn nop_import_job_service() -> Arc<dyn ImportJobService> {
+    Arc::new(MockImportJobService::new())
 }
 
 /// Returns an `ExternalServicesBuilder` pre-populated with nop implementations
