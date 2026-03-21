@@ -21,7 +21,7 @@ pub(crate) struct FilterGroup {
     pub items: Vec<BookFilter>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum FilterCondition {
     And,
@@ -34,7 +34,7 @@ pub(crate) struct EntityRef {
     pub label: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum TextOp {
     Contains,
@@ -47,7 +47,7 @@ pub(crate) enum TextOp {
     IsNotEmpty,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum SetOp {
     IncludesAny,
@@ -57,7 +57,7 @@ pub(crate) enum SetOp {
     IsNotEmpty,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum NumericOp {
     Eq,
@@ -68,7 +68,7 @@ pub(crate) enum NumericOp {
     Gte,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum DateOp {
     Before,
@@ -77,7 +77,7 @@ pub(crate) enum DateOp {
     IsNotEmpty,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum FilterReadStatus {
     Unread,
@@ -90,7 +90,7 @@ pub(crate) enum FilterReadStatus {
 }
 
 impl FilterReadStatus {
-    fn label(&self) -> &'static str {
+    fn label(self) -> &'static str {
         match self {
             Self::Unread => "Unread",
             Self::Reading => "Reading",
@@ -180,36 +180,36 @@ fn rule_to_summary(rule: &FilterRule) -> String {
     match rule {
         FilterRule::TitleText { op, value } => {
             if matches!(op, TextOp::IsEmpty | TextOp::IsNotEmpty) {
-                format!("title {}", text_op_summary(op))
+                format!("title {}", text_op_summary(*op))
             } else {
-                format!("title {} \"{}\"", text_op_summary(op), value)
+                format!("title {} \"{}\"", text_op_summary(*op), value)
             }
         }
         FilterRule::AuthorText { op, value } => {
             if matches!(op, TextOp::IsEmpty | TextOp::IsNotEmpty) {
-                format!("author text {}", text_op_summary(op))
+                format!("author text {}", text_op_summary(*op))
             } else {
-                format!("author text {} \"{}\"", text_op_summary(op), value)
+                format!("author text {} \"{}\"", text_op_summary(*op), value)
             }
         }
-        FilterRule::Author { op, values } => format!("author {} {}", set_op_summary(op), entity_label_list(values)),
-        FilterRule::Series { op, values } => format!("series {} {}", set_op_summary(op), entity_label_list(values)),
-        FilterRule::Genre { op, values } => format!("genre {} {}", set_op_summary(op), entity_label_list(values)),
-        FilterRule::Tag { op, values } => format!("tag {} {}", set_op_summary(op), entity_label_list(values)),
-        FilterRule::Publisher { op, values } => format!("publisher {} {}", set_op_summary(op), entity_label_list(values)),
-        FilterRule::Language { op, values } => format!("language {} {}", set_op_summary(op), values.join(", ")),
+        FilterRule::Author { op, values } => format!("author {} {}", set_op_summary(*op), entity_label_list(values)),
+        FilterRule::Series { op, values } => format!("series {} {}", set_op_summary(*op), entity_label_list(values)),
+        FilterRule::Genre { op, values } => format!("genre {} {}", set_op_summary(*op), entity_label_list(values)),
+        FilterRule::Tag { op, values } => format!("tag {} {}", set_op_summary(*op), entity_label_list(values)),
+        FilterRule::Publisher { op, values } => format!("publisher {} {}", set_op_summary(*op), entity_label_list(values)),
+        FilterRule::Language { op, values } => format!("language {} {}", set_op_summary(*op), values.join(", ")),
         FilterRule::ReadStatus { op, values } => {
-            let labels: Vec<&str> = values.iter().map(FilterReadStatus::label).collect();
-            format!("status {} {}", set_op_summary(op), labels.join(", "))
+            let labels: Vec<&str> = values.iter().map(|status: &FilterReadStatus| FilterReadStatus::label(*status)).collect();
+            format!("status {} {}", set_op_summary(*op), labels.join(", "))
         }
-        FilterRule::Rating { op, value } => format!("rating {} {value}", numeric_op_summary(op)),
+        FilterRule::Rating { op, value } => format!("rating {} {value}", numeric_op_summary(*op)),
         FilterRule::DateAdded { op, value } => {
             if matches!(op, DateOp::IsEmpty | DateOp::IsNotEmpty) {
-                format!("date added {}", date_op_summary(op))
+                format!("date added {}", date_op_summary(*op))
             } else if let Some(dt) = value {
-                format!("date added {} {}", date_op_summary(op), dt.format("%Y-%m-%d"))
+                format!("date added {} {}", date_op_summary(*op), dt.format("%Y-%m-%d"))
             } else {
-                format!("date added {}", date_op_summary(op))
+                format!("date added {}", date_op_summary(*op))
             }
         }
     }
@@ -222,7 +222,7 @@ fn entity_label_list(values: &[EntityRef]) -> String {
     values.iter().map(|e| e.label.as_str()).collect::<Vec<_>>().join(", ")
 }
 
-fn text_op_summary(op: &TextOp) -> &'static str {
+fn text_op_summary(op: TextOp) -> &'static str {
     match op {
         TextOp::Contains => "contains",
         TextOp::DoesntContain => "doesn't contain",
@@ -235,7 +235,7 @@ fn text_op_summary(op: &TextOp) -> &'static str {
     }
 }
 
-fn set_op_summary(op: &SetOp) -> &'static str {
+fn set_op_summary(op: SetOp) -> &'static str {
     match op {
         SetOp::IncludesAny => "is any of",
         SetOp::IncludesAll => "includes all of",
@@ -245,7 +245,7 @@ fn set_op_summary(op: &SetOp) -> &'static str {
     }
 }
 
-fn numeric_op_summary(op: &NumericOp) -> &'static str {
+fn numeric_op_summary(op: NumericOp) -> &'static str {
     match op {
         NumericOp::Eq => "=",
         NumericOp::NotEq => "≠",
@@ -256,7 +256,7 @@ fn numeric_op_summary(op: &NumericOp) -> &'static str {
     }
 }
 
-fn date_op_summary(op: &DateOp) -> &'static str {
+fn date_op_summary(op: DateOp) -> &'static str {
     match op {
         DateOp::Before => "before",
         DateOp::After => "after",
@@ -351,7 +351,7 @@ fn default_rule_for_field(field: &str) -> FilterRule {
     }
 }
 
-fn text_op_key(op: &TextOp) -> &'static str {
+fn text_op_key(op: TextOp) -> &'static str {
     match op {
         TextOp::Contains => "contains",
         TextOp::DoesntContain => "doesnt_contain",
@@ -378,7 +378,7 @@ fn parse_text_op(s: &str) -> TextOp {
     }
 }
 
-fn set_op_key(op: &SetOp) -> &'static str {
+fn set_op_key(op: SetOp) -> &'static str {
     match op {
         SetOp::IncludesAny => "includes_any",
         SetOp::IncludesAll => "includes_all",
@@ -399,7 +399,7 @@ fn parse_set_op(s: &str) -> SetOp {
     }
 }
 
-fn numeric_op_key(op: &NumericOp) -> &'static str {
+fn numeric_op_key(op: NumericOp) -> &'static str {
     match op {
         NumericOp::Eq => "eq",
         NumericOp::NotEq => "not_eq",
@@ -422,7 +422,7 @@ fn parse_numeric_op(s: &str) -> NumericOp {
     }
 }
 
-fn date_op_key(op: &DateOp) -> &'static str {
+fn date_op_key(op: DateOp) -> &'static str {
     match op {
         DateOp::Before => "before",
         DateOp::After => "after",
@@ -645,11 +645,11 @@ fn FilterRuleRow(rule: FilterRule, entity_options: FilterEntityOptions, on_chang
     let rule_ui = match rule.clone() {
         FilterRule::TitleText { op, value } | FilterRule::AuthorText { op, value } => {
             let is_text_field = matches!(rule, FilterRule::TitleText { .. });
-            let op_key = text_op_key(&op);
+            let op_key = text_op_key(op);
             let needs_value = !matches!(op, TextOp::IsEmpty | TextOp::IsNotEmpty);
             let oc_op = on_change;
             let current_value_for_op = value.clone();
-            let current_op_for_val = op.clone();
+            let current_op_for_val = op;
             let oc_val = on_change;
             rsx! {
                 select {
@@ -681,7 +681,7 @@ fn FilterRuleRow(rule: FilterRule, entity_options: FilterEntityOptions, on_chang
                         value: "{value}",
                         oninput: move |e| {
                             let v = e.value();
-                            let op = current_op_for_val.clone();
+                            let op = current_op_for_val;
                             let new_rule = if is_text_field {
                                 FilterRule::TitleText { op, value: v }
                             } else {
@@ -716,10 +716,10 @@ fn FilterRuleRow(rule: FilterRule, entity_options: FilterEntityOptions, on_chang
         }
 
         FilterRule::Language { op, values } => {
-            let op_key = set_op_key(&op);
+            let op_key = set_op_key(op);
             let needs_value = !matches!(op, SetOp::IsEmpty | SetOp::IsNotEmpty);
             let oc_op = on_change;
-            let op_for_val = op.clone();
+            let op_for_val = op;
             let values_for_val = values.clone();
             let oc_val = on_change;
             rsx! {
@@ -739,7 +739,7 @@ fn FilterRuleRow(rule: FilterRule, entity_options: FilterEntityOptions, on_chang
                         LanguageChipInput {
                             values: values_for_val,
                             on_change: move |new_vals: Vec<String>| {
-                                oc_val.call(FilterRule::Language { op: op_for_val.clone(), values: new_vals });
+                                oc_val.call(FilterRule::Language { op: op_for_val, values: new_vals });
                             },
                         }
                     }
@@ -748,10 +748,10 @@ fn FilterRuleRow(rule: FilterRule, entity_options: FilterEntityOptions, on_chang
         }
 
         FilterRule::ReadStatus { op, values } => {
-            let op_key = set_op_key(&op);
+            let op_key = set_op_key(op);
             let needs_value = !matches!(op, SetOp::IsEmpty | SetOp::IsNotEmpty);
             let oc_op = on_change;
-            let op_for_val = op.clone();
+            let op_for_val = op;
             let oc_val = on_change;
             rsx! {
                 select {
@@ -770,7 +770,7 @@ fn FilterRuleRow(rule: FilterRule, entity_options: FilterEntityOptions, on_chang
                         ReadStatusChipInput {
                             values: values.clone(),
                             on_change: move |new_vals: Vec<FilterReadStatus>| {
-                                oc_val.call(FilterRule::ReadStatus { op: op_for_val.clone(), values: new_vals });
+                                oc_val.call(FilterRule::ReadStatus { op: op_for_val, values: new_vals });
                             },
                         }
                     }
@@ -779,9 +779,9 @@ fn FilterRuleRow(rule: FilterRule, entity_options: FilterEntityOptions, on_chang
         }
 
         FilterRule::Rating { op, value } => {
-            let op_key = numeric_op_key(&op);
+            let op_key = numeric_op_key(op);
             let oc_op = on_change;
-            let op_for_val = op.clone();
+            let op_for_val = op;
             let oc_val = on_change;
             rsx! {
                 select {
@@ -802,7 +802,7 @@ fn FilterRuleRow(rule: FilterRule, entity_options: FilterEntityOptions, on_chang
                     value: "{value}",
                     onchange: move |e| {
                         let v: u8 = e.value().parse().unwrap_or(1);
-                        oc_val.call(FilterRule::Rating { op: op_for_val.clone(), value: v });
+                        oc_val.call(FilterRule::Rating { op: op_for_val, value: v });
                     },
                     option { value: "1", "★" }
                     option { value: "2", "★★" }
@@ -814,11 +814,11 @@ fn FilterRuleRow(rule: FilterRule, entity_options: FilterEntityOptions, on_chang
         }
 
         FilterRule::DateAdded { op, value } => {
-            let op_key = date_op_key(&op);
+            let op_key = date_op_key(op);
             let needs_value = !matches!(op, DateOp::IsEmpty | DateOp::IsNotEmpty);
             let date_str = value.as_ref().map(datetime_to_date_str).unwrap_or_default();
             let oc_op = on_change;
-            let op_for_val = op.clone();
+            let op_for_val = op;
             let oc_val = on_change;
             rsx! {
                 select {
@@ -839,7 +839,7 @@ fn FilterRuleRow(rule: FilterRule, entity_options: FilterEntityOptions, on_chang
                         value: "{date_str}",
                         oninput: move |e| {
                             let dt = date_str_to_datetime(&e.value());
-                            oc_val.call(FilterRule::DateAdded { op: op_for_val.clone(), value: dt });
+                            oc_val.call(FilterRule::DateAdded { op: op_for_val, value: dt });
                         },
                     }
                 }
@@ -880,12 +880,12 @@ fn entity_set_rule_ui(
     on_change: EventHandler<FilterRule>,
     make_rule: impl Fn(SetOp, Vec<EntityRef>) -> FilterRule + 'static + Clone,
 ) -> Element {
-    let op_key = set_op_key(&op);
+    let op_key = set_op_key(op);
     let needs_value = !matches!(op, SetOp::IsEmpty | SetOp::IsNotEmpty);
     let oc_op = on_change;
     let make_rule_op = make_rule.clone();
     let values_for_op = values.clone();
-    let op_for_val = op.clone();
+    let op_for_val = op;
     let make_rule_val = make_rule.clone();
     let oc_val = on_change;
     rsx! {
@@ -907,7 +907,7 @@ fn entity_set_rule_ui(
                     values,
                     options,
                     on_change: move |new_vals: Vec<EntityRef>| {
-                        oc_val.call(make_rule_val(op_for_val.clone(), new_vals));
+                        oc_val.call(make_rule_val(op_for_val, new_vals));
                     },
                 }
             }
@@ -1091,13 +1091,13 @@ fn ReadStatusChipInput(values: Vec<FilterReadStatus>, on_change: EventHandler<Ve
             let label = s.label().to_lowercase();
             (query.is_empty() || label.starts_with(&query)) && !values.iter().any(|v| v == *s)
         })
-        .cloned()
+        .copied()
         .collect();
     filtered.sort_by(|a, b| a.label().cmp(b.label()));
 
     // Pre-compute the top match so the Enter closure doesn't need to own
     // `filtered`.
-    let first_filtered = filtered.first().cloned();
+    let first_filtered = filtered.first().copied();
 
     rsx! {
         div { class: "relative",
@@ -1107,7 +1107,7 @@ fn ReadStatusChipInput(values: Vec<FilterReadStatus>, on_change: EventHandler<Ve
                         let label = status.label();
                         let new_values: Vec<FilterReadStatus> = values
                             .iter()
-                            .cloned()
+                            .copied()
                             .enumerate()
                             .filter(|(j, _)| *j != i)
                             .map(|(_, v)| v)
@@ -1142,7 +1142,7 @@ fn ReadStatusChipInput(values: Vec<FilterReadStatus>, on_change: EventHandler<Ve
                         match e.key() {
                             Key::Enter => {
                                 e.prevent_default();
-                                if let Some(first) = first_filtered.clone() {
+                                if let Some(first) = first_filtered {
                                     let mut new_vals = values.clone();
                                     new_vals.push(first);
                                     on_change.call(new_vals);
@@ -1171,7 +1171,7 @@ fn ReadStatusChipInput(values: Vec<FilterReadStatus>, on_change: EventHandler<Ve
                         {
                             let label = status.label();
                             let mut new_values = values.clone();
-                            new_values.push(status.clone());
+                            new_values.push(*status);
                             let oc = on_change;
                             rsx! {
                                 div {

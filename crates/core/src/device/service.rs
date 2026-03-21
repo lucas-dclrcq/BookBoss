@@ -381,7 +381,7 @@ impl DeviceService for DeviceServiceImpl {
                     // No cursor (since = None) means full sync from scratch — re-deliver all
                     // existing books as Refreshed so nothing is skipped. Also re-deliver any
                     // book whose metadata has changed since the last sync.
-                    Some(_) if since.is_none() || since.is_some_and(|s| book.updated_at > s) => EntryKind::Refreshed,
+                    Some(_) if since.is_none_or(|s| book.updated_at > s) => EntryKind::Refreshed,
                     Some(_) => continue, // unchanged — skip
                 };
 

@@ -208,6 +208,7 @@ pub(super) async fn handle_put(
     let (progress_bps, position_type, position_token) = if finished {
         (Some(10000u16), None, None)
     } else if let Some(bm) = item.current_bookmark {
+        #[allow(clippy::cast_sign_loss, reason = "progress_percent is always positive")]
         let progress_bps = (bm.progress_percent * 100.0).round() as u16;
         let (pt, pv) = bm
             .location
@@ -267,7 +268,7 @@ pub(super) fn build_kobo_state(state: &bb_core::reading::UserBookMetadata) -> se
         ReadStatus::Read => (100.0f64, None),
         ReadStatus::Unread => (0.0f64, None),
         _ => {
-            let p = state.progress_percentage.map_or(0.0, |v| v as f64 / 100.0);
+            let p = state.progress_percentage.map_or(0.0, |v| f64::from(v) / 100.0);
             let loc = match (&state.position_type, &state.position_token) {
                 (Some(t), Some(v)) if !t.is_empty() && !v.is_empty() => Some(json!({
                     "Type": t,

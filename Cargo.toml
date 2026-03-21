@@ -209,12 +209,10 @@ items_after_statements = "allow"  # fires on `use` blocks inside match arms / cl
 map_err_ignore = "allow"          # intentional in server fns that must not leak internal errors
 
 # Restriction lints
-allow_attributes_without_reason = "warn"
 assertions_on_result_states = "warn"
 deref_by_slicing = "warn"
 empty_drop = "warn"
 empty_enum_variants_with_brackets = "warn"
-empty_structs_with_brackets = "warn"
 fn_to_numeric_cast_any = "warn"
 redundant_type_annotations = "warn"
 renamed_function_params = "warn"
@@ -239,6 +237,8 @@ struct_excessive_bools = "allow"
 must_use_candidate = "allow"
 too_many_arguments = "allow"
 case_sensitive_file_extension_comparisons = "allow"
+allow-attributes-without-reason = "allow"
+empty_structs_with_brackets = "allow"
 
 # Pending Review
 missing_errors_doc = "allow"

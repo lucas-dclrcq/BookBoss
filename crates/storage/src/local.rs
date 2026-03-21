@@ -131,7 +131,7 @@ impl LibraryStore for LocalLibraryStore {
             tokio::fs::copy(source, &dest).await.map_err(io_err)?;
             let _ = tokio::fs::remove_file(source).await;
         }
-        Ok(LocalLibraryStore::book_file_rel_path(*token, slug, &format))
+        Ok(Self::book_file_rel_path(*token, slug, &format))
     }
 
     async fn store_cover(&self, token: &BookToken, filename: &str, data: &[u8]) -> Result<(), Error> {
@@ -262,7 +262,7 @@ mod tests {
 
         let rel_path = store.store_book_file(&token, "my-book", FileFormat::Epub, &source).await.unwrap();
 
-        assert_eq!(rel_path, format!("{}/my-book.epub", token));
+        assert_eq!(rel_path, format!("{token}/my-book.epub"));
     }
 
     #[tokio::test]

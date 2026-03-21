@@ -243,8 +243,5 @@ async fn approve_job_fails_when_not_needs_review() {
 
     let result = svc.pipeline_service.approve_job(job.token, edit, &std::env::temp_dir()).await;
 
-    assert!(matches!(
-        result,
-        Err(Error::RepositoryError(RepositoryError::NotFound)) | Err(Error::Validation(_))
-    ));
+    assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::NotFound) | Error::Validation(_))));
 }

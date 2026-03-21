@@ -136,6 +136,7 @@ pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>
     let stream = ReaderStream::new(fs_file);
     let body = Body::from_stream(stream);
 
+    #[allow(clippy::cast_sign_loss, reason = "file_size is always positive")]
     Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "application/epub+zip")

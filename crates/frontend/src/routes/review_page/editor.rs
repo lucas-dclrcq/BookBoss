@@ -527,7 +527,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                                         series_number.set(next_num.to_string());
                                                     }
                                                 },
-                                                on_cleared: move |_| series_number.set(String::new()),
+                                                on_cleared: move |()| series_number.set(String::new()),
                                                 on_blur: move |name: String| {
                                                     if !name.is_empty() && series_number.read().trim().is_empty() {
                                                         series_number.set("1".to_string());

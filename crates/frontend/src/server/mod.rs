@@ -72,7 +72,7 @@ impl IntoSubsystem<anyhow::Error> for FrontendSubsystem {
             .layer(AuthSessionLayer::<AuthUser, UserId, BackendSessionPool, BackendSessionPool>::new(Some(backend_pool)).with_config(auth_config));
 
         let frontend_config = Arc::new(self.config.clone());
-        let kobo = kobo::kobo_router(self.config.base_url.clone(), core_services.clone());
+        let kobo = kobo::kobo_router(&self.config.base_url, core_services.clone());
         let opds = opds::opds_router();
 
         let app_router = axum::Router::new()

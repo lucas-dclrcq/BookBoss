@@ -43,11 +43,11 @@ pub use extractor::KoboDevice;
 /// Registers all Kobo protocol endpoints. Specific handlers cover the core
 /// sync flow and known ancillary endpoints; a catch-all absorbs any remaining
 /// firmware requests and logs them at INFO level.
-pub fn kobo_router(base_url: String, core_services: Arc<CoreServices>) -> Router {
+pub fn kobo_router(base_url: &str, core_services: Arc<CoreServices>) -> Router {
     Router::new()
         // M8.4 — device initialization: proxy to Kobo store, patch our resource URLs
         .route("/kobo/{sync_token}/v1/initialization", {
-            let base_url = base_url.clone();
+            let base_url = base_url.to_string();
             let base_url2 = base_url.clone();
             routing::get(move |kobo: KoboDevice, method, headers, body| initialization::handle(kobo, method, headers, body, base_url.clone()))
                 .post(move |kobo: KoboDevice, method, headers, body| initialization::handle(kobo, method, headers, body, base_url2.clone()))
@@ -55,7 +55,7 @@ pub fn kobo_router(base_url: String, core_services: Arc<CoreServices>) -> Router
         // M8.5 — incremental library sync
         .route("/kobo/{sync_token}/v1/library/sync", {
             let core = core_services.clone();
-            let base = base_url.clone();
+            let base = base_url.to_string();
             routing::get(move |kobo: KoboDevice, headers| library_sync::handle(kobo, headers, core.clone(), base.clone()))
         })
         // M8.6 — book file download
@@ -75,7 +75,7 @@ pub fn kobo_router(base_url: String, core_services: Arc<CoreServices>) -> Router
         // M8.8 — per-book metadata
         .route("/kobo/{sync_token}/v1/library/{uuid}/metadata", {
             let core = core_services.clone();
-            let base = base_url.clone();
+            let base = base_url.to_string();
             routing::get(move |kobo: KoboDevice, params| book_metadata::handle(kobo, params, core.clone(), base.clone()))
         })
         // M8.8 — analytics A/B test config
@@ -94,7 +94,7 @@ pub fn kobo_router(base_url: String, core_services: Arc<CoreServices>) -> Router
         })
         // M8.8 — book delete (Kobo removed book from device; drop DeviceBook so it re-syncs as New)
         .route("/kobo/{sync_token}/v1/library/{uuid}", {
-            let core = core_services.clone();
+            let core = core_services;
             routing::delete(move |kobo: KoboDevice, params| library_delete::handle(kobo, params, core.clone()))
         })
         // Catch-all: proxy unrecognised paths to storeapi.kobo.com (auth, profile, etc.)

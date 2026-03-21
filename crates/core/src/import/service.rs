@@ -66,7 +66,7 @@ impl ImportJobService for ImportJobServiceImpl {
 
     #[tracing::instrument(level = "trace", skip(self))]
     async fn find_by_id(&self, id: ImportJobId) -> Result<Option<ImportJob>, Error> {
-        with_read_only_transaction!(self, import_job_repository, |tx| { import_job_repository.find_by_id(tx, id).await })
+        with_read_only_transaction!(self, import_job_repository, |tx| import_job_repository.find_by_id(tx, id).await)
     }
 
     #[tracing::instrument(level = "trace", skip(self, job), fields(jobToken = %job.token))]
@@ -372,7 +372,7 @@ mod tests {
             .queue_file_if_new("/watch/test.epub".into(), "abc123".into(), crate::book::FileFormat::Epub, Utc::now())
             .await;
 
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[tokio::test]
@@ -411,7 +411,7 @@ mod tests {
             .queue_file_if_new("/watch/new.epub".into(), "newHash".into(), crate::book::FileFormat::Epub, Utc::now())
             .await;
 
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     // ─── approve_job ──────────────────────────────────────────────────────────
