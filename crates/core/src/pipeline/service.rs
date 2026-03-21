@@ -1,5 +1,7 @@
 use std::{path::PathBuf, sync::Arc};
 
+use bb_utils::similarity::{author_similarity, combined_score, title_similarity};
+
 use crate::{
     Error, RepositoryError,
     book::{
@@ -8,7 +10,7 @@ use crate::{
     conversion::ConversionService,
     import::{ImportJob, ImportJobToken, ImportSource, ImportStatus},
     pipeline::{
-        MetadataExtractor, MetadataProvider,
+        MetadataExtractor, MetadataProvider, ProviderBook,
         model::{BookEdit, ExtractedIdentifier, ExtractedMetadata},
     },
     repository::{RepositoryService, read_only_transaction, transaction},
@@ -97,9 +99,10 @@ impl PipelineServiceImpl {
     }
 }
 
-/// Minimum side length (px) for a cover to be considered "good enough",
-/// after which the pipeline stops querying further providers for a better one.
-const GOOD_COVER_MIN_SIDE: u32 = 500;
+/// Minimum title similarity score [0.0, 1.0] required for a provider result
+/// to be accepted. Results below this threshold are discarded and embedded
+/// metadata is used instead.
+const MATCH_THRESHOLD: f32 = 0.5;
 
 /// Parse image dimensions from raw bytes by inspecting format-specific headers.
 /// Supports PNG, GIF, WebP (VP8/VP8L/VP8X), and JPEG (SOF markers).
@@ -253,48 +256,92 @@ impl PipelineService for PipelineServiceImpl {
             .await?
         };
 
-        // ── 5. Enrich: find metadata + best-quality cover across all providers
+        // ── 5. Enrich: query all providers concurrently, score results by title
+        //    similarity, and pick the highest-scoring match above the threshold.
         //
-        // The embedded EPUB cover seeds `best_cover` before providers are tried.
-        // Each provider cover replaces the current best if its min-side is larger.
-        // The loop stops early once metadata is found AND the best cover's min-side
-        // meets GOOD_COVER_MIN_SIDE; otherwise every provider is visited so we end
-        // up with the highest-resolution cover available.
+        // If the file already contains spinnaker:metadata it was previously
+        // enriched by BookBoss. Treat the embedded metadata as authoritative
+        // and skip all external providers.
+        //
+        // Cover selection: pick the largest image from any provider result
+        // (subtask 5 will refine this to only consider confident providers).
         let (final_meta, cover_bytes, job_source) = {
-            let mut meta: Option<(ExtractedMetadata, ImportSource)> = None;
-            let mut best_cover: Option<Vec<u8>> = extracted.cover_bytes.clone();
-            let mut best_min_side: u32 = best_cover.as_deref().map_or(0, cover_min_side);
+            let embedded_cover = extracted.cover_bytes.clone();
 
-            // If the file already contains spinnaker:metadata it was previously
-            // enriched by BookBoss. Treat the embedded metadata as authoritative
-            // and skip all external providers.
-            let skip_providers = extracted.has_spinnaker_metadata;
-
-            for provider in &self.providers {
-                if skip_providers {
-                    break;
+            if extracted.has_spinnaker_metadata {
+                (extracted, embedded_cover, ImportSource::Embedded)
+            } else {
+                // Spawn one task per provider and run all concurrently.
+                let mut join_set = tokio::task::JoinSet::new();
+                for provider in &self.providers {
+                    let provider = Arc::clone(provider);
+                    let ex = extracted.clone();
+                    join_set.spawn(async move {
+                        let name = provider.name();
+                        let result = provider.enrich(&ex).await;
+                        (name, result)
+                    });
                 }
-                let cover_good_enough = best_min_side >= GOOD_COVER_MIN_SIDE;
-                if meta.is_some() && cover_good_enough {
-                    break;
-                }
 
-                if let Some(pb) = provider.enrich(&extracted).await? {
-                    if meta.is_none() {
-                        meta = Some((pb.metadata, pb.source));
+                // Collect successful results; log and discard errors.
+                let mut provider_results: Vec<(&'static str, ProviderBook)> = Vec::new();
+                while let Some(join_result) = join_set.join_next().await {
+                    match join_result {
+                        Ok((name, Ok(Some(pb)))) => provider_results.push((name, pb)),
+                        Ok((name, Ok(None))) => tracing::debug!(provider = name, "provider returned no result"),
+                        Ok((name, Err(e))) => tracing::warn!(provider = name, error = %e, "provider error during enrichment"),
+                        Err(e) => tracing::warn!(error = %e, "provider task panicked during enrichment"),
                     }
-                    if let Some(provider_cover) = pb.cover_bytes {
-                        let provider_min_side = cover_min_side(&provider_cover);
-                        if provider_min_side > best_min_side {
-                            best_min_side = provider_min_side;
-                            best_cover = Some(provider_cover);
+                }
+
+                // Score each result against the embedded title and primary author;
+                // pick the highest combined scorer above MATCH_THRESHOLD.
+                let extracted_title = extracted.title.as_deref();
+                let extracted_author = extracted
+                    .authors
+                    .as_deref()
+                    .and_then(|a| a.iter().min_by_key(|a| a.sort_order))
+                    .map(|a| a.name.as_str());
+                let mut best_idx: Option<usize> = None;
+                let mut best_score: f32 = -1.0;
+                for (i, (name, pb)) in provider_results.iter().enumerate() {
+                    let t_score = match (extracted_title, pb.metadata.title.as_deref()) {
+                        (Some(ext), Some(prov)) => title_similarity(ext, prov),
+                        _ => 0.0,
+                    };
+                    let a_score = match (
+                        extracted_author,
+                        pb.metadata.authors.as_deref().and_then(|a| a.iter().min_by_key(|a| a.sort_order)),
+                    ) {
+                        (Some(ext), Some(prov)) => author_similarity(ext, &prov.name),
+                        _ => 0.5,
+                    };
+                    let score = combined_score(t_score, a_score);
+                    tracing::debug!(provider = name, title_score = t_score, author_score = a_score, score, "provider result scored");
+                    if score >= MATCH_THRESHOLD && score > best_score {
+                        best_score = score;
+                        best_idx = Some(i);
+                    }
+                }
+
+                // Cover: pick largest from any provider result.
+                let mut best_cover = embedded_cover;
+                let mut best_min_side = best_cover.as_deref().map_or(0, cover_min_side);
+                for (_, pb) in &provider_results {
+                    if let Some(cover) = &pb.cover_bytes {
+                        let min_side = cover_min_side(cover);
+                        if min_side > best_min_side {
+                            best_min_side = min_side;
+                            best_cover = Some(cover.clone());
                         }
                     }
                 }
-            }
 
-            match meta {
-                Some((mut metadata, source)) => {
+                if let Some(idx) = best_idx {
+                    let (source_name, pb) = provider_results.swap_remove(idx);
+                    tracing::debug!(provider = source_name, score = best_score, "selected provider result");
+                    let source = pb.source;
+                    let mut metadata = pb.metadata;
                     // Preserve file-embedded fields not returned by the provider.
                     if let Some(extracted_ids) = &extracted.identifiers {
                         let provider_ids = metadata.identifiers.get_or_insert_with(Vec::new);
@@ -321,8 +368,10 @@ impl PipelineService for PipelineServiceImpl {
                         metadata.page_count = extracted.page_count;
                     }
                     (metadata, best_cover, source)
+                } else {
+                    tracing::debug!("no provider result met match threshold; using embedded metadata");
+                    (extracted, best_cover, ImportSource::Embedded)
                 }
-                None => (extracted, best_cover, ImportSource::Embedded),
             }
         };
         let job_source = Some(job_source);
