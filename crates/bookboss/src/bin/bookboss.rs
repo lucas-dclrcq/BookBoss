@@ -144,7 +144,11 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
 
     use anyhow::Context;
     use bb_api::create_api_subsystem;
-    use bb_core::{ExternalServicesBuilder, create_core_subsystem, create_services, jobs::JobRegistry, pipeline::PipelineServiceImpl};
+    use bb_core::{
+        ExternalServicesBuilder, create_core_subsystem, create_services,
+        jobs::{JobRegistry, create_job_service},
+        pipeline::PipelineServiceImpl,
+    };
     use bb_database::{create_repository_service, open_database};
     use bb_formats::{ConversionServiceImpl, ConvertKepubHandler, EnrichEpubHandler, EpubExtractor, recover_enrichments, recover_kepub_conversions};
     use bb_frontend::server::create_frontend_subsystem;
@@ -158,7 +162,8 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     let database = open_database(&config.database).await.context("Couldn't create database connection")?;
     let repository_service = create_repository_service(database).await.context("Couldn't create database connection")?;
     let library_store = Arc::new(bb_storage::LocalLibraryStore::new(config.library.library_path.clone()));
-    let conversion_service = Arc::new(ConversionServiceImpl::new(repository_service.clone()));
+    let job_service = create_job_service(repository_service.clone());
+    let conversion_service = Arc::new(ConversionServiceImpl::new(job_service));
     let pipeline_service = Arc::new(PipelineServiceImpl::new(
         repository_service.clone(),
         library_store.clone(),

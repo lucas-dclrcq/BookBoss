@@ -11,6 +11,7 @@ use crate::{
     conversion::ConversionService,
     filter::BookFilter,
     import::{ImportJob, ImportJobService, ImportJobToken, ImportScanner, scanner::MockImportScanner, service::MockImportJobService},
+    jobs::{JobService, service::MockJobService},
     library::{LibraryService, LibraryStats},
     pipeline::{BookEdit, PipelineService, ProviderBook},
     storage::{BookSidecar, LibraryStore},
@@ -140,6 +141,15 @@ pub fn nop_import_scanner() -> Arc<dyn ImportScanner> {
     let mut mock = MockImportScanner::new();
     mock.expect_trigger_scan().returning(|| Box::pin(async {}));
     Arc::new(mock)
+}
+
+/// Returns a `MockJobService` with no expectations set.
+///
+/// Suitable for tests that wire up adapters but never exercise the job-queue
+/// code path.
+#[must_use]
+pub fn nop_job_service() -> Arc<dyn JobService> {
+    Arc::new(MockJobService::new())
 }
 
 /// Returns a `MockImportJobService` with no expectations set.

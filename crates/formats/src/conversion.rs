@@ -4,8 +4,7 @@ use bb_core::{
     Error,
     book::BookId,
     conversion::ConversionService,
-    jobs::{Enqueueable, JobRepositoryExt},
-    repository::{RepositoryService, read_only_transaction, transaction},
+    jobs::{Enqueueable, JobService, JobServiceExt},
 };
 use serde::{Deserialize, Serialize};
 
@@ -15,7 +14,7 @@ pub struct EnrichEpubPayload {
     pub book_id: BookId,
 }
 
-impl Enqueueable for EnrichEpubPayload {
+impl bb_core::jobs::Enqueueable for EnrichEpubPayload {
     const JOB_TYPE: &'static str = "enrich_epub";
     const DEFAULT_PRIORITY: i16 = 0;
 }
@@ -29,59 +28,37 @@ pub struct ConvertKepubPayload {
     pub book_id: BookId,
 }
 
-impl Enqueueable for ConvertKepubPayload {
+impl bb_core::jobs::Enqueueable for ConvertKepubPayload {
     const JOB_TYPE: &'static str = "convert_kepub";
     const DEFAULT_PRIORITY: i16 = 0;
 }
 
-/// Implementation of [`ConversionService`] that enqueues jobs via the
-/// standard [`JobRepository`].
+/// Implementation of [`ConversionService`] that enqueues jobs via
+/// [`JobService`].
 pub struct ConversionServiceImpl {
-    repository_service: Arc<RepositoryService>,
+    job_service: Arc<dyn JobService>,
 }
 
 impl ConversionServiceImpl {
     #[must_use]
-    pub fn new(repository_service: Arc<RepositoryService>) -> Self {
-        Self { repository_service }
+    pub fn new(job_service: Arc<dyn JobService>) -> Self {
+        Self { job_service }
     }
 }
 
 #[async_trait::async_trait]
 impl ConversionService for ConversionServiceImpl {
     async fn queue_enrich_epub(&self, book_id: BookId) -> Result<(), Error> {
-        let job_repo = self.repository_service.job_repository().clone();
-        transaction(&**self.repository_service.repository(), |tx| {
-            Box::pin(async move {
-                job_repo.enqueue(tx, &EnrichEpubPayload { book_id }).await?;
-                Ok(())
-            })
-        })
-        .await
+        self.job_service.enqueue(&EnrichEpubPayload { book_id }).await
     }
 
     async fn queue_convert_kepub(&self, book_id: BookId) -> Result<(), Error> {
-        let job_repo = self.repository_service.job_repository().clone();
-        transaction(&**self.repository_service.repository(), |tx| {
-            Box::pin(async move {
-                job_repo.enqueue(tx, &ConvertKepubPayload { book_id }).await?;
-                Ok(())
-            })
-        })
-        .await
+        self.job_service.enqueue(&ConvertKepubPayload { book_id }).await
     }
 
     async fn count_pending(&self) -> Result<u32, Error> {
-        let job_repo = self.repository_service.job_repository().clone();
-        let (enrich_count, kepub_count) = read_only_transaction(&**self.repository_service.repository(), |tx| {
-            let job_repo = job_repo.clone();
-            Box::pin(async move {
-                let e = job_repo.count_pending_by_type(tx, EnrichEpubPayload::JOB_TYPE).await?;
-                let k = job_repo.count_pending_by_type(tx, ConvertKepubPayload::JOB_TYPE).await?;
-                Ok::<_, bb_core::Error>((e, k))
-            })
-        })
-        .await?;
+        let enrich_count = self.job_service.count_pending_by_type(EnrichEpubPayload::JOB_TYPE).await?;
+        let kepub_count = self.job_service.count_pending_by_type(ConvertKepubPayload::JOB_TYPE).await?;
         #[expect(clippy::cast_possible_truncation, reason = "pending conversion count; will never approach u32::MAX")]
         Ok((enrich_count + kepub_count) as u32)
     }

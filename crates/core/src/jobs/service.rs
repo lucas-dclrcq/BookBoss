@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use crate::{
     Error,
-    jobs::{Enqueueable, JobRepository, JobRepositoryExt},
+    jobs::Enqueueable,
     repository::{RepositoryService, read_only_transaction, transaction},
 };
 
@@ -30,10 +30,7 @@ pub trait JobService: Send + Sync {
 /// Blanket-implemented for all `JobService` impls — no manual work per job
 /// type. Mirrors the [`JobRepositoryExt`] pattern but at the service layer.
 pub trait JobServiceExt: JobService {
-    fn enqueue<P: Enqueueable + Serialize + Send + Sync>(
-        &self,
-        payload: &P,
-    ) -> impl std::future::Future<Output = Result<(), Error>> + Send {
+    fn enqueue<P: Enqueueable + Serialize + Send + Sync>(&self, payload: &P) -> impl std::future::Future<Output = Result<(), Error>> + Send {
         let value = serde_json::to_value(payload);
         async move {
             let value = value.map_err(|e| Error::Infrastructure(format!("failed to serialize job payload: {e}")))?;
