@@ -14,6 +14,8 @@ pub struct LibraryStats {
 }
 
 #[async_trait::async_trait]
+#[cfg_attr(any(test, feature = "test-support"), mockall::automock)]
+#[allow(unused_lifetimes, reason = "async_trait + mockall expansion emits a spurious 'life0 parameter")]
 pub trait LibraryService: Send + Sync {
     /// Returns aggregate counts for the library.
     async fn library_stats(&self) -> Result<LibraryStats, Error>;
