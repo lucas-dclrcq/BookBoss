@@ -10,9 +10,10 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [features]
-test-support = []
+test-support = ["dep:mockall"]
 
 [dependencies]
+mockall = { workspace = true, optional = true }
 bb-utils.workspace = true
 
 aes-gcm.workspace = true
@@ -33,7 +34,7 @@ tracing.workspace = true
 
 [dev-dependencies]
 mockall = { workspace = true }
-tokio.workspace = true
+tokio = { workspace = true }
 
 [lints]
 workspace = true

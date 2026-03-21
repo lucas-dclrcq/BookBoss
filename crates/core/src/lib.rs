@@ -26,7 +26,7 @@ use crate::{
     book::{BookService, BookServiceImpl},
     conversion::ConversionService,
     device::{DeviceService, service::DeviceServiceImpl},
-    import::{ImportJobService, service::ImportJobServiceImpl},
+    import::{ImportJobService, ImportScanner, service::ImportJobServiceImpl},
     jobs::{JobRegistry, JobWorker},
     library::{LibraryService, LibraryServiceImpl},
     opds::{OpdsService, OpdsServiceImpl},
@@ -47,6 +47,7 @@ pub struct CoreServices {
     pub user_setting_service: Arc<dyn UserSettingService>,
     pub book_service: Arc<dyn BookService>,
     pub import_job_service: Arc<dyn ImportJobService>,
+    pub import_scanner: Arc<dyn ImportScanner>,
     pub library_store: Arc<dyn LibraryStore>,
     pub library_service: Arc<dyn LibraryService>,
     pub pipeline_service: Arc<dyn PipelineService>,
@@ -63,6 +64,7 @@ impl CoreServices {
         library_store: Arc<dyn LibraryStore>,
         pipeline_service: Arc<dyn PipelineService>,
         conversion_service: Arc<dyn ConversionService>,
+        import_scanner: Arc<dyn ImportScanner>,
         encryption_secret: &str,
     ) -> Self {
         Self {
@@ -71,6 +73,7 @@ impl CoreServices {
             user_setting_service: Arc::new(UserSettingServiceImpl::new(repository_service.clone())),
             book_service: Arc::new(BookServiceImpl::new(repository_service.clone())),
             import_job_service: Arc::new(ImportJobServiceImpl::new(repository_service.clone())),
+            import_scanner,
             library_service: Arc::new(LibraryServiceImpl::new(repository_service.clone(), library_store.clone())),
             library_store,
             pipeline_service,
@@ -88,6 +91,7 @@ pub fn create_services(
     library_store: Arc<dyn LibraryStore>,
     pipeline_service: Arc<dyn PipelineService>,
     conversion_service: Arc<dyn ConversionService>,
+    import_scanner: Arc<dyn ImportScanner>,
     encryption_secret: &str,
 ) -> Result<Arc<CoreServices>, Error> {
     Ok(Arc::new(CoreServices::new(
@@ -95,6 +99,7 @@ pub fn create_services(
         library_store,
         pipeline_service,
         conversion_service,
+        import_scanner,
         encryption_secret,
     )))
 }

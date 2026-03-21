@@ -10,13 +10,16 @@ use bb_core::{
     repository::{RepositoryService, read_only_transaction, transaction},
 };
 pub use handler::{ProcessImportHandler, ProcessImportPayload};
-pub use scanner::LibraryScanner;
+pub use scanner::ScanTrigger;
+use scanner::{LibraryScanner, ScanWorker, create_scan_channel};
 use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, SubsystemHandle};
 
 pub struct ImportSubsystem {
     bookdrop_path: PathBuf,
     poll_interval: Duration,
     repository_service: Arc<RepositoryService>,
+    scan_trigger: ScanTrigger,
+    scan_rx: tokio::sync::mpsc::Receiver<scanner::ScanCommand>,
 }
 
 impl IntoSubsystem<Error> for ImportSubsystem {
@@ -82,14 +85,19 @@ impl IntoSubsystem<Error> for ImportSubsystem {
             tracing::info!("re-enqueued {} pending import jobs on startup", enqueued);
         }
 
-        let scanner = LibraryScanner::new(
-            self.bookdrop_path,
-            self.poll_interval,
-            self.repository_service.repository().clone(),
-            self.repository_service.import_job_repository().clone(),
-            self.repository_service.job_repository().clone(),
+        let repo = &self.repository_service;
+        let worker = ScanWorker::new(
+            self.bookdrop_path.clone(),
+            self.scan_rx,
+            repo.repository().clone(),
+            repo.import_job_repository().clone(),
+            repo.job_repository().clone(),
         );
+        let scanner = LibraryScanner::new(self.poll_interval, self.scan_trigger);
+
+        subsys.start(SubsystemBuilder::new("ScanWorker", worker.into_subsystem()));
         subsys.start(SubsystemBuilder::new("Scanner", scanner.into_subsystem()));
+
         tracing::info!("ImportSubsystem started");
 
         subsys.on_shutdown_requested().await;
@@ -99,11 +107,21 @@ impl IntoSubsystem<Error> for ImportSubsystem {
     }
 }
 
+/// Creates the `ImportSubsystem` and returns a `ScanTrigger` for on-demand
+/// scans.
+///
+/// The caller (typically `bookboss`) should wrap the trigger in `Arc<dyn
+/// ImportScanner>` and pass it to `create_services()` so the frontend can reach
+/// it via `CoreServices`.
 #[must_use]
-pub fn create_import_subsystem(bookdrop_path: PathBuf, poll_interval: Duration, repository_service: Arc<RepositoryService>) -> ImportSubsystem {
-    ImportSubsystem {
+pub fn create_import_subsystem(bookdrop_path: PathBuf, poll_interval: Duration, repository_service: Arc<RepositoryService>) -> (ImportSubsystem, ScanTrigger) {
+    let (scan_trigger, scan_rx) = create_scan_channel();
+    let subsystem = ImportSubsystem {
         bookdrop_path,
         poll_interval,
         repository_service,
-    }
+        scan_trigger: scan_trigger.clone(),
+        scan_rx,
+    };
+    (subsystem, scan_trigger)
 }

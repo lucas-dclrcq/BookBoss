@@ -141,9 +141,12 @@ fn LocalTime(iso: String) -> Element {
 
 #[component]
 pub(crate) fn IncomingPage() -> Element {
-    let mut jobs = use_server_future(list_incoming_books)?;
-    let mut rejecting: Signal<Option<String>> = use_signal(|| None);
     let mut incoming_refresh: Signal<u32> = use_context();
+    let mut jobs = use_server_future(move || {
+        let _rev = incoming_refresh();
+        list_incoming_books()
+    })?;
+    let mut rejecting: Signal<Option<String>> = use_signal(|| None);
 
     rsx! {
         div { class: "flex-1 flex flex-col overflow-hidden",

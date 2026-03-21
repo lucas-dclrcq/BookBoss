@@ -10,7 +10,7 @@ use crate::{
     book::{Book, BookId, BookToken, FileFormat, IdentifierType},
     conversion::ConversionService,
     filter::BookFilter,
-    import::{ImportJob, ImportJobToken},
+    import::{ImportJob, ImportJobToken, ImportScanner, scanner::MockImportScanner},
     library::{LibraryService, LibraryStats},
     pipeline::{BookEdit, PipelineService, ProviderBook},
     storage::{BookSidecar, LibraryStore},
@@ -133,4 +133,11 @@ impl LibraryService for NopLibraryService {
 #[must_use]
 pub fn nop_library_service() -> Arc<dyn LibraryService> {
     Arc::new(NopLibraryService)
+}
+
+#[must_use]
+pub fn nop_import_scanner() -> Arc<dyn ImportScanner> {
+    let mut mock = MockImportScanner::new();
+    mock.expect_trigger_scan().returning(|| Box::pin(async {}));
+    Arc::new(mock)
 }

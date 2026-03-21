@@ -122,6 +122,7 @@ pub fn pipeline_services(ctx: &crate::context::TestContext, metadata: ExtractedM
         silent_library_store(),
         pipeline,
         silent_conversion_service(),
+        bb_core::test_support::nop_import_scanner(),
         "test-encryption-secret",
     )
     .unwrap()

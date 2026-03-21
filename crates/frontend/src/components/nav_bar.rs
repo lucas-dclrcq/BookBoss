@@ -8,6 +8,20 @@ use {
     std::sync::Arc,
 };
 
+#[post("/api/v1/incoming/trigger_scan", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
+async fn trigger_bookdrop_scan() -> Result<(), ServerFnError> {
+    let current_user = auth_session.current_user.clone().unwrap_or_default();
+    let has_permission = Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::POST], true)
+        .requires(Rights::any([Rights::permission(Capability::ApproveImports.as_str())]))
+        .validate(&current_user, &Method::POST, None)
+        .await;
+    if !has_permission {
+        return Err(ServerFnError::new("Forbidden"));
+    }
+    core_services.import_scanner.trigger_scan().await;
+    Ok(())
+}
+
 use crate::Route;
 
 #[get("/api/v1/incoming/pending_count", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
@@ -95,22 +109,57 @@ async fn logout() -> Result<(), ServerFnError> {
 /// resolves, rather than leaving it permanently absent after a page refresh.
 #[component]
 fn IncomingBadge() -> Element {
-    let incoming_refresh: Signal<u32> = use_context();
+    let mut incoming_refresh: Signal<u32> = use_context();
     let pending_count = use_server_future(move || {
         let _rev = incoming_refresh();
         get_pending_count()
     })?;
+    let mut scanning = use_signal(|| false);
+    let route = use_route::<Route>();
 
     let count_opt = pending_count().and_then(|r: Result<Option<u32>, ServerFnError>| r.ok()).flatten();
 
     rsx! {
-        {count_opt.map(|count| rsx! {
-            Link { to: Route::IncomingPage {}, class: "relative text-sm hover:text-indigo-200 flex items-center gap-1.5",
-                "Incoming"
-                if count > 0 {
-                    span {
-                        class: "inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[0.6rem] font-bold leading-none",
-                        "{count}"
+        {count_opt.map(|count| {
+            let on_incoming_page = route == Route::IncomingPage {};
+            rsx! {
+                div { class: "flex items-center gap-1",
+                    Link { to: Route::IncomingPage {}, class: "relative text-sm hover:text-indigo-200 flex items-center gap-1.5",
+                        "Incoming"
+                        if count > 0 {
+                            span {
+                                class: "inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[0.6rem] font-bold leading-none",
+                                "{count}"
+                            }
+                        }
+                    }
+                    if on_incoming_page {
+                        button {
+                            class: "flex items-center text-indigo-200 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer",
+                            title: "Scan bookdrop now",
+                            disabled: scanning(),
+                            onclick: move |_| {
+                                spawn(async move {
+                                    scanning.set(true);
+                                    let _ = trigger_bookdrop_scan().await;
+                                    *incoming_refresh.write() += 1;
+                                    scanning.set(false);
+                                });
+                            },
+                            svg {
+                                class: if scanning() { "w-3.5 h-3.5 animate-spin" } else { "w-3.5 h-3.5" },
+                                xmlns: "http://www.w3.org/2000/svg",
+                                fill: "none",
+                                view_box: "0 0 24 24",
+                                stroke_width: "2",
+                                stroke: "currentColor",
+                                path {
+                                    stroke_linecap: "round",
+                                    stroke_linejoin: "round",
+                                    d: "M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99",
+                                }
+                            }
+                        }
                     }
                 }
             }

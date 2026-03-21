@@ -144,7 +144,7 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
 
     use anyhow::Context;
     use bb_api::create_api_subsystem;
-    use bb_core::{create_core_subsystem, create_services, jobs::JobRegistry, pipeline::PipelineServiceImpl};
+    use bb_core::{create_core_subsystem, create_services, import::ImportScanner, jobs::JobRegistry, pipeline::PipelineServiceImpl};
     use bb_database::{create_repository_service, open_database};
     use bb_formats::{ConversionServiceImpl, ConvertKepubHandler, EnrichEpubHandler, EpubExtractor, recover_enrichments, recover_kepub_conversions};
     use bb_frontend::server::create_frontend_subsystem;
@@ -166,17 +166,20 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
         create_metadata_providers(&config.metadata),
         conversion_service.clone(),
     )) as Arc<dyn bb_core::pipeline::PipelineService>;
+
+    let scan_interval = Duration::from_secs(config.import.scan_interval_secs);
+    let worker_poll_interval = Duration::from_secs(config.import.worker_poll_interval_secs);
+
+    let (import_subsystem, scan_trigger) = create_import_subsystem(config.import.bookdrop_path.clone(), scan_interval, repository_service.clone());
     let core_services = create_services(
         repository_service.clone(),
         library_store,
         pipeline_service,
         conversion_service,
+        Arc::new(scan_trigger) as Arc<dyn ImportScanner>,
         &config.encryption_secret,
     )
     .context("Couldn't create core services")?;
-
-    let scan_interval = Duration::from_secs(config.import.scan_interval_secs);
-    let worker_poll_interval = Duration::from_secs(config.import.worker_poll_interval_secs);
 
     let mut registry = JobRegistry::new();
     registry.register(ProcessImportHandler::new(repository_service.clone(), core_services.pipeline_service.clone()));
@@ -190,7 +193,6 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
 
     let api_subsystem = create_api_subsystem(&config.api, core_services.clone());
     let core_subsystem = create_core_subsystem(registry, repository_service.clone(), worker_poll_interval);
-    let import_subsystem = create_import_subsystem(config.import.bookdrop_path.clone(), scan_interval, repository_service.clone());
     let frontend_subsystem = create_frontend_subsystem(&config.frontend, core_services.clone());
 
     span.exit();

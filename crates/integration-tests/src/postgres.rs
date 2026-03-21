@@ -18,6 +18,7 @@ pub async fn setup() -> TestContext {
         bb_core::test_support::nop_library_store(),
         bb_core::test_support::nop_pipeline_service(),
         bb_core::test_support::nop_conversion_service(),
+        bb_core::test_support::nop_import_scanner(),
         "test-encryption-secret",
     )
     .unwrap();

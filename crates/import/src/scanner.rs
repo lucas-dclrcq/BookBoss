@@ -7,35 +7,67 @@ use std::{
 use bb_core::{
     Error,
     book::FileFormat,
-    import::{ImportJobRepository, NewImportJob},
+    import::{ImportJobRepository, ImportScanner, NewImportJob},
     jobs::{JobRepository, JobRepositoryExt},
     repository::{Repository, transaction},
 };
 use chrono::Utc;
 use sha2::{Digest, Sha256};
+use tokio::sync::mpsc;
 use tokio_graceful_shutdown::{IntoSubsystem, SubsystemHandle};
 
 use crate::handler::ProcessImportPayload;
 
-pub struct LibraryScanner {
+// ── Channel types ────────────────────────────────────────────────────────────
+
+pub(crate) enum ScanCommand {
+    ScanOnce,
+}
+
+/// Cloneable handle for triggering an on-demand bookdrop scan.
+///
+/// `trigger()` is non-blocking: if a scan is already queued (channel full),
+/// the call is silently dropped — no pile-up of redundant scans.
+#[derive(Clone)]
+pub struct ScanTrigger {
+    tx: mpsc::Sender<ScanCommand>,
+}
+
+impl ScanTrigger {
+    pub fn trigger(&self) {
+        let _ = self.tx.try_send(ScanCommand::ScanOnce);
+    }
+}
+
+#[async_trait::async_trait]
+impl ImportScanner for ScanTrigger {
+    async fn trigger_scan(&self) {
+        self.trigger();
+    }
+}
+
+// ── ScanWorker ───────────────────────────────────────────────────────────────
+
+/// Executes bookdrop scans when commanded via the channel or on shutdown.
+pub(crate) struct ScanWorker {
     bookdrop_path: PathBuf,
-    poll_interval: Duration,
+    scan_rx: mpsc::Receiver<ScanCommand>,
     repository: Arc<dyn Repository>,
     import_job_repo: Arc<dyn ImportJobRepository>,
     job_repo: Arc<dyn JobRepository>,
 }
 
-impl LibraryScanner {
-    pub fn new(
+impl ScanWorker {
+    pub(crate) fn new(
         bookdrop_path: PathBuf,
-        poll_interval: Duration,
+        scan_rx: mpsc::Receiver<ScanCommand>,
         repository: Arc<dyn Repository>,
         import_job_repo: Arc<dyn ImportJobRepository>,
         job_repo: Arc<dyn JobRepository>,
     ) -> Self {
         Self {
             bookdrop_path,
-            poll_interval,
+            scan_rx,
             repository,
             import_job_repo,
             job_repo,
@@ -136,9 +168,51 @@ impl LibraryScanner {
     }
 }
 
+impl IntoSubsystem<Error> for ScanWorker {
+    async fn run(mut self, subsys: &mut SubsystemHandle) -> Result<(), Error> {
+        tracing::info!(directory = %self.bookdrop_path.display(), "scan worker started");
+
+        loop {
+            tokio::select! {
+                () = subsys.on_shutdown_requested() => {
+                    tracing::info!("ScanWorker shutting down...");
+                    break;
+                }
+                cmd = self.scan_rx.recv() => {
+                    match cmd {
+                        Some(ScanCommand::ScanOnce) => self.scan_once().await,
+                        None => {
+                            tracing::warn!("ScanWorker channel closed — shutting down");
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+// ── LibraryScanner ───────────────────────────────────────────────────────────
+
+/// Fires a `ScanOnce` command on a fixed timer interval.
+///
+/// Decoupled from scan execution: the actual scan is performed by `ScanWorker`.
+pub(crate) struct LibraryScanner {
+    poll_interval: Duration,
+    scan_trigger: ScanTrigger,
+}
+
+impl LibraryScanner {
+    pub(crate) fn new(poll_interval: Duration, scan_trigger: ScanTrigger) -> Self {
+        Self { poll_interval, scan_trigger }
+    }
+}
+
 impl IntoSubsystem<Error> for LibraryScanner {
     async fn run(self, subsys: &mut SubsystemHandle) -> Result<(), Error> {
-        tracing::info!(directory = %self.bookdrop_path.display(), "library scanner started");
+        tracing::info!("library scanner timer started");
 
         let mut counter: u32 = 0;
 
@@ -150,7 +224,7 @@ impl IntoSubsystem<Error> for LibraryScanner {
                 }
                 () = async {} => {
                     if counter == 0 {
-                        self.scan_once().await;
+                        self.scan_trigger.trigger();
                     }
                     counter += 1;
                     #[expect(clippy::cast_possible_truncation, reason = "poll interval in seconds fits in u32; no sane interval exceeds ~136 years")]
@@ -166,6 +240,18 @@ impl IntoSubsystem<Error> for LibraryScanner {
         Ok(())
     }
 }
+
+// ── Channel factory ──────────────────────────────────────────────────────────
+
+/// Creates a matched `(ScanTrigger, mpsc::Receiver<ScanCommand>)` pair.
+///
+/// Channel capacity is 1: at most one pending scan at a time.
+pub(crate) fn create_scan_channel() -> (ScanTrigger, mpsc::Receiver<ScanCommand>) {
+    let (tx, rx) = mpsc::channel(1);
+    (ScanTrigger { tx }, rx)
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 /// Detect the `FileFormat` from a file path's extension. Returns `None` for
 /// unrecognised or missing extensions.
