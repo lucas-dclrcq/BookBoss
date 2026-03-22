@@ -47,7 +47,7 @@ pub(crate) async fn list_system_messages() -> Result<Vec<MessageRow>, ServerFnEr
             source_task: m.source_task,
             severity: format!("{:?}", m.severity),
             message: m.message,
-            created_at: m.created_at.format("%Y-%m-%d %H:%M:%S UTC").to_string(),
+            created_at: m.created_at.to_rfc3339(),
         })
         .collect())
 }
@@ -90,6 +90,29 @@ pub(crate) async fn clear_all_system_messages() -> Result<(), ServerFnError> {
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// LocalTime — renders ISO 8601 timestamp in the browser's local timezone.
+// ---------------------------------------------------------------------------
+
+#[component]
+fn LocalTime(iso: String) -> Element {
+    let mut display = use_signal(|| iso.clone());
+
+    use_effect(move || {
+        let iso = iso.clone();
+        spawn(async move {
+            let js = format!(r#"return new Date("{iso}").toLocaleString(undefined, {{dateStyle: "medium", timeStyle: "short"}})"#);
+            if let Ok(val) = document::eval(&js).await {
+                if let Some(s) = val.as_str() {
+                    display.set(s.to_owned());
+                }
+            }
+        });
+    });
+
+    rsx! { "{display}" }
 }
 
 // ---------------------------------------------------------------------------
@@ -164,7 +187,8 @@ pub(crate) fn MessagesSection() -> Element {
                                         div { class: "flex-1 min-w-0",
                                             p { class: "text-sm text-gray-900", "{row.message}" }
                                             p { class: "text-xs text-gray-500 mt-0.5",
-                                                "{row.source_task} — {row.created_at}"
+                                                "{row.source_task} — "
+                                                LocalTime { iso: row.created_at.clone() }
                                             }
                                         }
                                         // Dismiss button

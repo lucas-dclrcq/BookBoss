@@ -14,7 +14,9 @@ pub(crate) struct TaskRow {
     pub job_type: String,
     pub run_on_startup: bool,
     pub interval_minutes: u64,
+    /// ISO 8601 timestamp, converted to relative + local time on the client.
     pub last_run_at: Option<String>,
+    /// ISO 8601 timestamp, converted to relative + local time on the client.
     pub next_run_at: String,
 }
 
@@ -41,8 +43,8 @@ pub(crate) async fn list_health_tasks() -> Result<Vec<TaskRow>, ServerFnError> {
             job_type: t.job_type,
             run_on_startup: t.run_on_startup,
             interval_minutes: t.interval_minutes,
-            last_run_at: t.last_run_at.map(|dt| dt.format("%Y-%m-%d %H:%M:%S UTC").to_string()),
-            next_run_at: t.next_run_at.format("%Y-%m-%d %H:%M:%S UTC").to_string(),
+            last_run_at: t.last_run_at.map(|dt| dt.to_rfc3339()),
+            next_run_at: t.next_run_at.to_rfc3339(),
         })
         .collect())
 }
@@ -84,7 +86,7 @@ pub(crate) fn TasksSection() -> Element {
     });
 
     rsx! {
-        div { class: "w-full max-w-3xl",
+        div { class: "w-full max-w-4xl",
             div { class: "flex items-center justify-between mb-6",
                 h2 { class: "text-lg font-semibold text-gray-900", "Health Tasks" }
             }
@@ -100,14 +102,14 @@ pub(crate) fn TasksSection() -> Element {
                 },
                 Some(Ok(rows)) => rsx! {
                     div { class: "rounded-lg border border-gray-200 bg-white overflow-hidden",
-                        table { class: "w-full text-sm",
+                        table { class: "w-full text-sm table-fixed",
                             thead {
                                 tr { class: "bg-gray-50 border-b border-gray-200",
-                                    th { class: "px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide", "Task" }
-                                    th { class: "px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide", "Interval" }
-                                    th { class: "px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide", "Last Run" }
-                                    th { class: "px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide", "Next Run" }
-                                    th { class: "px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wide", "Actions" }
+                                    th { class: "w-[30%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide", "Task" }
+                                    th { class: "w-[12%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide", "Interval" }
+                                    th { class: "w-[22%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide", "Last Run" }
+                                    th { class: "w-[22%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide", "Next Run" }
+                                    th { class: "w-[14%] px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wide", "Actions" }
                                 }
                             }
                             tbody { class: "divide-y divide-gray-100",
@@ -127,12 +129,14 @@ pub(crate) fn TasksSection() -> Element {
                                                 td { class: "px-4 py-3 text-gray-600", "{format_interval(row.interval_minutes)}" }
                                                 td { class: "px-4 py-3 text-gray-600",
                                                     if let Some(ref last) = row.last_run_at {
-                                                        "{last}"
+                                                        RelativeTime { iso: last.clone(), direction: "past" }
                                                     } else {
                                                         span { class: "text-gray-400", "Never" }
                                                     }
                                                 }
-                                                td { class: "px-4 py-3 text-gray-600", "{row.next_run_at}" }
+                                                td { class: "px-4 py-3 text-gray-600",
+                                                    RelativeTime { iso: row.next_run_at.clone(), direction: "future" }
+                                                }
                                                 td { class: "px-4 py-3",
                                                     div { class: "flex items-center justify-end",
                                                         RunNowButton { job_type: jt, on_triggered: move || *refresh.write() += 1 }
@@ -149,6 +153,66 @@ pub(crate) fn TasksSection() -> Element {
             }
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// RelativeTime — shows "in 6 hours, 22 min" or "3 min ago" with a tooltip
+// of the absolute local time.
+// ---------------------------------------------------------------------------
+
+#[component]
+fn RelativeTime(iso: String, direction: String) -> Element {
+    let mut rel_text = use_signal(|| iso.clone());
+    let mut abs_text = use_signal(String::new);
+
+    use_effect(move || {
+        let iso = iso.clone();
+        let direction = direction.clone();
+        spawn(async move {
+            let js = format!(
+                r#"
+                const dt = new Date("{iso}");
+                const now = Date.now();
+                const diffMs = {diff_expr};
+                const abs = dt.toLocaleString(undefined, {{dateStyle: "medium", timeStyle: "short"}});
+
+                const totalMin = Math.round(diffMs / 60000);
+                if (totalMin < 1) return JSON.stringify({{ rel: "now", abs }});
+                const d = Math.floor(totalMin / 1440);
+                const h = Math.floor((totalMin % 1440) / 60);
+                const m = totalMin % 60;
+                let parts = [];
+                if (d > 0) parts.push(d + (d === 1 ? " day" : " days"));
+                if (h > 0) parts.push(h + (h === 1 ? " hr" : " hrs"));
+                if (d === 0 && m > 0) parts.push(m + " min");
+                const rel = "{prefix}" + parts.join(", ") + "{suffix}";
+                return JSON.stringify({{ rel, abs }});
+                "#,
+                iso = iso,
+                diff_expr = if direction == "past" { "now - dt.getTime()" } else { "dt.getTime() - now" },
+                prefix = if direction == "past" { "" } else { "in " },
+                suffix = if direction == "past" { " ago" } else { "" },
+            );
+            if let Ok(val) = document::eval(&js).await {
+                if let Some(s) = val.as_str() {
+                    if let Ok(parsed) = serde_json::from_str::<RelTimeResult>(s) {
+                        rel_text.set(parsed.rel);
+                        abs_text.set(parsed.abs);
+                    }
+                }
+            }
+        });
+    });
+
+    rsx! {
+        span { title: "{abs_text}", "{rel_text}" }
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct RelTimeResult {
+    rel: String,
+    abs: String,
 }
 
 #[component]
