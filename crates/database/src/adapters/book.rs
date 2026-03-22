@@ -555,6 +555,8 @@ impl BookRepository for BookRepositoryAdapter {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
         // Books that have an Original epub but no Enriched epub.
+        // Only consider Available books — Incoming books still in review must not be
+        // enriched.
         let enriched_subq = {
             let mut q = Query::select();
             q.column(book_files::Column::BookId)
@@ -564,10 +566,17 @@ impl BookRepository for BookRepositoryAdapter {
             q
         };
 
+        let available_subq = {
+            let mut q = Query::select();
+            q.column(books::Column::Id).from(books::Entity).and_where(books::Column::Status.eq("available"));
+            q
+        };
+
         let rows = prelude::BookFiles::find()
             .filter(book_files::Column::Format.eq("epub"))
             .filter(book_files::Column::FileRole.eq("original"))
             .filter(book_files::Column::BookId.not_in_subquery(enriched_subq))
+            .filter(book_files::Column::BookId.in_subquery(available_subq))
             .all(transaction)
             .await
             .map_err(handle_dberr)?;
@@ -581,6 +590,8 @@ impl BookRepository for BookRepositoryAdapter {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
         // Books that have an Enriched EPUB but no Enriched KEPUB.
+        // Only consider Available books — Incoming books still in review must not be
+        // converted.
         let kepub_subq = {
             let mut q = Query::select();
             q.column(book_files::Column::BookId)
@@ -590,10 +601,17 @@ impl BookRepository for BookRepositoryAdapter {
             q
         };
 
+        let available_subq = {
+            let mut q = Query::select();
+            q.column(books::Column::Id).from(books::Entity).and_where(books::Column::Status.eq("available"));
+            q
+        };
+
         let rows = prelude::BookFiles::find()
             .filter(book_files::Column::Format.eq("epub"))
             .filter(book_files::Column::FileRole.eq("enriched"))
             .filter(book_files::Column::BookId.not_in_subquery(kepub_subq))
+            .filter(book_files::Column::BookId.in_subquery(available_subq))
             .all(transaction)
             .await
             .map_err(handle_dberr)?;
@@ -628,7 +646,7 @@ impl BookRepository for BookRepositoryAdapter {
 
         // Find book IDs where an enriched EPUB exists but its created_at is
         // older than the book's updated_at — meaning metadata changed after the
-        // enriched file was generated.
+        // enriched file was generated. Only consider Available books.
         let rows = prelude::BookFiles::find()
             .select_only()
             .column(book_files::Column::BookId)
@@ -642,6 +660,7 @@ impl BookRepository for BookRepositoryAdapter {
             )
             .filter(book_files::Column::Format.eq("epub"))
             .filter(book_files::Column::FileRole.eq("enriched"))
+            .filter(books::Column::Status.eq("available"))
             .filter(Expr::col((book_files::Entity, book_files::Column::CreatedAt)).lt(Expr::col((books::Entity, books::Column::UpdatedAt))))
             .into_model::<BookIdOnly>()
             .all(transaction)
