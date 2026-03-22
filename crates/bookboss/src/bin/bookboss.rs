@@ -146,11 +146,21 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     use bb_api::create_api_subsystem;
     use bb_core::{
         ExternalServicesBuilder, create_core_subsystem, create_services,
+        health::{
+            HealthTaskState, create_health_subsystem, default_health_tasks,
+            handlers::{
+                cleanup_old_import_jobs::CleanupOldImportJobsHandler, cleanup_old_jobs::CleanupOldJobsHandler,
+                cleanup_old_system_messages::CleanupOldSystemMessagesHandler, cleanup_orphan_authors::CleanupOrphanAuthorsHandler,
+                cleanup_orphan_publishers::CleanupOrphanPublishersHandler, cleanup_orphan_series::CleanupOrphanSeriesHandler,
+                ensure_enrichments::EnsureEnrichmentsHandler, recover_enrichments::RecoverEnrichmentsHandler,
+                reset_stale_import_jobs::ResetStaleImportJobsHandler, verify_file_integrity::VerifyFileIntegrityHandler,
+            },
+        },
         jobs::{JobRegistry, create_job_service},
         pipeline::PipelineServiceImpl,
     };
     use bb_database::{create_repository_service, open_database};
-    use bb_formats::{ConversionServiceImpl, ConvertKepubHandler, EnrichEpubHandler, EpubExtractor, recover_enrichments, recover_kepub_conversions};
+    use bb_formats::{ConversionServiceImpl, ConvertKepubHandler, EnrichEpubHandler, EpubExtractor};
     use bb_frontend::server::create_frontend_subsystem;
     use bb_import::{ProcessImportHandler, create_import_subsystem, create_scan_trigger};
     use bb_metadata::create_metadata_providers;
@@ -208,10 +218,29 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     registry.register(EnrichEpubHandler::new(repository_service.clone(), core_services.library_store.clone()));
     registry.register(ConvertKepubHandler::new(repository_service.clone(), core_services.library_store.clone()));
 
-    recover_enrichments(&repository_service).await.context("Couldn't recover pending enrichments")?;
-    recover_kepub_conversions(&repository_service)
-        .await
-        .context("Couldn't recover pending KEPUB conversions")?;
+    // Health check handlers
+    let sms = core_services.system_message_service.clone();
+    registry.register(RecoverEnrichmentsHandler::new(repository_service.clone(), sms.clone()));
+    registry.register(EnsureEnrichmentsHandler::new(repository_service.clone(), sms.clone()));
+    registry.register(CleanupOrphanAuthorsHandler::new(repository_service.clone(), sms.clone()));
+    registry.register(CleanupOrphanSeriesHandler::new(repository_service.clone(), sms.clone()));
+    registry.register(CleanupOrphanPublishersHandler::new(repository_service.clone(), sms.clone()));
+    registry.register(CleanupOldJobsHandler::new(repository_service.clone(), sms.clone()));
+    registry.register(CleanupOldImportJobsHandler::new(repository_service.clone(), sms.clone()));
+    registry.register(CleanupOldSystemMessagesHandler::new(sms.clone()));
+    registry.register(VerifyFileIntegrityHandler::new(
+        repository_service.clone(),
+        sms.clone(),
+        core_services.library_store.clone(),
+    ));
+    registry.register(ResetStaleImportJobsHandler::new(repository_service.clone(), sms));
+
+    let health_task_state = Arc::new(HealthTaskState::new(default_health_tasks()));
+    let health_subsystem = create_health_subsystem(
+        health_task_state,
+        repository_service.repository().clone(),
+        repository_service.job_repository().clone(),
+    );
 
     let api_subsystem = create_api_subsystem(&config.api, core_services.clone());
     let core_subsystem = create_core_subsystem(registry, repository_service.clone(), worker_poll_interval, event_service);
@@ -223,6 +252,7 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
         s.start(SubsystemBuilder::new("Api", api_subsystem.into_subsystem()));
         s.start(SubsystemBuilder::new("Core", core_subsystem.into_subsystem()));
         s.start(SubsystemBuilder::new("Import", import_subsystem.into_subsystem()));
+        s.start(SubsystemBuilder::new("Health", health_subsystem.into_subsystem()));
         s.start(SubsystemBuilder::new("Frontend", frontend_subsystem.into_subsystem()));
     })
     .catch_signals()
