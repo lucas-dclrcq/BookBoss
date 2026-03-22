@@ -15,4 +15,6 @@ pub trait SeriesRepository: Send + Sync {
     async fn find_by_name(&self, transaction: &dyn Transaction, name: &str) -> Result<Option<Series>, Error>;
     async fn list_all_series(&self, transaction: &dyn Transaction) -> Result<Vec<Series>, Error>;
     async fn max_series_number_for_series(&self, transaction: &dyn Transaction, series_id: SeriesId) -> Result<Option<rust_decimal::Decimal>, Error>;
+    async fn count_books_for_series(&self, transaction: &dyn Transaction, series_id: SeriesId) -> Result<u64, Error>;
+    async fn delete_series(&self, transaction: &dyn Transaction, series_id: SeriesId) -> Result<(), Error>;
 }

@@ -589,6 +589,25 @@ impl BookRepository for BookRepositoryAdapter {
 
         Ok(rows.into_iter().map(|m| m.book_id as u64).collect())
     }
+
+    async fn list_all_book_files(&self, transaction: &dyn Transaction) -> Result<Vec<BookFile>, Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        let rows = prelude::BookFiles::find().all(transaction).await.map_err(handle_dberr)?;
+
+        rows.into_iter()
+            .map(|m| {
+                Ok(BookFile {
+                    book_id: m.book_id as u64,
+                    format: parse_or_db_err(&m.format)?,
+                    file_role: parse_or_db_err(&m.file_role)?,
+                    path: m.path,
+                    file_size: m.file_size,
+                    file_hash: m.file_hash,
+                })
+            })
+            .collect()
+    }
 }
 
 #[cfg(test)]

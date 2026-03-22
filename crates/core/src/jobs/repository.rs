@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::Serialize;
 
 use crate::{Error, jobs::model::Job, repository::Transaction};
@@ -26,6 +27,10 @@ pub trait JobRepository: Send + Sync {
 
     /// Count jobs of the given type that are currently pending or running.
     async fn count_pending_by_type(&self, transaction: &dyn Transaction, job_type: &str) -> Result<u64, Error>;
+
+    /// Delete completed or failed jobs older than the given cutoff.
+    /// Returns the number of jobs deleted.
+    async fn delete_old_jobs(&self, transaction: &dyn Transaction, cutoff: DateTime<Utc>) -> Result<u64, Error>;
 }
 
 /// Marker trait for typed job payloads. Implement this on your payload struct

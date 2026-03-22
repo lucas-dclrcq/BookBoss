@@ -1,3 +1,5 @@
+use chrono::{DateTime, Utc};
+
 use crate::{
     Error,
     import::{ImportJob, ImportJobId, ImportJobToken, ImportStatus, NewImportJob},
@@ -33,4 +35,13 @@ pub trait ImportJobRepository: Send + Sync {
 
     /// Sets the job status to `Approved`.
     async fn approve_job(&self, transaction: &dyn Transaction, job_id: ImportJobId) -> Result<(), Error>;
+
+    /// Delete import jobs in terminal states (Approved/Rejected) older than the
+    /// cutoff. Returns the number of jobs deleted.
+    async fn delete_old_terminal_jobs(&self, transaction: &dyn Transaction, cutoff: DateTime<Utc>) -> Result<u64, Error>;
+
+    /// Find import jobs stuck in non-terminal states
+    /// (Pending/Extracting/Identifying/NeedsReview) that were last updated
+    /// before the cutoff.
+    async fn find_stale_non_terminal_jobs(&self, transaction: &dyn Transaction, cutoff: DateTime<Utc>) -> Result<Vec<ImportJob>, Error>;
 }

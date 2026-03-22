@@ -63,4 +63,7 @@ pub trait BookRepository: Send + Sync {
     /// KEPUB in `book_files`. Used at startup to re-enqueue any KEPUB
     /// conversion jobs that were lost due to a crash.
     async fn find_book_ids_needing_kepub_conversion(&self, transaction: &dyn Transaction) -> Result<Vec<BookId>, Error>;
+    /// Returns all book file records. Used by the file integrity health check
+    /// to verify that every recorded file exists on disk.
+    async fn list_all_book_files(&self, transaction: &dyn Transaction) -> Result<Vec<BookFile>, Error>;
 }

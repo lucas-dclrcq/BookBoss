@@ -3,7 +3,7 @@ use bb_core::{
     jobs::{Job, JobRepository, JobStatus},
     repository::Transaction,
 };
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use sea_orm::{
     ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, ExprTrait, PaginatorTrait, QueryFilter, QueryOrder, sea_query::Expr,
 };
@@ -223,6 +223,19 @@ impl JobRepository for JobRepositoryAdapter {
 
         Ok(result.rows_affected)
     }
+
+    async fn delete_old_jobs(&self, transaction: &dyn Transaction, cutoff: DateTime<Utc>) -> Result<u64, Error> {
+        let db_tx = TransactionImpl::get_db_transaction(transaction)?;
+
+        let result = prelude::Jobs::delete_many()
+            .filter(jobs::Column::Status.is_in(["completed", "failed"]))
+            .filter(jobs::Column::UpdatedAt.lt(cutoff.fixed_offset()))
+            .exec(db_tx)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(result.rows_affected)
+    }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -373,5 +386,58 @@ mod tests {
         // Both should be claimable again.
         let reclaimed = svc.job_repository().claim_next(&*tx).await.unwrap();
         assert!(reclaimed.is_some());
+    }
+
+    // ─── delete_old_jobs ──────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_delete_old_jobs_deletes_completed_before_cutoff() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        // Enqueue and complete a job.
+        svc.job_repository().enqueue_raw(&*tx, "old_job", serde_json::json!({}), 0).await.unwrap();
+        let claimed = svc.job_repository().claim_next(&*tx).await.unwrap().unwrap();
+        svc.job_repository().complete(&*tx, claimed).await.unwrap();
+
+        // Use a cutoff in the future — everything is "old".
+        let cutoff = chrono::Utc::now() + chrono::Duration::hours(1);
+        let deleted = svc.job_repository().delete_old_jobs(&*tx, cutoff).await.unwrap();
+
+        assert_eq!(deleted, 1);
+    }
+
+    #[tokio::test]
+    async fn test_delete_old_jobs_does_not_delete_pending_or_running() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        // Pending job.
+        svc.job_repository().enqueue_raw(&*tx, "pending_job", serde_json::json!({}), 0).await.unwrap();
+        // Running job.
+        svc.job_repository().enqueue_raw(&*tx, "running_job", serde_json::json!({}), 0).await.unwrap();
+        svc.job_repository().claim_next(&*tx).await.unwrap().unwrap();
+
+        let cutoff = chrono::Utc::now() + chrono::Duration::hours(1);
+        let deleted = svc.job_repository().delete_old_jobs(&*tx, cutoff).await.unwrap();
+
+        assert_eq!(deleted, 0);
+    }
+
+    #[tokio::test]
+    async fn test_delete_old_jobs_does_not_delete_recent() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        // Enqueue and complete a job.
+        svc.job_repository().enqueue_raw(&*tx, "recent_job", serde_json::json!({}), 0).await.unwrap();
+        let claimed = svc.job_repository().claim_next(&*tx).await.unwrap().unwrap();
+        svc.job_repository().complete(&*tx, claimed).await.unwrap();
+
+        // Cutoff in the past — nothing is old enough.
+        let cutoff = chrono::Utc::now() - chrono::Duration::hours(1);
+        let deleted = svc.job_repository().delete_old_jobs(&*tx, cutoff).await.unwrap();
+
+        assert_eq!(deleted, 0);
     }
 }

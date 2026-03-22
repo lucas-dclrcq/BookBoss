@@ -4,7 +4,7 @@ use bb_core::{
     import::{ImportJob, ImportJobId, ImportJobRepository, ImportJobToken, ImportStatus, NewImportJob},
     repository::Transaction,
 };
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, ExprTrait, ModelTrait, QueryFilter, QueryOrder, QuerySelect, sea_query::Expr};
 
 use crate::{
@@ -221,6 +221,37 @@ impl ImportJobRepository for ImportJobRepositoryAdapter {
         updater.update(transaction).await.map_err(handle_dberr)?;
 
         Ok(())
+    }
+
+    async fn delete_old_terminal_jobs(&self, transaction: &dyn Transaction, cutoff: DateTime<Utc>) -> Result<u64, Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        let result = prelude::ImportJobs::delete_many()
+            .filter(import_jobs::Column::Status.is_in([ImportStatus::Approved.as_str(), ImportStatus::Rejected.as_str()]))
+            .filter(import_jobs::Column::UpdatedAt.lt(cutoff.fixed_offset()))
+            .exec(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(result.rows_affected)
+    }
+
+    async fn find_stale_non_terminal_jobs(&self, transaction: &dyn Transaction, cutoff: DateTime<Utc>) -> Result<Vec<ImportJob>, Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        let rows = prelude::ImportJobs::find()
+            .filter(import_jobs::Column::Status.is_in([
+                ImportStatus::Pending.as_str(),
+                ImportStatus::Extracting.as_str(),
+                ImportStatus::Identifying.as_str(),
+                ImportStatus::NeedsReview.as_str(),
+            ]))
+            .filter(import_jobs::Column::UpdatedAt.lt(cutoff.fixed_offset()))
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
     }
 }
 
@@ -560,5 +591,95 @@ mod tests {
 
         let reset = svc.import_job_repository().reset_in_progress_to_pending(&*tx).await.unwrap();
         assert_eq!(reset, 0);
+    }
+
+    // ─── delete_old_terminal_jobs ─────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_delete_old_terminal_jobs_deletes_approved_before_cutoff() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let job = svc.import_job_repository().add_job(&*tx, new_job("/watch/old.epub")).await.unwrap();
+        svc.import_job_repository().approve_job(&*tx, job.id).await.unwrap();
+
+        // Cutoff in the future — everything is "old".
+        let cutoff = Utc::now() + chrono::Duration::hours(1);
+        let deleted = svc.import_job_repository().delete_old_terminal_jobs(&*tx, cutoff).await.unwrap();
+
+        assert_eq!(deleted, 1);
+    }
+
+    #[tokio::test]
+    async fn test_delete_old_terminal_jobs_does_not_delete_pending() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        svc.import_job_repository().add_job(&*tx, new_job("/watch/pending.epub")).await.unwrap();
+
+        let cutoff = Utc::now() + chrono::Duration::hours(1);
+        let deleted = svc.import_job_repository().delete_old_terminal_jobs(&*tx, cutoff).await.unwrap();
+
+        assert_eq!(deleted, 0);
+    }
+
+    #[tokio::test]
+    async fn test_delete_old_terminal_jobs_does_not_delete_recent() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let job = svc.import_job_repository().add_job(&*tx, new_job("/watch/recent.epub")).await.unwrap();
+        svc.import_job_repository().approve_job(&*tx, job.id).await.unwrap();
+
+        // Cutoff in the past — nothing is old enough.
+        let cutoff = Utc::now() - chrono::Duration::hours(1);
+        let deleted = svc.import_job_repository().delete_old_terminal_jobs(&*tx, cutoff).await.unwrap();
+
+        assert_eq!(deleted, 0);
+    }
+
+    // ─── find_stale_non_terminal_jobs ─────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_find_stale_non_terminal_jobs_returns_old_pending() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        svc.import_job_repository().add_job(&*tx, new_job("/watch/stale.epub")).await.unwrap();
+
+        // Cutoff in the future — everything is "stale".
+        let cutoff = Utc::now() + chrono::Duration::hours(1);
+        let stale = svc.import_job_repository().find_stale_non_terminal_jobs(&*tx, cutoff).await.unwrap();
+
+        assert_eq!(stale.len(), 1);
+        assert_eq!(stale[0].status, ImportStatus::Pending);
+    }
+
+    #[tokio::test]
+    async fn test_find_stale_non_terminal_jobs_ignores_approved() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let job = svc.import_job_repository().add_job(&*tx, new_job("/watch/approved.epub")).await.unwrap();
+        svc.import_job_repository().approve_job(&*tx, job.id).await.unwrap();
+
+        let cutoff = Utc::now() + chrono::Duration::hours(1);
+        let stale = svc.import_job_repository().find_stale_non_terminal_jobs(&*tx, cutoff).await.unwrap();
+
+        assert!(stale.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_find_stale_non_terminal_jobs_ignores_recent() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        svc.import_job_repository().add_job(&*tx, new_job("/watch/recent.epub")).await.unwrap();
+
+        // Cutoff in the past — nothing is stale enough.
+        let cutoff = Utc::now() - chrono::Duration::hours(1);
+        let stale = svc.import_job_repository().find_stale_non_terminal_jobs(&*tx, cutoff).await.unwrap();
+
+        assert!(stale.is_empty());
     }
 }

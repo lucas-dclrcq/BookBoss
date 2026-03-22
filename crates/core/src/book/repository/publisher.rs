@@ -14,4 +14,6 @@ pub trait PublisherRepository: Send + Sync {
     async fn list_publishers(&self, transaction: &dyn Transaction, start_id: Option<PublisherId>, page_size: Option<u64>) -> Result<Vec<Publisher>, Error>;
     async fn list_all_publishers(&self, transaction: &dyn Transaction) -> Result<Vec<Publisher>, Error>;
     async fn find_by_name(&self, transaction: &dyn Transaction, name: &str) -> Result<Option<Publisher>, Error>;
+    async fn count_books_for_publisher(&self, transaction: &dyn Transaction, publisher_id: PublisherId) -> Result<u64, Error>;
+    async fn delete_publisher(&self, transaction: &dyn Transaction, publisher_id: PublisherId) -> Result<(), Error>;
 }

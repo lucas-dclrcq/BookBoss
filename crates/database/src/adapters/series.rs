@@ -7,7 +7,7 @@ use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait,
     ActiveValue::Set,
-    ColumnTrait, EntityTrait, ExprTrait, QueryFilter, QueryOrder, QuerySelect,
+    ColumnTrait, EntityTrait, ExprTrait, ModelTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
     sea_query::{BinOper, Expr, Func},
 };
 
@@ -173,6 +173,28 @@ impl SeriesRepository for SeriesRepositoryAdapter {
         let rows = query.all(transaction).await.map_err(handle_dberr)?;
 
         Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn count_books_for_series(&self, transaction: &dyn Transaction, series_id: SeriesId) -> Result<u64, Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        let count = prelude::Books::find()
+            .filter(books::Column::SeriesId.eq(series_id as i64))
+            .count(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(count)
+    }
+
+    async fn delete_series(&self, transaction: &dyn Transaction, series_id: SeriesId) -> Result<(), Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        if let Some(existing) = prelude::Series::find_by_id(series_id as i64).one(transaction).await.map_err(handle_dberr)? {
+            existing.delete(transaction).await.map_err(handle_dberr)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -509,5 +531,106 @@ mod tests {
         };
 
         assert!(matches!(svc.series_repository().update_series(&*tx, s).await, Err(Error::InvalidId(0))));
+    }
+
+    // ─── count_books_for_series ───────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_count_books_for_series_zero_when_no_books() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let s = svc
+            .series_repository()
+            .add_series(
+                &*tx,
+                NewSeries {
+                    name: "Empty Series".into(),
+                    description: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(svc.series_repository().count_books_for_series(&*tx, s.id).await.unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_count_books_for_series_counts_linked_books() {
+        use bb_core::book::{BookStatus, NewBook};
+
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let s = svc
+            .series_repository()
+            .add_series(
+                &*tx,
+                NewSeries {
+                    name: "Dune".into(),
+                    description: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        // Create two books linked to the series.
+        for title in &["Dune", "Dune Messiah"] {
+            svc.book_repository()
+                .add_book(
+                    &*tx,
+                    NewBook {
+                        title: (*title).to_string(),
+                        status: BookStatus::Available,
+                        description: None,
+                        published_date: None,
+                        language: None,
+                        series_id: Some(s.id),
+                        series_number: None,
+                        publisher_id: None,
+                        page_count: None,
+                        rating: None,
+                        metadata_source: None,
+                        cover_path: None,
+                    },
+                )
+                .await
+                .unwrap();
+        }
+
+        assert_eq!(svc.series_repository().count_books_for_series(&*tx, s.id).await.unwrap(), 2);
+    }
+
+    // ─── delete_series ────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_delete_series_removes_record() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let s = svc
+            .series_repository()
+            .add_series(
+                &*tx,
+                NewSeries {
+                    name: "Doomed Series".into(),
+                    description: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        svc.series_repository().delete_series(&*tx, s.id).await.unwrap();
+
+        assert!(svc.series_repository().find_by_id(&*tx, s.id).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_delete_series_nonexistent_is_noop() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        // Should not error even if the series doesn't exist.
+        svc.series_repository().delete_series(&*tx, 999).await.unwrap();
     }
 }

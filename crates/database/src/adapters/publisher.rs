@@ -7,12 +7,12 @@ use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait,
     ActiveValue::Set,
-    ColumnTrait, EntityTrait, ExprTrait, QueryFilter, QueryOrder, QuerySelect,
+    ColumnTrait, EntityTrait, ExprTrait, ModelTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
     sea_query::{BinOper, Expr, Func},
 };
 
 use crate::{
-    entities::{prelude, publishers},
+    entities::{books, prelude, publishers},
     error::handle_dberr,
     transaction::TransactionImpl,
 };
@@ -152,6 +152,32 @@ impl PublisherRepository for PublisherRepositoryAdapter {
             .map_err(handle_dberr)?;
 
         Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn count_books_for_publisher(&self, transaction: &dyn Transaction, publisher_id: PublisherId) -> Result<u64, Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        let count = prelude::Books::find()
+            .filter(books::Column::PublisherId.eq(publisher_id as i64))
+            .count(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(count)
+    }
+
+    async fn delete_publisher(&self, transaction: &dyn Transaction, publisher_id: PublisherId) -> Result<(), Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        if let Some(existing) = prelude::Publishers::find_by_id(publisher_id as i64)
+            .one(transaction)
+            .await
+            .map_err(handle_dberr)?
+        {
+            existing.delete(transaction).await.map_err(handle_dberr)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -401,5 +427,96 @@ mod tests {
         };
 
         assert!(matches!(svc.publisher_repository().update_publisher(&*tx, p).await, Err(Error::InvalidId(0))));
+    }
+
+    // ─── count_books_for_publisher ────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_count_books_for_publisher_zero_when_no_books() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let p = svc
+            .publisher_repository()
+            .add_publisher(
+                &*tx,
+                NewPublisher {
+                    name: "Empty Publisher".into(),
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(svc.publisher_repository().count_books_for_publisher(&*tx, p.id).await.unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_count_books_for_publisher_counts_linked_books() {
+        use bb_core::book::{BookStatus, NewBook};
+
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let p = svc
+            .publisher_repository()
+            .add_publisher(&*tx, NewPublisher { name: "Tor Books".into() })
+            .await
+            .unwrap();
+
+        for title in &["Book A", "Book B"] {
+            svc.book_repository()
+                .add_book(
+                    &*tx,
+                    NewBook {
+                        title: (*title).to_string(),
+                        status: BookStatus::Available,
+                        description: None,
+                        published_date: None,
+                        language: None,
+                        series_id: None,
+                        series_number: None,
+                        publisher_id: Some(p.id),
+                        page_count: None,
+                        rating: None,
+                        metadata_source: None,
+                        cover_path: None,
+                    },
+                )
+                .await
+                .unwrap();
+        }
+
+        assert_eq!(svc.publisher_repository().count_books_for_publisher(&*tx, p.id).await.unwrap(), 2);
+    }
+
+    // ─── delete_publisher ─────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_delete_publisher_removes_record() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let p = svc
+            .publisher_repository()
+            .add_publisher(
+                &*tx,
+                NewPublisher {
+                    name: "Doomed Publisher".into(),
+                },
+            )
+            .await
+            .unwrap();
+
+        svc.publisher_repository().delete_publisher(&*tx, p.id).await.unwrap();
+
+        assert!(svc.publisher_repository().find_by_id(&*tx, p.id).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_delete_publisher_nonexistent_is_noop() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        svc.publisher_repository().delete_publisher(&*tx, 999).await.unwrap();
     }
 }
