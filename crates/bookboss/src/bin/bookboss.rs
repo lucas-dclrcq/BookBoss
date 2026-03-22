@@ -237,14 +237,14 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
 
     let health_task_state = Arc::new(HealthTaskState::new(default_health_tasks()));
     let health_subsystem = create_health_subsystem(
-        health_task_state,
+        health_task_state.clone(),
         repository_service.repository().clone(),
         repository_service.job_repository().clone(),
     );
 
     let api_subsystem = create_api_subsystem(&config.api, core_services.clone());
     let core_subsystem = create_core_subsystem(registry, repository_service.clone(), worker_poll_interval, event_service);
-    let frontend_subsystem = create_frontend_subsystem(&config.frontend, core_services.clone());
+    let frontend_subsystem = create_frontend_subsystem(&config.frontend, core_services.clone(), health_task_state);
 
     span.exit();
 

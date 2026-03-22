@@ -76,6 +76,16 @@ impl HealthTaskState {
             task.next_run_at = now + Duration::minutes(task.interval_minutes as i64);
         }
     }
+
+    /// Set a task's `next_run_at` to now so the scheduler picks it up on its
+    /// next poll cycle. Used by the "Run Now" admin action.
+    pub async fn mark_due_now(&self, job_type: &str) {
+        let now = Utc::now();
+        let mut tasks = self.tasks.write().await;
+        if let Some(task) = tasks.iter_mut().find(|t| t.job_type == job_type) {
+            task.next_run_at = now;
+        }
+    }
 }
 
 #[cfg(test)]
