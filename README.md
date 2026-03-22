@@ -19,6 +19,7 @@ by a flexible database layer that supports PostgreSQL, MySQL, MariaDB, and SQLit
 - Delete books from the library
 - Search bar allows searching from the displayed list of books. Can add author: title: series: genre: tag:
   for extra refinement
+- Multi-select books to change read status / edit a subset of metadata
 
 ### Import
 

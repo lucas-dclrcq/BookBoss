@@ -660,6 +660,22 @@ fn BulkEditRow(label: &'static str, checked: bool, on_toggle: EventHandler<()>, 
 }
 
 // ---------------------------------------------------------------------------
+// Server function: check EditBook capability
+// ---------------------------------------------------------------------------
+
+#[get(
+    "/api/v1/books/bulk/can-edit",
+    auth_session: axum::Extension<AuthSession>
+)]
+async fn check_edit_book_capability() -> Result<bool, ServerFnError> {
+    let current_user = auth_session.current_user.clone().unwrap_or_default();
+    Ok(Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::GET], true)
+        .requires(Rights::any([Rights::permission(Capability::EditBook.as_str())]))
+        .validate(&current_user, &Method::GET, None)
+        .await)
+}
+
+// ---------------------------------------------------------------------------
 // SelectionActionBar — fixed bottom bar with actions for selected books
 // ---------------------------------------------------------------------------
 
@@ -677,6 +693,10 @@ pub(crate) fn SelectionActionBar(
     let mut show_bulk_edit = use_signal(|| false);
     let mut busy = use_signal(|| false);
     let mut status_message = use_signal(|| None::<String>);
+
+    // Check if user has EditBook capability (for showing Edit Metadata button).
+    let can_edit_resource = use_server_future(check_edit_book_capability);
+    let can_edit = can_edit_resource.ok().and_then(|r| r()).and_then(std::result::Result::ok).unwrap_or(false);
 
     if !mode {
         return rsx! {};
@@ -698,6 +718,34 @@ pub(crate) fn SelectionActionBar(
     rsx! {
         div {
             class: "fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 shadow-lg px-6 py-3 flex items-center gap-4",
+            tabindex: -1,
+            onmounted: move |e| async move { let _ = e.set_focus(true).await; },
+            onkeydown: {
+                let tokens_for_shortcut = all_book_tokens.clone();
+                move |e: KeyboardEvent| {
+                    // Don't handle shortcuts when modal is open or busy
+                    if show_bulk_edit() || busy() { return; }
+                    match e.key() {
+                        Key::Escape => {
+                            // Close status dropdown if open, otherwise exit selection mode
+                            if show_status_dropdown() {
+                                show_status_dropdown.set(false);
+                            } else {
+                                exit_selection_mode();
+                            }
+                        }
+                        Key::Character(ref c) if c == "a" && (e.modifiers().meta() || e.modifiers().ctrl()) => {
+                            e.prevent_default();
+                            if all_selected {
+                                deselect_all();
+                            } else {
+                                select_all(tokens_for_shortcut.clone());
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            },
 
             // Selection count or status message
             if let Some(msg) = status_message() {
@@ -724,7 +772,8 @@ pub(crate) fn SelectionActionBar(
             }
 
             // Select None — clear selections but stay in selection mode
-            if has_selection {
+            // Hidden when all are selected since "Deselect All" already covers that.
+            if has_selection && !all_selected {
                 button {
                     class: "text-sm text-indigo-600 hover:text-indigo-800 font-medium cursor-pointer disabled:opacity-40",
                     disabled: busy(),
@@ -736,12 +785,14 @@ pub(crate) fn SelectionActionBar(
             // Spacer
             div { class: "flex-1" }
 
-            // Edit Metadata
-            button {
-                class: "px-4 py-2 text-sm font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer disabled:opacity-40",
-                disabled: busy() || !has_selection,
-                onclick: move |_| show_bulk_edit.set(true),
-                "Edit Metadata"
+            // Edit Metadata (only shown if user has EditBook capability)
+            if can_edit {
+                button {
+                    class: "px-4 py-2 text-sm font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer disabled:opacity-40",
+                    disabled: busy() || !has_selection,
+                    onclick: move |_| show_bulk_edit.set(true),
+                    "Edit Metadata"
+                }
             }
 
             // Set Status with dropdown

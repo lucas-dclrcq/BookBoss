@@ -6,6 +6,7 @@ use crate::{
     Route,
     components::{
         NavBar,
+        selection::{SELECTION_MODE, exit_selection_mode},
         sort_control::{SORT_ORDER, get_sort_preference},
     },
 };
@@ -28,6 +29,18 @@ pub(crate) fn AppLayout() -> Element {
             if let Some(Ok(Some(order))) = res() {
                 *SORT_ORDER.write() = order;
             }
+        }
+    });
+
+    // Exit selection mode when navigating away from book-grid pages.
+    let route = use_route::<Route>();
+    use_effect(move || {
+        let on_grid_page = matches!(
+            route,
+            Route::BooksPage | Route::AuthorDetailPage { .. } | Route::SeriesDetailPage { .. } | Route::ShelfPage { .. }
+        );
+        if !on_grid_page && SELECTION_MODE() {
+            exit_selection_mode();
         }
     });
 
