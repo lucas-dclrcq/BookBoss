@@ -52,6 +52,24 @@ enum Section {
     Messages,
 }
 
+impl Section {
+    fn from_hash(hash: &str) -> Self {
+        match hash.trim_start_matches('#') {
+            "tasks" => Self::Tasks,
+            "messages" => Self::Messages,
+            _ => Self::Users,
+        }
+    }
+
+    fn as_hash(self) -> &'static str {
+        match self {
+            Self::Users => "#users",
+            Self::Tasks => "#tasks",
+            Self::Messages => "#messages",
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // SettingsPage
 // ---------------------------------------------------------------------------
@@ -78,6 +96,28 @@ pub(crate) fn SettingsPage() -> Element {
     });
 
     let mut active_section = use_signal(|| Section::Users);
+
+    // Restore section from URL hash on mount.
+    use_effect(move || {
+        spawn(async move {
+            if let Ok(val) = document::eval("return window.location.hash").await {
+                if let Some(hash) = val.as_str() {
+                    let section = Section::from_hash(hash);
+                    if section != Section::Users {
+                        active_section.set(section);
+                    }
+                }
+            }
+        });
+    });
+
+    // Update URL hash when section changes.
+    use_effect(move || {
+        let hash = active_section().as_hash();
+        spawn(async move {
+            let _ = document::eval(&format!("window.location.hash = '{hash}'")).await;
+        });
+    });
 
     let nav_button_class = |section: Section| {
         if active_section() == section {
