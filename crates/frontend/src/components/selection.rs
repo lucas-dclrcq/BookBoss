@@ -3,8 +3,25 @@ use std::collections::HashSet;
 use dioxus::prelude::*;
 #[cfg(feature = "server")]
 use {
-    crate::routes::server_helpers::authenticated_user, crate::server::AuthSession, bb_core::CoreServices, bb_core::book::BookToken,
-    bb_core::reading::ReadStatus, std::str::FromStr, std::sync::Arc,
+    crate::routes::server_helpers::authenticated_user,
+    crate::server::{AuthSession, AuthUser, BackendSessionPool},
+    axum::http::Method,
+    axum_session_auth::{Auth, Rights},
+    bb_core::{
+        CoreServices,
+        book::{AuthorToken, BookToken, IdentifierType, PublisherToken, SeriesToken},
+        pipeline::BookEdit,
+        reading::ReadStatus,
+        types::Capability,
+        user::UserId,
+    },
+    std::str::FromStr,
+    std::sync::Arc,
+};
+
+use crate::{
+    components::{AutocompleteInput, ChipInput},
+    routes::review_page::{BulkEditFields, get_picklist_data},
 };
 
 // ---------------------------------------------------------------------------
@@ -90,6 +107,153 @@ async fn bulk_set_reading_status(tokens: Vec<String>, status: String) -> Result<
 }
 
 // ---------------------------------------------------------------------------
+// Server function: bulk edit metadata
+// ---------------------------------------------------------------------------
+
+#[put(
+    "/api/v1/books/bulk/edit",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+async fn bulk_edit_metadata(tokens: Vec<String>, fields: BulkEditFields) -> Result<u32, ServerFnError> {
+    let current_user = auth_session.current_user.clone().unwrap_or_default();
+    if !Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::PUT], true)
+        .requires(Rights::any([Rights::permission(Capability::EditBook.as_str())]))
+        .validate(&current_user, &Method::PUT, None)
+        .await
+    {
+        return Err(ServerFnError::new("Forbidden"));
+    }
+
+    let temp_dir = std::env::temp_dir();
+
+    let mut updated = 0u32;
+    for token_str in &tokens {
+        let result = bulk_edit_single_book(&core_services, token_str, &fields, &temp_dir).await;
+        match result {
+            Ok(()) => updated += 1,
+            Err(e) => tracing::warn!(book_token = %token_str, error = %e, "bulk edit failed for book"),
+        }
+    }
+
+    Ok(updated)
+}
+
+/// Load a single book's existing data, merge bulk edit fields, and save.
+#[cfg(feature = "server")]
+async fn bulk_edit_single_book(
+    core_services: &CoreServices,
+    token_str: &str,
+    fields: &BulkEditFields,
+    temp_dir: &std::path::Path,
+) -> Result<(), ServerFnError> {
+    let book_service = &core_services.book_service;
+    let token = BookToken::from_str(token_str).map_err(|_| ServerFnError::new("Invalid book token"))?;
+    let book = book_service
+        .find_book_by_token(token)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .ok_or_else(|| ServerFnError::new("Book not found"))?;
+
+    // Load existing authors
+    let existing_authors = {
+        let mut links = book_service.authors_for_book(book.id).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        links.sort_by_key(|a| a.sort_order);
+        let mut names = Vec::with_capacity(links.len());
+        for ba in &links {
+            if let Some(author) = book_service
+                .find_author_by_token(AuthorToken::new(ba.author_id))
+                .await
+                .map_err(|e| ServerFnError::new(e.to_string()))?
+            {
+                names.push(author.name);
+            }
+        }
+        names
+    };
+
+    // Load existing series name
+    let existing_series = if let Some(sid) = book.series_id {
+        book_service
+            .find_series_by_token(SeriesToken::new(sid))
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?
+            .map(|s| s.name)
+    } else {
+        None
+    };
+
+    // Load existing publisher name
+    let existing_publisher = if let Some(pid) = book.publisher_id {
+        book_service
+            .find_publisher_by_token(PublisherToken::new(pid))
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?
+            .map(|p| p.name)
+    } else {
+        None
+    };
+
+    // Load existing identifiers
+    let existing_identifiers: Vec<(IdentifierType, String)> = book_service
+        .identifiers_for_book(book.id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .into_iter()
+        .map(|i| (i.identifier_type, i.value))
+        .collect();
+
+    // Load existing genres and tags
+    let existing_genres: Vec<String> = book_service
+        .genres_for_book(book.id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .into_iter()
+        .map(|g| g.name)
+        .collect();
+    let existing_tags: Vec<String> = book_service
+        .tags_for_book(book.id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .into_iter()
+        .map(|t| t.name)
+        .collect();
+
+    // Merge: bulk fields override existing; None means keep existing
+    let edit = BookEdit {
+        title: book.title.clone(),
+        description: book.description.clone(),
+        published_date: book.published_date,
+        language: fields.language.clone().or(book.language.clone()),
+        series_name: match &fields.series_name {
+            Some(s) if s.is_empty() => None,
+            Some(s) => Some(s.clone()),
+            None => existing_series,
+        },
+        series_number: book.series_number,
+        publisher_name: match &fields.publisher {
+            Some(p) if p.is_empty() => None,
+            Some(p) => Some(p.clone()),
+            None => existing_publisher,
+        },
+        page_count: book.page_count,
+        authors: fields.authors.clone().unwrap_or(existing_authors),
+        identifiers: existing_identifiers,
+        use_fetched_cover: false,
+        genres: fields.genres.clone().unwrap_or(existing_genres),
+        tags: fields.tags.clone().unwrap_or(existing_tags),
+    };
+
+    core_services
+        .pipeline_service
+        .edit_book(token, edit, token_str, temp_dir)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // SelectionToggle — small icon button to enter/exit selection mode
 // ---------------------------------------------------------------------------
 
@@ -135,6 +299,367 @@ pub(crate) fn SelectionToggle() -> Element {
 }
 
 // ---------------------------------------------------------------------------
+// BulkEditModal — modal for editing metadata on multiple books at once
+// ---------------------------------------------------------------------------
+
+/// ISO 639-1 language codes — North American / European subset.
+const LANGUAGE_CODES: &[&str] = &[
+    "af", "be", "bg", "ca", "cs", "cy", "da", "de", "el", "en", "es", "et", "fi", "fr", "ga", "hr", "hu", "is", "it", "lv", "lt", "mk", "nl", "no", "pl", "pt",
+    "ro", "ru", "sk", "sl", "sq", "sr", "sv", "tr", "uk",
+];
+
+#[component]
+fn BulkEditModal(on_close: EventHandler<()>, on_saved: EventHandler<()>) -> Element {
+    let count = selection_count();
+
+    // Field value signals
+    let mut authors = use_signal(Vec::<String>::new);
+    let mut publisher = use_signal(Vec::<String>::new);
+    let mut language = use_signal(Vec::<String>::new);
+    let mut series_name = use_signal(String::new);
+    let mut genres = use_signal(Vec::<String>::new);
+    let mut tags = use_signal(Vec::<String>::new);
+
+    // Apply flags — independent checkboxes
+    let mut apply_authors = use_signal(|| false);
+    let mut apply_publisher = use_signal(|| false);
+    let mut apply_language = use_signal(|| false);
+    let mut apply_series = use_signal(|| false);
+    let mut apply_genres = use_signal(|| false);
+    let mut apply_tags = use_signal(|| false);
+
+    // Auto-sync: content changes update checkboxes
+    use_effect(move || {
+        let v = authors();
+        apply_authors.set(!v.is_empty());
+    });
+    use_effect(move || {
+        let v = publisher();
+        apply_publisher.set(!v.is_empty());
+    });
+    use_effect(move || {
+        let v = language();
+        apply_language.set(!v.is_empty());
+    });
+    use_effect(move || {
+        let v = series_name();
+        apply_series.set(!v.is_empty());
+    });
+    use_effect(move || {
+        let v = genres();
+        apply_genres.set(!v.is_empty());
+    });
+    use_effect(move || {
+        let v = tags();
+        apply_tags.set(!v.is_empty());
+    });
+
+    let mut busy = use_signal(|| false);
+    let mut error_msg: Signal<Option<String>> = use_signal(|| None);
+
+    // Picklist data for autocomplete
+    let picklist = use_resource(move || get_picklist_data(()));
+
+    let any_checked = apply_authors() || apply_publisher() || apply_language() || apply_series() || apply_genres() || apply_tags();
+    let authors_invalid = apply_authors() && authors.read().is_empty();
+
+    let label = if count == 1 {
+        "Editing 1 book — checked fields will be applied".to_string()
+    } else {
+        format!("Editing {count} books — checked fields will be applied")
+    };
+
+    rsx! {
+        div {
+            class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+            tabindex: -1,
+            onmounted: move |e| async move { let _ = e.set_focus(true).await; },
+            onclick: move |_| if !busy() { on_close.call(()); },
+            onkeydown: move |e| { if e.key() == Key::Escape && !busy() { on_close.call(()); } },
+
+            div {
+                class: "bg-white rounded-xl shadow-xl w-full max-w-lg mx-4",
+                onclick: |e| e.stop_propagation(),
+
+                // Header
+                div { class: "flex items-center justify-between px-6 pt-5 pb-2",
+                    h2 { class: "text-lg font-semibold text-gray-900", "Bulk Edit Metadata" }
+                    button {
+                        class: "text-gray-400 hover:text-gray-600 cursor-pointer",
+                        disabled: busy(),
+                        onclick: move |_| on_close.call(()),
+                        svg {
+                            class: "w-5 h-5",
+                            xmlns: "http://www.w3.org/2000/svg",
+                            fill: "none",
+                            view_box: "0 0 24 24",
+                            stroke_width: "2",
+                            stroke: "currentColor",
+                            path {
+                                stroke_linecap: "round",
+                                stroke_linejoin: "round",
+                                d: "M6 18L18 6M6 6l12 12",
+                            }
+                        }
+                    }
+                }
+
+                // Subtitle
+                div { class: "px-6 pb-4",
+                    p { class: "text-sm text-gray-500", "{label}" }
+                }
+
+                // Fields
+                div { class: "px-6 space-y-3",
+                    // Authors
+                    BulkEditRow {
+                        label: "Authors",
+                        checked: apply_authors(),
+                        on_toggle: move |()| {
+                            if apply_authors() {
+                                authors.write().clear();
+                                apply_authors.set(false);
+                            } else {
+                                apply_authors.set(true);
+                            }
+                        },
+                        {
+                            let opts = picklist.read().as_ref().and_then(|r| r.as_ref().ok()).map(|p| p.authors.clone()).unwrap_or_default();
+                            rsx! {
+                                ChipInput {
+                                    values: authors,
+                                    options: opts,
+                                    placeholder: "Add authors…".to_string(),
+                                }
+                            }
+                        }
+                    }
+
+                    // Publisher
+                    BulkEditRow {
+                        label: "Publisher",
+                        checked: apply_publisher(),
+                        on_toggle: move |()| {
+                            if apply_publisher() {
+                                publisher.write().clear();
+                                apply_publisher.set(false);
+                            } else {
+                                apply_publisher.set(true);
+                            }
+                        },
+                        {
+                            let opts = picklist.read().as_ref().and_then(|r| r.as_ref().ok()).map(|p| p.publishers.clone()).unwrap_or_default();
+                            rsx! {
+                                ChipInput {
+                                    values: publisher,
+                                    options: opts,
+                                    placeholder: "Set publisher…".to_string(),
+                                    max_chips: Some(1),
+                                }
+                            }
+                        }
+                    }
+
+                    // Language
+                    BulkEditRow {
+                        label: "Language",
+                        checked: apply_language(),
+                        on_toggle: move |()| {
+                            if apply_language() {
+                                language.write().clear();
+                                apply_language.set(false);
+                            } else {
+                                apply_language.set(true);
+                            }
+                        },
+                        ChipInput {
+                            values: language,
+                            options: LANGUAGE_CODES.iter().map(std::string::ToString::to_string).collect(),
+                            placeholder: "Set language…".to_string(),
+                            max_chips: Some(1),
+                        }
+                    }
+
+                    // Series Name
+                    BulkEditRow {
+                        label: "Series",
+                        checked: apply_series(),
+                        on_toggle: move |()| {
+                            if apply_series() {
+                                series_name.set(String::new());
+                                apply_series.set(false);
+                            } else {
+                                apply_series.set(true);
+                            }
+                        },
+                        {
+                            let series_options = picklist.read().as_ref().and_then(|r| r.as_ref().ok())
+                                .map(|p| p.series.iter().map(|s| (s.name.clone(), s.next_number)).collect::<Vec<_>>())
+                                .unwrap_or_default();
+                            rsx! {
+                                AutocompleteInput {
+                                    value: series_name,
+                                    options: series_options,
+                                    on_series_selected: move |_: (String, u32)| {},
+                                    on_cleared: move |()| {},
+                                    on_blur: move |_: String| {},
+                                }
+                            }
+                        }
+                    }
+
+                    // Genres
+                    BulkEditRow {
+                        label: "Genres",
+                        checked: apply_genres(),
+                        on_toggle: move |()| {
+                            if apply_genres() {
+                                genres.write().clear();
+                                apply_genres.set(false);
+                            } else {
+                                apply_genres.set(true);
+                            }
+                        },
+                        {
+                            let opts = picklist.read().as_ref().and_then(|r| r.as_ref().ok()).map(|p| p.genres.clone()).unwrap_or_default();
+                            rsx! {
+                                ChipInput {
+                                    values: genres,
+                                    options: opts,
+                                    placeholder: "Add genres…".to_string(),
+                                }
+                            }
+                        }
+                    }
+
+                    // Tags
+                    BulkEditRow {
+                        label: "Tags",
+                        checked: apply_tags(),
+                        on_toggle: move |()| {
+                            if apply_tags() {
+                                tags.write().clear();
+                                apply_tags.set(false);
+                            } else {
+                                apply_tags.set(true);
+                            }
+                        },
+                        {
+                            let opts = picklist.read().as_ref().and_then(|r| r.as_ref().ok()).map(|p| p.tags.clone()).unwrap_or_default();
+                            rsx! {
+                                ChipInput {
+                                    values: tags,
+                                    options: opts,
+                                    placeholder: "Add tags…".to_string(),
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Validation / error messages
+                if authors_invalid {
+                    div { class: "px-6 pt-2",
+                        p { class: "text-sm text-amber-600", "Authors cannot be cleared — add at least one author or uncheck the field." }
+                    }
+                }
+                if let Some(err) = error_msg() {
+                    div { class: "px-6 pt-2",
+                        p { class: "text-sm text-red-600", "{err}" }
+                    }
+                }
+
+                // Footer
+                div { class: "flex justify-end gap-3 px-6 pt-4 pb-5",
+                    button {
+                        class: "px-4 py-2 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-40",
+                        disabled: busy(),
+                        onclick: move |_| on_close.call(()),
+                        "Cancel"
+                    }
+                    button {
+                        class: "px-4 py-2 text-sm font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer disabled:opacity-40",
+                        disabled: busy() || !any_checked || authors_invalid,
+                        onclick: move |_| {
+                            let fields = BulkEditFields {
+                                authors: if apply_authors() { Some(authors.read().clone()) } else { None },
+                                publisher: if apply_publisher() { Some(publisher.read().first().cloned().unwrap_or_default()) } else { None },
+                                language: if apply_language() { Some(language.read().first().cloned().unwrap_or_default()) } else { None },
+                                series_name: if apply_series() { Some(series_name.read().clone()) } else { None },
+                                genres: if apply_genres() { Some(genres.read().clone()) } else { None },
+                                tags: if apply_tags() { Some(tags.read().clone()) } else { None },
+                            };
+                            let tokens: Vec<String> = SELECTED_BOOKS.read().iter().cloned().collect();
+                            busy.set(true);
+                            error_msg.set(None);
+                            spawn(async move {
+                                match bulk_edit_metadata(tokens, fields).await {
+                                    Ok(_) => {
+                                        busy.set(false);
+                                        on_saved.call(());
+                                    }
+                                    Err(e) => {
+                                        error_msg.set(Some(format!("{e}")));
+                                        busy.set(false);
+                                    }
+                                }
+                            });
+                        },
+                        if busy() {
+                            "Updating {count} books…"
+                        } else {
+                            "Apply Changes"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// A single row in the bulk edit modal: checkbox + label + field content.
+#[component]
+fn BulkEditRow(label: &'static str, checked: bool, on_toggle: EventHandler<()>, children: Element) -> Element {
+    rsx! {
+        div { class: "flex items-start gap-3",
+            // Checkbox
+            button {
+                r#type: "button",
+                class: "mt-1.5 flex-none w-5 h-5 rounded border cursor-pointer flex items-center justify-center",
+                class: if checked { "bg-indigo-600 border-indigo-600" } else { "border-gray-300 hover:border-indigo-400" },
+                onclick: move |_| on_toggle.call(()),
+                if checked {
+                    svg {
+                        class: "w-3.5 h-3.5 text-white",
+                        xmlns: "http://www.w3.org/2000/svg",
+                        fill: "none",
+                        view_box: "0 0 24 24",
+                        stroke_width: "3",
+                        stroke: "currentColor",
+                        path {
+                            stroke_linecap: "round",
+                            stroke_linejoin: "round",
+                            d: "M4.5 12.75l6 6 9-13.5",
+                        }
+                    }
+                }
+            }
+            // Label
+            span { class: "mt-1.5 flex-none w-20 text-sm font-medium text-gray-600", "{label}" }
+            // Field — when unchecked, render a placeholder instead of children
+            // so any open ChipInput/AutocompleteInput dropdowns are unmounted.
+            div { class: "flex-1 min-w-0",
+                if checked {
+                    {children}
+                } else {
+                    div { class: "border border-gray-300 rounded px-2 py-1 min-h-[34px] opacity-50" }
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // SelectionActionBar — fixed bottom bar with actions for selected books
 // ---------------------------------------------------------------------------
 
@@ -149,6 +674,7 @@ pub(crate) fn SelectionActionBar(
     let mode = SELECTION_MODE();
     let count = selection_count();
     let mut show_status_dropdown = use_signal(|| false);
+    let mut show_bulk_edit = use_signal(|| false);
     let mut busy = use_signal(|| false);
     let mut status_message = use_signal(|| None::<String>);
 
@@ -210,10 +736,11 @@ pub(crate) fn SelectionActionBar(
             // Spacer
             div { class: "flex-1" }
 
-            // Edit Metadata (wired up in Phase 3)
+            // Edit Metadata
             button {
                 class: "px-4 py-2 text-sm font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer disabled:opacity-40",
                 disabled: busy() || !has_selection,
+                onclick: move |_| show_bulk_edit.set(true),
                 "Edit Metadata"
             }
 
@@ -270,6 +797,18 @@ pub(crate) fn SelectionActionBar(
                 disabled: busy(),
                 onclick: move |_| exit_selection_mode(),
                 "Cancel"
+            }
+        }
+
+        // Bulk edit modal
+        if show_bulk_edit() {
+            BulkEditModal {
+                on_close: move |()| show_bulk_edit.set(false),
+                on_saved: move |()| {
+                    show_bulk_edit.set(false);
+                    exit_selection_mode();
+                    on_action.call(());
+                },
             }
         }
     }

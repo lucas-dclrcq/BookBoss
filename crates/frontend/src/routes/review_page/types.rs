@@ -68,6 +68,18 @@ pub(crate) struct BookEditFields {
     pub use_fetched_cover: bool,
 }
 
+/// Bulk edit fields — all optional. `None` = don't change, `Some` = replace
+/// (even if the value is empty, meaning "clear this field on all books").
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct BulkEditFields {
+    pub authors: Option<Vec<String>>,
+    pub publisher: Option<String>,
+    pub language: Option<String>,
+    pub series_name: Option<String>,
+    pub genres: Option<Vec<String>>,
+    pub tags: Option<Vec<String>>,
+}
+
 /// Picklist option for a series (name + suggested next book number).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct SeriesOption {

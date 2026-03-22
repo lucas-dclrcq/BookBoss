@@ -4,8 +4,9 @@ mod types;
 
 use dioxus::prelude::*;
 pub(crate) use editor::ReviewEditor;
-pub(crate) use server::get_book_for_edit;
 use server::get_review_data;
+pub(crate) use server::{get_book_for_edit, get_picklist_data};
+pub(crate) use types::BulkEditFields;
 
 #[component]
 pub(crate) fn ReviewPage(token: String) -> Element {
