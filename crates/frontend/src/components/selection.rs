@@ -254,6 +254,56 @@ async fn bulk_edit_single_book(
 }
 
 // ---------------------------------------------------------------------------
+// Server function: bulk delete books
+// ---------------------------------------------------------------------------
+
+#[post(
+    "/api/v1/books/bulk/delete",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+async fn bulk_delete_books(tokens: Vec<String>) -> Result<u32, ServerFnError> {
+    let current_user = auth_session.current_user.clone().unwrap_or_default();
+    if !Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::POST], true)
+        .requires(Rights::any([Rights::permission(Capability::DeleteBook.as_str())]))
+        .validate(&current_user, &Method::POST, None)
+        .await
+    {
+        return Err(ServerFnError::new("Forbidden"));
+    }
+
+    let mut deleted = 0u32;
+    for token_str in &tokens {
+        let Ok(book_token) = BookToken::from_str(token_str) else {
+            tracing::warn!(book_token = %token_str, "bulk delete: invalid token, skipping");
+            continue;
+        };
+        match core_services.library_service.delete_book(book_token).await {
+            Ok(()) => deleted += 1,
+            Err(e) => tracing::warn!(book_token = %token_str, error = %e, "bulk delete failed for book"),
+        }
+    }
+
+    Ok(deleted)
+}
+
+// ---------------------------------------------------------------------------
+// Server function: check DeleteBook capability
+// ---------------------------------------------------------------------------
+
+#[get(
+    "/api/v1/books/bulk/can-delete",
+    auth_session: axum::Extension<AuthSession>
+)]
+async fn check_delete_book_capability() -> Result<bool, ServerFnError> {
+    let current_user = auth_session.current_user.clone().unwrap_or_default();
+    Ok(Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::GET], true)
+        .requires(Rights::any([Rights::permission(Capability::DeleteBook.as_str())]))
+        .validate(&current_user, &Method::GET, None)
+        .await)
+}
+
+// ---------------------------------------------------------------------------
 // SelectionToggle — small icon button to enter/exit selection mode
 // ---------------------------------------------------------------------------
 
@@ -660,6 +710,83 @@ fn BulkEditRow(label: &'static str, checked: bool, on_toggle: EventHandler<()>, 
 }
 
 // ---------------------------------------------------------------------------
+// BulkDeleteModal — confirmation dialog for deleting multiple books
+// ---------------------------------------------------------------------------
+
+#[component]
+fn BulkDeleteModal(on_close: EventHandler<()>, on_deleted: EventHandler<()>) -> Element {
+    let count = selection_count();
+    let mut busy = use_signal(|| false);
+    let mut error_msg: Signal<Option<String>> = use_signal(|| None);
+
+    let label = if count == 1 {
+        "This will permanently delete 1 book and all its files. This cannot be undone.".to_string()
+    } else {
+        format!("This will permanently delete {count} books and all their files. This cannot be undone.")
+    };
+
+    rsx! {
+        div {
+            class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+            tabindex: -1,
+            onmounted: move |e| async move { let _ = e.set_focus(true).await; },
+            onclick: move |_| if !busy() { on_close.call(()); },
+            onkeydown: move |e| { if e.key() == Key::Escape && !busy() { on_close.call(()); } },
+
+            div {
+                class: "bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4",
+                onclick: |e| e.stop_propagation(),
+
+                h2 { class: "text-lg font-semibold text-gray-900 mb-2",
+                    if count == 1 { "Delete Book?" } else { "Delete Books?" }
+                }
+                p { class: "text-sm text-gray-600 mb-6", "{label}" }
+
+                if let Some(err) = error_msg() {
+                    p { class: "text-sm text-red-600 mb-4", "{err}" }
+                }
+
+                div { class: "flex gap-3 justify-end",
+                    button {
+                        class: "px-4 py-2 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50 cursor-pointer",
+                        autofocus: true,
+                        disabled: busy(),
+                        onclick: move |_| on_close.call(()),
+                        "No, Keep Them"
+                    }
+                    button {
+                        class: "px-4 py-2 text-sm font-medium rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 cursor-pointer",
+                        disabled: busy(),
+                        onclick: move |_| {
+                            let tokens: Vec<String> = SELECTED_BOOKS.read().iter().cloned().collect();
+                            busy.set(true);
+                            error_msg.set(None);
+                            spawn(async move {
+                                match bulk_delete_books(tokens).await {
+                                    Ok(_) => {
+                                        busy.set(false);
+                                        on_deleted.call(());
+                                    }
+                                    Err(e) => {
+                                        error_msg.set(Some(format!("{e}")));
+                                        busy.set(false);
+                                    }
+                                }
+                            });
+                        },
+                        if busy() {
+                            {format!("Deleting {count} books…")}
+                        } else {
+                            "Yes, Delete"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Server function: check EditBook capability
 // ---------------------------------------------------------------------------
 
@@ -691,12 +818,17 @@ pub(crate) fn SelectionActionBar(
     let count = selection_count();
     let mut show_status_dropdown = use_signal(|| false);
     let mut show_bulk_edit = use_signal(|| false);
+    let mut show_bulk_delete = use_signal(|| false);
     let mut busy = use_signal(|| false);
     let mut status_message = use_signal(|| None::<String>);
 
     // Check if user has EditBook capability (for showing Edit Metadata button).
     let can_edit_resource = use_server_future(check_edit_book_capability);
     let can_edit = can_edit_resource.ok().and_then(|r| r()).and_then(std::result::Result::ok).unwrap_or(false);
+
+    // Check if user has DeleteBook capability (for showing Delete button).
+    let can_delete_resource = use_server_future(check_delete_book_capability);
+    let can_delete = can_delete_resource.ok().and_then(|r| r()).and_then(std::result::Result::ok).unwrap_or(false);
 
     if !mode {
         return rsx! {};
@@ -724,7 +856,7 @@ pub(crate) fn SelectionActionBar(
                 let tokens_for_shortcut = all_book_tokens.clone();
                 move |e: KeyboardEvent| {
                     // Don't handle shortcuts when modal is open or busy
-                    if show_bulk_edit() || busy() { return; }
+                    if show_bulk_edit() || show_bulk_delete() || busy() { return; }
                     match e.key() {
                         Key::Escape => {
                             // Close status dropdown if open, otherwise exit selection mode
@@ -842,6 +974,16 @@ pub(crate) fn SelectionActionBar(
                 }
             }
 
+            // Delete (only shown if user has DeleteBook capability)
+            if can_delete {
+                button {
+                    class: "px-4 py-2 text-sm font-medium rounded bg-red-600 text-white hover:bg-red-700 cursor-pointer disabled:opacity-40",
+                    disabled: busy() || !has_selection,
+                    onclick: move |_| show_bulk_delete.set(true),
+                    "Delete"
+                }
+            }
+
             // Cancel
             button {
                 class: "px-4 py-2 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-40",
@@ -857,6 +999,18 @@ pub(crate) fn SelectionActionBar(
                 on_close: move |()| show_bulk_edit.set(false),
                 on_saved: move |()| {
                     show_bulk_edit.set(false);
+                    exit_selection_mode();
+                    on_action.call(());
+                },
+            }
+        }
+
+        // Bulk delete confirmation modal
+        if show_bulk_delete() {
+            BulkDeleteModal {
+                on_close: move |()| show_bulk_delete.set(false),
+                on_deleted: move |()| {
+                    show_bulk_delete.set(false);
                     exit_selection_mode();
                     on_action.call(());
                 },
