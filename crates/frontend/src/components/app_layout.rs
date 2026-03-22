@@ -11,6 +11,15 @@ use crate::{
     },
 };
 
+/// Newtype wrapper so `use_context` can distinguish the incoming-review refresh
+/// signal from other `Signal<u32>` contexts.
+#[derive(Clone, Copy)]
+pub(crate) struct IncomingRefresh(pub Signal<u32>);
+
+/// Newtype wrapper for the background-jobs refresh signal.
+#[derive(Clone, Copy)]
+pub(crate) struct JobsRefresh(pub Signal<u32>);
+
 #[get("/api/v1/check_auth", auth_session: axum::Extension<AuthSession>)]
 async fn check_auth() -> Result<bool, ServerFnError> {
     Ok(auth_session.current_user.as_ref().is_some_and(|u| !u.username.is_empty()))
@@ -18,9 +27,32 @@ async fn check_auth() -> Result<bool, ServerFnError> {
 
 #[component]
 pub(crate) fn AppLayout() -> Element {
-    // Shared counter bumped after approve/reject so NavBar re-fetches the pending
-    // count.
-    use_context_provider(|| Signal::new(0u32));
+    let mut incoming_refresh = use_context_provider(|| IncomingRefresh(Signal::new(0u32)));
+    let mut jobs_refresh = use_context_provider(|| JobsRefresh(Signal::new(0u32)));
+
+    // Connect to the SSE event stream so the UI updates in real time when the
+    // backend processes imports or background jobs.
+    use_hook(move || {
+        spawn(async move {
+            let mut eval = document::eval(
+                r"
+                const es = new EventSource('/api/v1/events');
+                es.addEventListener('incoming_changed', () => dioxus.send('incoming_changed'));
+                es.addEventListener('jobs_changed', () => dioxus.send('jobs_changed'));
+                // Keep the eval alive indefinitely — EventSource auto-reconnects.
+                await new Promise(() => {});
+                ",
+            );
+
+            while let Ok(msg) = eval.recv::<String>().await {
+                match msg.as_str() {
+                    "incoming_changed" => *incoming_refresh.0.write() += 1,
+                    "jobs_changed" => *jobs_refresh.0.write() += 1,
+                    _ => {}
+                }
+            }
+        });
+    });
 
     // Load persisted sort preference once; write to global signal.
     let sort_pref = use_server_future(get_sort_preference);

@@ -8,6 +8,7 @@ use crate::{
         AuthorRole, BookStatus, BookToken, FileRole, IdentifierType, MetadataSource, NewAuthor, NewBook, NewGenre, NewPublisher, NewSeries, NewTag, book_slug,
     },
     conversion::ConversionService,
+    event::EventService,
     import::{ImportJob, ImportJobToken, ImportSource, ImportStatus},
     pipeline::{
         MetadataExtractor, MetadataProvider, ProviderBook,
@@ -79,6 +80,7 @@ pub struct PipelineServiceImpl {
     extractor: Arc<dyn MetadataExtractor>,
     providers: Vec<Arc<dyn MetadataProvider>>,
     conversion_service: Arc<dyn ConversionService>,
+    event_service: Arc<dyn EventService>,
 }
 
 impl PipelineServiceImpl {
@@ -88,6 +90,7 @@ impl PipelineServiceImpl {
         extractor: Arc<dyn MetadataExtractor>,
         providers: Vec<Arc<dyn MetadataProvider>>,
         conversion_service: Arc<dyn ConversionService>,
+        event_service: Arc<dyn EventService>,
     ) -> Self {
         Self {
             repository_service,
@@ -95,6 +98,7 @@ impl PipelineServiceImpl {
             extractor,
             providers,
             conversion_service,
+            event_service,
         }
     }
 }
@@ -641,6 +645,8 @@ impl PipelineService for PipelineServiceImpl {
         };
         self.library_store.store_metadata(book.token, &sidecar).await?;
 
+        self.event_service.notify_incoming_changed();
+
         Ok(updated_job)
     }
 
@@ -998,6 +1004,9 @@ impl PipelineService for PipelineServiceImpl {
         // ── 8. Enqueue EPUB enrichment ────────────────────────────────────────
         self.conversion_service.queue_enrich_epub(book_id).await?;
 
+        self.event_service.notify_incoming_changed();
+        self.event_service.notify_jobs_changed();
+
         Ok(())
     }
 
@@ -1278,6 +1287,8 @@ impl PipelineService for PipelineServiceImpl {
         // ── 7. Enqueue EPUB enrichment ────────────────────────────────────────
         self.conversion_service.queue_enrich_epub(book_id).await?;
 
+        self.event_service.notify_jobs_changed();
+
         Ok(())
     }
 
@@ -1354,6 +1365,8 @@ impl PipelineService for PipelineServiceImpl {
         for filename in original_filenames {
             self.library_store.delete_original_file(&filename).await?;
         }
+
+        self.event_service.notify_incoming_changed();
 
         Ok(())
     }

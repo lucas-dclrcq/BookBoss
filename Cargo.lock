@@ -841,6 +841,7 @@ name = "bb-frontend"
 version = "0.5.2"
 dependencies = [
  "anyhow",
+ "async-stream",
  "async-trait",
  "axum",
  "axum_session",
@@ -860,6 +861,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-graceful-shutdown",
+ "tokio-stream",
  "tokio-util",
  "tower",
  "tower-http",

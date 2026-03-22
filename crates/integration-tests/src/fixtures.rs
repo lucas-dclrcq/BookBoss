@@ -109,6 +109,7 @@ impl MetadataExtractor for StubMetadataExtractor {
 /// - `SilentConversionService` (no-op enqueue)
 /// - No metadata providers (extracted metadata is used as-is)
 pub fn pipeline_services(ctx: &crate::context::TestContext, metadata: ExtractedMetadata) -> Arc<bb_core::CoreServices> {
+    let event_service = bb_core::test_support::nop_event_service();
     let extractor = Arc::new(StubMetadataExtractor { metadata });
     let pipeline = Arc::new(PipelineServiceImpl::new(
         ctx.repos.clone(),
@@ -116,6 +117,7 @@ pub fn pipeline_services(ctx: &crate::context::TestContext, metadata: ExtractedM
         extractor,
         vec![],
         silent_conversion_service(),
+        event_service.clone(),
     ));
     bb_core::create_services(
         bb_core::test_support::default_external_services_builder()
@@ -123,6 +125,7 @@ pub fn pipeline_services(ctx: &crate::context::TestContext, metadata: ExtractedM
             .library_store(silent_library_store())
             .pipeline_service(pipeline)
             .conversion_service(silent_conversion_service())
+            .event_service(event_service)
             .build()
             .unwrap(),
         "test-encryption-secret",

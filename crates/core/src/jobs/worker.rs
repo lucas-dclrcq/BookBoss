@@ -4,6 +4,7 @@ use tokio_graceful_shutdown::{IntoSubsystem, SubsystemHandle};
 
 use crate::{
     Error,
+    event::EventService,
     jobs::{JobRegistry, JobRepository},
     repository::{Repository, transaction},
 };
@@ -13,15 +14,23 @@ pub struct JobWorker {
     repository: Arc<dyn Repository>,
     job_repo: Arc<dyn JobRepository>,
     poll_interval: Duration,
+    event_service: Arc<dyn EventService>,
 }
 
 impl JobWorker {
-    pub fn new(registry: JobRegistry, repository: Arc<dyn Repository>, job_repo: Arc<dyn JobRepository>, poll_interval: Duration) -> Self {
+    pub fn new(
+        registry: JobRegistry,
+        repository: Arc<dyn Repository>,
+        job_repo: Arc<dyn JobRepository>,
+        poll_interval: Duration,
+        event_service: Arc<dyn EventService>,
+    ) -> Self {
         Self {
             registry,
             repository,
             job_repo,
             poll_interval,
+            event_service,
         }
     }
 }
@@ -32,6 +41,7 @@ impl IntoSubsystem<Error> for JobWorker {
         let repository = self.repository;
         let registry = self.registry;
         let poll_interval = self.poll_interval;
+        let event_service = self.event_service;
 
         // Crash recovery: reset any jobs left running from a previous crash.
         let reset = transaction(&*repository, |tx| {
@@ -42,6 +52,7 @@ impl IntoSubsystem<Error> for JobWorker {
 
         if reset > 0 {
             tracing::warn!("reset {} running jobs to pending after startup", reset);
+            event_service.notify_jobs_changed();
         }
 
         let mut counter: u32 = 0;
@@ -83,6 +94,7 @@ impl IntoSubsystem<Error> for JobWorker {
                                             })
                                         })
                                         .await?;
+                                        event_service.notify_jobs_changed();
                                     }
                                     Some(handler) => {
                                         match handler.handle(payload).await {
@@ -93,6 +105,7 @@ impl IntoSubsystem<Error> for JobWorker {
                                                     Box::pin(async move { job_repo.complete(tx, job).await })
                                                 })
                                                 .await?;
+                                                event_service.notify_jobs_changed();
                                             }
                                             Err(e) => {
                                                 tracing::error!(job_type, error = %e, "job handler failed");
@@ -104,6 +117,7 @@ impl IntoSubsystem<Error> for JobWorker {
                                                     })
                                                 })
                                                 .await?;
+                                                event_service.notify_jobs_changed();
                                             }
                                         }
                                     }

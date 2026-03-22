@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::{
     ExternalServicesBuilder,
     conversion::{ConversionService, MockConversionService},
+    event::{self, EventService},
     import::{ImportJobService, ImportScanner, scanner::MockImportScanner, service::MockImportJobService},
     jobs::{JobService, service::MockJobService},
     library::{LibraryService, MockLibraryService},
@@ -60,6 +61,13 @@ pub fn nop_import_job_service() -> Arc<dyn ImportJobService> {
     Arc::new(MockImportJobService::new())
 }
 
+/// Returns a no-op `EventService` backed by a broadcast channel that nobody
+/// listens on.  Suitable for tests that don't exercise real-time events.
+#[must_use]
+pub fn nop_event_service() -> Arc<dyn EventService> {
+    event::create_event_service(16)
+}
+
 /// Returns an `ExternalServicesBuilder` pre-populated with nop implementations
 /// for all fields except `repository_service`, which callers must always
 /// provide.
@@ -73,4 +81,5 @@ pub fn default_external_services_builder() -> ExternalServicesBuilder {
         .pipeline_service(nop_pipeline_service())
         .conversion_service(nop_conversion_service())
         .import_scanner(nop_import_scanner())
+        .event_service(nop_event_service())
 }

@@ -3,6 +3,7 @@ pub mod book;
 pub mod conversion;
 pub mod device;
 pub mod error;
+pub mod event;
 pub mod filter;
 pub mod import;
 pub mod jobs;
@@ -27,6 +28,7 @@ use crate::{
     book::{BookService, BookServiceImpl},
     conversion::ConversionService,
     device::{DeviceService, service::DeviceServiceImpl},
+    event::EventService,
     import::{ImportJobService, ImportScanner, service::ImportJobServiceImpl},
     jobs::{JobRegistry, JobWorker},
     library::{LibraryService, LibraryServiceImpl},
@@ -54,6 +56,7 @@ pub struct ExternalServices {
     pub pipeline_service: Arc<dyn PipelineService>,
     pub conversion_service: Arc<dyn ConversionService>,
     pub import_scanner: Arc<dyn ImportScanner>,
+    pub event_service: Arc<dyn EventService>,
 }
 
 pub struct CoreServices {
@@ -71,6 +74,7 @@ pub struct CoreServices {
     pub reading_service: Arc<dyn ReadingService>,
     pub device_service: Arc<dyn DeviceService>,
     pub opds_service: Arc<dyn OpdsService>,
+    pub event_service: Arc<dyn EventService>,
 }
 
 impl CoreServices {
@@ -81,6 +85,7 @@ impl CoreServices {
             pipeline_service,
             conversion_service,
             import_scanner,
+            event_service,
         } = external;
         Self {
             auth_service: Arc::new(AuthServiceImpl::new(repository_service.clone())),
@@ -97,6 +102,7 @@ impl CoreServices {
             reading_service: Arc::new(ReadingServiceImpl::new(repository_service.clone())),
             device_service: Arc::new(DeviceServiceImpl::new(repository_service.clone())),
             opds_service: Arc::new(OpdsServiceImpl::new(repository_service, encryption_secret)),
+            event_service,
         }
     }
 }
@@ -109,6 +115,7 @@ pub struct CoreSubsystem {
     registry: JobRegistry,
     repository_service: Arc<RepositoryService>,
     poll_interval: Duration,
+    event_service: Arc<dyn EventService>,
 }
 
 impl IntoSubsystem<Error> for CoreSubsystem {
@@ -118,6 +125,7 @@ impl IntoSubsystem<Error> for CoreSubsystem {
             self.repository_service.repository().clone(),
             self.repository_service.job_repository().clone(),
             self.poll_interval,
+            self.event_service,
         );
         subsys.start(SubsystemBuilder::new("Worker", worker.into_subsystem()));
 
@@ -131,10 +139,16 @@ impl IntoSubsystem<Error> for CoreSubsystem {
 }
 
 #[must_use]
-pub fn create_core_subsystem(registry: JobRegistry, repository_service: Arc<RepositoryService>, poll_interval: Duration) -> CoreSubsystem {
+pub fn create_core_subsystem(
+    registry: JobRegistry,
+    repository_service: Arc<RepositoryService>,
+    poll_interval: Duration,
+    event_service: Arc<dyn EventService>,
+) -> CoreSubsystem {
     CoreSubsystem {
         registry,
         repository_service,
         poll_interval,
+        event_service,
     }
 }

@@ -21,6 +21,7 @@ use crate::{BookBossFrontend, FrontendConfig};
 
 pub(crate) mod covers;
 pub(crate) mod downloads;
+pub(crate) mod events;
 pub(crate) mod kobo;
 pub(crate) mod opds;
 pub(crate) mod session_pool;
@@ -78,6 +79,7 @@ impl IntoSubsystem<anyhow::Error> for FrontendSubsystem {
         let app_router = axum::Router::new()
             .route("/api/v1/covers/{book_token}", axum::routing::get(covers::serve_cover))
             .route("/api/v1/books/{book_token}/download/{format}", axum::routing::get(downloads::serve_book_file))
+            .route("/api/v1/events", axum::routing::get(events::event_stream))
             .serve_dioxus_application(dioxus_server::ServeConfig::new(), BookBossFrontend)
             .merge(kobo)
             .merge(opds)

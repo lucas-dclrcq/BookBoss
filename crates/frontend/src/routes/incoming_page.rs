@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::Route;
+use crate::{Route, components::IncomingRefresh};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct IncomingBookSummary {
@@ -141,9 +141,9 @@ fn LocalTime(iso: String) -> Element {
 
 #[component]
 pub(crate) fn IncomingPage() -> Element {
-    let mut incoming_refresh: Signal<u32> = use_context();
+    let mut incoming_refresh = use_context::<IncomingRefresh>();
     let mut jobs = use_server_future(move || {
-        let _rev = incoming_refresh();
+        let _rev = (incoming_refresh.0)();
         list_incoming_books()
     })?;
     let mut rejecting: Signal<Option<String>> = use_signal(|| None);
@@ -231,7 +231,7 @@ pub(crate) fn IncomingPage() -> Element {
                                                                     let result = reject_incoming_book(token).await;
                                                                     rejecting.set(None);
                                                                     if result.is_ok() {
-                                                                        *incoming_refresh.write() += 1;
+                                                                        *incoming_refresh.0.write() += 1;
                                                                         jobs.restart();
                                                                     }
                                                                 });

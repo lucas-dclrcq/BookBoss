@@ -8,6 +8,8 @@ use {
     std::sync::Arc,
 };
 
+use crate::components::{IncomingRefresh, JobsRefresh};
+
 #[post("/api/v1/incoming/trigger_scan", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
 async fn trigger_bookdrop_scan() -> Result<(), ServerFnError> {
     let current_user = auth_session.current_user.clone().unwrap_or_default();
@@ -110,9 +112,9 @@ async fn logout() -> Result<(), ServerFnError> {
 /// resolves, rather than leaving it permanently absent after a page refresh.
 #[component]
 fn IncomingBadge() -> Element {
-    let mut incoming_refresh: Signal<u32> = use_context();
+    let mut incoming_refresh = use_context::<IncomingRefresh>();
     let pending_count = use_server_future(move || {
-        let _rev = incoming_refresh();
+        let _rev = (incoming_refresh.0)();
         get_pending_count()
     })?;
     let mut scanning = use_signal(|| false);
@@ -143,7 +145,7 @@ fn IncomingBadge() -> Element {
                                 spawn(async move {
                                     scanning.set(true);
                                     let _ = trigger_bookdrop_scan().await;
-                                    *incoming_refresh.write() += 1;
+                                    *incoming_refresh.0.write() += 1;
                                     scanning.set(false);
                                 });
                             },
@@ -173,7 +175,11 @@ fn IncomingBadge() -> Element {
 /// as `IncomingBadge`.
 #[component]
 fn ConversionBadge() -> Element {
-    let pending_count = use_server_future(get_conversion_pending_count)?;
+    let jobs_refresh = use_context::<JobsRefresh>();
+    let pending_count = use_server_future(move || {
+        let _rev = (jobs_refresh.0)();
+        get_conversion_pending_count()
+    })?;
     let count = pending_count().and_then(|r: Result<u32, ServerFnError>| r.ok()).unwrap_or(0);
 
     if count == 0 {
