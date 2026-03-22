@@ -37,11 +37,20 @@ pub(crate) fn AppLayout() -> Element {
 
     // Connect to the SSE event stream so the UI updates in real time when the
     // backend processes imports or background jobs.
+    //
+    // The JS-side guard (`window.__bb_es`) ensures exactly one EventSource
+    // exists even if the component remounts during fullstack hydration.  If a
+    // prior connection is still open it is closed first, preventing zombie
+    // connections from exhausting the browser's per-domain connection limit.
     use_hook(move || {
         spawn(async move {
             let mut eval = document::eval(
                 r"
+                if (window.__bb_es) {
+                    window.__bb_es.close();
+                }
                 const es = new EventSource('/api/v1/events');
+                window.__bb_es = es;
                 es.addEventListener('incoming_changed', () => dioxus.send('incoming_changed'));
                 es.addEventListener('jobs_changed', () => dioxus.send('jobs_changed'));
                 es.addEventListener('system_messages_changed', () => dioxus.send('system_messages_changed'));
