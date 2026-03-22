@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     Route,
-    components::{BookGrid, BookGridContext, ShelfBar, filter_books_by_search},
+    components::{BookGrid, BookGridContext, SelectionActionBar, ShelfBar, filter_books_by_search},
     routes::{
         book_detail_page::ReadingStateDto,
         shelf_page::{ShelfSummary, list_all_accessible_shelves},
@@ -240,6 +240,7 @@ pub(crate) fn BooksPage() -> Element {
                 let filtered_books = filter_books_by_search(books, &query);
                 let filtered_reading = filter_books_by_search(currently_reading, &query);
                 let has_search = !query.trim().is_empty();
+                let book_tokens: Vec<String> = filtered_books.iter().map(|b| b.token.clone()).collect();
                 rsx! {
                     div { class: "flex-1 flex flex-col overflow-hidden",
                         ShelfBar {
@@ -261,6 +262,7 @@ pub(crate) fn BooksPage() -> Element {
                             }
                         }
                     }
+                    SelectionActionBar { all_book_tokens: book_tokens }
                 }
             },
         }

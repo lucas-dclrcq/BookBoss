@@ -71,6 +71,9 @@ fn BookCard(book: BookSummary) -> Element {
     let mut show_confirm = use_signal(|| false);
     let mut deleting = use_signal(|| false);
 
+    let in_selection_mode = super::selection::SELECTION_MODE();
+    let selected = super::selection::is_selected(&book.token);
+
     let series_line = match (&book.series_name, &book.series_number) {
         (Some(name), Some(num)) => Some(format!("{name} #{num}")),
         (Some(name), None) => Some(name.clone()),
@@ -85,7 +88,7 @@ fn BookCard(book: BookSummary) -> Element {
         _ => (None, None),
     };
 
-    let is_dragging = dragged_token().as_deref() == Some(book.token.as_str());
+    let is_dragging = !in_selection_mode && dragged_token().as_deref() == Some(book.token.as_str());
 
     // Whether the × button triggers a delete-with-confirm or a plain remove.
     let is_library_delete = matches!(ctx, BookGridContext::AllBooks { can_delete: true });
@@ -108,7 +111,7 @@ fn BookCard(book: BookSummary) -> Element {
         _ => None,
     };
 
-    let show_x = is_library_delete || remove_action.is_some();
+    let show_x = !in_selection_mode && (is_library_delete || remove_action.is_some());
 
     rsx! {
         // Delete confirmation modal (library delete only)
@@ -155,16 +158,35 @@ fn BookCard(book: BookSummary) -> Element {
         }
 
         div {
-            class: if is_dragging { "flex flex-col opacity-50" } else { "flex flex-col" },
-            draggable: true,
+            class: if is_dragging {
+                "flex flex-col opacity-50"
+            } else if in_selection_mode && selected {
+                "flex flex-col ring-2 ring-indigo-500 rounded"
+            } else {
+                "flex flex-col"
+            },
+            draggable: !in_selection_mode,
             ondragstart: {
                 let tok = book.token.clone();
-                move |_| *dragged_token.write() = Some(tok.clone())
+                move |_| {
+                    if !in_selection_mode {
+                        *dragged_token.write() = Some(tok.clone());
+                    }
+                }
             },
             ondragend: move |_| *dragged_token.write() = None,
 
             div { class: "relative cursor-pointer",
-                onclick: move |_| { navigator.push(Route::BookDetailPage { token: token.clone() }); },
+                onclick: {
+                    let tok = token.clone();
+                    move |_| {
+                        if in_selection_mode {
+                            super::selection::toggle_selection(&tok);
+                        } else {
+                            navigator.push(Route::BookDetailPage { token: tok.clone() });
+                        }
+                    }
+                },
                 img {
                     src: "/api/v1/covers/{book.token}",
                     alt: "{book.title}",
@@ -206,6 +228,29 @@ fn BookCard(book: BookSummary) -> Element {
                                 div {
                                     class: "absolute bottom-0 left-0 right-0 h-1 bg-black/20 rounded-b overflow-hidden",
                                     div { class: "h-full bg-indigo-400", style: "width: {pct}%" }
+                                }
+                            }
+                        }
+                    }
+                }
+                // Selection checkbox (top-right)
+                if in_selection_mode {
+                    div {
+                        class: if selected {
+                            "absolute top-1 right-1 w-5 h-5 rounded-full bg-indigo-600 flex items-center justify-center"
+                        } else {
+                            "absolute top-1 right-1 w-5 h-5 rounded-full border-2 border-white/80 bg-black/20"
+                        },
+                        if selected {
+                            svg {
+                                class: "w-3 h-3 text-white",
+                                xmlns: "http://www.w3.org/2000/svg",
+                                view_box: "0 0 20 20",
+                                fill: "currentColor",
+                                path {
+                                    fill_rule: "evenodd",
+                                    d: "M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z",
+                                    clip_rule: "evenodd",
                                 }
                             }
                         }

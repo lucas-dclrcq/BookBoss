@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 
 use crate::{
     Route,
-    components::{BookFilter, DraggedBookToken, FilterBuilder, FilterEntityOptions, SortControl, default_book_filter, filter_to_summary},
+    components::{BookFilter, DraggedBookToken, FilterBuilder, FilterEntityOptions, SelectionToggle, SortControl, default_book_filter, filter_to_summary},
     routes::shelf_page::{ShelfSummary, add_book_to_shelf, create_shelf, create_smart_shelf, get_filter_entity_options},
 };
 
@@ -232,6 +232,7 @@ pub(crate) fn ShelfBar(
 
             // Sort control + Edit/Delete — pushed to far right
             div { class: "flex items-center gap-2 shrink-0 ml-auto",
+                SelectionToggle {}
                 SortControl {}
                 if current_is_own {
                     button {

@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     Route,
     components::{
-        BookFilter, BookGrid, BookGridContext, FilterBuilder, FilterEntityOptions, SORT_ORDER, ShelfBar, default_book_filter, filter_books_by_search,
-        sort_books_client_side,
+        BookFilter, BookGrid, BookGridContext, FilterBuilder, FilterEntityOptions, SORT_ORDER, SelectionActionBar, ShelfBar, default_book_filter,
+        filter_books_by_search, sort_books_client_side,
     },
     routes::books_page::BookSummary,
 };
@@ -567,6 +567,7 @@ pub(crate) fn ShelfPage(token: String) -> Element {
     let all_books = filter_books_by_search(sorted, &query);
     let has_search = !query.trim().is_empty();
     let has_more = next_offset().is_some();
+    let book_tokens: Vec<String> = all_books.iter().map(|b| b.token.clone()).collect();
 
     rsx! {
         div { class: "flex-1 flex flex-col overflow-hidden",
@@ -812,6 +813,8 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                 }
             }
         }
+
+        SelectionActionBar { all_book_tokens: book_tokens }
 
         // Delete shelf modal
         if show_delete() {

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     Route,
-    components::{BookGrid, BookGridContext, filter_books_by_search},
+    components::{BookGrid, BookGridContext, SelectionActionBar, SelectionToggle, filter_books_by_search},
     routes::books_page::BookSummary,
 };
 
@@ -86,6 +86,7 @@ pub(crate) fn SeriesDetailPage(token: String) -> Element {
                     let query = crate::components::SEARCH_TEXT();
                     let filtered_books = filter_books_by_search(series.books, &query);
                     let has_search = !query.trim().is_empty();
+                    let book_tokens: Vec<String> = filtered_books.iter().map(|b| b.token.clone()).collect();
                     rsx! {
                         Link {
                             to: Route::BooksPage {},
@@ -102,8 +103,11 @@ pub(crate) fn SeriesDetailPage(token: String) -> Element {
                         if filtered_books.is_empty() && has_search {
                             p { class: "text-gray-400 text-sm mt-4", "No books match your search." }
                         } else if !filtered_books.is_empty() {
-                            h2 { class: "text-xs font-semibold uppercase tracking-wider text-gray-500 mb-4",
-                                "Books"
+                            div { class: "flex items-center gap-2 mb-4",
+                                h2 { class: "text-xs font-semibold uppercase tracking-wider text-gray-500",
+                                    "Books"
+                                }
+                                SelectionToggle {}
                             }
                             BookGrid {
                                 books: filtered_books,
@@ -114,6 +118,7 @@ pub(crate) fn SeriesDetailPage(token: String) -> Element {
                                 on_action: |()| {},
                             }
                         }
+                        SelectionActionBar { all_book_tokens: book_tokens }
                     }
                 },
             }
