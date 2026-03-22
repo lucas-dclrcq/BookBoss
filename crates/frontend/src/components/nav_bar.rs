@@ -47,11 +47,11 @@ async fn get_pending_count() -> Result<Option<u32>, ServerFnError> {
     Ok(Some(count))
 }
 
-#[get("/api/v1/conversions/pending_count", core_services: axum::Extension<Arc<CoreServices>>)]
-async fn get_conversion_pending_count() -> Result<u32, ServerFnError> {
+#[get("/api/v1/jobs/queue_count", core_services: axum::Extension<Arc<CoreServices>>)]
+async fn get_job_queue_count() -> Result<u64, ServerFnError> {
     core_services
-        .conversion_service
-        .count_pending()
+        .job_service
+        .count_all_pending()
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))
 }
@@ -170,17 +170,17 @@ fn IncomingBadge() -> Element {
     }
 }
 
-/// Shows a subtle count badge when EPUB enrichment jobs are in flight.
+/// Shows a subtle count badge when background jobs are in flight.
 /// Hidden when the count is zero. Uses the same SuspenseBoundary pattern
 /// as `IncomingBadge`.
 #[component]
-fn ConversionBadge() -> Element {
+fn JobQueueBadge() -> Element {
     let jobs_refresh = use_context::<JobsRefresh>();
     let pending_count = use_server_future(move || {
         let _rev = (jobs_refresh.0)();
-        get_conversion_pending_count()
+        get_job_queue_count()
     })?;
-    let count = pending_count().and_then(|r: Result<u32, ServerFnError>| r.ok()).unwrap_or(0);
+    let count = pending_count().and_then(|r: Result<u64, ServerFnError>| r.ok()).unwrap_or(0);
 
     if count == 0 {
         return rsx! {};
@@ -383,7 +383,7 @@ pub(crate) fn NavBar() -> Element {
                 }
                 SuspenseBoundary {
                     fallback: |_| rsx! {},
-                    ConversionBadge {}
+                    JobQueueBadge {}
                 }
             }
             div { class: "flex-1 flex justify-center",

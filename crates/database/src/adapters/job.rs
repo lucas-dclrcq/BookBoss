@@ -208,6 +208,16 @@ impl JobRepository for JobRepositoryAdapter {
         Ok(count)
     }
 
+    async fn count_all_pending(&self, transaction: &dyn Transaction) -> Result<u64, Error> {
+        let db_tx = TransactionImpl::get_db_transaction(transaction)?;
+        let count = prelude::Jobs::find()
+            .filter(jobs::Column::Status.is_in(["pending", "running"]))
+            .count(db_tx)
+            .await
+            .map_err(handle_dberr)?;
+        Ok(count)
+    }
+
     async fn reset_running_to_pending(&self, transaction: &dyn Transaction) -> Result<u64, Error> {
         let db_tx = TransactionImpl::get_db_transaction(transaction)?;
         let now = Utc::now();
@@ -386,6 +396,29 @@ mod tests {
         // Both should be claimable again.
         let reclaimed = svc.job_repository().claim_next(&*tx).await.unwrap();
         assert!(reclaimed.is_some());
+    }
+
+    // ─── delete_old_jobs ──────────────────────────────────────────────────────
+
+    // ─── count_all_pending ──────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_count_all_pending_counts_pending_and_running() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        // Pending job.
+        svc.job_repository().enqueue_raw(&*tx, "job_a", serde_json::json!({}), 0).await.unwrap();
+        // Running job (claim it).
+        svc.job_repository().enqueue_raw(&*tx, "job_b", serde_json::json!({}), 0).await.unwrap();
+        svc.job_repository().claim_next(&*tx).await.unwrap().unwrap();
+        // Completed job.
+        svc.job_repository().enqueue_raw(&*tx, "job_c", serde_json::json!({}), 0).await.unwrap();
+        let claimed = svc.job_repository().claim_next(&*tx).await.unwrap().unwrap();
+        svc.job_repository().complete(&*tx, claimed).await.unwrap();
+
+        let count = svc.job_repository().count_all_pending(&*tx).await.unwrap();
+        assert_eq!(count, 2); // pending + running, not completed
     }
 
     // ─── delete_old_jobs ──────────────────────────────────────────────────────

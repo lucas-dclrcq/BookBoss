@@ -15,6 +15,7 @@ use crate::{
 /// to manage their own `Repository` or `Transaction` references.
 #[async_trait::async_trait]
 #[cfg_attr(any(test, feature = "test-support"), mockall::automock)]
+#[allow(unused_lifetimes, reason = "async_trait + mockall expansion emits a spurious 'life0 parameter")]
 pub trait JobService: Send + Sync {
     /// Enqueue a raw job by type string and pre-serialised JSON payload.
     ///
@@ -23,6 +24,10 @@ pub trait JobService: Send + Sync {
 
     /// Count jobs of the given type that are currently pending or running.
     async fn count_pending_by_type(&self, job_type: &str) -> Result<u64, Error>;
+
+    /// Count all jobs that are currently pending or running, regardless of
+    /// type.
+    async fn count_all_pending(&self) -> Result<u64, Error>;
 }
 
 /// Extension methods on [`JobService`] for typed enqueueing.
@@ -78,6 +83,15 @@ impl JobService for JobServiceImpl {
         })
         .await
     }
+
+    async fn count_all_pending(&self) -> Result<u64, Error> {
+        let job_repo = self.repository_service.job_repository().clone();
+        read_only_transaction(&**self.repository_service.repository(), |tx| {
+            let job_repo = job_repo.clone();
+            Box::pin(async move { job_repo.count_all_pending(tx).await })
+        })
+        .await
+    }
 }
 
 /// Creates a `JobService` backed by the given `RepositoryService`.
@@ -126,5 +140,16 @@ mod tests {
         let result = svc.count_pending_by_type("enrich_epub").await;
 
         assert!(matches!(result, Err(Error::RepositoryError(_))));
+    }
+
+    #[tokio::test]
+    async fn test_count_all_pending_delegates_to_repo() {
+        let mut mock = MockJobRepository::new();
+        mock.expect_count_all_pending().returning(|_| Box::pin(async { Ok(12) }));
+        let svc = create_service(mock);
+
+        let result = svc.count_all_pending().await;
+
+        assert_eq!(result.unwrap(), 12);
     }
 }

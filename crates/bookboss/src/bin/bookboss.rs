@@ -173,7 +173,7 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     let repository_service = create_repository_service(database).await.context("Couldn't create database connection")?;
     let library_store = Arc::new(bb_storage::LocalLibraryStore::new(config.library.library_path.clone()));
     let job_service = create_job_service(repository_service.clone());
-    let conversion_service = Arc::new(ConversionServiceImpl::new(job_service));
+    let conversion_service = Arc::new(ConversionServiceImpl::new(job_service.clone()));
     let event_service = bb_core::event::create_event_service(64);
 
     let pipeline_service = Arc::new(PipelineServiceImpl::new(
@@ -196,6 +196,7 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
         .library_store(library_store)
         .pipeline_service(pipeline_service)
         .conversion_service(conversion_service)
+        .job_service(job_service)
         .import_scanner(Arc::new(scan_trigger.clone()))
         .event_service(event_service.clone())
         .build()
@@ -240,6 +241,7 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
         health_task_state.clone(),
         repository_service.repository().clone(),
         repository_service.job_repository().clone(),
+        event_service.clone(),
     );
 
     let api_subsystem = create_api_subsystem(&config.api, core_services.clone());

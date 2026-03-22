@@ -28,6 +28,10 @@ pub trait JobRepository: Send + Sync {
     /// Count jobs of the given type that are currently pending or running.
     async fn count_pending_by_type(&self, transaction: &dyn Transaction, job_type: &str) -> Result<u64, Error>;
 
+    /// Count all jobs that are currently pending or running, regardless of
+    /// type.
+    async fn count_all_pending(&self, transaction: &dyn Transaction) -> Result<u64, Error>;
+
     /// Delete completed or failed jobs older than the given cutoff.
     /// Returns the number of jobs deleted.
     async fn delete_old_jobs(&self, transaction: &dyn Transaction, cutoff: DateTime<Utc>) -> Result<u64, Error>;

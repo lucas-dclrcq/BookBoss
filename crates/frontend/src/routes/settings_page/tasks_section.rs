@@ -79,9 +79,11 @@ pub(crate) async fn trigger_health_task(job_type: String) -> Result<(), ServerFn
 #[component]
 pub(crate) fn TasksSection() -> Element {
     let mut refresh = use_signal(|| 0u32);
+    let jobs_refresh = use_context::<crate::components::JobsRefresh>();
 
     let tasks_resource = use_resource(move || async move {
-        let _ = refresh(); // subscribe
+        let _ = refresh(); // subscribe — local (Run Now button)
+        let _ = (jobs_refresh.0)(); // subscribe — SSE (job completed)
         list_health_tasks().await
     });
 

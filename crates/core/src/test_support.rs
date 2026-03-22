@@ -86,6 +86,7 @@ pub fn default_external_services_builder() -> ExternalServicesBuilder {
         .library_store(nop_library_store())
         .pipeline_service(nop_pipeline_service())
         .conversion_service(nop_conversion_service())
+        .job_service(nop_job_service())
         .import_scanner(nop_import_scanner())
         .event_service(nop_event_service())
 }

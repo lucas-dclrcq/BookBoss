@@ -4,6 +4,7 @@ use tokio_graceful_shutdown::{IntoSubsystem, SubsystemHandle};
 
 use crate::{
     Error,
+    event::EventService,
     health::HealthTaskState,
     jobs::JobRepository,
     repository::{Repository, transaction},
@@ -15,12 +16,18 @@ pub struct HealthCheckSubsystem {
     state: Arc<HealthTaskState>,
     repository: Arc<dyn Repository>,
     job_repo: Arc<dyn JobRepository>,
+    event_service: Arc<dyn EventService>,
 }
 
 impl HealthCheckSubsystem {
     #[must_use]
-    pub fn new(state: Arc<HealthTaskState>, repository: Arc<dyn Repository>, job_repo: Arc<dyn JobRepository>) -> Self {
-        Self { state, repository, job_repo }
+    pub fn new(state: Arc<HealthTaskState>, repository: Arc<dyn Repository>, job_repo: Arc<dyn JobRepository>, event_service: Arc<dyn EventService>) -> Self {
+        Self {
+            state,
+            repository,
+            job_repo,
+            event_service,
+        }
     }
 
     /// Enqueue a health check job for the given `job_type`.
@@ -53,6 +60,7 @@ impl HealthCheckSubsystem {
         .await?;
 
         tracing::info!(job_type, "enqueued health check task");
+        self.event_service.notify_jobs_changed();
         Ok(())
     }
 }
@@ -98,6 +106,11 @@ impl IntoSubsystem<Error> for HealthCheckSubsystem {
 }
 
 #[must_use]
-pub fn create_health_subsystem(state: Arc<HealthTaskState>, repository: Arc<dyn Repository>, job_repo: Arc<dyn JobRepository>) -> HealthCheckSubsystem {
-    HealthCheckSubsystem::new(state, repository, job_repo)
+pub fn create_health_subsystem(
+    state: Arc<HealthTaskState>,
+    repository: Arc<dyn Repository>,
+    job_repo: Arc<dyn JobRepository>,
+    event_service: Arc<dyn EventService>,
+) -> HealthCheckSubsystem {
+    HealthCheckSubsystem::new(state, repository, job_repo, event_service)
 }
