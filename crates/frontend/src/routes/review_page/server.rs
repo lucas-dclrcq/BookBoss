@@ -274,6 +274,7 @@ pub(super) async fn fetch_provider_metadata(
     job_token: String,
     provider_name: String,
     title: String,
+    authors: Vec<String>,
     identifiers: IdentifierMap,
 ) -> Result<Option<ProviderResult>, ServerFnError> {
     let current_user = auth_session.current_user.clone().unwrap_or_default();
@@ -297,7 +298,7 @@ pub(super) async fn fetch_provider_metadata(
     let title = if title.is_empty() { None } else { Some(title) };
     let result = core_services
         .pipeline_service
-        .fetch_from_provider(&provider_name, title, parsed_identifiers, &token.to_string(), &temp_dir)
+        .fetch_from_provider(&provider_name, title, authors, parsed_identifiers, &token.to_string(), &temp_dir)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
@@ -528,6 +529,7 @@ pub(super) async fn fetch_provider_for_edit(
     book_token: String,
     provider_name: String,
     title: String,
+    authors: Vec<String>,
     identifiers: IdentifierMap,
 ) -> Result<Option<ProviderResult>, ServerFnError> {
     let current_user = auth_session.current_user.clone().unwrap_or_default();
@@ -550,7 +552,7 @@ pub(super) async fn fetch_provider_for_edit(
     let title = if title.is_empty() { None } else { Some(title) };
     let result = core_services
         .pipeline_service
-        .fetch_from_provider(&provider_name, title, parsed_identifiers, &book_token, &temp_dir)
+        .fetch_from_provider(&provider_name, title, authors, parsed_identifiers, &book_token, &temp_dir)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 

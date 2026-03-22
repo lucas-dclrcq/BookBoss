@@ -12,7 +12,7 @@ use crate::{
     import::{ImportJob, ImportJobToken, ImportSource, ImportStatus},
     pipeline::{
         MetadataExtractor, MetadataProvider, ProviderBook,
-        model::{BookEdit, ExtractedIdentifier, ExtractedMetadata},
+        model::{BookEdit, ExtractedAuthor, ExtractedIdentifier, ExtractedMetadata},
     },
     repository::{RepositoryService, read_only_transaction, transaction},
     storage::{BookSidecar, LibraryStore, SidecarAuthor, SidecarFile, SidecarIdentifier, SidecarSeries},
@@ -52,6 +52,7 @@ pub trait PipelineService: Send + Sync {
         &self,
         provider_name: &str,
         title: Option<String>,
+        authors: Vec<String>,
         identifiers: Vec<(IdentifierType, String)>,
         cover_key: &str,
         temp_dir: &std::path::Path,
@@ -654,11 +655,12 @@ impl PipelineService for PipelineServiceImpl {
         self.providers.iter().map(|p| p.name()).collect()
     }
 
-    #[tracing::instrument(level = "trace", skip(self, identifiers, temp_dir), fields(coverKey = cover_key, provider = provider_name))]
+    #[tracing::instrument(level = "trace", skip(self, authors, identifiers, temp_dir), fields(coverKey = cover_key, provider = provider_name))]
     async fn fetch_from_provider(
         &self,
         provider_name: &str,
         title: Option<String>,
+        authors: Vec<String>,
         identifiers: Vec<(IdentifierType, String)>,
         cover_key: &str,
         temp_dir: &std::path::Path,
@@ -672,6 +674,21 @@ impl PipelineService for PipelineServiceImpl {
 
         let extracted = ExtractedMetadata {
             title,
+            authors: if authors.is_empty() {
+                None
+            } else {
+                Some(
+                    authors
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, name)| ExtractedAuthor {
+                            name,
+                            role: None,
+                            sort_order: i as i32,
+                        })
+                        .collect(),
+                )
+            },
             identifiers: if identifiers.is_empty() {
                 None
             } else {

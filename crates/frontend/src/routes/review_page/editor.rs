@@ -231,12 +231,14 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                                         error_msg.set(None);
                                                         let current_ids = identifiers.read().clone();
                                                         let current_title = title.read().clone();
+                                                        let current_authors = authors.read().clone();
                                                         spawn(async move {
                                                             let result = if edit_mode {
                                                                 fetch_provider_for_edit(
                                                                     ck,
                                                                     pname.clone(),
                                                                     current_title,
+                                                                    current_authors,
                                                                     current_ids,
                                                                 )
                                                                 .await
@@ -245,6 +247,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                                                     ck,
                                                                     pname.clone(),
                                                                     current_title,
+                                                                    current_authors,
                                                                     current_ids,
                                                                 )
                                                                 .await
