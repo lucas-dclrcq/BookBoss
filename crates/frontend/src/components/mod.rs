@@ -11,7 +11,7 @@ mod selection;
 mod shelf_bar;
 mod sort_control;
 
-pub(crate) use app_layout::{AppLayout, IncomingRefresh, JobsRefresh};
+pub(crate) use app_layout::{AppLayout, IncomingRefresh, JobsRefresh, SystemMessagesRefresh};
 pub(crate) use autocomplete_input::AutocompleteInput;
 pub(crate) use book_grid::{BookGrid, BookGridContext, DraggedBookToken};
 pub(crate) use chip_input::ChipInput;

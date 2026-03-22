@@ -106,7 +106,7 @@ impl CoreServices {
             reading_service: Arc::new(ReadingServiceImpl::new(repository_service.clone())),
             device_service: Arc::new(DeviceServiceImpl::new(repository_service.clone())),
             opds_service: Arc::new(OpdsServiceImpl::new(repository_service.clone(), encryption_secret)),
-            system_message_service: Arc::new(SystemMessageServiceImpl::new(repository_service)),
+            system_message_service: Arc::new(SystemMessageServiceImpl::new(repository_service, event_service.clone())),
             event_service,
         }
     }

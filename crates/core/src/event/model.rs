@@ -9,4 +9,6 @@ pub enum AppEvent {
     /// A background job (enrich_epub / convert_kepub) was queued, completed,
     /// or failed.
     JobsChanged,
+    /// A system message was added, deleted, or cleared.
+    SystemMessagesChanged,
 }

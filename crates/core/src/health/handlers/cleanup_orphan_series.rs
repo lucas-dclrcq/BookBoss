@@ -141,7 +141,7 @@ mod tests {
                 .unwrap(),
         );
 
-        let sms = crate::message::SystemMessageServiceImpl::new(repo_service.clone());
+        let sms = crate::message::SystemMessageServiceImpl::new(repo_service.clone(), crate::test_support::nop_event_service());
         let handler = CleanupOrphanSeriesHandler::new(repo_service, Arc::new(sms));
         handler.handle(serde_json::json!({})).await.unwrap();
     }
@@ -166,7 +166,7 @@ mod tests {
 
         let repo_service = Arc::new(default_repository_service_builder().series_repository(Arc::new(series_repo)).build().unwrap());
 
-        let sms = crate::message::SystemMessageServiceImpl::new(repo_service.clone());
+        let sms = crate::message::SystemMessageServiceImpl::new(repo_service.clone(), crate::test_support::nop_event_service());
         let handler = CleanupOrphanSeriesHandler::new(repo_service, Arc::new(sms));
         handler.handle(serde_json::json!({})).await.unwrap();
     }

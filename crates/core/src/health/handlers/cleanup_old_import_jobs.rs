@@ -92,7 +92,7 @@ mod tests {
                 .unwrap(),
         );
 
-        let sms = crate::message::SystemMessageServiceImpl::new(repo_service.clone());
+        let sms = crate::message::SystemMessageServiceImpl::new(repo_service.clone(), crate::test_support::nop_event_service());
         let handler = CleanupOldImportJobsHandler::new(repo_service, Arc::new(sms));
         handler.handle(serde_json::json!({})).await.unwrap();
     }
@@ -112,7 +112,7 @@ mod tests {
                 .unwrap(),
         );
 
-        let sms = crate::message::SystemMessageServiceImpl::new(repo_service.clone());
+        let sms = crate::message::SystemMessageServiceImpl::new(repo_service.clone(), crate::test_support::nop_event_service());
         let handler = CleanupOldImportJobsHandler::new(repo_service, Arc::new(sms));
         handler.handle(serde_json::json!({})).await.unwrap();
     }

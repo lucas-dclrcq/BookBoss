@@ -20,6 +20,10 @@ pub(crate) struct IncomingRefresh(pub Signal<u32>);
 #[derive(Clone, Copy)]
 pub(crate) struct JobsRefresh(pub Signal<u32>);
 
+/// Newtype wrapper for the system-messages refresh signal.
+#[derive(Clone, Copy)]
+pub(crate) struct SystemMessagesRefresh(pub Signal<u32>);
+
 #[get("/api/v1/check_auth", auth_session: axum::Extension<AuthSession>)]
 async fn check_auth() -> Result<bool, ServerFnError> {
     Ok(auth_session.current_user.as_ref().is_some_and(|u| !u.username.is_empty()))
@@ -29,6 +33,7 @@ async fn check_auth() -> Result<bool, ServerFnError> {
 pub(crate) fn AppLayout() -> Element {
     let mut incoming_refresh = use_context_provider(|| IncomingRefresh(Signal::new(0u32)));
     let mut jobs_refresh = use_context_provider(|| JobsRefresh(Signal::new(0u32)));
+    let mut messages_refresh = use_context_provider(|| SystemMessagesRefresh(Signal::new(0u32)));
 
     // Connect to the SSE event stream so the UI updates in real time when the
     // backend processes imports or background jobs.
@@ -39,6 +44,7 @@ pub(crate) fn AppLayout() -> Element {
                 const es = new EventSource('/api/v1/events');
                 es.addEventListener('incoming_changed', () => dioxus.send('incoming_changed'));
                 es.addEventListener('jobs_changed', () => dioxus.send('jobs_changed'));
+                es.addEventListener('system_messages_changed', () => dioxus.send('system_messages_changed'));
                 // Keep the eval alive indefinitely — EventSource auto-reconnects.
                 await new Promise(() => {});
                 ",
@@ -48,6 +54,7 @@ pub(crate) fn AppLayout() -> Element {
                 match msg.as_str() {
                     "incoming_changed" => *incoming_refresh.0.write() += 1,
                     "jobs_changed" => *jobs_refresh.0.write() += 1,
+                    "system_messages_changed" => *messages_refresh.0.write() += 1,
                     _ => {}
                 }
             }

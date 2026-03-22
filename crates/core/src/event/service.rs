@@ -14,6 +14,9 @@ pub trait EventService: Send + Sync {
     /// A background job was queued, completed, or failed.
     fn notify_jobs_changed(&self);
 
+    /// A system message was added, deleted, or cleared.
+    fn notify_system_messages_changed(&self);
+
     /// Subscribe to the event stream. Each subscriber gets its own receiver.
     fn subscribe(&self) -> broadcast::Receiver<AppEvent>;
 }
@@ -38,6 +41,11 @@ impl EventService for EventServiceImpl {
     fn notify_jobs_changed(&self) {
         tracing::debug!("broadcasting JobsChanged event");
         let _ = self.sender.send(AppEvent::JobsChanged);
+    }
+
+    fn notify_system_messages_changed(&self) {
+        tracing::debug!("broadcasting SystemMessagesChanged event");
+        let _ = self.sender.send(AppEvent::SystemMessagesChanged);
     }
 
     fn subscribe(&self) -> broadcast::Receiver<AppEvent> {

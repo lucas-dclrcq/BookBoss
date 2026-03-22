@@ -57,6 +57,7 @@ fn debounced_event_stream(rx: tokio::sync::broadcast::Receiver<AppEvent>) -> imp
 
             let mut has_incoming = matches!(first, AppEvent::IncomingChanged);
             let mut has_jobs = matches!(first, AppEvent::JobsChanged);
+            let mut has_messages = matches!(first, AppEvent::SystemMessagesChanged);
 
             // Collect any further events that arrive within the debounce window.
             let deadline = tokio::time::Instant::now() + DEBOUNCE;
@@ -66,6 +67,7 @@ fn debounced_event_stream(rx: tokio::sync::broadcast::Receiver<AppEvent>) -> imp
                         match maybe {
                             Some(Ok(AppEvent::IncomingChanged)) => has_incoming = true,
                             Some(Ok(AppEvent::JobsChanged)) => has_jobs = true,
+                            Some(Ok(AppEvent::SystemMessagesChanged)) => has_messages = true,
                             Some(Err(_)) => {} // lagged
                             None => {
                                 // Channel closed — emit whatever we have, then return.
@@ -74,6 +76,9 @@ fn debounced_event_stream(rx: tokio::sync::broadcast::Receiver<AppEvent>) -> imp
                                 }
                                 if has_jobs {
                                     yield Ok(Event::default().event("jobs_changed").data("updated"));
+                                }
+                                if has_messages {
+                                    yield Ok(Event::default().event("system_messages_changed").data("updated"));
                                 }
                                 return;
                             }
@@ -88,6 +93,9 @@ fn debounced_event_stream(rx: tokio::sync::broadcast::Receiver<AppEvent>) -> imp
             }
             if has_jobs {
                 yield Ok(Event::default().event("jobs_changed").data("updated"));
+            }
+            if has_messages {
+                yield Ok(Event::default().event("system_messages_changed").data("updated"));
             }
         }
     }

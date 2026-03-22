@@ -190,7 +190,7 @@ mod tests {
                 .unwrap(),
         );
 
-        let sms = crate::message::SystemMessageServiceImpl::new(repo_service.clone());
+        let sms = crate::message::SystemMessageServiceImpl::new(repo_service.clone(), crate::test_support::nop_event_service());
         let handler = RecoverEnrichmentsHandler::new(repo_service, Arc::new(sms));
         handler.handle(serde_json::json!({})).await.unwrap();
     }
@@ -209,7 +209,7 @@ mod tests {
 
         let repo_service = Arc::new(default_repository_service_builder().book_repository(Arc::new(book_repo)).build().unwrap());
 
-        let sms = crate::message::SystemMessageServiceImpl::new(repo_service.clone());
+        let sms = crate::message::SystemMessageServiceImpl::new(repo_service.clone(), crate::test_support::nop_event_service());
         let handler = RecoverEnrichmentsHandler::new(repo_service, Arc::new(sms));
         handler.handle(serde_json::json!({})).await.unwrap();
     }
