@@ -269,15 +269,7 @@ async fn set_reading_status(token: String, status: String) -> Result<ReadingStat
         .map_err(|e| ServerFnError::new(e.to_string()))?
         .ok_or_else(|| ServerFnError::new("Book not found"))?;
 
-    let new_status = match status.as_str() {
-        "Unread" => ReadStatus::Unread,
-        "Reading" => ReadStatus::Reading,
-        "Paused" => ReadStatus::Paused,
-        "Rereading" => ReadStatus::Rereading,
-        "Read" => ReadStatus::Read,
-        "Abandoned" => ReadStatus::Abandoned,
-        _ => return Err(ServerFnError::new("Invalid status")),
-    };
+    let new_status: ReadStatus = status.parse().map_err(|e: String| ServerFnError::new(e))?;
 
     let meta = core_services
         .reading_service

@@ -262,7 +262,10 @@ pub(crate) fn BooksPage() -> Element {
                             }
                         }
                     }
-                    SelectionActionBar { all_book_tokens: book_tokens }
+                    SelectionActionBar {
+                        all_book_tokens: book_tokens,
+                        on_action: move |()| page_data.restart(),
+                    }
                 }
             },
         }

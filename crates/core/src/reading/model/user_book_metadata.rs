@@ -1,3 +1,5 @@
+use std::{fmt, str::FromStr};
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -11,6 +13,35 @@ pub enum ReadStatus {
     Rereading,
     Read,
     Abandoned,
+}
+
+impl fmt::Display for ReadStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Unread => write!(f, "Unread"),
+            Self::Reading => write!(f, "Reading"),
+            Self::Paused => write!(f, "Paused"),
+            Self::Rereading => write!(f, "Rereading"),
+            Self::Read => write!(f, "Read"),
+            Self::Abandoned => write!(f, "Abandoned"),
+        }
+    }
+}
+
+impl FromStr for ReadStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Unread" => Ok(Self::Unread),
+            "Reading" => Ok(Self::Reading),
+            "Paused" => Ok(Self::Paused),
+            "Rereading" => Ok(Self::Rereading),
+            "Read" => Ok(Self::Read),
+            "Abandoned" => Ok(Self::Abandoned),
+            _ => Err(format!("Invalid ReadStatus: {s}")),
+        }
+    }
 }
 
 /// Per-user reading state for a single book.
