@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0](https://github.com/szinn/BookBoss/compare/v0.5.3..v0.6.0) - 2026-03-22
+
+### Features
+
+- _(core)_ SSE event plumbing for system messages - ([a147e65](https://github.com/szinn/BookBoss/commit/a147e656f0e8f35534a395ce37115985b377bbb4))
+- _(core)_ Health check subsystem and bookboss wiring - ([03278d1](https://github.com/szinn/BookBoss/commit/03278d1c023cf7f85f513a2cb1d7a0e217e6066f))
+- _(core)_ Health check job handlers - ([727255c](https://github.com/szinn/BookBoss/commit/727255c908ec3f390e80ab34b1a858c7fdcd3caf))
+- _(core)_ New repository methods for health check tasks - ([4f13844](https://github.com/szinn/BookBoss/commit/4f1384464d751c887951af57b2315d2c898e5659))
+- _(core)_ Health task registry and scheduling state - ([bbe3d54](https://github.com/szinn/BookBoss/commit/bbe3d5406bc7172a392f45dad4e88ceea152aede))
+- _(core)_ System message domain model, repository, and service - ([e33534d](https://github.com/szinn/BookBoss/commit/e33534d65e93807860fb7c54e7f98d2c0fc0c034))
+- _(database)_ Add created_at to book_files for stale enrichment detection - ([37e0bd5](https://github.com/szinn/BookBoss/commit/37e0bd52a443a8792c4df73c8c8eae37b6c6f33b))
+- _(frontend)_ Add bulk delete action to multi-select action bar - ([b4968be](https://github.com/szinn/BookBoss/commit/b4968be078c68b01d2c68ea6f193821486a8d5f2))
+- _(frontend)_ Navbar badge shows total job queue count, tasks auto-refresh - ([af8a782](https://github.com/szinn/BookBoss/commit/af8a7821b3f438d60bacfef6eb210d5f5f3b9e67))
+- _(frontend)_ Persist settings page section across browser refresh - ([6c1d3cf](https://github.com/szinn/BookBoss/commit/6c1d3cffe1d9dbebe9d796bdcd75bf19ecd30188))
+- _(frontend)_ Improve timestamps in settings tasks and messages - ([f469ddb](https://github.com/szinn/BookBoss/commit/f469ddbaf5decfe0d2d0ffe209e4c16614b29e81))
+- _(frontend)_ Tasks and messages sections in settings page - ([4df0332](https://github.com/szinn/BookBoss/commit/4df0332cb145d4c15e2319596e593c411a9348c0))
+
+### Bug Fixes
+
+- _(core)_ Pass authors to fetch_from_provider for title search scoring - ([42fa4e6](https://github.com/szinn/BookBoss/commit/42fa4e6a42af034c9562f4480d816cb2e426c2e1))
+- _(database)_ Filter enrichment recovery queries to Available books only - ([1e36bb3](https://github.com/szinn/BookBoss/commit/1e36bb334fab920eedc83fe541b8cb6732aa848d))
+- _(frontend)_ Guard SSE EventSource against duplicate connections - ([c2d11ed](https://github.com/szinn/BookBoss/commit/c2d11ed6613e29cc9186a6cb261e9f6af4da716d))
+- _(frontend)_ Trigger_health_task enqueues job directly instead of waiting for poll - ([c85f88b](https://github.com/szinn/BookBoss/commit/c85f88b98668cdf21adb38dc0ac9463897c67c04))
+- _(frontend)_ AutocompleteInput commits single keystrokes as values - ([e9a1ff7](https://github.com/szinn/BookBoss/commit/e9a1ff7e67591d18024b0b411c4fda512df047b6))
+
+### Documentation
+
+- Update README and mdBook docs to reflect current project state - ([ecfde4d](https://github.com/szinn/BookBoss/commit/ecfde4d164d7cfeb395447103d8a85e871529840))
+
+### Stying
+
+- _(frontend)_ Center-align task list columns - ([b2963a9](https://github.com/szinn/BookBoss/commit/b2963a94b0aa7d50b83d104de49f650bbe38681c))
+
+### Miscellaneous Tasks
+
+- _(core)_ Polish health check wiring and remove dead code - ([764092d](https://github.com/szinn/BookBoss/commit/764092dad0a361360db4ce68c79f8ed0e05e97df))
+
 ## [0.5.3](https://github.com/szinn/BookBoss/compare/v0.5.2..v0.5.3) - 2026-03-22
 
 ### Features
