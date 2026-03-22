@@ -147,7 +147,7 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     use bb_core::{
         ExternalServicesBuilder, create_core_subsystem, create_services,
         health::{
-            HealthTaskState, create_health_subsystem, default_health_tasks,
+            HealthTaskState, create_health_subsystem, create_health_trigger, default_health_tasks,
             handlers::{
                 cleanup_old_import_jobs::CleanupOldImportJobsHandler, cleanup_old_jobs::CleanupOldJobsHandler,
                 cleanup_old_system_messages::CleanupOldSystemMessagesHandler, cleanup_orphan_authors::CleanupOrphanAuthorsHandler,
@@ -237,16 +237,18 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     registry.register(ResetStaleImportJobsHandler::new(repository_service.clone(), sms));
 
     let health_task_state = Arc::new(HealthTaskState::new(default_health_tasks()));
+    let (health_trigger, health_trigger_rx) = create_health_trigger();
     let health_subsystem = create_health_subsystem(
         health_task_state.clone(),
         repository_service.repository().clone(),
         repository_service.job_repository().clone(),
         event_service.clone(),
+        health_trigger_rx,
     );
 
     let api_subsystem = create_api_subsystem(&config.api, core_services.clone());
     let core_subsystem = create_core_subsystem(registry, repository_service.clone(), worker_poll_interval, event_service);
-    let frontend_subsystem = create_frontend_subsystem(&config.frontend, core_services.clone(), health_task_state);
+    let frontend_subsystem = create_frontend_subsystem(&config.frontend, core_services.clone(), health_task_state, health_trigger);
 
     span.exit();
 

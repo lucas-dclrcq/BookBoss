@@ -1,5 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
+use tokio::sync::mpsc;
 use tokio_graceful_shutdown::{IntoSubsystem, SubsystemHandle};
 
 use crate::{
@@ -12,24 +13,50 @@ use crate::{
 
 const POLL_INTERVAL: Duration = Duration::from_secs(30);
 
+// ── Trigger channel ──────────────────────────────────────────────────────────
+
+/// Lightweight, cloneable handle that kicks the health subsystem to run a
+/// specific task immediately. Mirrors the `ScanTrigger` pattern from the
+/// import crate.
+#[derive(Clone)]
+pub struct HealthTrigger {
+    tx: mpsc::Sender<String>,
+}
+
+impl HealthTrigger {
+    /// Request that the subsystem enqueue and run the given task now.
+    ///
+    /// Non-blocking: if the channel is full the call is silently dropped —
+    /// the subsystem will pick up the task on its next poll cycle.
+    pub fn kick(&self, job_type: String) {
+        let _ = self.tx.try_send(job_type);
+    }
+}
+
+/// Receiving end of the trigger channel, consumed by `HealthCheckSubsystem`.
+pub struct HealthTriggerReceiver(mpsc::Receiver<String>);
+
+/// Creates a matched `(HealthTrigger, HealthTriggerReceiver)` pair.
+///
+/// Channel capacity is 16 — enough to buffer a burst of "Run Now" clicks
+/// without blocking.
+#[must_use]
+pub fn create_health_trigger() -> (HealthTrigger, HealthTriggerReceiver) {
+    let (tx, rx) = mpsc::channel(16);
+    (HealthTrigger { tx }, HealthTriggerReceiver(rx))
+}
+
+// ── Subsystem ────────────────────────────────────────────────────────────────
+
 pub struct HealthCheckSubsystem {
     state: Arc<HealthTaskState>,
     repository: Arc<dyn Repository>,
     job_repo: Arc<dyn JobRepository>,
     event_service: Arc<dyn EventService>,
+    trigger_rx: HealthTriggerReceiver,
 }
 
 impl HealthCheckSubsystem {
-    #[must_use]
-    pub fn new(state: Arc<HealthTaskState>, repository: Arc<dyn Repository>, job_repo: Arc<dyn JobRepository>, event_service: Arc<dyn EventService>) -> Self {
-        Self {
-            state,
-            repository,
-            job_repo,
-            event_service,
-        }
-    }
-
     /// Enqueue a health check job for the given `job_type`.
     ///
     /// Uses `count_pending_by_type` to avoid duplicate enqueues — if a job of
@@ -63,18 +90,23 @@ impl HealthCheckSubsystem {
         self.event_service.notify_jobs_changed();
         Ok(())
     }
-}
 
-impl IntoSubsystem<Error> for HealthCheckSubsystem {
-    async fn run(self, subsys: &mut SubsystemHandle) -> Result<(), Error> {
-        // Enqueue all due tasks (startup tasks are due immediately).
-        let due = self.state.due_tasks().await;
-        for job_type in &due {
+    /// Enqueue + mark_run for a batch of due tasks.
+    async fn process_due_tasks(&self, due: &[String]) {
+        for job_type in due {
             if let Err(e) = self.enqueue_task(job_type).await {
-                tracing::error!(job_type, error = %e, "failed to enqueue startup health task");
+                tracing::error!(job_type, error = %e, "failed to enqueue health task");
             }
             self.state.mark_run(job_type).await;
         }
+    }
+}
+
+impl IntoSubsystem<Error> for HealthCheckSubsystem {
+    async fn run(mut self, subsys: &mut SubsystemHandle) -> Result<(), Error> {
+        // Enqueue all due tasks (startup tasks are due immediately).
+        let due = self.state.due_tasks().await;
+        self.process_due_tasks(&due).await;
 
         if !due.is_empty() {
             tracing::info!(count = due.len(), "enqueued startup health tasks");
@@ -82,21 +114,22 @@ impl IntoSubsystem<Error> for HealthCheckSubsystem {
 
         tracing::info!("HealthCheckSubsystem started");
 
-        // Poll loop: check for due tasks every POLL_INTERVAL.
+        // Main loop: respond to manual kicks and periodic polls.
         loop {
             tokio::select! {
                 () = subsys.on_shutdown_requested() => {
                     tracing::info!("HealthCheckSubsystem shutting down...");
                     break;
                 }
+                // Manual trigger from "Run Now" button.
+                Some(job_type) = self.trigger_rx.0.recv() => {
+                    self.state.mark_due_now(&job_type).await;
+                    self.process_due_tasks(&[job_type]).await;
+                }
+                // Periodic poll for scheduled tasks.
                 () = tokio::time::sleep(POLL_INTERVAL) => {
                     let due = self.state.due_tasks().await;
-                    for job_type in &due {
-                        if let Err(e) = self.enqueue_task(job_type).await {
-                            tracing::error!(job_type, error = %e, "failed to enqueue health task");
-                        }
-                        self.state.mark_run(job_type).await;
-                    }
+                    self.process_due_tasks(&due).await;
                 }
             }
         }
@@ -111,6 +144,13 @@ pub fn create_health_subsystem(
     repository: Arc<dyn Repository>,
     job_repo: Arc<dyn JobRepository>,
     event_service: Arc<dyn EventService>,
+    trigger_rx: HealthTriggerReceiver,
 ) -> HealthCheckSubsystem {
-    HealthCheckSubsystem::new(state, repository, job_repo, event_service)
+    HealthCheckSubsystem {
+        state,
+        repository,
+        job_repo,
+        event_service,
+        trigger_rx,
+    }
 }

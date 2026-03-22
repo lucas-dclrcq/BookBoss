@@ -2,7 +2,7 @@
 use bb_core::health::HealthTaskState;
 use dioxus::prelude::*;
 #[cfg(feature = "server")]
-use {crate::routes::server_helpers::authenticated_user, crate::server::AuthSession, std::sync::Arc};
+use {crate::routes::server_helpers::authenticated_user, crate::server::AuthSession, bb_core::health::HealthTrigger, std::sync::Arc};
 
 // ---------------------------------------------------------------------------
 // DTO
@@ -52,7 +52,8 @@ pub(crate) async fn list_health_tasks() -> Result<Vec<TaskRow>, ServerFnError> {
 #[post(
     "/api/v1/admin/health/tasks/trigger",
     auth_session: axum::Extension<AuthSession>,
-    health_task_state: axum::Extension<Arc<HealthTaskState>>
+    health_task_state: axum::Extension<Arc<HealthTaskState>>,
+    health_trigger: axum::Extension<HealthTrigger>
 )]
 pub(crate) async fn trigger_health_task(job_type: String) -> Result<(), ServerFnError> {
     let user = authenticated_user(&auth_session)?;
@@ -66,8 +67,10 @@ pub(crate) async fn trigger_health_task(job_type: String) -> Result<(), ServerFn
         return Err(ServerFnError::new("Unknown health task"));
     }
 
-    // Mark the task as due immediately so the subsystem's poll loop picks it up.
-    health_task_state.mark_due_now(&job_type).await;
+    // Kick the health subsystem to enqueue and run the task immediately.
+    // The subsystem handles: mark_due_now → enqueue → mark_run →
+    // notify_jobs_changed.
+    health_trigger.kick(job_type);
 
     Ok(())
 }
