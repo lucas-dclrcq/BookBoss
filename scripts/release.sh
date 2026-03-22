@@ -47,7 +47,7 @@ cargo fetch --quiet
 
 # Set the jj commit description before tagging
 echo "    Setting commit description..."
-jj desc -m "chore(release): Preparing for version $VERSION"
+jj desc -m "chore(release): Preparing release for version $VERSION"
 jj new
 jj tug
 
