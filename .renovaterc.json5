@@ -38,7 +38,8 @@
       matchDatasources: ["docker"],
       addLabels: ["docker"],
       commitMessageTopic: "Docker image {{depName}}",
-      semanticCommitScope: "deps"
+      semanticCommitScope: "deps",
+      automerge: false
     },
     {
       matchUpdateTypes: ["major"],
