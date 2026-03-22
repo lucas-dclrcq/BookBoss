@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2](https://github.com/szinn/BookBoss/compare/v0.5.1..v0.5.2) - 2026-03-22
+
+### Features
+
+- _(core)_ Cover selection from confident providers only - ([f6c9cd7](https://github.com/szinn/BookBoss/commit/f6c9cd759fa411337e7fff86d8961f8a7e7e3437))
+- _(core)_ Parallel provider enrichment with title+author similarity scoring - ([8569422](https://github.com/szinn/BookBoss/commit/85694220b650f618968ae38f3bce6c18c2afd189))
+- _(metadata)_ Open Library title search fallback - ([7c4d9d5](https://github.com/szinn/BookBoss/commit/7c4d9d5cd50660f23e2758d55a4ab9f3e865cc7c))
+- _(metadata)_ Google Books title search fallback + provider priority tiebreaker - ([d312246](https://github.com/szinn/BookBoss/commit/d31224653b81e7105e6f62e6cbdb8245557dc67c))
+- _(metadata)_ Hardcover title search fallback - ([fdf0021](https://github.com/szinn/BookBoss/commit/fdf0021a9a2489204d4e86f888cc9581b599566d))
+
+### Bug Fixes
+
+- _(database)_ Fix integration tests broken by available-only list_books filter - ([88f87bc](https://github.com/szinn/BookBoss/commit/88f87bc0b8b862fb46bf6d90b41982a0e8e93fd2))
+- _(frontend)_ Avoid unnecessary ownership in kobo init response builder - ([59540ac](https://github.com/szinn/BookBoss/commit/59540acc0f839f55ab4aa9e4fc4ccb12cb20f014))
+
+### Refactor
+
+- _(core,database,frontend)_ Pass token types by value instead of reference - ([9c75190](https://github.com/szinn/BookBoss/commit/9c75190cb038e9fefd5053b1407c6874a51388ff))
+
 ## [0.5.1](https://github.com/szinn/BookBoss/compare/v0.5.0..v0.5.1) - 2026-03-21
 
 ### Features
