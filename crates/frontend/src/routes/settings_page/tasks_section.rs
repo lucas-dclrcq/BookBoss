@@ -111,10 +111,10 @@ pub(crate) fn TasksSection() -> Element {
                             thead {
                                 tr { class: "bg-gray-50 border-b border-gray-200",
                                     th { class: "w-[30%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide", "Task" }
-                                    th { class: "w-[12%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide", "Interval" }
-                                    th { class: "w-[22%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide", "Last Run" }
-                                    th { class: "w-[22%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide", "Next Run" }
-                                    th { class: "w-[14%] px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wide", "Actions" }
+                                    th { class: "w-[12%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wide", "Interval" }
+                                    th { class: "w-[22%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wide", "Last Run" }
+                                    th { class: "w-[22%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wide", "Next Run" }
+                                    th { class: "w-[14%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wide", "Actions" }
                                 }
                             }
                             tbody { class: "divide-y divide-gray-100",
@@ -131,19 +131,19 @@ pub(crate) fn TasksSection() -> Element {
                                                         }
                                                     }
                                                 }
-                                                td { class: "px-4 py-3 text-gray-600", "{format_interval(row.interval_minutes)}" }
-                                                td { class: "px-4 py-3 text-gray-600",
+                                                td { class: "px-4 py-3 text-center text-gray-600", "{format_interval(row.interval_minutes)}" }
+                                                td { class: "px-4 py-3 text-center text-gray-600",
                                                     if let Some(ref last) = row.last_run_at {
                                                         RelativeTime { iso: last.clone(), direction: "past" }
                                                     } else {
                                                         span { class: "text-gray-400", "Never" }
                                                     }
                                                 }
-                                                td { class: "px-4 py-3 text-gray-600",
+                                                td { class: "px-4 py-3 text-center text-gray-600",
                                                     RelativeTime { iso: row.next_run_at.clone(), direction: "future" }
                                                 }
                                                 td { class: "px-4 py-3",
-                                                    div { class: "flex items-center justify-end",
+                                                    div { class: "flex items-center justify-center",
                                                         RunNowButton { job_type: jt, on_triggered: move || *refresh.write() += 1 }
                                                     }
                                                 }
