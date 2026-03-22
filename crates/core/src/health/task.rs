@@ -178,4 +178,18 @@ mod tests {
         // No longer due
         assert!(state.due_tasks().await.is_empty());
     }
+
+    #[tokio::test]
+    async fn mark_due_now_makes_non_startup_task_due() {
+        let state = HealthTaskState::new(sample_configs());
+
+        // Periodic task is not due initially
+        let due = state.due_tasks().await;
+        assert!(!due.contains(&"health.periodic".to_string()));
+
+        state.mark_due_now("health.periodic").await;
+
+        let due = state.due_tasks().await;
+        assert!(due.contains(&"health.periodic".to_string()));
+    }
 }

@@ -10,6 +10,7 @@ use crate::{
     with_read_only_transaction, with_transaction,
 };
 
+#[allow(unused_lifetimes)] // async_trait macro generates hidden lifetime parameters
 #[async_trait::async_trait]
 #[cfg_attr(any(test, feature = "test-support"), mockall::automock)]
 pub trait SystemMessageService: Send + Sync {
