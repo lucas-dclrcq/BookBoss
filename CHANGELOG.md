@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3](https://github.com/szinn/BookBoss/compare/v0.5.2..v0.5.3) - 2026-03-22
+
+### Features
+
+- _(core)_ SSE real-time event system with EventService abstraction - ([ad21cea](https://github.com/szinn/BookBoss/commit/ad21cea8581ef62f5b9317dd8bd36fb2477f9050))
+- _(frontend)_ Phase 4 polish — keyboard shortcuts, permission gating, route-aware selection cleanup - ([9471147](https://github.com/szinn/BookBoss/commit/9471147ee3fa316bbe0be440a20b032d8b7423e9))
+- _(frontend)_ Bulk edit metadata modal for selected books - ([5343ce5](https://github.com/szinn/BookBoss/commit/5343ce5f702a64caec0a7f6f5f2e5b02b211a4a7))
+- _(frontend)_ Bulk set reading status for selected books - ([fc604f5](https://github.com/szinn/BookBoss/commit/fc604f5836500e7f2d8862ff1b5ec150a8524c82))
+- _(frontend)_ Add multiselect infrastructure for bulk book operations - ([86db3f5](https://github.com/szinn/BookBoss/commit/86db3f577878f7e4e5e452999a184f53fd25c4b1))
+
+### Bug Fixes
+
+- _(frontend)_ Show reading status and progress on shelf book cards - ([7f9d40a](https://github.com/szinn/BookBoss/commit/7f9d40a7fef165ea394132437304d451ab87ba00))
+
 ## [0.5.2](https://github.com/szinn/BookBoss/compare/v0.5.1..v0.5.2) - 2026-03-22
 
 ### Features
