@@ -1,5 +1,7 @@
 use std::{fmt, str::FromStr};
 
+use chrono::{DateTime, Utc};
+
 use crate::book::BookId;
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -121,6 +123,7 @@ pub struct BookFile {
     pub path: String,
     pub file_size: i64,
     pub file_hash: String,
+    pub created_at: DateTime<Utc>,
 }
 
 impl BookFile {
@@ -135,6 +138,7 @@ impl BookFile {
             path: String::new(),
             file_size: 0,
             file_hash: String::new(),
+            created_at: Utc::now(),
         }
     }
 }

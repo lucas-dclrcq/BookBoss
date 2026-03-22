@@ -688,6 +688,7 @@ mod tests {
             path: String::new(),
             file_size: 0,
             file_hash: String::new(),
+            created_at: chrono::Utc::now(),
         }
     }
 

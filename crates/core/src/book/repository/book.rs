@@ -66,4 +66,8 @@ pub trait BookRepository: Send + Sync {
     /// Returns all book file records. Used by the file integrity health check
     /// to verify that every recorded file exists on disk.
     async fn list_all_book_files(&self, transaction: &dyn Transaction) -> Result<Vec<BookFile>, Error>;
+    /// Returns the IDs of books that have an Enriched EPUB whose `created_at`
+    /// is older than the book's `updated_at` — i.e. metadata changed after
+    /// the enriched file was generated, so re-enrichment is needed.
+    async fn find_book_ids_with_stale_enrichment(&self, transaction: &dyn Transaction) -> Result<Vec<BookId>, Error>;
 }

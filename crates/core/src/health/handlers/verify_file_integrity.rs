@@ -107,6 +107,7 @@ mod tests {
                 path: "BK_abc/book.epub".to_string(),
                 file_size: 1000,
                 file_hash: "hash123".to_string(),
+                created_at: chrono::Utc::now(),
             }])))
         });
 
@@ -155,6 +156,7 @@ mod tests {
                 path: "BK_abc/book.epub".to_string(),
                 file_size: 1000,
                 file_hash: "hash123".to_string(),
+                created_at: chrono::Utc::now(),
             }])))
         });
 

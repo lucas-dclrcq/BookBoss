@@ -14,6 +14,7 @@ pub struct Model {
     pub path: String,
     pub file_size: i64,
     pub file_hash: String,
+    pub created_at: DateTimeWithTimeZone,
 }
 
 #[async_trait::async_trait]

@@ -21,6 +21,12 @@ fn parse_or_db_err<T: std::str::FromStr<Err = String>>(s: &str) -> Result<T, Err
     s.parse().map_err(|e| Error::RepositoryError(RepositoryError::Database(e)))
 }
 
+/// Lightweight projection for queries that only need `book_id`.
+#[derive(Debug, sea_orm::FromQueryResult)]
+struct BookIdOnly {
+    book_id: i64,
+}
+
 // ─── From impls ──────────────────────────────────────────────────────────────
 
 impl From<books::Model> for Book {
@@ -242,6 +248,7 @@ impl BookRepository for BookRepositoryAdapter {
                     path: m.path,
                     file_size: m.file_size,
                     file_hash: m.file_hash,
+                    created_at: m.created_at.into(),
                 })
             })
             .collect()
@@ -287,6 +294,7 @@ impl BookRepository for BookRepositoryAdapter {
                 path: m.path,
                 file_size: m.file_size,
                 file_hash: m.file_hash,
+                created_at: m.created_at.into(),
             })
         })
         .transpose()
@@ -304,6 +312,7 @@ impl BookRepository for BookRepositoryAdapter {
     ) -> Result<BookFile, Error> {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
+        let now = chrono::Utc::now();
         let model = book_files::ActiveModel {
             book_id: Set(book_id as i64),
             format: Set(format.to_string()),
@@ -311,6 +320,7 @@ impl BookRepository for BookRepositoryAdapter {
             path: Set(path.clone()),
             file_size: Set(file_size),
             file_hash: Set(file_hash.clone()),
+            created_at: Set(now.into()),
         };
 
         model.insert(transaction).await.map_err(handle_dberr)?;
@@ -322,6 +332,7 @@ impl BookRepository for BookRepositoryAdapter {
             path,
             file_size,
             file_hash,
+            created_at: now,
         })
     }
 
@@ -604,9 +615,40 @@ impl BookRepository for BookRepositoryAdapter {
                     path: m.path,
                     file_size: m.file_size,
                     file_hash: m.file_hash,
+                    created_at: m.created_at.into(),
                 })
             })
             .collect()
+    }
+
+    async fn find_book_ids_with_stale_enrichment(&self, transaction: &dyn Transaction) -> Result<Vec<BookId>, Error> {
+        use sea_orm::{ExprTrait, JoinType, QuerySelect, sea_query::Expr};
+
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        // Find book IDs where an enriched EPUB exists but its created_at is
+        // older than the book's updated_at — meaning metadata changed after the
+        // enriched file was generated.
+        let rows = prelude::BookFiles::find()
+            .select_only()
+            .column(book_files::Column::BookId)
+            .join_as(
+                JoinType::InnerJoin,
+                book_files::Entity::belongs_to(books::Entity)
+                    .from(book_files::Column::BookId)
+                    .to(books::Column::Id)
+                    .into(),
+                books::Entity,
+            )
+            .filter(book_files::Column::Format.eq("epub"))
+            .filter(book_files::Column::FileRole.eq("enriched"))
+            .filter(Expr::col((book_files::Entity, book_files::Column::CreatedAt)).lt(Expr::col((books::Entity, books::Column::UpdatedAt))))
+            .into_model::<BookIdOnly>()
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(rows.into_iter().map(|r| r.book_id as u64).collect())
     }
 }
 
@@ -1175,6 +1217,7 @@ mod tests {
             path: Set("Originals/dune.epub".to_owned()),
             file_size: Set(1_024_000),
             file_hash: Set("abc123".to_owned()),
+            created_at: Set(chrono::Utc::now().into()),
         }
         .insert(db_tx)
         .await
