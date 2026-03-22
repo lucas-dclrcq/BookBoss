@@ -6,14 +6,14 @@ BookBoss uses [SeaORM](https://www.sea-ql.org/SeaORM/) for database access. Post
 
 The following environment variables are used by database-related `just` commands:
 
-| Variable | Used by |
-| --- | --- |
-| `PGUSER` | `just create-database`, `just database` |
-| `PGPASSWORD` | `just create-database`, `just database` |
-| `PGDATABASE` | `just create-database`, `just database` |
-| `PGADMINUSER` | `just create-database` |
-| `PGADMINPASSWORD` | `just create-database` |
-| `BOOKBOSS__DATABASE__DATABASE_URL` | Migrations, entity generation |
+| Variable                           | Used by                                 |
+| ---------------------------------- | --------------------------------------- |
+| `PGUSER`                           | `just create-database`, `just database` |
+| `PGPASSWORD`                       | `just create-database`, `just database` |
+| `PGDATABASE`                       | `just create-database`, `just database` |
+| `PGADMINUSER`                      | `just create-database`                  |
+| `PGADMINPASSWORD`                  | `just create-database`                  |
+| `BOOKBOSS__DATABASE__DATABASE_URL` | Migrations, entity generation           |
 
 Connection string format for `BOOKBOSS__DATABASE__DATABASE_URL`:
 

@@ -23,6 +23,7 @@ mod m20260303_000020_create_book_shelves_table;
 mod m20260303_000021_create_import_jobs_table;
 mod m20260305_000022_create_jobs_table;
 mod m20260321_000023_add_sort_indexes;
+mod m20260322_000024_create_system_messages_table;
 
 pub struct Migrator;
 
@@ -53,6 +54,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260303_000021_create_import_jobs_table::Migration),
             Box::new(m20260305_000022_create_jobs_table::Migration),
             Box::new(m20260321_000023_add_sort_indexes::Migration),
+            Box::new(m20260322_000024_create_system_messages_table::Migration),
         ]
     }
 }

@@ -33,14 +33,14 @@ Any OPDS 1.x compatible reader should work, including:
 
 The OPDS catalog provides the following navigation:
 
-| Feed | URL | Description |
-| --- | --- | --- |
-| Root catalog | `/opds/` | Entry point with links to all feeds |
-| All books | `/opds/all` | Complete library listing |
-| Search | `/opds/search?q=...` | Full-text book search |
-| Shelves | `/opds/shelves` | Browse by shelf |
-| Authors | `/opds/authors` | Browse by author |
-| Series | `/opds/series` | Browse by series |
+| Feed         | URL                  | Description                         |
+| ------------ | -------------------- | ----------------------------------- |
+| Root catalog | `/opds/`             | Entry point with links to all feeds |
+| All books    | `/opds/all`          | Complete library listing            |
+| Search       | `/opds/search?q=...` | Full-text book search               |
+| Shelves      | `/opds/shelves`      | Browse by shelf                     |
+| Authors      | `/opds/authors`      | Browse by author                    |
+| Series       | `/opds/series`       | Browse by series                    |
 
 Each book entry includes download links for all available formats and cover images.
 

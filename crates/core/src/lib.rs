@@ -5,9 +5,11 @@ pub mod device;
 pub mod error;
 pub mod event;
 pub mod filter;
+pub mod health;
 pub mod import;
 pub mod jobs;
 pub mod library;
+pub mod message;
 pub mod opds;
 pub mod pipeline;
 pub mod reading;
@@ -32,6 +34,7 @@ use crate::{
     import::{ImportJobService, ImportScanner, service::ImportJobServiceImpl},
     jobs::{JobRegistry, JobWorker},
     library::{LibraryService, LibraryServiceImpl},
+    message::{SystemMessageService, SystemMessageServiceImpl},
     opds::{OpdsService, OpdsServiceImpl},
     pipeline::PipelineService,
     reading::{ReadingService, ReadingServiceImpl},
@@ -75,6 +78,7 @@ pub struct CoreServices {
     pub device_service: Arc<dyn DeviceService>,
     pub opds_service: Arc<dyn OpdsService>,
     pub event_service: Arc<dyn EventService>,
+    pub system_message_service: Arc<dyn SystemMessageService>,
 }
 
 impl CoreServices {
@@ -101,7 +105,8 @@ impl CoreServices {
             shelf_service: Arc::new(ShelfServiceImpl::new(repository_service.clone())),
             reading_service: Arc::new(ReadingServiceImpl::new(repository_service.clone())),
             device_service: Arc::new(DeviceServiceImpl::new(repository_service.clone())),
-            opds_service: Arc::new(OpdsServiceImpl::new(repository_service, encryption_secret)),
+            opds_service: Arc::new(OpdsServiceImpl::new(repository_service.clone(), encryption_secret)),
+            system_message_service: Arc::new(SystemMessageServiceImpl::new(repository_service)),
             event_service,
         }
     }

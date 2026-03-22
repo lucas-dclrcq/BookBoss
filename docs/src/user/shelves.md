@@ -26,13 +26,13 @@ Smart shelves recalculate their contents whenever books or reading state change 
 
 Each user tracks their own reading state per book. Reading status options are:
 
-| Status | Meaning |
-| --- | --- |
-| **Unread** | Default — book has not been read |
-| **Reading** | Currently reading |
-| **Paused** | Reading paused |
-| **Rereading** | Reading again |
-| **Read** | Finished reading |
+| Status        | Meaning                                 |
+| ------------- | --------------------------------------- |
+| **Unread**    | Default — book has not been read        |
+| **Reading**   | Currently reading                       |
+| **Paused**    | Reading paused                          |
+| **Rereading** | Reading again                           |
+| **Read**      | Finished reading                        |
 | **Abandoned** | Stopped reading, not planning to finish |
 
 ### Setting Reading Status

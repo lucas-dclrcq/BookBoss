@@ -5,6 +5,6 @@ pub(crate) use super::{
     book_identifiers::Entity as BookIdentifiers, book_shelves::Entity as BookShelves, book_tags::Entity as BookTags, books::Entity as Books,
     device_books::Entity as DeviceBooks, device_sync_log::Entity as DeviceSyncLogs, devices::Entity as Devices, genres::Entity as Genres,
     import_jobs::Entity as ImportJobs, jobs::Entity as Jobs, publishers::Entity as Publishers, series::Entity as Series, sessions::Entity as Sessions,
-    shelves::Entity as Shelves, tags::Entity as Tags, user_book_metadata::Entity as UserBookMetadata, user_settings::Entity as UserSettings,
-    users::Entity as Users,
+    shelves::Entity as Shelves, system_messages::Entity as SystemMessages, tags::Entity as Tags, user_book_metadata::Entity as UserBookMetadata,
+    user_settings::Entity as UserSettings, users::Entity as Users,
 };

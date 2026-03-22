@@ -6,13 +6,13 @@ This project uses [jujutsu](https://github.com/jj-vcs/jj) (`jj`), not `git` dire
 
 Key commands:
 
-| Command | Description |
-| --- | --- |
-| `jj commit` | Commit current changes |
+| Command              | Description                         |
+| -------------------- | ----------------------------------- |
+| `jj commit`          | Commit current changes              |
 | `jj describe -m "…"` | Update the working copy description |
-| `jj new` | Start a new change |
-| `jj log` | Show history |
-| `jj status` | Show working copy status |
+| `jj new`             | Start a new change                  |
+| `jj log`             | Show history                        |
+| `jj status`          | Show working copy status            |
 
 ## Commit Messages
 
@@ -36,10 +36,10 @@ Use `jj describe -m "..."` to set the working copy description. Do not amend pub
 
 ## Error Handling
 
-| Crate | Approach |
-| --- | --- |
-| `core`, `api`, `database` | `thiserror` for typed errors |
-| `bookboss` (binary entry point) | `anyhow` for ad-hoc errors |
+| Crate                           | Approach                     |
+| ------------------------------- | ---------------------------- |
+| `core`, `api`, `database`       | `thiserror` for typed errors |
+| `bookboss` (binary entry point) | `anyhow` for ad-hoc errors   |
 
 ## Dependencies
 

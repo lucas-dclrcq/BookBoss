@@ -10,6 +10,7 @@ use crate::{
     import::ImportJobRepository,
     jobs::JobRepository,
     library::LibraryRepository,
+    message::SystemMessageRepository,
     reading::UserBookMetadataRepository,
     shelf::ShelfRepository,
     user::{UserRepository, UserSettingRepository},
@@ -34,6 +35,7 @@ pub struct RepositoryService {
     shelf_repository: Arc<dyn ShelfRepository>,
     user_book_metadata_repository: Arc<dyn UserBookMetadataRepository>,
     device_repository: Arc<dyn DeviceRepository>,
+    system_message_repository: Arc<dyn SystemMessageRepository>,
 }
 
 impl RepositoryService {
@@ -131,6 +133,12 @@ impl RepositoryService {
     #[must_use]
     pub fn device_repository(&self) -> &Arc<dyn DeviceRepository> {
         &self.device_repository
+    }
+
+    /// Returns a reference to the system message repository.
+    #[must_use]
+    pub fn system_message_repository(&self) -> &Arc<dyn SystemMessageRepository> {
+        &self.system_message_repository
     }
 }
 
@@ -270,6 +278,7 @@ pub(crate) mod testing {
         import::repository::import_job::MockImportJobRepository,
         jobs::repository::MockJobRepository,
         library::MockLibraryRepository,
+        message::repository::MockSystemMessageRepository,
         reading::repository::user_book_metadata::MockUserBookMetadataRepository,
         shelf::repository::shelf::MockShelfRepository,
         user::repository::{user::MockUserRepository, user_settings::MockUserSettingRepository},
@@ -324,5 +333,6 @@ pub(crate) mod testing {
             .shelf_repository(Arc::new(MockShelfRepository::new()))
             .user_book_metadata_repository(Arc::new(MockUserBookMetadataRepository::new()))
             .device_repository(Arc::new(MockDeviceRepository::new()))
+            .system_message_repository(Arc::new(MockSystemMessageRepository::new()))
     }
 }

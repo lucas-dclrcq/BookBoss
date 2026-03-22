@@ -90,17 +90,17 @@ first launch you will be prompted to create an administrator account.
 
 Configuration is loaded from environment variables with the `BOOKBOSS__` prefix:
 
-| Variable | Purpose |
-| --- | --- |
-| `BOOKBOSS__DATABASE__DATABASE_URL` | SeaORM connection string (Postgres / MySQL / SQLite) |
-| `BOOKBOSS__ENCRYPTION_SECRET` | Used for encrypting OPDS passwords in the database |
-| `BOOKBOSS__LIBRARY__LIBRARY_PATH` | Where approved book files are stored |
-| `BOOKBOSS__IMPORT__BOOKDROP_PATH` | Drop e-book files here to trigger the import pipeline |
-| `BOOKBOSS__FRONTEND__LISTEN_IP` | Server listen address (default `0.0.0.0`) |
-| `BOOKBOSS__FRONTEND__LISTEN_PORT` | Server listen port (default `8080`) |
-| `BOOKBOSS__FRONTEND__BASE_URL` | Public base URL (default `http://0.0.0.0:8080`) |
-| `BOOKBOSS__METADATA__HARDCOVER_API_TOKEN` | API token for Hardcover metadata provider |
-| `BOOKBOSS__METADATA__GOOGLEBOOKS_API_TOKEN` | API token for Google Books metadata provider |
+| Variable                                    | Purpose                                               |
+| ------------------------------------------- | ----------------------------------------------------- |
+| `BOOKBOSS__DATABASE__DATABASE_URL`          | SeaORM connection string (Postgres / MySQL / SQLite)  |
+| `BOOKBOSS__ENCRYPTION_SECRET`               | Used for encrypting OPDS passwords in the database    |
+| `BOOKBOSS__LIBRARY__LIBRARY_PATH`           | Where approved book files are stored                  |
+| `BOOKBOSS__IMPORT__BOOKDROP_PATH`           | Drop e-book files here to trigger the import pipeline |
+| `BOOKBOSS__FRONTEND__LISTEN_IP`             | Server listen address (default `0.0.0.0`)             |
+| `BOOKBOSS__FRONTEND__LISTEN_PORT`           | Server listen port (default `8080`)                   |
+| `BOOKBOSS__FRONTEND__BASE_URL`              | Public base URL (default `http://0.0.0.0:8080`)       |
+| `BOOKBOSS__METADATA__HARDCOVER_API_TOKEN`   | API token for Hardcover metadata provider             |
+| `BOOKBOSS__METADATA__GOOGLEBOOKS_API_TOKEN` | API token for Google Books metadata provider          |
 
 Connection string formats:
 
@@ -125,20 +125,20 @@ sqlite:path/to/file.db
 
 ### Common Commands
 
-| Command | Description |
-| --- | --- |
-| `just build` | Build the project |
-| `just run` | Run the application |
-| `just fmt` | Format code (Rust + Prettier) |
-| `just clippy` | Run Clippy lints |
-| `just quick-test` | Component tests + Postgres/SQLite integration tests |
-| `just test` | Run all tests |
-| `just component-tests` | Unit/component tests only |
-| `just integration-tests` | All integration tests (requires Colima) |
-| `just insta` | Run snapshot tests with cargo-insta |
-| `just docs-serve` | Serve documentation locally |
-| `just deps` | Update Rust crate dependencies |
-| `just changelog` | Regenerate CHANGELOG.md |
+| Command                  | Description                                         |
+| ------------------------ | --------------------------------------------------- |
+| `just build`             | Build the project                                   |
+| `just run`               | Run the application                                 |
+| `just fmt`               | Format code (Rust + Prettier)                       |
+| `just clippy`            | Run Clippy lints                                    |
+| `just quick-test`        | Component tests + Postgres/SQLite integration tests |
+| `just test`              | Run all tests                                       |
+| `just component-tests`   | Unit/component tests only                           |
+| `just integration-tests` | All integration tests (requires Colima)             |
+| `just insta`             | Run snapshot tests with cargo-insta                 |
+| `just docs-serve`        | Serve documentation locally                         |
+| `just deps`              | Update Rust crate dependencies                      |
+| `just changelog`         | Regenerate CHANGELOG.md                             |
 
 ### Integration Tests
 

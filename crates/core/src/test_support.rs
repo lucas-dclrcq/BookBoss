@@ -7,6 +7,7 @@ use crate::{
     import::{ImportJobService, ImportScanner, scanner::MockImportScanner, service::MockImportJobService},
     jobs::{JobService, service::MockJobService},
     library::{LibraryService, MockLibraryService},
+    message::{SystemMessageService, service::MockSystemMessageService},
     pipeline::{PipelineService, service::MockPipelineService},
     storage::{LibraryStore, MockLibraryStore},
 };
@@ -66,6 +67,11 @@ pub fn nop_import_job_service() -> Arc<dyn ImportJobService> {
 #[must_use]
 pub fn nop_event_service() -> Arc<dyn EventService> {
     event::create_event_service(16)
+}
+
+#[must_use]
+pub fn nop_system_message_service() -> Arc<dyn SystemMessageService> {
+    Arc::new(MockSystemMessageService::new())
 }
 
 /// Returns an `ExternalServicesBuilder` pre-populated with nop implementations

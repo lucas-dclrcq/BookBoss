@@ -20,6 +20,7 @@ pub(crate) mod publishers;
 pub(crate) mod series;
 pub(crate) mod sessions;
 pub(crate) mod shelves;
+pub(crate) mod system_messages;
 pub(crate) mod tags;
 pub(crate) mod user_book_metadata;
 pub(crate) mod user_settings;

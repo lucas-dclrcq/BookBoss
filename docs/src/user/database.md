@@ -2,12 +2,12 @@
 
 BookBoss supports four database backends. Choose the one that fits your deployment:
 
-| Database | Best for |
-| --- | --- |
-| SQLite | Single-user, low maintenance, simple setups |
-| PostgreSQL | Multi-user, production deployments |
-| MariaDB | Existing MariaDB infrastructure |
-| MySQL | Existing MySQL infrastructure |
+| Database   | Best for                                    |
+| ---------- | ------------------------------------------- |
+| SQLite     | Single-user, low maintenance, simple setups |
+| PostgreSQL | Multi-user, production deployments          |
+| MariaDB    | Existing MariaDB infrastructure             |
+| MySQL      | Existing MySQL infrastructure               |
 
 ---
 
