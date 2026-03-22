@@ -49,12 +49,17 @@ pub(crate) struct ShelfSummary {
 #[cfg(feature = "server")]
 use {
     crate::components::to_core_sort,
-    crate::routes::{books_page::hydrate_books, server_helpers::authenticated_user},
+    crate::routes::{
+        book_detail_page::{ReadingStateDto, to_reading_state_dto},
+        books_page::hydrate_books,
+        server_helpers::authenticated_user,
+    },
     crate::server::AuthSession,
     bb_core::{
         CoreServices,
         book::{Book, BookToken},
         filter::BookFilter as CoreBookFilter,
+        reading::ReadStatus,
         shelf::{ShelfToken, ShelfType, ShelfVisibility},
     },
     std::sync::Arc,
@@ -467,7 +472,19 @@ pub(crate) async fn books_for_shelf(
         });
     }
 
-    let book_summaries = hydrate_books(&books, &core_services, None).await?;
+    // Load per-user reading state so book cards show progress and status.
+    let reading_metas = core_services
+        .reading_service
+        .list_for_user(user_id, None)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let reading_map: std::collections::HashMap<u64, ReadingStateDto> = reading_metas
+        .iter()
+        .filter(|m| m.read_status != ReadStatus::Unread)
+        .map(|m| (m.book_id, to_reading_state_dto(m)))
+        .collect();
+
+    let book_summaries = hydrate_books(&books, &core_services, Some(&reading_map)).await?;
 
     Ok(ShelfBooksPage {
         books: book_summaries,
