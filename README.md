@@ -15,91 +15,92 @@ by a flexible database layer that supports PostgreSQL, MySQL, MariaDB, and SQLit
 - View author detail pages listing all their books
 - View series detail pages listing all books in a series
 - Sort books by date added, title, and author
+- Search bar with support for `author:`, `title:`, `series:`, `genre:`, `tag:` refinements
 - Edit book metadata (title, author, series, publisher, genres, tags, description, identifiers, cover)
+- Bulk edit metadata across multiple selected books
 - Delete books from the library
-- Search bar allows searching from the displayed list of books. Can add author: title: series: genre: tag:
-  for extra refinement
-- Multi-select books to change read status / edit a subset of metadata
+- Keyboard shortcuts for common operations
+- Real-time UI updates via Server-Sent Events (SSE)
 
-### Import
+### Import Pipeline
 
 - Drop books into a watched folder — BookBoss scans and picks them up automatically
 - Metadata extracted from EPUB files automatically
-- Metadata enriched from external providers (Hardcover, OpenLibrary, GoogleBooks)
+- Parallel metadata enrichment from external providers (Hardcover, OpenLibrary, GoogleBooks) with title+author similarity scoring
 - Review incoming books before they enter the library (approve or reject)
-- Cover art fetched automatically from metadata providers
+- Cover art fetched automatically from the most confident provider match
+- Manual scan trigger from the UI
 
 ### Shelves
 
-- Create manual shelves and add/remove books
+- Create manual shelves and add/remove books via drag-and-drop
 - Create smart shelves with filter rules (e.g. "all books with read status Active")
 - Smart shelves update automatically as books and reading state change
 
 ### Reading State
 
-- Track reading status per book (e.g. Active, Finished, etc.)
-- Per-user — each user has their own reading state
+- Track reading status per book (Not Started, Reading, Finished)
+- Per-user — each user has their own reading state and progress
+- Set reading status individually or in bulk across selected books
 
 ### Kobo Device Sync
 
-- Register Kobo devices to your account
+- Register Kobo e-readers to your account
 - Each device gets a companion smart shelf — books on the shelf sync to the device
 - Incremental sync — only sends new or changed books each time
 - Cover art served to the Kobo automatically
-- Download book files directly to the device (EPUB and KEPUB)
+- EPUB and KEPUB format support with in-house EPUB-to-KEPUB conversion
+- Reading position and progress synced between Kobo and BookBoss
 - Reset sync state to force a full re-sync
 - Copy device sync URL to clipboard from the profile page
-- Kobo-initiated book removal handled — user-defined action on what to do
+- Kobo-initiated book removal handled with user-defined actions
 
-### OPDS browsing
+### OPDS Catalog Server
 
-- Each user gets a custom login for OPDS browsing
+- OPDS 1.x catalog server with Atom XML feeds
+- Browse all books, by author, by series, or by shelf
+- Search books via OpenSearch
+- Per-user OPDS password (auto-generated, regeneratable from profile page)
+- Compatible with any OPDS client (KOReader, Librera, Moon+ Reader, etc.)
 
 ### User & Admin
 
 - User registration and login
 - Admin first-run setup
 - Multi-user support (each user has their own reading state, shelves, devices)
+- Capability-based permissions (Approve Imports, Edit Book, Delete Book, OPDS Access)
 - Settings page with library stats (total books, authors)
 - User management (admin)
 
-## Development Requirements
-
-- [Rust](https://rustup.rs) 1.85+ (nightly toolchain for formatting/clippy)
-- [mise](https://mise.jdx.dev) — manages tool versions
-- [just](https://just.systems) — task runner
-- Node.js 24+ (for Tailwind CSS, managed by mise)
-- An existing PostgreSQL or MySQL instance (for those database backends)
-
 ## Getting Started
 
-### 1. Install tools
+See the [full documentation](docs/src/) for detailed setup and usage guides.
 
-```bash
-just install-tools
-```
+### Quick Start
 
-This runs `mise install` and adds the `nightly` Rust toolchain and the
-`wasm32-unknown-unknown` target.
+1. Install tools: `just install-tools`
+2. Configure: `just config` (edit encrypted `config.sops.env`)
+3. Create database: `just create-database`
+4. Run: `just run`
 
-### 2. Configure
+The application will be available at `http://localhost:8080` by default. On
+first launch you will be prompted to create an administrator account.
 
-```bash
-just config
-```
+### Configuration
 
-Edit the encrypted `config.sops.env` file. Required variables:
+Configuration is loaded from environment variables with the `BOOKBOSS__` prefix:
 
-| Variable                             | Purpose                                               |
-| ------------------------------------ | ----------------------------------------------------- |
-| `BOOKBOSS__DATABASE__DATABASE_URL`   | SeaORM connection string (Postgres / MySQL / SQLite)  |
-| `BOOKBOSS__ENCRYPTION_SECRET`        | Used for encrypting data in the database              |
-| `BOOKBOSS__LIBRARY__LIBRARY_PATH`    | Where approved book files are stored                  |
-| `BOOKBOSS__IMPORT__BOOKDROP_PATH`    | Drop e-book files here to trigger the import pipeline |
-| `BOOKBOSS__FRONTEND__LISTEN_IP`      | Server listen address (default `0.0.0.0`)             |
-| `BOOKBOSS__FRONTEND__LISTEN_PORT`    | Server listen port (default `8080`)                   |
-| `PGUSER`, `PGPASSWORD`, `PGDATABASE` | Used by `just create-database` and `just database`    |
-| `PGADMINUSER`, `PGADMINPASSWORD`     | Admin credentials for database creation               |
+| Variable | Purpose |
+| --- | --- |
+| `BOOKBOSS__DATABASE__DATABASE_URL` | SeaORM connection string (Postgres / MySQL / SQLite) |
+| `BOOKBOSS__ENCRYPTION_SECRET` | Used for encrypting OPDS passwords in the database |
+| `BOOKBOSS__LIBRARY__LIBRARY_PATH` | Where approved book files are stored |
+| `BOOKBOSS__IMPORT__BOOKDROP_PATH` | Drop e-book files here to trigger the import pipeline |
+| `BOOKBOSS__FRONTEND__LISTEN_IP` | Server listen address (default `0.0.0.0`) |
+| `BOOKBOSS__FRONTEND__LISTEN_PORT` | Server listen port (default `8080`) |
+| `BOOKBOSS__FRONTEND__BASE_URL` | Public base URL (default `http://0.0.0.0:8080`) |
+| `BOOKBOSS__METADATA__HARDCOVER_API_TOKEN` | API token for Hardcover metadata provider |
+| `BOOKBOSS__METADATA__GOOGLEBOOKS_API_TOKEN` | API token for Google Books metadata provider |
 
 Connection string formats:
 
@@ -112,48 +113,34 @@ sqlite:path/to/file.db
 > Secrets are encrypted with [sops](https://github.com/getsops/sops) — never
 > commit plaintext secrets.
 
-### 3. Create the database
-
-```bash
-just create-database
-```
-
-### 4. Run
-
-```bash
-just run
-```
-
-The application will be available at `http://localhost:8080` by default. On
-first launch you will be prompted to create an administrator account.
-
 ## Development
 
-### Build
+### Requirements
 
-```bash
-just build
-```
+- [Rust](https://rustup.rs) 1.85+ (nightly toolchain for formatting/clippy)
+- [mise](https://mise.jdx.dev) — manages tool versions
+- [just](https://just.systems) — task runner
+- Node.js 24+ (for Tailwind CSS, managed by mise)
+- An existing PostgreSQL or MySQL instance (for those database backends)
 
-### Common commands
+### Common Commands
 
-| Command                           | Description                                         |
-| --------------------------------- | --------------------------------------------------- |
-| `just fmt`                        | Format code (Rust + Prettier)                       |
-| `just clippy`                     | Run Clippy lints                                    |
-| `just test`                       | Run all tests                                       |
-| `just quick-test`                 | Component tests + Postgres/SQLite integration tests |
-| `just component-tests`            | Unit/component tests only                           |
-| `just integration-tests`          | All integration tests (requires Colima)             |
-| `just postgres-integration-tests` | Postgres integration tests                          |
-| `just sqlite-integration-tests`   | SQLite integration tests                            |
-| `just mysql-integration-tests`    | MySQL integration tests                             |
-| `just insta`                      | Run snapshot tests with cargo-insta                 |
-| `just deps`                       | Update Rust crate dependencies                      |
-| `just changelog`                  | Regenerate CHANGELOG.md                             |
-| `just clean`                      | Clean the workspace                                 |
+| Command | Description |
+| --- | --- |
+| `just build` | Build the project |
+| `just run` | Run the application |
+| `just fmt` | Format code (Rust + Prettier) |
+| `just clippy` | Run Clippy lints |
+| `just quick-test` | Component tests + Postgres/SQLite integration tests |
+| `just test` | Run all tests |
+| `just component-tests` | Unit/component tests only |
+| `just integration-tests` | All integration tests (requires Colima) |
+| `just insta` | Run snapshot tests with cargo-insta |
+| `just docs-serve` | Serve documentation locally |
+| `just deps` | Update Rust crate dependencies |
+| `just changelog` | Regenerate CHANGELOG.md |
 
-### Integration tests
+### Integration Tests
 
 Integration tests use Docker containers managed by [Colima](https://github.com/abiosoft/colima):
 
@@ -174,10 +161,10 @@ crates/
 ├── core/             # Domain: business logic, models, port traits
 ├── api/              # Adapter: gRPC interface
 ├── database/         # Adapter: SeaORM persistence (Postgres / MySQL / SQLite)
-├── formats/          # Adapter: e-book file format support (EPUB, OPF)
-├── frontend/         # Adapter: Dioxus web UI (fullstack)
+├── formats/          # Adapter: e-book formats (EPUB, OPF, KEPUB conversion)
+├── frontend/         # Adapter: Dioxus web UI, OPDS server, Kobo sync
 ├── import/           # Adapter: library scanner + import job handler
-├── metadata/         # Adapter: external metadata providers
+├── metadata/         # Adapter: external metadata providers (Hardcover, OpenLibrary, GoogleBooks)
 ├── storage/          # Adapter: local filesystem library store
 ├── utils/            # Shared utilities
 ├── bookboss/         # Binary: wires adapters to ports

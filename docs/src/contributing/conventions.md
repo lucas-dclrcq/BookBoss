@@ -6,13 +6,13 @@ This project uses [jujutsu](https://github.com/jj-vcs/jj) (`jj`), not `git` dire
 
 Key commands:
 
-| Command              | Description                         |
-| -------------------- | ----------------------------------- |
-| `jj commit`          | Commit current changes              |
+| Command | Description |
+| --- | --- |
+| `jj commit` | Commit current changes |
 | `jj describe -m "…"` | Update the working copy description |
-| `jj new`             | Start a new change                  |
-| `jj log`             | Show history                        |
-| `jj status`          | Show working copy status            |
+| `jj new` | Start a new change |
+| `jj log` | Show history |
+| `jj status` | Show working copy status |
 
 ## Commit Messages
 
@@ -22,7 +22,7 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/) with crate-b
 type(scope): description
 ```
 
-Valid scopes: `api`, `core`, `database`, `frontend`, `import` (match crate names).
+Valid scopes: `api`, `cli`, `core`, `database`, `frontend`, `import`, `metadata`, `formats`, `storage` (match crate names).
 
 Examples:
 
@@ -36,10 +36,10 @@ Use `jj describe -m "..."` to set the working copy description. Do not amend pub
 
 ## Error Handling
 
-| Crate                           | Approach                     |
-| ------------------------------- | ---------------------------- |
-| `core`, `api`, `database`       | `thiserror` for typed errors |
-| `bookboss` (binary entry point) | `anyhow` for ad-hoc errors   |
+| Crate | Approach |
+| --- | --- |
+| `core`, `api`, `database` | `thiserror` for typed errors |
+| `bookboss` (binary entry point) | `anyhow` for ad-hoc errors |
 
 ## Dependencies
 
@@ -67,6 +67,7 @@ Secrets are encrypted with `sops`. Never commit plaintext secrets.
 - Use `cargo-insta` for snapshot tests when asserting against larger or structured output
 - Use regular assertions for simple value checks
 - Tests live alongside source code in `#[cfg(test)]` modules
+- Integration tests run against real database containers (Postgres, MySQL, MariaDB, SQLite) via testcontainers + Colima
 
 ## End-of-Task Routine
 
@@ -76,4 +77,3 @@ Run these steps in order after completing each task:
 2. `just clippy` — lint (run separately from fmt, not chained)
 3. `just component-tests` — verify tests pass
 4. `jj desc -m "type(scope): description\n\nbody"` — update working copy description
-5. Update `.scratchpad/implementation-plan.md` — mark completed tasks `✓` / `[x]`

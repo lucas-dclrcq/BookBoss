@@ -7,16 +7,16 @@ BookBoss acquires books through a bookdrop directory. The pipeline runs automati
 ### Workflow
 
 1. **Drop a file** into the directory configured as `BOOKBOSS__IMPORT__BOOKDROP_PATH`
-2. **BookBoss picks it up** — the scanner runs on a configurable interval (default: 60 seconds) and hashes each new file to avoid duplicates
+2. **BookBoss picks it up** — the scanner runs on a configurable interval (default: 60 seconds) and hashes each new file to avoid duplicates. You can also trigger a scan manually from the UI.
 3. **Metadata is extracted** — for EPUB files, embedded metadata is read from the OPF inside the archive; other formats fall through to provider lookup
-4. **Provider enrichment** — if the file contains an ISBN, BookBoss queries external metadata providers (Hardcover, Open Library, Google Books) for additional metadata and a cover image
+4. **Provider enrichment** — BookBoss queries external metadata providers (Hardcover, Open Library, Google Books) in parallel, using title+author similarity scoring to select the best match. Cover art is fetched from the most confident provider.
 5. **Review queue** — the book lands in the **Incoming** section of the library (requires the _Approve Imports_ capability)
 
 ### Reviewing and Approving
 
-Navigate to **Library → Incoming** to see books awaiting review.
+Navigate to **Library > Incoming** to see books awaiting review.
 
-Each review page shows three columns: the field name, the current extracted value (editable), and the value fetched from the metadata provider. Use the **←** copy buttons to pull individual fields from the provider into the current value.
+Each review page shows three columns: the field name, the current extracted value (editable), and the value fetched from the metadata provider. Use the copy buttons to pull individual fields from the provider into the current value.
 
 - **Fetch provider data** — re-queries the provider using the current identifiers in the form
 - **Approve** — commits the edited metadata, moves the book to your library, and sets its status to _Available_
@@ -47,16 +47,27 @@ Files are SHA-256 hashed before ingestion. If a file with the same hash already 
 
 The main **Library** view shows your approved books as a grid of cover thumbnails.
 
-Use the shelf pills in the sidebar to filter by shelf.
+- **Sort** books by date added, title, or author using the sort controls
+- **Search** using the search bar in the navigation bar — type to filter the displayed books. Prefix terms with `author:`, `title:`, `series:`, `genre:`, or `tag:` for targeted filtering.
+- **Filter by shelf** using the shelf pills at the top of the screen
 
 ### Book Detail Page
 
 Click any book to open its detail page. From there you can:
 
 - View full metadata — title, authors, series, description, published year, page count, language, and identifiers (ISBN, ASIN, Hardcover, etc.)
-- **Download** the book file — format badges (e.g. `EPUB ↓ 2.3 MB`) are download links; click to save the file to your device
+- **Download** the book file — format badges (e.g. `EPUB 2.3 MB`) are download links
 - **Edit** metadata — opens the edit page (requires the _Edit Book_ capability)
 - **Delete** the book (requires the _Delete Book_ capability)
+
+### Multi-Select & Bulk Operations
+
+Select multiple books from the grid to perform bulk operations:
+
+- **Set reading status** — change the reading status for all selected books at once
+- **Edit metadata** — bulk edit a subset of fields (genres, tags, etc.) across selected books
+
+Keyboard shortcuts are available for common actions.
 
 ---
 
@@ -75,28 +86,6 @@ Changes are saved to the database and to the OPF sidecar file on disk.
 
 ---
 
-## Shelves
-
-Shelves are named collections you create to organise your books.
-
-### Creating a Shelf
-
-Open **Settings → Shelves** (or use the sidebar) to create a new shelf. Give it a name.
-
-### Adding Books to a Shelf
-
-The way to add a book to a shelf:
-
-1. **Drag and drop** — in the book grid, drag a book's cover onto a shelf pill
-
-### Removing Books from a Shelf
-
-Open the shelf, then remove individual books from the shelf view.
-
----
-
 ## Downloading Books
 
-Format download links appear on each book's detail page under the **Formats** section. Each badge shows the format name and file size. Clicking downloads the original file as imported.
-
-> **Note:** Downloads serve the original imported file. Metadata edits made inside BookBoss (title, author, cover) are stored in the database and OPF sidecar but are not written back into the EPUB/MOBI file itself.
+Format download links appear on each book's detail page under the **Formats** section. Each badge shows the format name and file size. Clicking downloads an enriched copy of the book with up-to-date metadata and cover art embedded.

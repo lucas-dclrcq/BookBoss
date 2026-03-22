@@ -6,7 +6,8 @@
 - [mise](https://mise.jdx.dev) — tool version manager
 - [just](https://just.systems) — command runner
 - [direnv](https://direnv.net/) — environment setup
-- sops — secrets for environment
+- [sops](https://github.com/getsops/sops) — secrets encryption
+- Node.js 24+ (managed by mise, used for Tailwind CSS)
 
 ## One-time Setup
 
@@ -16,7 +17,15 @@ Install and update all required tools:
 just install-tools
 ```
 
-This installs the nightly toolchain, cargo extensions, and any other project tools.
+This installs the nightly toolchain, wasm32 target, cargo extensions, and any other project tools.
+
+## Secrets Configuration
+
+```bash
+just config
+```
+
+This opens the encrypted `config.sops.env` file for editing. See [Configuration Reference](../user/configuration.md) for all available settings.
 
 ## Building
 
@@ -30,11 +39,7 @@ just build
 just run
 ```
 
-## Secrets Configuration
-
-```bash
-just config
-```
+The application will be available at `http://localhost:8080` by default.
 
 ## Integration Tests
 
@@ -45,3 +50,5 @@ colima start
 just test
 colima stop
 ```
+
+See [Commands](commands.md) for the full list of test commands.

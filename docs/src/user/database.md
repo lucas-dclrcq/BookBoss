@@ -1,13 +1,13 @@
 # Database Configuration
 
-BookBoss supports three database backends. Choose the one that fits your deployment:
+BookBoss supports four database backends. Choose the one that fits your deployment:
 
-| Database   | Best for                                    |
-| ---------- | ------------------------------------------- |
-| SQLite     | Single-user, low maintenance, simple setups |
-| PostgreSQL | Multi-user, production deployments          |
-| MariaDB    | Existing MariaDB infrastructur e            |
-| MySQL      | Existing MySQL infrastructure               |
+| Database | Best for |
+| --- | --- |
+| SQLite | Single-user, low maintenance, simple setups |
+| PostgreSQL | Multi-user, production deployments |
+| MariaDB | Existing MariaDB infrastructure |
+| MySQL | Existing MySQL infrastructure |
 
 ---
 
@@ -15,18 +15,16 @@ BookBoss supports three database backends. Choose the one that fits your deploym
 
 SQLite requires no separate server — the database is a single file on disk.
 
-Set the `database_url` in your configuration to a file path:
+Set `BOOKBOSS__DATABASE__DATABASE_URL` to a file path:
 
-```toml
-[database]
-database_url = "sqlite:///path/to/bookboss.db"
+```
+sqlite:///path/to/bookboss.db
 ```
 
 Or use a relative path:
 
-```toml
-[database]
-database_url = "sqlite://./bookboss.db"
+```
+sqlite://./bookboss.db
 ```
 
 > **Tip:** SQLite is the simplest option for personal use. No additional software required.
@@ -53,16 +51,8 @@ docker run -d \
 
 ### Configuration
 
-```toml
-[database]
-database_url = "postgres://user:password@host:5432/database"
 ```
-
-For example:
-
-```toml
-[database]
-database_url = "postgres://bookboss:yourpassword@localhost:5432/bookboss"
+BOOKBOSS__DATABASE__DATABASE_URL=postgres://user:password@host:5432/database
 ```
 
 ---
@@ -71,7 +61,7 @@ database_url = "postgres://bookboss:yourpassword@localhost:5432/bookboss"
 
 ### Prerequisites
 
-A running MySQL instance is required. You can run one with Docker:
+A running MySQL or MariaDB instance is required. You can run one with Docker:
 
 ```bash
 docker run -d \
@@ -86,18 +76,10 @@ docker run -d \
 
 ### Configuration
 
-Both MySQL and MariaDB use the same `database_url` configuration.
+Both MySQL and MariaDB use the same connection string format:
 
-```toml
-[database]
-database_url = "mysql://user:password@host:3306/database"
 ```
-
-For example:
-
-```toml
-[database]
-database_url = "mysql://bookboss:yourpassword@localhost:3306/bookboss"
+BOOKBOSS__DATABASE__DATABASE_URL=mysql://user:password@host:3306/database
 ```
 
 ---

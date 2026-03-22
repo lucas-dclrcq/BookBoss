@@ -47,16 +47,9 @@ use {crate::server::AuthSession, bb_core::CoreServices, std::sync::Arc};
 
 ### Axum Handlers (non-server-fn routes)
 
-Some endpoints need full axum handler control — for example, file downloads and image serving.
-These live in `crates/frontend/src/server/` and are registered manually in `server/mod.rs`:
-
-```rust
-let router = dioxus::server::router(BookBossFrontend)
-    .route("/api/v1/covers/{book_token}", axum::routing::get(covers::serve_cover))
-    .route("/api/v1/books/{book_token}/download/{format}", axum::routing::get(downloads::serve_book_file))
-    .layer(Extension(core_services))
-    .layer(middleware);
-```
+Some endpoints need full axum handler control — for example, file downloads, image serving,
+OPDS feeds, and the Kobo sync protocol. These live in `crates/frontend/src/server/` and are
+registered manually in `server/mod.rs`.
 
 Follow the pattern in `covers.rs` / `downloads.rs`: check auth via `auth_session.current_user`,
 return `Response` directly, use `Body::from(data)` with appropriate `Content-Type` and
@@ -81,7 +74,25 @@ enum Route {
 
     #[layout(AppLayout)]
     #[route("/library")]
-    LibraryPage {},
+    BooksPage {},
+    #[route("/library/books/:token")]
+    BookDetailPage { token: String },
+    #[route("/library/books/:token/edit")]
+    EditMetadataPage { token: String },
+    #[route("/library/authors/:token")]
+    AuthorDetailPage { token: String },
+    #[route("/library/series/:token")]
+    SeriesDetailPage { token: String },
+    #[route("/library/incoming")]
+    IncomingPage {},
+    #[route("/library/incoming/:token")]
+    ReviewPage { token: String },
+    #[route("/shelves/:token")]
+    ShelfPage { token: String },
+    #[route("/settings")]
+    SettingsPage {},
+    #[route("/profile")]
+    ProfilePage {},
 }
 ```
 
@@ -89,7 +100,7 @@ Navigate programmatically after a server fn succeeds:
 
 ```rust
 let navigator = use_navigator();
-navigator.push(Route::LibraryPage {});
+navigator.push(Route::BooksPage {});
 ```
 
 ### Hydration
@@ -102,6 +113,30 @@ let data = use_server_future(fetch_data)?;
 
 Browser-specific code (e.g. `localStorage`) must go inside `use_effect`, which runs only after hydration.
 
+## Server Modules
+
+```
+crates/frontend/src/server/
+├── mod.rs                       # Server setup, router, middleware stack
+├── auth_user.rs                 # AuthUser impl for axum-session-auth
+├── session_pool.rs              # BackendSessionPool (session store)
+├── covers.rs                    # GET /api/v1/covers/{token} — serve cover images
+├── downloads.rs                 # GET /api/v1/books/{token}/download/{format}
+├── events.rs                    # GET /api/v1/events — SSE event stream
+├── opds/                        # OPDS 1.x catalog server (Atom XML feeds)
+│   ├── mod.rs                   # Router, auth extractor
+│   ├── feeds.rs                 # All OPDS feed endpoints
+│   ├── xml.rs                   # Atom XML builder
+│   └── ...
+└── kobo/                        # Kobo device sync protocol
+    ├── mod.rs                   # Router, auth extractor
+    ├── initialization.rs        # Device init + store API proxy
+    ├── library_sync.rs          # Incremental library sync
+    ├── metadata.rs              # Per-book metadata
+    ├── state.rs                 # Reading state GET/PUT
+    └── ...
+```
+
 ## Frontend Structure
 
 ```
@@ -111,35 +146,42 @@ crates/frontend/src/
 ├── error.rs                         # Error types
 │
 ├── routes/
-│   ├── landing_page.rs              # Login, register admin — server fns
-│   ├── books_page.rs                # Library grid with ShelfBar
-│   ├── book_detail_page.rs          # Book detail view + download + delete
-│   ├── edit_metadata_page.rs        # Metadata editor (title, authors, cover, etc.)
+│   ├── landing_page.rs              # Login, register admin
+│   ├── books_page.rs                # Library grid with search, sort, bulk ops
+│   ├── book_detail_page.rs          # Book detail + download + delete
+│   ├── edit_metadata_page.rs        # Metadata editor
 │   ├── author_detail_page.rs        # Author detail + books list
 │   ├── series_detail_page.rs        # Series detail + books list
 │   ├── shelf_page.rs                # Shelf contents view
 │   ├── incoming_page.rs             # Import review queue
-│   ├── settings_page.rs             # Settings (library stats, shelves)
+│   ├── settings_page.rs             # Settings, user management
+│   ├── profile_page.rs             # User profile, OPDS, Kobo devices
 │   └── review_page/
 │       ├── mod.rs                   # ReviewPage component
 │       ├── editor.rs                # Side-by-side metadata editor
-│       ├── server.rs                # Server functions (get_review, approve, reject)
+│       ├── server.rs                # Server functions
 │       └── types.rs                 # ReviewBook, ReviewField, etc.
 │
 ├── components/
 │   ├── app_layout.rs                # AppLayout wrapper (NavBar + outlet)
-│   ├── nav_bar.rs                   # Top navigation bar
-│   ├── book_grid.rs                 # Cover thumbnail grid (with DnD drag source)
+│   ├── nav_bar.rs                   # Top navigation bar with search
+│   ├── book_grid.rs                 # Cover thumbnail grid (DnD, multi-select)
 │   ├── shelf_bar.rs                 # Horizontal shelf pills (DnD drop targets)
 │   ├── autocomplete_input.rs        # Typeahead input for authors, series, etc.
 │   ├── chip_input.rs                # Tag/genre chip input
 │   ├── login_form.rs                # Login form
 │   └── register_admin_form.rs       # Admin registration form
 │
-└── server/
-    ├── mod.rs                       # Server setup, router, middleware
-    ├── auth_user.rs                 # AuthUser impl for axum-session-auth
-    ├── session_pool.rs              # BackendSessionPool (session store)
-    ├── covers.rs                    # GET /api/v1/covers/{token} — serve cover images
-    └── downloads.rs                 # GET /api/v1/books/{token}/download/{format} — serve book files
+└── server/                          # (see Server Modules above)
 ```
+
+## SSE Events
+
+BookBoss uses Server-Sent Events for real-time UI updates. The `GET /api/v1/events` endpoint
+streams `AppEvent` variants:
+
+- `IncomingChanged` — new imports ready for review, or imports approved/rejected
+- `JobsChanged` — background job status changes
+
+The frontend subscribes to this stream and updates relevant UI components automatically (e.g. the
+incoming badge count refreshes without a page reload).
