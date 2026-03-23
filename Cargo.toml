@@ -151,7 +151,7 @@ features = ["tls-native-roots", "tls-ring"]
 
 [workspace.dependencies.tower-http]
 version = "0.6.8"
-features = ["limit", "request-id", "trace"]
+features = ["compression-full", "limit", "request-id", "trace"]
 
 [workspace.dependencies.tracing]
 version = "0.1.44"
