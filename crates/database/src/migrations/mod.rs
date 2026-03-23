@@ -25,6 +25,7 @@ mod m20260305_000022_create_jobs_table;
 mod m20260321_000023_add_sort_indexes;
 mod m20260322_000024_create_system_messages_table;
 mod m20260322_000025_add_created_at_to_book_files;
+mod m20260323_000026_drop_devices_preferred_format;
 
 pub struct Migrator;
 
@@ -57,6 +58,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260321_000023_add_sort_indexes::Migration),
             Box::new(m20260322_000024_create_system_messages_table::Migration),
             Box::new(m20260322_000025_add_created_at_to_book_files::Migration),
+            Box::new(m20260323_000026_drop_devices_preferred_format::Migration),
         ]
     }
 }

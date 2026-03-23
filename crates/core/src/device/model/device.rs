@@ -3,7 +3,7 @@ use std::{fmt, str::FromStr};
 use bb_utils::{define_token_prefix, token::Token};
 use chrono::{DateTime, Utc};
 
-use crate::{book::FileFormat, user::UserId};
+use crate::user::UserId;
 
 define_token_prefix!(DeviceTokenPrefix, "DV_");
 pub type DeviceId = u64;
@@ -53,7 +53,6 @@ pub struct Device {
     pub owner_id: UserId,
     pub name: String,
     pub device_type: String,
-    pub preferred_format: Option<FileFormat>,
     pub on_removal_action: OnRemovalAction,
     pub last_synced_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
@@ -65,6 +64,5 @@ pub struct NewDevice {
     pub owner_id: UserId,
     pub name: String,
     pub device_type: String,
-    pub preferred_format: Option<FileFormat>,
     pub on_removal_action: OnRemovalAction,
 }

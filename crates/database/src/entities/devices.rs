@@ -16,7 +16,6 @@ pub struct Model {
     pub owner_id: i64,
     pub name: String,
     pub device_type: String,
-    pub preferred_format: Option<String>,
     pub on_removal_action: String,
     pub last_synced_at: Option<DateTimeWithTimeZone>,
     pub version: i64,

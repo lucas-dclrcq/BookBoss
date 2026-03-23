@@ -27,7 +27,6 @@ impl From<devices::Model> for Device {
             owner_id: m.owner_id as u64,
             name: m.name,
             device_type: m.device_type,
-            preferred_format: m.preferred_format.as_deref().map(|s| s.parse().expect("DB has unknown file format")),
             on_removal_action: m.on_removal_action.parse().expect("DB has unknown removal action"),
             last_synced_at: m.last_synced_at.map(|t| t.with_timezone(&Utc)),
             created_at: m.created_at.with_timezone(&Utc),
@@ -87,7 +86,6 @@ impl DeviceRepository for DeviceRepositoryAdapter {
             owner_id: Set(device.owner_id as i64),
             name: Set(device.name),
             device_type: Set(device.device_type),
-            preferred_format: Set(device.preferred_format.as_ref().map(std::string::ToString::to_string)),
             on_removal_action: Set(device.on_removal_action.to_string()),
             last_synced_at: Set(None),
             version: Set(0),
@@ -113,7 +111,6 @@ impl DeviceRepository for DeviceRepositoryAdapter {
         let mut updater: devices::ActiveModel = existing.into();
         updater.name = Set(device.name);
         updater.device_type = Set(device.device_type);
-        updater.preferred_format = Set(device.preferred_format.as_ref().map(std::string::ToString::to_string));
         updater.on_removal_action = Set(device.on_removal_action.to_string());
         updater.last_synced_at = Set(device.last_synced_at.map(Into::into));
 
@@ -364,7 +361,6 @@ mod tests {
             owner_id,
             name: name.to_owned(),
             device_type: "kobo".to_owned(),
-            preferred_format: Some(FileFormat::Epub),
             on_removal_action: OnRemovalAction::Nothing,
         }
     }

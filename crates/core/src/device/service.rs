@@ -150,16 +150,6 @@ impl DeviceServiceImpl {
     }
 }
 
-/// Derives the preferred file format for a device type.
-///
-/// Currently only `"kobo"` maps to EPUB; all other types return `None`.
-fn derive_preferred_format(device_type: &str) -> Option<FileFormat> {
-    match device_type.to_lowercase().as_str() {
-        "kobo" => Some(FileFormat::Epub),
-        _ => None,
-    }
-}
-
 /// Builds the default companion-shelf filter: `ReadStatus IncludesAny
 /// [Active]`.
 fn device_shelf_filter() -> BookFilter {
@@ -198,8 +188,6 @@ impl DeviceService for DeviceServiceImpl {
             return Err(Error::Validation("device name must not be empty".to_string()));
         }
 
-        let preferred_format = derive_preferred_format(&device_type);
-
         with_transaction!(self, device_repository, shelf_repository, |tx| {
             let device = device_repository
                 .add_device(
@@ -208,7 +196,6 @@ impl DeviceService for DeviceServiceImpl {
                         owner_id,
                         name: name.clone(),
                         device_type,
-                        preferred_format,
                         on_removal_action,
                     },
                 )
@@ -622,7 +609,6 @@ mod tests {
             owner_id,
             name: "My Device".to_string(),
             device_type: "kobo".to_string(),
-            preferred_format: Some(FileFormat::Epub),
             on_removal_action: OnRemovalAction::Nothing,
             last_synced_at: None,
             created_at: Utc::now(),
@@ -711,20 +697,6 @@ mod tests {
             Box::pin(async move { Ok(files) })
         });
         repo
-    }
-
-    // ─── derive_preferred_format ──────────────────────────────────────────────
-
-    #[test]
-    fn test_derive_preferred_format_kobo() {
-        assert_eq!(derive_preferred_format("kobo"), Some(FileFormat::Epub));
-        assert_eq!(derive_preferred_format("Kobo"), Some(FileFormat::Epub));
-    }
-
-    #[test]
-    fn test_derive_preferred_format_unknown() {
-        assert_eq!(derive_preferred_format("kindle"), None);
-        assert_eq!(derive_preferred_format(""), None);
     }
 
     // ─── list_devices_for_user ────────────────────────────────────────────────
