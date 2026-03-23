@@ -1,0 +1,60 @@
+---
+# BookBoss with SQLite
+#
+# Usage:
+#   docker compose -f docker-compose-sqlite.yaml up -d
+#
+# Prerequisites:
+#   mkdir -p Library/Books Library/Bookdrop
+#
+# The SQLite database file is stored alongside your library at Library/bookboss.db
+
+services:
+  bookboss:
+    image: ghcr.io/szinn/bookboss:latest
+    ports:
+      - "8080:8080" # Web UI
+      - "8081:8081" # gRPC API
+    volumes:
+      - ./Library:/library
+      - ./Library/Bookdrop:/library/bookdrop
+    environment:
+      # ── Required ─────────────────────────────────────────────
+      # Database connection string (SQLite file stored in Library directory)
+      BOOKBOSS__DATABASE__DATABASE_URL: "sqlite:///library/bookboss.db?mode=rwc"
+      # Absolute path inside container where imported books are stored
+      BOOKBOSS__LIBRARY__LIBRARY_PATH: "/library/books"
+      # Absolute path inside container where new files are dropped for import
+      BOOKBOSS__IMPORT__BOOKDROP_PATH: "/library/bookdrop"
+      # Encryption key for OPDS/device sync tokens — change this to a random string
+      BOOKBOSS__ENCRYPTION_SECRET: "change-me-to-a-random-secret"
+
+      # ── Optional: Networking ─────────────────────────────────
+      # IP address for the web server (default: 0.0.0.0)
+      # BOOKBOSS__FRONTEND__LISTEN_IP: "0.0.0.0"
+      # Port for the web server (default: 8080)
+      # BOOKBOSS__FRONTEND__LISTEN_PORT: "8080"
+      # External URL where users access BookBoss — used for OPDS and device sync
+      # (default: http://0.0.0.0:8080)
+      BOOKBOSS__FRONTEND__BASE_URL: "http://localhost:8080"
+      # IP address for the gRPC API (default: 0.0.0.0)
+      # BOOKBOSS__API__GRPC_LISTEN_IP: "0.0.0.0"
+      # Port for the gRPC API (default: 8081)
+      # BOOKBOSS__API__GRPC_LISTEN_PORT: "8081"
+
+      # ── Optional: Import Scanner ─────────────────────────────
+      # Seconds between bookdrop scans (default: 60)
+      # BOOKBOSS__IMPORT__SCAN_INTERVAL_SECS: "60"
+      # Seconds between import worker polls (default: 5)
+      # BOOKBOSS__IMPORT__WORKER_POLL_INTERVAL_SECS: "5"
+
+      # ── Optional: Metadata Providers ─────────────────────────
+      # Hardcover API token — enables richer metadata enrichment
+      # BOOKBOSS__METADATA__HARDCOVER_API_TOKEN: ""
+      # Google Books API token — secondary metadata source
+      # BOOKBOSS__METADATA__GOOGLEBOOKS_API_TOKEN: ""
+
+      # ── Optional: Logging ────────────────────────────────────
+      # Log level (default: info). Examples: debug, warn, bookboss=debug
+      # RUST_LOG: "info"
+    restart: unless-stopped

@@ -70,7 +70,9 @@ jobs:
           platforms: linux/amd64 # load does not support muti-arch https://github.com/docker/buildx/issues/290
           file: Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/${{ steps.vars.outputs.tag_version }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ steps.vars.outputs.tag_version }}
+            ghcr.io/${{ github.repository_owner }}/bookboss:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
