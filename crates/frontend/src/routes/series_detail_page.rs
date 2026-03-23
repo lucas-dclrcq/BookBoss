@@ -89,9 +89,9 @@ pub(crate) fn SeriesDetailPage(token: String) -> Element {
                     let book_tokens: Vec<String> = filtered_books.iter().map(|b| b.token.clone()).collect();
                     rsx! {
                         Link {
-                            to: Route::BooksPage {},
+                            to: Route::SeriesPage {},
                             class: "inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 mb-6",
-                            "← Library"
+                            "← Series"
                         }
 
                         h1 { class: "text-2xl font-bold text-gray-900 mb-2", "{series.name}" }

@@ -2,6 +2,7 @@
 pub(crate) mod server_helpers;
 
 pub(crate) mod author_detail_page;
+pub(crate) mod authors_page;
 pub(crate) mod book_detail_page;
 pub(crate) mod books_page;
 pub(crate) mod edit_metadata_page;
@@ -10,10 +11,12 @@ pub(crate) mod landing_page;
 pub(crate) mod profile_page;
 pub(crate) mod review_page;
 pub(crate) mod series_detail_page;
+pub(crate) mod series_page;
 pub(crate) mod settings_page;
 pub(crate) mod shelf_page;
 
 pub(crate) use author_detail_page::AuthorDetailPage;
+pub(crate) use authors_page::AuthorsPage;
 pub(crate) use book_detail_page::BookDetailPage;
 pub(crate) use books_page::BooksPage;
 pub(crate) use edit_metadata_page::EditMetadataPage;
@@ -22,5 +25,6 @@ pub(crate) use landing_page::LandingPage;
 pub(crate) use profile_page::ProfilePage;
 pub(crate) use review_page::ReviewPage;
 pub(crate) use series_detail_page::SeriesDetailPage;
+pub(crate) use series_page::SeriesPage;
 pub(crate) use settings_page::SettingsPage;
 pub(crate) use shelf_page::ShelfPage;

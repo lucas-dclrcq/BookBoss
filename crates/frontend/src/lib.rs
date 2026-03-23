@@ -52,8 +52,8 @@ pub mod server;
 
 use components::AppLayout;
 use routes::{
-    AuthorDetailPage, BookDetailPage, BooksPage, EditMetadataPage, IncomingPage, LandingPage, ProfilePage, ReviewPage, SeriesDetailPage, SettingsPage,
-    ShelfPage,
+    AuthorDetailPage, AuthorsPage, BookDetailPage, BooksPage, EditMetadataPage, IncomingPage, LandingPage, ProfilePage, ReviewPage, SeriesDetailPage,
+    SeriesPage, SettingsPage, ShelfPage,
 };
 use serde::Deserialize;
 
@@ -65,6 +65,10 @@ enum Route {
     #[layout(AppLayout)]
         #[route("/library")]
         BooksPage,
+        #[route("/library/authors")]
+        AuthorsPage,
+        #[route("/library/series")]
+        SeriesPage,
         #[route("/library/books/:token")]
         BookDetailPage { token: String },
         #[route("/library/books/:token/edit")]

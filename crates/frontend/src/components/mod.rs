@@ -8,6 +8,7 @@ mod nav_bar;
 mod register_admin_form;
 mod search;
 mod selection;
+mod series_tile;
 mod shelf_bar;
 mod sort_control;
 
@@ -21,6 +22,7 @@ pub(crate) use nav_bar::NavBar;
 pub(crate) use register_admin_form::RegisterAdminForm;
 pub(crate) use search::{SEARCH_TEXT, filter_books_by_search};
 pub(crate) use selection::{SelectionActionBar, SelectionToggle};
+pub(crate) use series_tile::{SeriesTile, SeriesTileData};
 pub(crate) use shelf_bar::ShelfBar;
 #[cfg(feature = "server")]
 pub(crate) use sort_control::to_core_sort;

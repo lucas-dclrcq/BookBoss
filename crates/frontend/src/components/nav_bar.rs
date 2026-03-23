@@ -350,8 +350,14 @@ pub(crate) fn NavBar() -> Element {
 
     let search_active = matches!(
         route,
-        Route::BooksPage | Route::ShelfPage { .. } | Route::AuthorDetailPage { .. } | Route::SeriesDetailPage { .. }
+        Route::BooksPage | Route::ShelfPage { .. } | Route::AuthorDetailPage { .. } | Route::SeriesDetailPage { .. } | Route::AuthorsPage | Route::SeriesPage
     );
+
+    let search_placeholder = match route {
+        Route::AuthorsPage => "Search authors…",
+        Route::SeriesPage => "Search series…",
+        _ => "Search books…",
+    };
 
     let on_logout = move |_| {
         user_menu_open.set(false);
@@ -376,6 +382,12 @@ pub(crate) fn NavBar() -> Element {
                 }
                 Link { to: Route::BooksPage {}, class: "text-sm hover:text-indigo-200",
                     "Library"
+                }
+                Link { to: Route::AuthorsPage {}, class: "text-sm hover:text-indigo-200",
+                    "Authors"
+                }
+                Link { to: Route::SeriesPage {}, class: "text-sm hover:text-indigo-200",
+                    "Series"
                 }
                 SuspenseBoundary {
                     fallback: |_| rsx! {},
@@ -406,7 +418,7 @@ pub(crate) fn NavBar() -> Element {
                         input {
                             class: "w-full pl-9 pr-8 py-1.5 rounded text-sm text-gray-900 bg-white/90 placeholder-gray-400 outline-none focus:bg-white focus:ring-2 focus:ring-indigo-300",
                             r#type: "text",
-                            placeholder: "Search books…",
+                            placeholder: "{search_placeholder}",
                             value: SEARCH_TEXT(),
                             oninput: move |e| *SEARCH_TEXT.write() = e.value(),
                         }
