@@ -30,6 +30,8 @@ pub trait BookService: Send + Sync {
     async fn list_all_authors(&self) -> Result<Vec<Author>, Error>;
     async fn list_all_publishers(&self) -> Result<Vec<Publisher>, Error>;
     async fn series_next_number(&self, series_name: &str) -> Result<u32, Error>;
+    async fn count_books_for_author(&self, author_id: AuthorId) -> Result<u64, Error>;
+    async fn count_books_for_series(&self, series_id: SeriesId) -> Result<u64, Error>;
 }
 
 pub(crate) struct BookServiceImpl {
@@ -149,6 +151,14 @@ impl BookService for BookServiceImpl {
             None => 1,
         };
         Ok(next)
+    }
+
+    async fn count_books_for_author(&self, author_id: AuthorId) -> Result<u64, Error> {
+        with_read_only_transaction!(self, book_repository, |tx| book_repository.count_books_for_author(tx, author_id).await)
+    }
+
+    async fn count_books_for_series(&self, series_id: SeriesId) -> Result<u64, Error> {
+        with_read_only_transaction!(self, series_repository, |tx| series_repository.count_books_for_series(tx, series_id).await)
     }
 }
 
@@ -560,5 +570,57 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
+    }
+
+    // ─── count_books_for_author ──────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_count_books_for_author_returns_count() {
+        let mut book_repo = MockBookRepository::new();
+        book_repo.expect_count_books_for_author().returning(|_, _| Box::pin(async { Ok(5) }));
+        let svc = default_service_with_book_repo(book_repo);
+
+        let result = svc.count_books_for_author(1).await;
+
+        assert_eq!(result.unwrap(), 5);
+    }
+
+    #[tokio::test]
+    async fn test_count_books_for_author_propagates_error() {
+        let mut book_repo = MockBookRepository::new();
+        book_repo
+            .expect_count_books_for_author()
+            .returning(|_, _| Box::pin(async { Err(Error::RepositoryError(RepositoryError::Database("db error".into()))) }));
+        let svc = default_service_with_book_repo(book_repo);
+
+        let result = svc.count_books_for_author(1).await;
+
+        assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::Database(_)))));
+    }
+
+    // ─── count_books_for_series ──────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_count_books_for_series_returns_count() {
+        let mut series_repo = MockSeriesRepository::new();
+        series_repo.expect_count_books_for_series().returning(|_, _| Box::pin(async { Ok(3) }));
+        let svc = create_service(MockBookRepository::new(), MockAuthorRepository::new(), series_repo);
+
+        let result = svc.count_books_for_series(1).await;
+
+        assert_eq!(result.unwrap(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_count_books_for_series_propagates_error() {
+        let mut series_repo = MockSeriesRepository::new();
+        series_repo
+            .expect_count_books_for_series()
+            .returning(|_, _| Box::pin(async { Err(Error::RepositoryError(RepositoryError::Database("db error".into()))) }));
+        let svc = create_service(MockBookRepository::new(), MockAuthorRepository::new(), series_repo);
+
+        let result = svc.count_books_for_series(1).await;
+
+        assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::Database(_)))));
     }
 }
