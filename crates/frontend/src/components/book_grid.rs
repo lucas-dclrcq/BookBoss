@@ -140,13 +140,12 @@ fn BookCard(book: BookSummary) -> Element {
                                 move |_| {
                                     let tok = tok.clone();
                                     deleting.set(true);
+                                    show_confirm.set(false);
                                     spawn(async move {
                                         if delete_library_book(tok).await.is_ok() {
                                             on_action.call(());
-                                        } else {
-                                            deleting.set(false);
-                                            show_confirm.set(false);
                                         }
+                                        deleting.set(false);
                                     });
                                 }
                             },

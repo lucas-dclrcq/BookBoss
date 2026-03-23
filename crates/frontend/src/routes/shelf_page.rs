@@ -862,11 +862,12 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                                 move |_| {
                                     let tok = tok.clone();
                                     deleting.set(true);
+                                    show_delete.set(false);
                                     spawn(async move {
-                                        if let Ok(()) = delete_shelf(tok).await { nav.push(Route::BooksPage {}); } else {
-                                            deleting.set(false);
-                                            show_delete.set(false);
+                                        if let Ok(()) = delete_shelf(tok).await {
+                                            nav.push(Route::BooksPage {});
                                         }
+                                        deleting.set(false);
                                     });
                                 }
                             },
