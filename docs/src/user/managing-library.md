@@ -71,6 +71,33 @@ Keyboard shortcuts are available for common actions.
 
 ---
 
+## Deleting Books & Trash
+
+When you delete a book (from the book detail page or via multi-select), BookBoss removes it
+from the database and deletes its library files. Before deletion, the enriched book file
+(with metadata and cover art baked in) is automatically copied to a **Trash** directory:
+
+```
+{library_path}/Trash/
+└── author-title.epub    # enriched copy, ready for re-import
+```
+
+This acts as a filesystem safety net — if you change your mind, recovering the book is as
+simple as copying the file from Trash back into your Bookdrop directory. The scanner will
+pick it up, extract the embedded metadata, and run it through the normal import pipeline.
+
+A few details:
+
+- Only the **enriched** file is copied to Trash (the version with metadata and cover embedded).
+  If no enriched file exists, nothing is placed in Trash.
+- If a file with the same name already exists in Trash, it is overwritten with the newer version.
+- **Rejected** imports do not go to Trash. The original file was moved out of Bookdrop during
+  ingestion and rejecting the import deletes it permanently.
+- There is no automatic retention policy. Clean up the Trash directory manually when you are
+  ready to free the disk space.
+
+---
+
 ## Editing Metadata
 
 Click **Edit** on any book's detail page to open the metadata editor. You can update:

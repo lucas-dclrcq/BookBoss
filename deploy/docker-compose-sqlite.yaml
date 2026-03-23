@@ -7,6 +7,9 @@
 # Prerequisites:
 #   mkdir -p Library/Books Library/Bookdrop
 #
+# See the user manual for full configuration details:
+#   https://szinn.github.io/BookBoss/user/configuration.html
+#
 # The SQLite database file is stored alongside your library at Library/bookboss.db
 
 services:

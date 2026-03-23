@@ -6,6 +6,9 @@
 #
 # Prerequisites:
 #   mkdir -p Library/Books Library/Bookdrop
+#
+# See the user manual for full configuration details:
+#   https://szinn.github.io/BookBoss/user/configuration.html
 
 services:
   db:
