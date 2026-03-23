@@ -80,14 +80,15 @@ pub(crate) fn AppLayout() -> Element {
         }
     });
 
-    // Exit selection mode when navigating away from book-grid pages.
+    // Exit selection mode whenever the route changes (e.g. clicking an author
+    // or series link while selecting books on another page).
     let route = use_route::<Route>();
     use_effect(move || {
-        let on_grid_page = matches!(
-            route,
-            Route::BooksPage | Route::AuthorDetailPage { .. } | Route::SeriesDetailPage { .. } | Route::ShelfPage { .. }
-        );
-        if !on_grid_page && SELECTION_MODE() {
+        // Subscribe to route changes so the effect re-runs on navigation.
+        // Use peek() for SELECTION_MODE to avoid re-running when the user
+        // toggles selection mode on the current page.
+        let _ = &route;
+        if *SELECTION_MODE.peek() {
             exit_selection_mode();
         }
     });
