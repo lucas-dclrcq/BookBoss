@@ -20,6 +20,7 @@
     {
       matchManagers: ["github-actions"],
       matchUpdateTypes: ["minor", "patch", "digest"],
+      addLabels: ["ci"],
       automerge: true
     },
     {
