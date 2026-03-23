@@ -21,9 +21,9 @@ impl JobHandler for CleanupExpiredSessionsHandler {
         let deleted = self.auth_service.delete_by_expiry().await?;
 
         if deleted.is_empty() {
-            tracing::info!("no expired sessions to clean up");
+            tracing::info!("no stale sessions to clean up");
         } else {
-            tracing::info!(count = deleted.len(), "deleted expired sessions");
+            tracing::info!(count = deleted.len(), "deleted stale sessions");
         }
 
         Ok(())

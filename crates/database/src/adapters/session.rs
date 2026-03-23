@@ -4,7 +4,7 @@ use bb_core::{
     repository::Transaction,
 };
 use chrono::Utc;
-use sea_orm::{ActiveValue::Set, ColumnTrait, EntityTrait, ModelTrait, PaginatorTrait, QueryFilter, QuerySelect, sea_query::OnConflict};
+use sea_orm::{ActiveValue::Set, ColumnTrait, Condition, EntityTrait, ModelTrait, PaginatorTrait, QueryFilter, QuerySelect, sea_query::OnConflict};
 
 use crate::{
     entities::{prelude, sessions},
@@ -100,20 +100,29 @@ impl SessionRepository for SessionRepositoryAdapter {
     async fn delete_by_expiry(&self, transaction: &dyn Transaction) -> Result<Vec<String>, Error> {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
         let now = Utc::now();
+        let anonymous_cutoff = now - chrono::Duration::hours(48);
 
-        // Fetch only the IDs of expired sessions
+        // Match expired sessions OR stale anonymous sessions (empty data, older than
+        // 48h)
+        let condition = Condition::any().add(sessions::Column::ExpiresAt.lt(now)).add(
+            Condition::all()
+                .add(sessions::Column::Session.contains("\"data\":{}"))
+                .add(sessions::Column::CreatedAt.lt(anonymous_cutoff)),
+        );
+
+        // Fetch only the IDs of sessions to delete
         let ids: Vec<String> = prelude::Sessions::find()
             .select_only()
             .column(sessions::Column::Id)
-            .filter(sessions::Column::ExpiresAt.lt(now))
+            .filter(condition.clone())
             .into_tuple()
             .all(transaction)
             .await
             .map_err(handle_dberr)?;
 
-        // Bulk delete all expired sessions in a single query
+        // Bulk delete in a single query
         prelude::Sessions::delete_many()
-            .filter(sessions::Column::ExpiresAt.lt(now))
+            .filter(condition)
             .exec(transaction)
             .await
             .map_err(handle_dberr)?;
@@ -150,9 +159,9 @@ mod tests {
 
     use bb_core::{auth::NewSession, repository::RepositoryService};
     use chrono::{Duration, Utc};
-    use sea_orm::Database;
+    use sea_orm::{ActiveModelTrait, Database, EntityTrait, IntoActiveModel};
 
-    use crate::create_repository_service;
+    use crate::{create_repository_service, transaction::TransactionImpl};
 
     async fn setup() -> Arc<RepositoryService> {
         let db = Database::connect("sqlite::memory:").await.unwrap();
@@ -450,6 +459,116 @@ mod tests {
             original.created_at.timestamp(),
             "created_at should not change on upsert"
         );
+    }
+
+    #[tokio::test]
+    async fn test_delete_by_expiry_removes_stale_anonymous_sessions() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        // Stale anonymous session (empty data, created > 48h ago) — should be deleted
+        svc.session_repository()
+            .store(
+                &*tx,
+                NewSession::new("anon-stale", r#"{"data":{},"longterm":false}"#, Utc::now() + Duration::hours(24)).unwrap(),
+            )
+            .await
+            .unwrap();
+        // Backdate created_at to 72h ago via a raw update so it qualifies as stale
+        let model: crate::entities::sessions::Model = crate::entities::prelude::Sessions::find_by_id("anon-stale")
+            .one(TransactionImpl::get_db_transaction(&*tx).unwrap())
+            .await
+            .unwrap()
+            .unwrap();
+        let mut active = model.into_active_model();
+        active.created_at = sea_orm::ActiveValue::Set((Utc::now() - Duration::hours(72)).into());
+        active.update(TransactionImpl::get_db_transaction(&*tx).unwrap()).await.unwrap();
+
+        // Recent anonymous session (< 48h old) — should be kept
+        svc.session_repository()
+            .store(
+                &*tx,
+                NewSession::new("anon-recent", r#"{"data":{},"longterm":false}"#, Utc::now() + Duration::hours(24)).unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Logged-in session with old created_at — should be kept (has user data)
+        svc.session_repository()
+            .store(
+                &*tx,
+                NewSession::new(
+                    "logged-in-old",
+                    r#"{"data":{"user_auth_session_id":"123"},"longterm":false}"#,
+                    Utc::now() + Duration::hours(24),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+        let model: crate::entities::sessions::Model = crate::entities::prelude::Sessions::find_by_id("logged-in-old")
+            .one(TransactionImpl::get_db_transaction(&*tx).unwrap())
+            .await
+            .unwrap()
+            .unwrap();
+        let mut active = model.into_active_model();
+        active.created_at = sea_orm::ActiveValue::Set((Utc::now() - Duration::hours(72)).into());
+        active.update(TransactionImpl::get_db_transaction(&*tx).unwrap()).await.unwrap();
+
+        let deleted = svc.session_repository().delete_by_expiry(&*tx).await.unwrap();
+
+        assert_eq!(deleted, vec!["anon-stale"]);
+        assert!(svc.session_repository().exists(&*tx, "anon-recent").await.unwrap());
+        assert!(svc.session_repository().exists(&*tx, "logged-in-old").await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_delete_by_expiry_removes_both_expired_and_stale_anonymous() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        // Expired session (any data, past expiry)
+        svc.session_repository()
+            .store(&*tx, NewSession::new("expired", "data", Utc::now() - Duration::hours(1)).unwrap())
+            .await
+            .unwrap();
+
+        // Stale anonymous session
+        svc.session_repository()
+            .store(
+                &*tx,
+                NewSession::new("anon-stale", r#"{"data":{},"longterm":false}"#, Utc::now() + Duration::hours(24)).unwrap(),
+            )
+            .await
+            .unwrap();
+        let model: crate::entities::sessions::Model = crate::entities::prelude::Sessions::find_by_id("anon-stale")
+            .one(TransactionImpl::get_db_transaction(&*tx).unwrap())
+            .await
+            .unwrap()
+            .unwrap();
+        let mut active = model.into_active_model();
+        active.created_at = sea_orm::ActiveValue::Set((Utc::now() - Duration::hours(72)).into());
+        active.update(TransactionImpl::get_db_transaction(&*tx).unwrap()).await.unwrap();
+
+        // Valid logged-in session — should survive
+        svc.session_repository()
+            .store(
+                &*tx,
+                NewSession::new(
+                    "valid",
+                    r#"{"data":{"user_auth_session_id":"456"},"longterm":false}"#,
+                    Utc::now() + Duration::hours(24),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let mut deleted = svc.session_repository().delete_by_expiry(&*tx).await.unwrap();
+        deleted.sort();
+
+        assert_eq!(deleted, vec!["anon-stale", "expired"]);
+        assert!(svc.session_repository().exists(&*tx, "valid").await.unwrap());
     }
 
     #[tokio::test]
