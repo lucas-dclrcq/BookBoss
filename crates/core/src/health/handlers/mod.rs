@@ -1,3 +1,4 @@
+pub mod cleanup_expired_sessions;
 pub mod cleanup_old_import_jobs;
 pub mod cleanup_old_jobs;
 pub mod cleanup_old_system_messages;

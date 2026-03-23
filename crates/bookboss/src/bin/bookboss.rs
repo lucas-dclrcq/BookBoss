@@ -149,11 +149,12 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
         health::{
             HealthTaskState, create_health_subsystem, create_health_trigger, default_health_tasks,
             handlers::{
-                cleanup_old_import_jobs::CleanupOldImportJobsHandler, cleanup_old_jobs::CleanupOldJobsHandler,
-                cleanup_old_system_messages::CleanupOldSystemMessagesHandler, cleanup_orphan_authors::CleanupOrphanAuthorsHandler,
-                cleanup_orphan_publishers::CleanupOrphanPublishersHandler, cleanup_orphan_series::CleanupOrphanSeriesHandler,
-                ensure_enrichments::EnsureEnrichmentsHandler, recover_enrichments::RecoverEnrichmentsHandler,
-                reset_stale_import_jobs::ResetStaleImportJobsHandler, verify_file_integrity::VerifyFileIntegrityHandler,
+                cleanup_expired_sessions::CleanupExpiredSessionsHandler, cleanup_old_import_jobs::CleanupOldImportJobsHandler,
+                cleanup_old_jobs::CleanupOldJobsHandler, cleanup_old_system_messages::CleanupOldSystemMessagesHandler,
+                cleanup_orphan_authors::CleanupOrphanAuthorsHandler, cleanup_orphan_publishers::CleanupOrphanPublishersHandler,
+                cleanup_orphan_series::CleanupOrphanSeriesHandler, ensure_enrichments::EnsureEnrichmentsHandler,
+                recover_enrichments::RecoverEnrichmentsHandler, reset_stale_import_jobs::ResetStaleImportJobsHandler,
+                verify_file_integrity::VerifyFileIntegrityHandler,
             },
         },
         jobs::{JobRegistry, create_job_service},
@@ -229,6 +230,7 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     registry.register(CleanupOldJobsHandler::new(repository_service.clone(), sms.clone()));
     registry.register(CleanupOldImportJobsHandler::new(repository_service.clone(), sms.clone()));
     registry.register(CleanupOldSystemMessagesHandler::new(sms.clone()));
+    registry.register(CleanupExpiredSessionsHandler::new(core_services.auth_service.clone()));
     registry.register(VerifyFileIntegrityHandler::new(
         repository_service.clone(),
         sms.clone(),

@@ -64,6 +64,12 @@ pub fn default_health_tasks() -> Vec<HealthTaskConfig> {
             run_on_startup: true,
             interval_minutes: 360,
         },
+        HealthTaskConfig {
+            name: "Cleanup Expired Sessions".into(),
+            job_type: "health.cleanup_expired_sessions".into(),
+            run_on_startup: false,
+            interval_minutes: 1440,
+        },
     ]
 }
 
@@ -74,7 +80,7 @@ mod tests {
     #[test]
     fn default_health_tasks_returns_10_tasks() {
         let tasks = default_health_tasks();
-        assert_eq!(tasks.len(), 10);
+        assert_eq!(tasks.len(), 11);
     }
 
     #[test]
