@@ -197,16 +197,20 @@ fn parse_year(s: &str) -> Option<i32> {
 
 fn parse_dc(xml: &[u8]) -> Result<DcFields, Error> {
     let mut reader = NsReader::from_reader(xml);
-    reader.config_mut().trim_text(true);
+    // Do NOT use trim_text(true) — it trims each text fragment
+    // independently, which strips whitespace around XML entities
+    // (e.g. "turned &amp; twisted" → "turned&twisted").
 
     let mut fields = DcFields::default();
     let mut state = ParseState::Other;
     let mut buf = Vec::new();
+    let mut text_buf = String::new();
 
     loop {
         buf.clear();
         match reader.read_resolved_event_into(&mut buf)? {
             (ResolveResult::Bound(ns), Event::Start(ref e)) if ns == Namespace(DC_NS) => {
+                text_buf.clear();
                 let local = e.local_name();
                 match local.as_ref() {
                     b"title" => state = ParseState::InTitle,
@@ -301,7 +305,30 @@ fn parse_dc(xml: &[u8]) -> Result<DcFields, Error> {
                 }
             }
             (_, Event::Text(ref t)) => {
-                let text = t.decode()?.into_owned();
+                text_buf.push_str(&t.decode()?);
+            }
+            (_, Event::GeneralRef(ref r)) => {
+                // quick-xml emits XML entity references (&apos; &amp; etc.)
+                // as separate GeneralRef events. Resolve and append to the
+                // text accumulator so entities don't cause truncation.
+                let name = r.decode()?;
+                match name.as_ref() {
+                    "amp" => text_buf.push('&'),
+                    "lt" => text_buf.push('<'),
+                    "gt" => text_buf.push('>'),
+                    "apos" => text_buf.push('\''),
+                    "quot" => text_buf.push('"'),
+                    _ => {
+                        if let Some(ch) = r.resolve_char_ref()? {
+                            text_buf.push(ch);
+                        }
+                    }
+                }
+            }
+            (_, Event::End(_)) => {
+                // Trim outer whitespace (replaces the old trim_text(true)
+                // which can't be used because it trims per-fragment).
+                let text = std::mem::take(&mut text_buf).trim().to_string();
                 match std::mem::replace(&mut state, ParseState::Other) {
                     ParseState::InTitle => fields.title = Some(text),
                     ParseState::InCreator { id, role, file_as } => {
@@ -335,9 +362,6 @@ fn parse_dc(xml: &[u8]) -> Result<DcFields, Error> {
                     }
                     ParseState::Other => {}
                 }
-            }
-            (_, Event::End(_)) => {
-                state = ParseState::Other;
             }
             (_, Event::Eof) => break,
             _ => {}

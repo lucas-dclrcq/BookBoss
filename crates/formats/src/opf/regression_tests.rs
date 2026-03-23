@@ -11,6 +11,29 @@
 ///      generate the snapshot.
 use super::{extract_metadata, parse_sidecar, write_sidecar};
 
+/// XML entities (&apos; &amp; &quot;) in title and description must be
+/// decoded without truncating text. Regression: quick-xml splits text at
+/// entity boundaries into multiple Event::Text events; the old code
+/// consumed state on the first fragment and discarded the rest.
+#[test]
+fn xml_entities_in_title_and_description() {
+    let opf = br#"<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"
+            xmlns:opf="http://www.idpf.org/2007/opf">
+    <dc:title>Guardian&apos;s Vengeance</dc:title>
+    <dc:creator opf:role="aut">Georgia Wagner</dc:creator>
+    <dc:description>Anna&apos;s world is turned &amp; twisted &quot;upside down&quot;.</dc:description>
+  </metadata>
+  <manifest/>
+  <spine/>
+</package>"#;
+
+    let meta = extract_metadata(opf).expect("parse failed");
+    assert_eq!(meta.title.as_deref(), Some("Guardian's Vengeance"));
+    assert_eq!(meta.description.as_deref(), Some("Anna's world is turned & twisted \"upside down\"."));
+}
+
 #[test]
 fn extract_metadata_opf2_full() {
     let opf = br#"<?xml version="1.0" encoding="utf-8"?>
