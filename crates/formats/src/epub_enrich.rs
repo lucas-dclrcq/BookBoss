@@ -9,7 +9,7 @@ use zip::{ZipArchive, ZipWriter, write::SimpleFileOptions};
 use crate::{
     Error,
     epub::{find_opf_path, resolve_zip_path},
-    opf::{extract_cover_href, write_metadata_xml},
+    opf::{extract_cover_info, write_metadata_xml},
 };
 
 /// Produces an enriched copy of an EPUB file at `dest`.
@@ -38,15 +38,17 @@ pub fn enrich_epub(source: &Path, dest: &Path, sidecar: &BookSidecar, cover: Opt
         None => String::new(),
     };
 
-    // Path within the ZIP of the existing cover image, if any.
-    let existing_cover_zip_path: Option<String> = {
+    // Detect existing cover image in the source OPF.
+    let cover_info = {
         let mut f = src.by_name(&opf_path)?;
         let mut buf = Vec::new();
         f.read_to_end(&mut buf)?;
-        extract_cover_href(&buf).map(|href| resolve_zip_path(&opf_dir, &href))
+        extract_cover_info(&buf)
     };
 
-    // ── 2. Build updated OPF (splice new metadata; optionally inject cover) ─
+    let existing_cover_zip_path: Option<String> = cover_info.as_ref().map(|ci| resolve_zip_path(&opf_dir, &ci.href));
+
+    // ── 2. Build updated OPF (splice new metadata; ensure cover declaration) ─
 
     let new_opf: String = {
         let mut f = src.by_name(&opf_path)?;
@@ -54,8 +56,21 @@ pub fn enrich_epub(source: &Path, dest: &Path, sidecar: &BookSidecar, cover: Opt
         f.read_to_end(&mut buf)?;
         let opf_str = std::str::from_utf8(&buf)?;
         let mut updated = replace_opf_metadata(opf_str, sidecar)?;
-        if cover.is_some() && existing_cover_zip_path.is_none() {
-            updated = inject_cover_manifest_entry(&updated, "cover.jpg")?;
+
+        if cover.is_some() {
+            match &cover_info {
+                Some(ci) if !ci.has_cover_image_property => {
+                    // Existing cover found but missing EPUB 3 property — fix it
+                    updated = ensure_cover_image_property(&updated, &ci.id)?;
+                }
+                Some(_) => {
+                    // Already has properties="cover-image" — nothing to do
+                }
+                None => {
+                    // No existing cover — inject a new manifest entry
+                    updated = inject_cover_manifest_entry(&updated, "cover.jpg")?;
+                }
+            }
         }
         updated
     };
@@ -187,6 +202,61 @@ fn inject_cover_manifest_entry(opf_xml: &str, cover_href: &str) -> Result<String
     }
 
     Err(Error::InvalidValue("OPF: no <manifest> element found".into()))
+}
+
+/// Ensure a manifest `<item>` with the given `id` has
+/// `properties="cover-image"`. Adds the attribute if missing, appends
+/// `cover-image` to an existing `properties` value, or no-ops if already
+/// present.
+fn ensure_cover_image_property(opf_xml: &str, item_id: &str) -> Result<String, Error> {
+    // Find the <item …> element that contains id="<item_id>"
+    let id_needle = format!(r#"id="{item_id}""#);
+    let id_pos = opf_xml
+        .find(&id_needle)
+        .ok_or_else(|| Error::InvalidValue(format!("OPF: manifest item id=\"{item_id}\" not found")))?;
+
+    // Walk backward to find `<item` (or `< item` with whitespace)
+    let tag_start = opf_xml[..id_pos]
+        .rfind("<item")
+        .ok_or_else(|| Error::InvalidValue("OPF: <item opening not found before id".into()))?;
+
+    // Walk forward from id_pos to find the closing `/>` or `>`
+    let tag_end_rel = opf_xml[tag_start..]
+        .find("/>")
+        .or_else(|| opf_xml[tag_start..].find('>'))
+        .ok_or_else(|| Error::InvalidValue("OPF: <item closing not found".into()))?;
+    let tag_end = tag_start + tag_end_rel;
+
+    let tag = &opf_xml[tag_start..tag_end];
+
+    // Check if properties="…" already exists within this tag
+    if let Some(props_start_rel) = tag.find("properties=\"") {
+        let props_val_start = tag_start + props_start_rel + "properties=\"".len();
+        let props_val_end = opf_xml[props_val_start..]
+            .find('"')
+            .map(|p| props_val_start + p)
+            .ok_or_else(|| Error::InvalidValue("OPF: unclosed properties attribute".into()))?;
+        let props_val = &opf_xml[props_val_start..props_val_end];
+
+        if props_val.split_whitespace().any(|p| p == "cover-image") {
+            // Already present — no-op
+            return Ok(opf_xml.to_string());
+        }
+
+        // Append cover-image to existing properties value
+        let mut result = String::with_capacity(opf_xml.len() + " cover-image".len());
+        result.push_str(&opf_xml[..props_val_end]);
+        result.push_str(" cover-image");
+        result.push_str(&opf_xml[props_val_end..]);
+        return Ok(result);
+    }
+
+    // No properties attribute — insert one before the closing />  or >
+    let mut result = String::with_capacity(opf_xml.len() + r#" properties="cover-image""#.len());
+    result.push_str(&opf_xml[..tag_end]);
+    result.push_str(r#" properties="cover-image""#);
+    result.push_str(&opf_xml[tag_end..]);
+    Ok(result)
 }
 
 #[cfg(test)]
@@ -352,6 +422,17 @@ mod tests {
         let mut buf = Vec::new();
         cover_entry.read_to_end(&mut buf).unwrap();
         assert_eq!(buf, NEW_COVER);
+
+        // The manifest item must have properties="cover-image" so e-readers
+        // and our own extractor can find it after the EPUB 2 meta tag was
+        // replaced by enrichment.
+        let opf_bytes = read_opf_from_epub(&dst);
+        let opf_str = std::str::from_utf8(&opf_bytes).unwrap();
+        assert!(opf_str.contains("cover-image"), "manifest should have cover-image property");
+        assert!(
+            crate::opf::extract_cover_href(&opf_bytes).is_some(),
+            "extract_cover_href must find cover in enriched EPUB"
+        );
     }
 
     #[test]
@@ -484,5 +565,102 @@ mod tests {
         let mut archive = zip::ZipArchive::new(file).unwrap();
         let first = archive.by_index(0).unwrap();
         assert_eq!(first.name(), "mimetype");
+    }
+
+    // ── Convention cover (id="cover", no meta, no properties) ────────────────
+
+    fn build_epub_convention_cover(title: &str) -> Vec<u8> {
+        let opf = format!(
+            r#"<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+    <dc:title>{title}</dc:title>
+  </metadata>
+  <manifest>
+    <item id="cover" href="cover.jpeg" media-type="image/jpeg"/>
+    <item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine><itemref idref="ch1"/></spine>
+</package>"#
+        );
+        build_epub_zip(&opf, Some(("cover.jpeg", FAKE_JPEG)))
+    }
+
+    #[test]
+    fn convention_cover_replaced_not_duplicated() {
+        let dir = tempdir().unwrap();
+        let src = dir.path().join("src.epub");
+        let dst = dir.path().join("dst.epub");
+        std::fs::write(&src, build_epub_convention_cover("Test")).unwrap();
+
+        enrich_epub(&src, &dst, &make_sidecar("Test"), Some(NEW_COVER)).unwrap();
+
+        let file = std::fs::File::open(&dst).unwrap();
+        let mut archive = zip::ZipArchive::new(file).unwrap();
+
+        // Cover bytes should be replaced at the EXISTING path (cover.jpeg)
+        let cover_buf = {
+            let mut entry = archive.by_name("cover.jpeg").unwrap();
+            let mut buf = Vec::new();
+            entry.read_to_end(&mut buf).unwrap();
+            buf
+        };
+        assert_eq!(cover_buf, NEW_COVER, "cover.jpeg should have new cover bytes");
+
+        // There must NOT be a duplicate cover.jpg entry
+        assert!(archive.by_name("cover.jpg").is_err(), "cover.jpg should not exist — no duplicate");
+
+        // OPF must have properties="cover-image" on the existing item
+        let opf_bytes = read_opf_from_epub(&dst);
+        let opf_str = std::str::from_utf8(&opf_bytes).unwrap();
+        assert!(
+            opf_str.contains(r#"properties="cover-image""#),
+            "manifest item should have cover-image property"
+        );
+
+        // Extractor must find the cover
+        assert!(
+            crate::opf::extract_cover_href(&opf_bytes).is_some(),
+            "extract_cover_href must find cover in enriched EPUB"
+        );
+    }
+
+    #[test]
+    fn enriched_epub2_cover_roundtrips_through_extractor() {
+        let dir = tempdir().unwrap();
+        let src = dir.path().join("src.epub");
+        let dst = dir.path().join("dst.epub");
+        std::fs::write(&src, build_epub2_with_cover("Roundtrip")).unwrap();
+
+        enrich_epub(&src, &dst, &make_sidecar("Roundtrip"), Some(NEW_COVER)).unwrap();
+
+        let opf_bytes = read_opf_from_epub(&dst);
+        let href = crate::opf::extract_cover_href(&opf_bytes).expect("cover must be findable after enrichment");
+        assert_eq!(href, "cover.jpg");
+    }
+
+    // ── ensure_cover_image_property unit tests ───────────────────────────────
+
+    #[test]
+    fn ensure_adds_property_when_missing() {
+        let opf = r#"<manifest><item id="cover" href="cover.jpeg" media-type="image/jpeg"/></manifest>"#;
+        let result = super::ensure_cover_image_property(opf, "cover").unwrap();
+        assert!(result.contains(r#"properties="cover-image""#));
+    }
+
+    #[test]
+    fn ensure_appends_to_existing_properties() {
+        let opf = r#"<manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/><item id="cover" href="cover.jpg" media-type="image/jpeg" properties="svg"/></manifest>"#;
+        let result = super::ensure_cover_image_property(opf, "cover").unwrap();
+        assert!(result.contains(r#"properties="svg cover-image""#));
+        // nav item should be untouched
+        assert!(result.contains(r#"properties="nav""#));
+    }
+
+    #[test]
+    fn ensure_is_idempotent() {
+        let opf = r#"<manifest><item id="ci" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/></manifest>"#;
+        let result = super::ensure_cover_image_property(opf, "ci").unwrap();
+        assert_eq!(result, opf);
     }
 }

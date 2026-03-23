@@ -498,14 +498,29 @@ pub fn extract_metadata(xml: &[u8]) -> Result<ExtractedMetadata, Error> {
     })
 }
 
-/// Find the cover image href within an EPUB OPF document.
+/// Information about a cover image found in an OPF manifest.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CoverInfo {
+    /// The `href` attribute of the manifest item (relative to the OPF file).
+    pub href: String,
+    /// The `id` attribute of the manifest item.
+    pub id: String,
+    /// Whether the manifest item already has `properties="cover-image"` (EPUB
+    /// 3).
+    pub has_cover_image_property: bool,
+}
+
+/// Find cover image information within an EPUB OPF document.
 ///
-/// Handles both EPUB 2 (`<meta name="cover" content="item-id"/>` + manifest
-/// lookup) and EPUB 3 (`<item properties="cover-image"/>` in the manifest).
-/// Returns the href exactly as written in the manifest (caller must resolve it
-/// relative to the OPF file's directory within the ZIP archive).
+/// Detection priority:
+/// 1. **EPUB 3**: `<item properties="cover-image"/>` — returns immediately.
+/// 2. **EPUB 2**: `<meta name="cover" content="item-id"/>` + matching manifest
+///    item.
+/// 3. **Heuristic**: manifest item with an `id` containing "cover"
+///    (case-insensitive) and an image `media-type`. Prefers exact `id="cover"`
+///    or `id="cover-image"` over substring matches.
 #[must_use]
-pub fn extract_cover_href(opf_xml: &[u8]) -> Option<String> {
+pub fn extract_cover_info(opf_xml: &[u8]) -> Option<CoverInfo> {
     use quick_xml::Reader;
 
     let mut reader = Reader::from_reader(opf_xml);
@@ -513,7 +528,8 @@ pub fn extract_cover_href(opf_xml: &[u8]) -> Option<String> {
     let mut buf = Vec::new();
 
     let mut cover_meta_id: Option<String> = None;
-    let mut manifest_items: HashMap<String, String> = HashMap::new();
+    // id → (href, media_type)
+    let mut manifest_items: HashMap<String, (String, Option<String>)> = HashMap::new();
 
     loop {
         buf.clear();
@@ -542,6 +558,7 @@ pub fn extract_cover_href(opf_xml: &[u8]) -> Option<String> {
                     b"item" => {
                         let mut id = None;
                         let mut href = None;
+                        let mut media_type = None;
                         let mut is_cover_image = false;
                         for attr in e.attributes().flatten() {
                             match attr.key.as_ref() {
@@ -551,8 +568,10 @@ pub fn extract_cover_href(opf_xml: &[u8]) -> Option<String> {
                                 b"href" => {
                                     href = attr.decode_and_unescape_value(reader.decoder()).ok().map(std::borrow::Cow::into_owned);
                                 }
+                                b"media-type" => {
+                                    media_type = attr.decode_and_unescape_value(reader.decoder()).ok().map(std::borrow::Cow::into_owned);
+                                }
                                 b"properties" => {
-                                    // EPUB 3: properties may be a space-separated list
                                     if let Ok(v) = attr.decode_and_unescape_value(reader.decoder()) {
                                         if v.split_whitespace().any(|p| p == "cover-image") {
                                             is_cover_image = true;
@@ -562,11 +581,15 @@ pub fn extract_cover_href(opf_xml: &[u8]) -> Option<String> {
                                 _ => {}
                             }
                         }
-                        if is_cover_image {
-                            return href; // EPUB 3: direct match
-                        }
                         if let (Some(id), Some(href)) = (id, href) {
-                            manifest_items.insert(id, href);
+                            if is_cover_image {
+                                return Some(CoverInfo {
+                                    href,
+                                    id,
+                                    has_cover_image_property: true,
+                                });
+                            }
+                            manifest_items.insert(id, (href, media_type));
                         }
                     }
                     _ => {}
@@ -578,5 +601,158 @@ pub fn extract_cover_href(opf_xml: &[u8]) -> Option<String> {
     }
 
     // EPUB 2: resolve cover id against collected manifest items
-    cover_meta_id.and_then(|id| manifest_items.remove(&id))
+    if let Some(id) = cover_meta_id {
+        if let Some((href, _)) = manifest_items.remove(&id) {
+            return Some(CoverInfo {
+                href,
+                id,
+                has_cover_image_property: false,
+            });
+        }
+    }
+
+    // Heuristic: look for a manifest item whose id contains "cover" with an
+    // image media-type. Prefer exact id "cover" > "cover-image" > substring.
+    let mut candidates: Vec<(String, String)> = manifest_items
+        .into_iter()
+        .filter(|(id, (_, mt))| id.to_ascii_lowercase().contains("cover") && mt.as_deref().is_some_and(|m| m.starts_with("image/")))
+        .map(|(id, (href, _))| (id, href))
+        .collect();
+
+    if candidates.is_empty() {
+        return None;
+    }
+
+    // Sort: exact "cover" first, then "cover-image", then the rest
+    candidates.sort_by_key(|(id, _)| {
+        let lower = id.to_ascii_lowercase();
+        if lower == "cover" {
+            0
+        } else if lower == "cover-image" {
+            1
+        } else {
+            2
+        }
+    });
+
+    let (id, href) = candidates.remove(0);
+    Some(CoverInfo {
+        href,
+        id,
+        has_cover_image_property: false,
+    })
+}
+
+/// Find the cover image href within an EPUB OPF document.
+///
+/// Convenience wrapper around [`extract_cover_info`] that returns only the
+/// href. See that function for detection priority and heuristic details.
+#[must_use]
+pub fn extract_cover_href(opf_xml: &[u8]) -> Option<String> {
+    extract_cover_info(opf_xml).map(|ci| ci.href)
+}
+
+#[cfg(test)]
+mod cover_info_tests {
+    use super::*;
+
+    #[test]
+    fn epub3_cover_info() {
+        let opf = br#"<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>T</dc:title></metadata>
+  <manifest>
+    <item id="ci" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>
+  </manifest>
+</package>"#;
+        let info = extract_cover_info(opf).expect("should find cover");
+        assert_eq!(info.href, "cover.jpg");
+        assert_eq!(info.id, "ci");
+        assert!(info.has_cover_image_property);
+    }
+
+    #[test]
+    fn epub2_cover_info() {
+        let opf = br#"<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>T</dc:title>
+    <meta name="cover" content="cover-img"/>
+  </metadata>
+  <manifest>
+    <item id="cover-img" href="images/cover.jpg" media-type="image/jpeg"/>
+  </manifest>
+</package>"#;
+        let info = extract_cover_info(opf).expect("should find cover");
+        assert_eq!(info.href, "images/cover.jpg");
+        assert_eq!(info.id, "cover-img");
+        assert!(!info.has_cover_image_property);
+    }
+
+    #[test]
+    fn heuristic_cover_by_id() {
+        let opf = br#"<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>T</dc:title></metadata>
+  <manifest>
+    <item id="cover" href="cover.jpeg" media-type="image/jpeg"/>
+    <item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+</package>"#;
+        let info = extract_cover_info(opf).expect("should find cover via heuristic");
+        assert_eq!(info.href, "cover.jpeg");
+        assert_eq!(info.id, "cover");
+        assert!(!info.has_cover_image_property);
+    }
+
+    #[test]
+    fn heuristic_ignores_non_image() {
+        let opf = br#"<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>T</dc:title></metadata>
+  <manifest>
+    <item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+</package>"#;
+        assert!(extract_cover_info(opf).is_none());
+    }
+
+    #[test]
+    fn heuristic_prefers_exact_cover_id() {
+        let opf = br#"<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>T</dc:title></metadata>
+  <manifest>
+    <item id="cover-page" href="coverpage.jpg" media-type="image/jpeg"/>
+    <item id="cover" href="cover.jpg" media-type="image/jpeg"/>
+  </manifest>
+</package>"#;
+        let info = extract_cover_info(opf).expect("should find cover");
+        assert_eq!(info.id, "cover");
+        assert_eq!(info.href, "cover.jpg");
+    }
+
+    #[test]
+    fn no_cover_returns_none() {
+        let opf = br#"<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>T</dc:title></metadata>
+  <manifest>
+    <item id="ch1" href="chapter.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+</package>"#;
+        assert!(extract_cover_info(opf).is_none());
+    }
+
+    #[test]
+    fn extract_cover_href_wrapper() {
+        let opf = br#"<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>T</dc:title></metadata>
+  <manifest>
+    <item id="ci" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>
+  </manifest>
+</package>"#;
+        assert_eq!(extract_cover_href(opf), Some("cover.jpg".to_string()));
+    }
 }

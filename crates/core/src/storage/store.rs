@@ -57,6 +57,11 @@ pub trait LibraryStore: Send + Sync {
     /// Removes the book's entire directory and all its contents.
     async fn delete_book(&self, token: BookToken) -> Result<(), Error>;
 
+    /// Copies a single file from the book's directory to `Trash/`, creating
+    /// the directory if needed. Overwrites any existing file with the same
+    /// name.
+    async fn copy_to_trash(&self, token: BookToken, file_name: &str) -> Result<(), Error>;
+
     /// Removes a file by its library-root-relative path. No-op if the file
     /// does not exist.
     async fn delete_original_file(&self, relative_path: &str) -> Result<(), Error>;

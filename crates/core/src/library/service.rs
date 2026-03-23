@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use tracing::warn;
+
 use crate::{
     Error, RepositoryError,
     book::{Book, BookToken, FileRole},
@@ -82,7 +84,7 @@ impl LibraryService for LibraryServiceImpl {
         let author_repo = self.repository_service.author_repository().clone();
         let job_repo = self.repository_service.import_job_repository().clone();
 
-        let original_filenames = transaction(&**self.repository_service.repository(), |tx| {
+        let (original_filenames, enriched_filename) = transaction(&**self.repository_service.repository(), |tx| {
             let br = book_repo.clone();
             let ar = author_repo.clone();
             let jr = job_repo.clone();
@@ -95,14 +97,13 @@ impl LibraryService for LibraryServiceImpl {
                 let author_links = br.authors_for_book(tx, book.id).await?;
                 let author_ids: Vec<u64> = author_links.iter().map(|a| a.author_id).collect();
 
-                // Collect original file paths before deleting records.
-                let original_filenames: Vec<String> = br
-                    .files_for_book(tx, book.id)
-                    .await?
-                    .into_iter()
-                    .filter(|f| f.file_role == FileRole::Original)
-                    .map(|f| f.path)
-                    .collect();
+                // Collect file paths before deleting records.
+                let files = br.files_for_book(tx, book.id).await?;
+                let original_filenames: Vec<String> = files.iter().filter(|f| f.file_role == FileRole::Original).map(|f| f.path.clone()).collect();
+                let enriched_filename: Option<String> = files
+                    .iter()
+                    .find(|f| f.file_role == FileRole::Enriched)
+                    .and_then(|f| std::path::Path::new(&f.path).file_name().and_then(|n| n.to_str()).map(String::from));
 
                 // Delete the originating import job so the file can be re-imported.
                 if let Some(job) = jr.find_by_candidate_book_id(tx, book.id).await? {
@@ -119,10 +120,17 @@ impl LibraryService for LibraryServiceImpl {
                     }
                 }
 
-                Ok(original_filenames)
+                Ok((original_filenames, enriched_filename))
             })
         })
         .await?;
+
+        // Best-effort: copy the enriched file to Trash before deleting.
+        if let Some(ref file_name) = enriched_filename {
+            if let Err(e) = self.library_store.copy_to_trash(book_token, file_name).await {
+                warn!(book_token = %book_token, file_name, error = %e, "failed to copy enriched file to Trash");
+            }
+        }
 
         self.library_store.delete_book(book_token).await?;
         for filename in original_filenames {
@@ -141,7 +149,7 @@ mod tests {
     use crate::{
         Error, RepositoryError,
         book::{
-            AuthorId, BookAuthor, BookFile, BookId, BookStatus, BookToken,
+            AuthorId, BookAuthor, BookFile, BookId, BookStatus, BookToken, FileRole,
             repository::{author::MockAuthorRepository, book::MockBookRepository},
         },
         import::{ImportJob, ImportJobId, ImportJobToken, ImportStatus, repository::import_job::MockImportJobRepository},
@@ -450,5 +458,121 @@ mod tests {
         svc.delete_book(token).await.unwrap();
         // `.times(1)` on `delete_original_file` verifies the file was removed
         // from the store
+    }
+
+    #[tokio::test]
+    async fn delete_book_copies_enriched_file_to_trash() {
+        let book_id: BookId = 1;
+        let book = fake_book_with_id(book_id);
+
+        let mut enriched = BookFile::fake(book_id, "epub");
+        enriched.file_role = FileRole::Enriched;
+        enriched.path = "BK_00001/my-book.epub".to_owned();
+
+        let mut book_repo = MockBookRepository::new();
+        book_repo.expect_find_by_token().returning(move |_, _| {
+            let b = book.clone();
+            Box::pin(async move { Ok(Some(b)) })
+        });
+        book_repo.expect_authors_for_book().returning(|_, _| Box::pin(async { Ok(vec![]) }));
+        book_repo.expect_files_for_book().returning(move |_, _| {
+            let f = enriched.clone();
+            Box::pin(async move { Ok(vec![f]) })
+        });
+        book_repo.expect_delete_book_authors().returning(|_, _| Box::pin(async { Ok(()) }));
+        book_repo.expect_delete_book_identifiers().returning(|_, _| Box::pin(async { Ok(()) }));
+        book_repo.expect_delete_book().returning(|_, _| Box::pin(async { Ok(()) }));
+
+        let mut job_repo = MockImportJobRepository::new();
+        job_repo.expect_find_by_candidate_book_id().returning(|_, _| Box::pin(async { Ok(None) }));
+
+        let mut store = MockLibraryStore::new();
+        store
+            .expect_copy_to_trash()
+            .withf(|_, name| name == "my-book.epub")
+            .times(1)
+            .returning(|_, _| Box::pin(async { Ok(()) }));
+        store.expect_delete_book().returning(|_| Box::pin(async { Ok(()) }));
+
+        let svc = create_service(book_repo, MockAuthorRepository::new(), job_repo, MockLibraryRepository::new(), store);
+        let token = BookToken::new(book_id);
+
+        svc.delete_book(token).await.unwrap();
+        // `.times(1)` on `copy_to_trash` verifies it was called
+    }
+
+    #[tokio::test]
+    async fn delete_book_skips_trash_when_no_enriched_file() {
+        let book_id: BookId = 1;
+        let book = fake_book_with_id(book_id);
+
+        let mut original = BookFile::fake(book_id, "epub");
+        original.path = "Originals/test.epub".to_owned();
+
+        let mut book_repo = MockBookRepository::new();
+        book_repo.expect_find_by_token().returning(move |_, _| {
+            let b = book.clone();
+            Box::pin(async move { Ok(Some(b)) })
+        });
+        book_repo.expect_authors_for_book().returning(|_, _| Box::pin(async { Ok(vec![]) }));
+        book_repo.expect_files_for_book().returning(move |_, _| {
+            let f = original.clone();
+            Box::pin(async move { Ok(vec![f]) })
+        });
+        book_repo.expect_delete_book_authors().returning(|_, _| Box::pin(async { Ok(()) }));
+        book_repo.expect_delete_book_identifiers().returning(|_, _| Box::pin(async { Ok(()) }));
+        book_repo.expect_delete_book().returning(|_, _| Box::pin(async { Ok(()) }));
+
+        let mut job_repo = MockImportJobRepository::new();
+        job_repo.expect_find_by_candidate_book_id().returning(|_, _| Box::pin(async { Ok(None) }));
+
+        let mut store = MockLibraryStore::new();
+        // No expectation on copy_to_trash — mockall panics if it is called
+        store.expect_delete_book().returning(|_| Box::pin(async { Ok(()) }));
+        store.expect_delete_original_file().returning(|_| Box::pin(async { Ok(()) }));
+
+        let svc = create_service(book_repo, MockAuthorRepository::new(), job_repo, MockLibraryRepository::new(), store);
+        let token = BookToken::new(book_id);
+
+        svc.delete_book(token).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn delete_book_succeeds_when_trash_copy_fails() {
+        let book_id: BookId = 1;
+        let book = fake_book_with_id(book_id);
+
+        let mut enriched = BookFile::fake(book_id, "epub");
+        enriched.file_role = FileRole::Enriched;
+        enriched.path = "BK_00001/my-book.epub".to_owned();
+
+        let mut book_repo = MockBookRepository::new();
+        book_repo.expect_find_by_token().returning(move |_, _| {
+            let b = book.clone();
+            Box::pin(async move { Ok(Some(b)) })
+        });
+        book_repo.expect_authors_for_book().returning(|_, _| Box::pin(async { Ok(vec![]) }));
+        book_repo.expect_files_for_book().returning(move |_, _| {
+            let f = enriched.clone();
+            Box::pin(async move { Ok(vec![f]) })
+        });
+        book_repo.expect_delete_book_authors().returning(|_, _| Box::pin(async { Ok(()) }));
+        book_repo.expect_delete_book_identifiers().returning(|_, _| Box::pin(async { Ok(()) }));
+        book_repo.expect_delete_book().returning(|_, _| Box::pin(async { Ok(()) }));
+
+        let mut job_repo = MockImportJobRepository::new();
+        job_repo.expect_find_by_candidate_book_id().returning(|_, _| Box::pin(async { Ok(None) }));
+
+        let mut store = MockLibraryStore::new();
+        store
+            .expect_copy_to_trash()
+            .returning(|_, _| Box::pin(async { Err(crate::Error::Infrastructure("disk full".to_owned())) }));
+        store.expect_delete_book().returning(|_| Box::pin(async { Ok(()) }));
+
+        let svc = create_service(book_repo, MockAuthorRepository::new(), job_repo, MockLibraryRepository::new(), store);
+        let token = BookToken::new(book_id);
+
+        // Should succeed despite trash copy failure
+        svc.delete_book(token).await.unwrap();
     }
 }

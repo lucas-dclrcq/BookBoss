@@ -23,6 +23,10 @@ impl LocalLibraryStore {
         self.library_path.join("Originals")
     }
 
+    fn trash_dir(&self) -> PathBuf {
+        self.library_path.join("Trash")
+    }
+
     fn book_dir(&self, token: BookToken) -> PathBuf {
         self.library_path.join(token.to_string())
     }
@@ -174,6 +178,15 @@ impl LibraryStore for LocalLibraryStore {
                 tokio::fs::rename(entry.path(), book_dir.join(new_name)).await.map_err(io_err)?;
             }
         }
+        Ok(())
+    }
+
+    async fn copy_to_trash(&self, token: BookToken, file_name: &str) -> Result<(), Error> {
+        let source = self.book_dir(token).join(file_name);
+        let trash_dir = self.trash_dir();
+        tokio::fs::create_dir_all(&trash_dir).await.map_err(io_err)?;
+        let dest = trash_dir.join(file_name);
+        tokio::fs::copy(&source, &dest).await.map_err(io_err)?;
         Ok(())
     }
 
@@ -331,6 +344,47 @@ mod tests {
         assert!(!book_dir.join("old-slug.pdf").exists(), "old pdf should not exist");
         // Non-matching file unchanged
         assert!(book_dir.join("cover.jpg").exists(), "cover.jpg should be untouched");
+    }
+
+    #[tokio::test]
+    async fn copy_to_trash_copies_file() {
+        let dir = tempdir().unwrap();
+        let store = test_store(dir.path().to_path_buf());
+        let token = test_token();
+
+        let book_dir = dir.path().join(token.to_string());
+        tokio::fs::create_dir_all(&book_dir).await.unwrap();
+        tokio::fs::write(book_dir.join("my-book.epub"), b"enriched epub").await.unwrap();
+
+        store.copy_to_trash(token, "my-book.epub").await.unwrap();
+
+        let trash_file = dir.path().join("Trash").join("my-book.epub");
+        assert!(trash_file.exists(), "file should exist in Trash/");
+        let contents = tokio::fs::read(&trash_file).await.unwrap();
+        assert_eq!(contents, b"enriched epub");
+    }
+
+    #[tokio::test]
+    async fn copy_to_trash_overwrites_existing() {
+        let dir = tempdir().unwrap();
+        let store = test_store(dir.path().to_path_buf());
+        let token = test_token();
+
+        let book_dir = dir.path().join(token.to_string());
+        tokio::fs::create_dir_all(&book_dir).await.unwrap();
+
+        // Write an old version in Trash
+        let trash_dir = dir.path().join("Trash");
+        tokio::fs::create_dir_all(&trash_dir).await.unwrap();
+        tokio::fs::write(trash_dir.join("my-book.epub"), b"old version").await.unwrap();
+
+        // Write the new version in the book dir
+        tokio::fs::write(book_dir.join("my-book.epub"), b"new version").await.unwrap();
+
+        store.copy_to_trash(token, "my-book.epub").await.unwrap();
+
+        let contents = tokio::fs::read(trash_dir.join("my-book.epub")).await.unwrap();
+        assert_eq!(contents, b"new version");
     }
 
     #[tokio::test]

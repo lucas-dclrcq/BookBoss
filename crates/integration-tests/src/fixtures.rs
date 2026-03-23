@@ -49,6 +49,9 @@ impl LibraryStore for SilentLibraryStore {
     async fn rename_book_files(&self, _token: BookToken, _old_slug: &str, _new_slug: &str) -> Result<(), Error> {
         Ok(())
     }
+    async fn copy_to_trash(&self, _token: BookToken, _file_name: &str) -> Result<(), Error> {
+        Ok(())
+    }
     async fn delete_book(&self, _token: BookToken) -> Result<(), Error> {
         Ok(())
     }
