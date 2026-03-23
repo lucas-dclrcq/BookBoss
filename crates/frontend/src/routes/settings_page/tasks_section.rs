@@ -36,7 +36,7 @@ pub(crate) async fn list_health_tasks() -> Result<Vec<TaskRow>, ServerFnError> {
     }
 
     let tasks = health_task_state.list_tasks().await;
-    Ok(tasks
+    let mut rows: Vec<TaskRow> = tasks
         .into_iter()
         .map(|t| TaskRow {
             name: t.name,
@@ -46,7 +46,9 @@ pub(crate) async fn list_health_tasks() -> Result<Vec<TaskRow>, ServerFnError> {
             last_run_at: t.last_run_at.map(|dt| dt.to_rfc3339()),
             next_run_at: t.next_run_at.to_rfc3339(),
         })
-        .collect())
+        .collect();
+    rows.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(rows)
 }
 
 #[post(
