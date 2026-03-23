@@ -12,7 +12,7 @@
 
 services:
   db:
-    image: mysql:9@sha256:24e450bbd24f621c71b10404c946cc9ea1cbb0e6e7464b2be2de5193dcf1d05b
+    image: mysql:9
     environment:
       MYSQL_ROOT_PASSWORD: bookboss
       MYSQL_DATABASE: bookboss
@@ -28,7 +28,7 @@ services:
     restart: unless-stopped
 
   bookboss:
-    image: ghcr.io/szinn/bookboss:latest@sha256:c2fa84b39d6b2e9018e5533af8737863a4d644d97ed0f6f8ff3ce26d2f2d120f
+    image: ghcr.io/szinn/bookboss:latest
     ports:
       - "8080:8080" # Web UI
       - "8081:8081" # gRPC API

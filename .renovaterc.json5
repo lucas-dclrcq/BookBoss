@@ -5,7 +5,6 @@
     ":disableRateLimiting",
     "docker:enableMajor",
     "helpers:pinGitHubActionDigests",
-    "docker:pinDigests",
     ":automergeDigest",
     ":enablePreCommit",
     ":semanticCommits",
