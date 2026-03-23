@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1](https://github.com/szinn/BookBoss/compare/v0.6.0..v0.6.1) - 2026-03-23
+
+### Features
+
+- _(core)_ Add count_books_for_author and count_books_for_series to BookService - ([37ee7dc](https://github.com/szinn/BookBoss/commit/37ee7dc08f4d7bc290ab4697499b7ac66f8b9bfb))
+- _(deploy)_ Add example docker-compose files for all database backends - ([1d7e8de](https://github.com/szinn/BookBoss/commit/1d7e8def7f9f4bb5fcfbfda59189f81bff16b733))
+- _(frontend)_ Add authors and series listing pages - ([eb7afcf](https://github.com/szinn/BookBoss/commit/eb7afcf7755c58f2f70febbe293ce8c18ba2d654))
+
+### Bug Fixes
+
+- _(frontend)_ Exit selection mode on any route change - ([15e0222](https://github.com/szinn/BookBoss/commit/15e0222873baa4c50b1081153d93a2657782610c))
+
 ## [0.6.0](https://github.com/szinn/BookBoss/compare/v0.5.3..v0.6.0) - 2026-03-22
 
 ### Features
