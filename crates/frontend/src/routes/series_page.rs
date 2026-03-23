@@ -30,13 +30,13 @@ async fn get_all_series() -> Result<Vec<SeriesTileData>, ServerFnError> {
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-        // Load first 3 books for cover art (sorted by series_number)
+        // Load books for this series, sort by series_number, take first 3 for cover art
         let filter = BookQuery {
             series_id: Some(series.id),
             ..Default::default()
         };
         let mut books = book_service
-            .list_books(&filter, None, Some(3))
+            .list_books(&filter, None, None)
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?;
 
@@ -46,6 +46,7 @@ async fn get_all_series() -> Result<Vec<SeriesTileData>, ServerFnError> {
             (None, Some(_)) => std::cmp::Ordering::Greater,
             (None, None) => std::cmp::Ordering::Equal,
         });
+        books.truncate(3);
 
         let cover_book_tokens: Vec<String> = books.iter().map(|b| b.token.to_string()).collect();
 
