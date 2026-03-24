@@ -6,11 +6,7 @@ use axum::{
 };
 use axum_session::{SessionConfig, SessionLayer, SessionStore};
 use axum_session_auth::{AuthConfig, AuthSessionLayer};
-use bb_core::{
-    CoreServices,
-    health::{HealthTaskState, HealthTrigger},
-    user::UserId,
-};
+use bb_core::{CoreServices, user::UserId};
 use chrono::Duration;
 use dioxus::server::DioxusRouterExt;
 use tokio_graceful_shutdown::{IntoSubsystem, SubsystemHandle};
@@ -44,8 +40,6 @@ const MAX_REQUEST_BODY_SIZE: usize = 10 * 1024 * 1024; // 10 MiB
 pub struct FrontendSubsystem {
     config: FrontendConfig,
     core_services: Arc<CoreServices>,
-    health_task_state: Arc<HealthTaskState>,
-    health_trigger: HealthTrigger,
 }
 
 impl IntoSubsystem<anyhow::Error> for FrontendSubsystem {
@@ -91,8 +85,7 @@ impl IntoSubsystem<anyhow::Error> for FrontendSubsystem {
             .serve_dioxus_application(dioxus_server::ServeConfig::new(), BookBossFrontend)
             .merge(kobo)
             .merge(opds)
-            .layer(Extension(self.health_task_state))
-            .layer(Extension(self.health_trigger))
+            .layer(Extension(core_services.health_service.clone()))
             .layer(Extension(core_services))
             .layer(Extension(frontend_config))
             .layer(middleware);
@@ -126,16 +119,9 @@ impl IntoSubsystem<anyhow::Error> for FrontendSubsystem {
 }
 
 #[must_use]
-pub fn create_frontend_subsystem(
-    config: &FrontendConfig,
-    core_services: Arc<CoreServices>,
-    health_task_state: Arc<HealthTaskState>,
-    health_trigger: HealthTrigger,
-) -> FrontendSubsystem {
+pub fn create_frontend_subsystem(config: &FrontendConfig, core_services: Arc<CoreServices>) -> FrontendSubsystem {
     FrontendSubsystem {
         config: config.to_owned(),
         core_services,
-        health_task_state,
-        health_trigger,
     }
 }

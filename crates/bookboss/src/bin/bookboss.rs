@@ -147,7 +147,7 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     use bb_core::{
         ExternalServicesBuilder, create_core_subsystem, create_services,
         health::{
-            HealthTaskState, create_health_subsystem, create_health_trigger, default_health_tasks,
+            create_health_service, create_health_subsystem, default_health_tasks,
             handlers::{
                 cleanup_expired_sessions::CleanupExpiredSessionsHandler, cleanup_old_import_jobs::CleanupOldImportJobsHandler,
                 cleanup_old_jobs::CleanupOldJobsHandler, cleanup_old_system_messages::CleanupOldSystemMessagesHandler,
@@ -189,15 +189,20 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     let scan_interval = Duration::from_secs(config.import.scan_interval_secs);
     let worker_poll_interval = Duration::from_secs(config.import.worker_poll_interval_secs);
 
-    // Create the scan channel before CoreServices so the trigger can be passed
-    // in as import_scanner, while the receiver goes to the import subsystem.
+    // Create channels before CoreServices so triggers can be passed in via
+    // ExternalServices, while receivers go to their respective subsystems.
     let (scan_trigger, scan_receiver) = create_scan_trigger();
+    let (health_service, health_kick_rx) = create_health_service();
+    for config in default_health_tasks() {
+        health_service.register_task(config);
+    }
     let external = ExternalServicesBuilder::default()
         .repository_service(repository_service.clone())
         .file_store(file_store)
         .pipeline_service(pipeline_service)
         .conversion_service(conversion_service)
         .job_service(job_service)
+        .health_service(health_service)
         .import_scanner(Arc::new(scan_trigger.clone()))
         .event_service(event_service.clone())
         .build()
@@ -239,14 +244,12 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     ));
     js.register(ResetStaleImportJobsHandler::new(repository_service.clone(), sms));
 
-    let health_task_state = Arc::new(HealthTaskState::new(default_health_tasks()));
-    let (health_trigger, health_trigger_rx) = create_health_trigger();
     let health_subsystem = create_health_subsystem(
-        health_task_state.clone(),
+        core_services.health_service.clone(),
         repository_service.repository().clone(),
         repository_service.job_repository().clone(),
         event_service.clone(),
-        health_trigger_rx,
+        health_kick_rx,
     );
 
     let api_subsystem = create_api_subsystem(&config.api, core_services.clone());
@@ -256,7 +259,7 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
         worker_poll_interval,
         event_service,
     );
-    let frontend_subsystem = create_frontend_subsystem(&config.frontend, core_services.clone(), health_task_state, health_trigger);
+    let frontend_subsystem = create_frontend_subsystem(&config.frontend, core_services.clone());
 
     span.exit();
 

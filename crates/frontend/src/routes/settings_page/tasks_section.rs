@@ -1,8 +1,8 @@
 #[cfg(feature = "server")]
-use bb_core::health::HealthTaskState;
+use bb_core::health::HealthService;
 use dioxus::prelude::*;
 #[cfg(feature = "server")]
-use {crate::routes::server_helpers::authenticated_user, crate::server::AuthSession, bb_core::health::HealthTrigger, std::sync::Arc};
+use {crate::routes::server_helpers::authenticated_user, crate::server::AuthSession, std::sync::Arc};
 
 // ---------------------------------------------------------------------------
 // DTO
@@ -27,7 +27,7 @@ pub(crate) struct TaskRow {
 #[post(
     "/api/v1/admin/health/tasks",
     auth_session: axum::Extension<AuthSession>,
-    health_task_state: axum::Extension<Arc<HealthTaskState>>
+    health_service: axum::Extension<Arc<dyn HealthService>>
 )]
 pub(crate) async fn list_health_tasks() -> Result<Vec<TaskRow>, ServerFnError> {
     let user = authenticated_user(&auth_session)?;
@@ -35,7 +35,7 @@ pub(crate) async fn list_health_tasks() -> Result<Vec<TaskRow>, ServerFnError> {
         return Err(ServerFnError::new("Insufficient permissions"));
     }
 
-    let tasks = health_task_state.list_tasks().await;
+    let tasks = health_service.list_tasks().await;
     let mut rows: Vec<TaskRow> = tasks
         .into_iter()
         .map(|t| TaskRow {
@@ -54,8 +54,7 @@ pub(crate) async fn list_health_tasks() -> Result<Vec<TaskRow>, ServerFnError> {
 #[post(
     "/api/v1/admin/health/tasks/trigger",
     auth_session: axum::Extension<AuthSession>,
-    health_task_state: axum::Extension<Arc<HealthTaskState>>,
-    health_trigger: axum::Extension<HealthTrigger>
+    health_service: axum::Extension<Arc<dyn HealthService>>
 )]
 pub(crate) async fn trigger_health_task(job_type: String) -> Result<(), ServerFnError> {
     let user = authenticated_user(&auth_session)?;
@@ -64,7 +63,7 @@ pub(crate) async fn trigger_health_task(job_type: String) -> Result<(), ServerFn
     }
 
     // Verify the job_type is a known health task.
-    let tasks = health_task_state.list_tasks().await;
+    let tasks = health_service.list_tasks().await;
     if !tasks.iter().any(|t| t.job_type == job_type) {
         return Err(ServerFnError::new("Unknown health task"));
     }
@@ -72,7 +71,7 @@ pub(crate) async fn trigger_health_task(job_type: String) -> Result<(), ServerFn
     // Kick the health subsystem to enqueue and run the task immediately.
     // The subsystem handles: mark_due_now → enqueue → mark_run →
     // notify_jobs_changed.
-    health_trigger.kick(job_type);
+    health_service.kick(job_type);
 
     Ok(())
 }

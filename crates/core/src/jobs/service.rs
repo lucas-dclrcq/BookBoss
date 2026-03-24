@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc, sync::RwLock};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
 use serde::Serialize;
 
