@@ -78,7 +78,7 @@ crates/core/src/
 Each crate that owns background work exposes a `XxxSubsystem` struct + `create_xxx_subsystem()` factory
 in its `lib.rs` — same pattern as `ApiSubsystem` in `bb-api`. The subsystem's `run()` starts its
 child subsystems via `subsys.start(SubsystemBuilder::new(...))` then awaits `on_shutdown_requested()`.
-`bookboss/main.rs` stays clean: build any shared state (e.g. `JobRegistry`), call the factories,
+`bookboss/main.rs` stays clean: call the factories,
 pass results to `Toplevel`. Existing subsystems: `ApiSubsystem` (bb-api), `CoreSubsystem` (bb-core,
 owns `JobWorker`), `ImportSubsystem` (bb-import, owns `LibraryScanner`).
 

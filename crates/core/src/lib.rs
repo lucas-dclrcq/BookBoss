@@ -32,7 +32,7 @@ use crate::{
     device::{DeviceService, service::DeviceServiceImpl},
     event::EventService,
     import::{ImportJobService, ImportScanner, service::ImportJobServiceImpl},
-    jobs::{JobRegistry, JobService, JobWorker},
+    jobs::{JobService, JobWorker},
     library::{LibraryService, LibraryServiceImpl},
     message::{SystemMessageService, SystemMessageServiceImpl},
     opds::{OpdsService, OpdsServiceImpl},
@@ -121,7 +121,7 @@ pub fn create_services(external: ExternalServices, encryption_secret: &str) -> R
 }
 
 pub struct CoreSubsystem {
-    registry: JobRegistry,
+    job_service: Arc<dyn JobService>,
     repository_service: Arc<RepositoryService>,
     poll_interval: Duration,
     event_service: Arc<dyn EventService>,
@@ -130,7 +130,7 @@ pub struct CoreSubsystem {
 impl IntoSubsystem<Error> for CoreSubsystem {
     async fn run(self, subsys: &mut SubsystemHandle) -> Result<(), Error> {
         let worker = JobWorker::new(
-            self.registry,
+            self.job_service,
             self.repository_service.repository().clone(),
             self.repository_service.job_repository().clone(),
             self.poll_interval,
@@ -149,13 +149,13 @@ impl IntoSubsystem<Error> for CoreSubsystem {
 
 #[must_use]
 pub fn create_core_subsystem(
-    registry: JobRegistry,
+    job_service: Arc<dyn JobService>,
     repository_service: Arc<RepositoryService>,
     poll_interval: Duration,
     event_service: Arc<dyn EventService>,
 ) -> CoreSubsystem {
     CoreSubsystem {
-        registry,
+        job_service,
         repository_service,
         poll_interval,
         event_service,

@@ -157,7 +157,7 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
                 verify_file_integrity::VerifyFileIntegrityHandler,
             },
         },
-        jobs::{JobRegistry, create_job_service},
+        jobs::{JobServiceExt, create_job_service},
         pipeline::PipelineServiceImpl,
     };
     use bb_database::{create_repository_service, open_database};
@@ -212,31 +212,32 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
         core_services.import_job_service.clone(),
     );
 
-    let mut registry = JobRegistry::new();
-    registry.register(ProcessImportHandler::new(
+    // Register job handlers via JobService
+    let js = &core_services.job_service;
+    js.register(ProcessImportHandler::new(
         core_services.import_job_service.clone(),
         core_services.pipeline_service.clone(),
     ));
-    registry.register(EnrichEpubHandler::new(repository_service.clone(), core_services.file_store.clone()));
-    registry.register(ConvertKepubHandler::new(repository_service.clone(), core_services.file_store.clone()));
+    js.register(EnrichEpubHandler::new(repository_service.clone(), core_services.file_store.clone()));
+    js.register(ConvertKepubHandler::new(repository_service.clone(), core_services.file_store.clone()));
 
     // Health check handlers
     let sms = core_services.system_message_service.clone();
-    registry.register(RecoverEnrichmentsHandler::new(repository_service.clone(), sms.clone()));
-    registry.register(EnsureEnrichmentsHandler::new(repository_service.clone(), sms.clone()));
-    registry.register(CleanupOrphanAuthorsHandler::new(repository_service.clone(), sms.clone()));
-    registry.register(CleanupOrphanSeriesHandler::new(repository_service.clone(), sms.clone()));
-    registry.register(CleanupOrphanPublishersHandler::new(repository_service.clone(), sms.clone()));
-    registry.register(CleanupOldJobsHandler::new(repository_service.clone(), sms.clone()));
-    registry.register(CleanupOldImportJobsHandler::new(repository_service.clone(), sms.clone()));
-    registry.register(CleanupOldSystemMessagesHandler::new(sms.clone()));
-    registry.register(CleanupExpiredSessionsHandler::new(core_services.auth_service.clone()));
-    registry.register(VerifyFileIntegrityHandler::new(
+    js.register(RecoverEnrichmentsHandler::new(repository_service.clone(), sms.clone()));
+    js.register(EnsureEnrichmentsHandler::new(repository_service.clone(), sms.clone()));
+    js.register(CleanupOrphanAuthorsHandler::new(repository_service.clone(), sms.clone()));
+    js.register(CleanupOrphanSeriesHandler::new(repository_service.clone(), sms.clone()));
+    js.register(CleanupOrphanPublishersHandler::new(repository_service.clone(), sms.clone()));
+    js.register(CleanupOldJobsHandler::new(repository_service.clone(), sms.clone()));
+    js.register(CleanupOldImportJobsHandler::new(repository_service.clone(), sms.clone()));
+    js.register(CleanupOldSystemMessagesHandler::new(sms.clone()));
+    js.register(CleanupExpiredSessionsHandler::new(core_services.auth_service.clone()));
+    js.register(VerifyFileIntegrityHandler::new(
         repository_service.clone(),
         sms.clone(),
         core_services.file_store.clone(),
     ));
-    registry.register(ResetStaleImportJobsHandler::new(repository_service.clone(), sms));
+    js.register(ResetStaleImportJobsHandler::new(repository_service.clone(), sms));
 
     let health_task_state = Arc::new(HealthTaskState::new(default_health_tasks()));
     let (health_trigger, health_trigger_rx) = create_health_trigger();
@@ -249,7 +250,12 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     );
 
     let api_subsystem = create_api_subsystem(&config.api, core_services.clone());
-    let core_subsystem = create_core_subsystem(registry, repository_service.clone(), worker_poll_interval, event_service);
+    let core_subsystem = create_core_subsystem(
+        core_services.job_service.clone(),
+        repository_service.clone(),
+        worker_poll_interval,
+        event_service,
+    );
     let frontend_subsystem = create_frontend_subsystem(&config.frontend, core_services.clone(), health_task_state, health_trigger);
 
     span.exit();

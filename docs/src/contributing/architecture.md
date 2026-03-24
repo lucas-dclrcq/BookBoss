@@ -37,7 +37,7 @@ crates/core/src/
 ├── event/              # EventService: broadcast channel for real-time UI updates (SSE)
 ├── filter/             # BookFilter, FilterCondition, operators (for smart shelves)
 ├── import/             # Acquisition pipeline: ImportJob, ImportJobService
-├── jobs/               # Job queue: Job, JobRepository, JobWorker, JobRegistry, JobHandler
+├── jobs/               # Job queue: Job, JobRepository, JobWorker, JobService, JobHandler
 ├── library/            # LibraryService (delete_book, library_stats), LibraryRepository
 ├── opds/               # OpdsService port (OPDS password management)
 ├── pipeline/           # Port traits: MetadataExtractor, MetadataProvider; PipelineService
@@ -78,8 +78,8 @@ The import worker runs via the core job system (`CoreSubsystem`/`JobWorker`):
 
 The core job system provides a generic background task framework:
 
-- **JobRegistry** — maps job types to `JobHandler` implementations
-- **JobWorker** — polls for pending jobs and dispatches to handlers
+- **JobService** — manages job enqueueing, handler registration, and dispatch
+- **JobWorker** — polls for pending jobs and dispatches to handlers via `JobService`
 - **JobHandler** — trait implemented by each handler (import pipeline, EPUB enrichment, KEPUB conversion)
 
 Jobs are persisted in the database with status tracking (Pending, Processing, Completed, Failed). Recovery runs on startup to retry stalled jobs.

@@ -5,12 +5,12 @@ use tokio_graceful_shutdown::{IntoSubsystem, SubsystemHandle};
 use crate::{
     Error,
     event::EventService,
-    jobs::{JobRegistry, JobRepository},
+    jobs::{JobRepository, JobService},
     repository::{Repository, transaction},
 };
 
 pub struct JobWorker {
-    registry: JobRegistry,
+    job_service: Arc<dyn JobService>,
     repository: Arc<dyn Repository>,
     job_repo: Arc<dyn JobRepository>,
     poll_interval: Duration,
@@ -19,14 +19,14 @@ pub struct JobWorker {
 
 impl JobWorker {
     pub fn new(
-        registry: JobRegistry,
+        job_service: Arc<dyn JobService>,
         repository: Arc<dyn Repository>,
         job_repo: Arc<dyn JobRepository>,
         poll_interval: Duration,
         event_service: Arc<dyn EventService>,
     ) -> Self {
         Self {
-            registry,
+            job_service,
             repository,
             job_repo,
             poll_interval,
@@ -39,7 +39,7 @@ impl IntoSubsystem<Error> for JobWorker {
     async fn run(self, subsys: &mut SubsystemHandle) -> Result<(), Error> {
         let job_repo = self.job_repo;
         let repository = self.repository;
-        let registry = self.registry;
+        let job_service = self.job_service;
         let poll_interval = self.poll_interval;
         let event_service = self.event_service;
 
@@ -81,45 +81,27 @@ impl IntoSubsystem<Error> for JobWorker {
                                 let job_type = job.job_type.clone();
                                 let payload = job.payload.clone();
 
-                                match registry.get(&job_type) {
-                                    None => {
-                                        tracing::warn!(job_type, "no handler registered for job type");
+                                match job_service.dispatch(&job_type, payload).await {
+                                    Ok(()) => {
                                         let job_repo = job_repo.clone();
                                         transaction(&*repository, |tx| {
                                             let job = job.clone();
-                                            Box::pin(async move {
-                                                job_repo
-                                                    .fail(tx, job, format!("no handler for job type '{job_type}'"))
-                                                    .await
-                                            })
+                                            Box::pin(async move { job_repo.complete(tx, job).await })
                                         })
                                         .await?;
                                         event_service.notify_jobs_changed();
                                     }
-                                    Some(handler) => {
-                                        match handler.handle(payload).await {
-                                            Ok(()) => {
-                                                let job_repo = job_repo.clone();
-                                                transaction(&*repository, |tx| {
-                                                    let job = job.clone();
-                                                    Box::pin(async move { job_repo.complete(tx, job).await })
-                                                })
-                                                .await?;
-                                                event_service.notify_jobs_changed();
-                                            }
-                                            Err(e) => {
-                                                tracing::error!(job_type, error = %e, "job handler failed");
-                                                let job_repo = job_repo.clone();
-                                                transaction(&*repository, |tx| {
-                                                    let job = job.clone();
-                                                    Box::pin(async move {
-                                                        job_repo.fail(tx, job, e.to_string()).await
-                                                    })
-                                                })
-                                                .await?;
-                                                event_service.notify_jobs_changed();
-                                            }
-                                        }
+                                    Err(e) => {
+                                        tracing::error!(job_type, error = %e, "job handler failed");
+                                        let job_repo = job_repo.clone();
+                                        transaction(&*repository, |tx| {
+                                            let job = job.clone();
+                                            Box::pin(async move {
+                                                job_repo.fail(tx, job, e.to_string()).await
+                                            })
+                                        })
+                                        .await?;
+                                        event_service.notify_jobs_changed();
                                     }
                                 }
                             }

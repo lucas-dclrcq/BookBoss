@@ -1,18 +1,21 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc, sync::RwLock};
 
 use serde::Serialize;
 
 use crate::{
     Error,
-    jobs::Enqueueable,
+    jobs::{Enqueueable, handler::ErasedJobHandler},
     repository::{RepositoryService, read_only_transaction, transaction},
 };
 
-/// Service port for enqueuing and counting background jobs.
+/// Service port for enqueuing, counting, and dispatching background jobs.
 ///
 /// Abstracts transaction management away from adapter crates — callers receive
 /// an `Arc<dyn JobService>` and use [`JobServiceExt::enqueue`] without needing
 /// to manage their own `Repository` or `Transaction` references.
+///
+/// Also serves as the handler registry — handlers are registered via
+/// [`JobServiceExt::register`] and dispatched via [`JobService::dispatch`].
 #[async_trait::async_trait]
 #[cfg_attr(any(test, feature = "test-support"), mockall::automock)]
 #[allow(unused_lifetimes, reason = "async_trait + mockall expansion emits a spurious 'life0 parameter")]
@@ -28,9 +31,20 @@ pub trait JobService: Send + Sync {
     /// Count all jobs that are currently pending or running, regardless of
     /// type.
     async fn count_all_pending(&self) -> Result<u64, Error>;
+
+    /// Register a type-erased job handler for the given job type.
+    ///
+    /// Prefer [`JobServiceExt::register`] for typed registration.
+    fn register_handler(&self, job_type: String, handler: Arc<dyn ErasedJobHandler>);
+
+    /// Look up the handler for `job_type` and invoke it with `payload`.
+    ///
+    /// Returns an error if no handler is registered for the given type, or if
+    /// the handler itself fails.
+    async fn dispatch(&self, job_type: &str, payload: serde_json::Value) -> Result<(), Error>;
 }
 
-/// Extension methods on [`JobService`] for typed enqueueing.
+/// Extension methods on [`JobService`] for typed enqueueing and registration.
 ///
 /// Blanket-implemented for all `JobService` impls — no manual work per job
 /// type. Mirrors the [`JobRepositoryExt`] pattern but at the service layer.
@@ -42,17 +56,26 @@ pub trait JobServiceExt: JobService {
             self.enqueue_raw(P::JOB_TYPE, value, P::DEFAULT_PRIORITY).await
         }
     }
+
+    /// Register a typed [`JobHandler`](super::JobHandler).
+    fn register<H: super::JobHandler>(&self, handler: H) {
+        self.register_handler(H::JOB_TYPE.to_string(), Arc::new(handler));
+    }
 }
 
 impl<S: JobService + ?Sized> JobServiceExt for S {}
 
 pub(crate) struct JobServiceImpl {
     repository_service: Arc<RepositoryService>,
+    handlers: RwLock<HashMap<String, Arc<dyn ErasedJobHandler>>>,
 }
 
 impl JobServiceImpl {
     pub(crate) fn new(repository_service: Arc<RepositoryService>) -> Self {
-        Self { repository_service }
+        Self {
+            repository_service,
+            handlers: RwLock::new(HashMap::new()),
+        }
     }
 }
 
@@ -91,6 +114,21 @@ impl JobService for JobServiceImpl {
             Box::pin(async move { job_repo.count_all_pending(tx).await })
         })
         .await
+    }
+
+    fn register_handler(&self, job_type: String, handler: Arc<dyn ErasedJobHandler>) {
+        self.handlers.write().expect("handler lock poisoned").insert(job_type, handler);
+    }
+
+    async fn dispatch(&self, job_type: &str, payload: serde_json::Value) -> Result<(), Error> {
+        let handler = {
+            let handlers = self.handlers.read().expect("handler lock poisoned");
+            handlers
+                .get(job_type)
+                .ok_or_else(|| Error::Infrastructure(format!("no handler registered for job type '{job_type}'")))?
+                .clone()
+        };
+        handler.handle(payload).await
     }
 }
 
@@ -151,5 +189,34 @@ mod tests {
         let result = svc.count_all_pending().await;
 
         assert_eq!(result.unwrap(), 12);
+    }
+
+    #[tokio::test]
+    async fn register_and_dispatch_handler() {
+        use crate::jobs::JobHandler;
+
+        struct TestHandler;
+        impl JobHandler for TestHandler {
+            const JOB_TYPE: &'static str = "test.job";
+            type Payload = serde_json::Value;
+            async fn handle(&self, _payload: serde_json::Value) -> Result<(), Error> {
+                Ok(())
+            }
+        }
+
+        let mock = MockJobRepository::new();
+        let svc = create_service(mock);
+        svc.register_handler("test.job".to_string(), Arc::new(TestHandler));
+
+        svc.dispatch("test.job", serde_json::json!({})).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn dispatch_unknown_type_returns_error() {
+        let mock = MockJobRepository::new();
+        let svc = create_service(mock);
+
+        let result = svc.dispatch("unknown.job", serde_json::json!({})).await;
+        assert!(result.is_err());
     }
 }

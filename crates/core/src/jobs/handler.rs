@@ -13,10 +13,12 @@ pub trait JobHandler: Send + Sync + 'static {
     fn handle(&self, payload: Self::Payload) -> impl Future<Output = Result<(), Error>> + Send;
 }
 
-/// Object-safe erased version of `JobHandler` used for `HashMap` storage.
-/// Not part of the public API — handler authors implement `JobHandler`.
-pub(crate) trait ErasedJobHandler: Send + Sync {
-    #[allow(dead_code, reason = "reserved for future use in job routing/debugging")]
+/// Object-safe erased version of `JobHandler` used for dynamic dispatch.
+///
+/// Handler authors implement [`JobHandler`] — this trait exists for type-erased
+/// storage in the job registry. The blanket impl below bridges the two.
+pub trait ErasedJobHandler: Send + Sync {
+    /// The job type string this handler is registered for.
     fn job_type(&self) -> &str;
     fn handle<'a>(&'a self, payload: serde_json::Value) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'a>>;
 }
