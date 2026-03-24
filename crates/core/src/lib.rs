@@ -66,6 +66,9 @@ pub struct ExternalServices {
 }
 
 pub struct CoreServices {
+    // Used by health/job handlers in Step 4 of lifecycle-hooks feature.
+    #[allow(dead_code)]
+    pub(crate) repository_service: Arc<RepositoryService>,
     pub auth_service: Arc<dyn AuthService>,
     pub user_service: Arc<dyn UserService>,
     pub user_setting_service: Arc<dyn UserSettingService>,
@@ -99,6 +102,7 @@ impl CoreServices {
             event_service,
         } = external;
         Self {
+            repository_service: repository_service.clone(),
             auth_service: Arc::new(AuthServiceImpl::new(repository_service.clone())),
             user_service: Arc::new(UserServiceImpl::new(repository_service.clone())),
             user_setting_service: Arc::new(UserSettingServiceImpl::new(repository_service.clone())),
