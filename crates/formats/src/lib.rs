@@ -14,3 +14,13 @@ pub use epub_enrich::enrich_epub;
 pub use error::Error;
 pub use kepub_handler::ConvertKepubHandler;
 pub use opf::parse_sidecar;
+
+/// Register format-related job handlers.
+///
+/// Called once after `CoreServices` is built.
+pub fn before_start(core: &std::sync::Arc<bb_core::CoreServices>) {
+    use bb_core::jobs::JobServiceExt;
+
+    core.job_service.register(EnrichEpubHandler::new(core.clone()));
+    core.job_service.register(ConvertKepubHandler::new(core.clone()));
+}

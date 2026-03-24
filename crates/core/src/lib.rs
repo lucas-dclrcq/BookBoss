@@ -127,6 +127,113 @@ pub fn create_services(external: ExternalServices, encryption_secret: &str) -> R
     Ok(Arc::new(CoreServices::new(external, encryption_secret)))
 }
 
+/// Register core job handlers and health tasks.
+///
+/// Called once after `CoreServices` is built — before the subsystem event loop
+/// starts. Each crate that owns handlers exposes a similar function.
+pub fn before_start(core: &Arc<CoreServices>) {
+    use health::{
+        HealthTaskConfig,
+        handlers::{
+            cleanup_expired_sessions, cleanup_old_import_jobs, cleanup_old_jobs, cleanup_old_system_messages, cleanup_orphan_authors,
+            cleanup_orphan_publishers, cleanup_orphan_series, ensure_enrichments, recover_enrichments, reset_stale_import_jobs, verify_file_integrity,
+        },
+    };
+    use jobs::JobServiceExt;
+
+    let js = &core.job_service;
+    let hs = &core.health_service;
+
+    // Health check handlers + their scheduled tasks
+    js.register(recover_enrichments::RecoverEnrichmentsHandler::new(core.clone()));
+    hs.register_task(HealthTaskConfig {
+        name: "Recover Enrichments".into(),
+        job_type: "health.recover_enrichments".into(),
+        run_on_startup: true,
+        interval_minutes: 60,
+    });
+
+    js.register(ensure_enrichments::EnsureEnrichmentsHandler::new(core.clone()));
+    hs.register_task(HealthTaskConfig {
+        name: "Ensure Enrichments".into(),
+        job_type: "health.ensure_enrichments".into(),
+        run_on_startup: true,
+        interval_minutes: 120,
+    });
+
+    js.register(cleanup_orphan_authors::CleanupOrphanAuthorsHandler::new(core.clone()));
+    hs.register_task(HealthTaskConfig {
+        name: "Cleanup Orphan Authors".into(),
+        job_type: "health.cleanup_orphan_authors".into(),
+        run_on_startup: false,
+        interval_minutes: 360,
+    });
+
+    js.register(cleanup_orphan_series::CleanupOrphanSeriesHandler::new(core.clone()));
+    hs.register_task(HealthTaskConfig {
+        name: "Cleanup Orphan Series".into(),
+        job_type: "health.cleanup_orphan_series".into(),
+        run_on_startup: false,
+        interval_minutes: 360,
+    });
+
+    js.register(cleanup_orphan_publishers::CleanupOrphanPublishersHandler::new(core.clone()));
+    hs.register_task(HealthTaskConfig {
+        name: "Cleanup Orphan Publishers".into(),
+        job_type: "health.cleanup_orphan_publishers".into(),
+        run_on_startup: false,
+        interval_minutes: 360,
+    });
+
+    js.register(cleanup_old_jobs::CleanupOldJobsHandler::new(core.clone()));
+    hs.register_task(HealthTaskConfig {
+        name: "Cleanup Old Jobs".into(),
+        job_type: "health.cleanup_old_jobs".into(),
+        run_on_startup: false,
+        interval_minutes: 1440,
+    });
+
+    js.register(cleanup_old_import_jobs::CleanupOldImportJobsHandler::new(core.clone()));
+    hs.register_task(HealthTaskConfig {
+        name: "Cleanup Old Import Jobs".into(),
+        job_type: "health.cleanup_old_import_jobs".into(),
+        run_on_startup: false,
+        interval_minutes: 1440,
+    });
+
+    js.register(cleanup_old_system_messages::CleanupOldSystemMessagesHandler::new(core.clone()));
+    hs.register_task(HealthTaskConfig {
+        name: "Cleanup Old System Messages".into(),
+        job_type: "health.cleanup_old_system_messages".into(),
+        run_on_startup: false,
+        interval_minutes: 1440,
+    });
+
+    js.register(cleanup_expired_sessions::CleanupExpiredSessionsHandler::new(core.clone()));
+    hs.register_task(HealthTaskConfig {
+        name: "Cleanup Expired Sessions".into(),
+        job_type: "health.cleanup_expired_sessions".into(),
+        run_on_startup: false,
+        interval_minutes: 1440,
+    });
+
+    js.register(verify_file_integrity::VerifyFileIntegrityHandler::new(core.clone()));
+    hs.register_task(HealthTaskConfig {
+        name: "Verify Library File Integrity".into(),
+        job_type: "health.verify_file_integrity".into(),
+        run_on_startup: false,
+        interval_minutes: 720,
+    });
+
+    js.register(reset_stale_import_jobs::ResetStaleImportJobsHandler::new(core.clone()));
+    hs.register_task(HealthTaskConfig {
+        name: "Reset Stale Import Jobs".into(),
+        job_type: "health.reset_stale_import_jobs".into(),
+        run_on_startup: true,
+        interval_minutes: 360,
+    });
+}
+
 pub struct CoreSubsystem {
     job_service: Arc<dyn JobService>,
     repository_service: Arc<RepositoryService>,
