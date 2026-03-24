@@ -2,16 +2,16 @@ use std::sync::Arc;
 
 use chrono::{Duration, Utc};
 
-use crate::{Error, jobs::JobHandler, message::SystemMessageService};
+use crate::{CoreServices, Error, jobs::JobHandler};
 
 pub struct CleanupOldSystemMessagesHandler {
-    system_message_service: Arc<dyn SystemMessageService>,
+    core: Arc<CoreServices>,
 }
 
 impl CleanupOldSystemMessagesHandler {
     #[must_use]
-    pub fn new(system_message_service: Arc<dyn SystemMessageService>) -> Self {
-        Self { system_message_service }
+    pub fn new(core: Arc<CoreServices>) -> Self {
+        Self { core }
     }
 }
 
@@ -22,7 +22,7 @@ impl JobHandler for CleanupOldSystemMessagesHandler {
     async fn handle(&self, _payload: serde_json::Value) -> Result<(), Error> {
         let cutoff = Utc::now() - Duration::days(30);
 
-        let deleted = self.system_message_service.delete_older_than(cutoff).await?;
+        let deleted = self.core.system_message_service.delete_older_than(cutoff).await?;
 
         if deleted > 0 {
             tracing::info!(count = deleted, "deleted old system messages");
@@ -37,25 +37,51 @@ impl JobHandler for CleanupOldSystemMessagesHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::service::MockSystemMessageService;
+    use crate::{message::repository::MockSystemMessageRepository, repository::testing::default_repository_service_builder, test_support::*};
 
     #[tokio::test]
     async fn deletes_old_messages() {
-        let mut sms = MockSystemMessageService::new();
+        let mut msg_repo = MockSystemMessageRepository::new();
 
-        sms.expect_delete_older_than().returning(|_| Box::pin(std::future::ready(Ok(10))));
+        msg_repo.expect_delete_older_than().returning(|_, _| Box::pin(std::future::ready(Ok(10))));
 
-        let handler = CleanupOldSystemMessagesHandler::new(Arc::new(sms));
+        let repo_service = Arc::new(
+            default_repository_service_builder()
+                .system_message_repository(Arc::new(msg_repo))
+                .build()
+                .unwrap(),
+        );
+
+        let core = crate::create_services(
+            default_external_services_builder().repository_service(repo_service).build().unwrap(),
+            "test-secret",
+        )
+        .unwrap();
+
+        let handler = CleanupOldSystemMessagesHandler::new(core);
         handler.handle(serde_json::json!({})).await.unwrap();
     }
 
     #[tokio::test]
     async fn noop_when_no_old_messages() {
-        let mut sms = MockSystemMessageService::new();
+        let mut msg_repo = MockSystemMessageRepository::new();
 
-        sms.expect_delete_older_than().returning(|_| Box::pin(std::future::ready(Ok(0))));
+        msg_repo.expect_delete_older_than().returning(|_, _| Box::pin(std::future::ready(Ok(0))));
 
-        let handler = CleanupOldSystemMessagesHandler::new(Arc::new(sms));
+        let repo_service = Arc::new(
+            default_repository_service_builder()
+                .system_message_repository(Arc::new(msg_repo))
+                .build()
+                .unwrap(),
+        );
+
+        let core = crate::create_services(
+            default_external_services_builder().repository_service(repo_service).build().unwrap(),
+            "test-secret",
+        )
+        .unwrap();
+
+        let handler = CleanupOldSystemMessagesHandler::new(core);
         handler.handle(serde_json::json!({})).await.unwrap();
     }
 }

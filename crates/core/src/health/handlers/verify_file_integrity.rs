@@ -1,31 +1,20 @@
 use std::sync::Arc;
 
 use crate::{
-    Error,
+    CoreServices, Error,
     jobs::JobHandler,
-    message::{MessageSeverity, NewSystemMessage, SystemMessageService},
-    repository::{RepositoryService, read_only_transaction},
-    storage::FileStoreService,
+    message::{MessageSeverity, NewSystemMessage},
+    repository::read_only_transaction,
 };
 
 pub struct VerifyFileIntegrityHandler {
-    repository_service: Arc<RepositoryService>,
-    system_message_service: Arc<dyn SystemMessageService>,
-    file_store: Arc<dyn FileStoreService>,
+    core: Arc<CoreServices>,
 }
 
 impl VerifyFileIntegrityHandler {
     #[must_use]
-    pub fn new(
-        repository_service: Arc<RepositoryService>,
-        system_message_service: Arc<dyn SystemMessageService>,
-        file_store: Arc<dyn FileStoreService>,
-    ) -> Self {
-        Self {
-            repository_service,
-            system_message_service,
-            file_store,
-        }
+    pub fn new(core: Arc<CoreServices>) -> Self {
+        Self { core }
     }
 }
 
@@ -34,9 +23,9 @@ impl JobHandler for VerifyFileIntegrityHandler {
     type Payload = serde_json::Value;
 
     async fn handle(&self, _payload: serde_json::Value) -> Result<(), Error> {
-        let book_repo = self.repository_service.book_repository().clone();
+        let book_repo = self.core.repository_service.book_repository().clone();
 
-        let all_files = read_only_transaction(&**self.repository_service.repository(), |tx| {
+        let all_files = read_only_transaction(&**self.core.repository_service.repository(), |tx| {
             let book_repo = book_repo.clone();
             Box::pin(async move { book_repo.list_all_book_files(tx).await })
         })
@@ -45,7 +34,7 @@ impl JobHandler for VerifyFileIntegrityHandler {
         let mut missing = Vec::new();
 
         for file in &all_files {
-            let abs_path = self.file_store.resolve(&file.path);
+            let abs_path = self.core.file_store.resolve(&file.path);
             if !abs_path.exists() {
                 missing.push(format!("book_id={}, path={}", file.book_id, file.path));
             }
@@ -53,7 +42,8 @@ impl JobHandler for VerifyFileIntegrityHandler {
 
         if missing.is_empty() {
             tracing::info!(total = all_files.len(), "all library files verified");
-            self.system_message_service
+            self.core
+                .system_message_service
                 .add_message(NewSystemMessage {
                     source_task: Self::JOB_TYPE.to_string(),
                     severity: MessageSeverity::Info,
@@ -68,7 +58,8 @@ impl JobHandler for VerifyFileIntegrityHandler {
                 tracing::warn!(entry, "missing file");
             }
 
-            self.system_message_service
+            self.core
+                .system_message_service
                 .add_message(NewSystemMessage {
                     source_task: Self::JOB_TYPE.to_string(),
                     severity: MessageSeverity::Warning,
@@ -91,6 +82,7 @@ mod tests {
         message::repository::MockSystemMessageRepository,
         repository::testing::default_repository_service_builder,
         storage::MockFileStoreService,
+        test_support::*,
     };
 
     #[tokio::test]
@@ -137,8 +129,17 @@ mod tests {
                 .unwrap(),
         );
 
-        let sms = crate::message::SystemMessageServiceImpl::new(repo_service.clone(), crate::test_support::nop_event_service());
-        let handler = VerifyFileIntegrityHandler::new(repo_service, Arc::new(sms), Arc::new(store));
+        let core = crate::create_services(
+            default_external_services_builder()
+                .repository_service(repo_service)
+                .file_store(Arc::new(store))
+                .build()
+                .unwrap(),
+            "test-secret",
+        )
+        .unwrap();
+
+        let handler = VerifyFileIntegrityHandler::new(core);
         handler.handle(serde_json::json!({})).await.unwrap();
     }
 
@@ -184,8 +185,17 @@ mod tests {
                 .unwrap(),
         );
 
-        let sms = crate::message::SystemMessageServiceImpl::new(repo_service.clone(), crate::test_support::nop_event_service());
-        let handler = VerifyFileIntegrityHandler::new(repo_service, Arc::new(sms), Arc::new(store));
+        let core = crate::create_services(
+            default_external_services_builder()
+                .repository_service(repo_service)
+                .file_store(Arc::new(store))
+                .build()
+                .unwrap(),
+            "test-secret",
+        )
+        .unwrap();
+
+        let handler = VerifyFileIntegrityHandler::new(core);
         handler.handle(serde_json::json!({})).await.unwrap();
     }
 }

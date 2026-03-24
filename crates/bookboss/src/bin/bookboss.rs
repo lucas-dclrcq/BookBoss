@@ -219,30 +219,22 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
 
     // Register job handlers via JobService
     let js = &core_services.job_service;
-    js.register(ProcessImportHandler::new(
-        core_services.import_job_service.clone(),
-        core_services.pipeline_service.clone(),
-    ));
-    js.register(EnrichEpubHandler::new(repository_service.clone(), core_services.file_store.clone()));
-    js.register(ConvertKepubHandler::new(repository_service.clone(), core_services.file_store.clone()));
+    js.register(ProcessImportHandler::new(core_services.clone()));
+    js.register(EnrichEpubHandler::new(core_services.clone()));
+    js.register(ConvertKepubHandler::new(core_services.clone()));
 
     // Health check handlers
-    let sms = core_services.system_message_service.clone();
-    js.register(RecoverEnrichmentsHandler::new(repository_service.clone(), sms.clone()));
-    js.register(EnsureEnrichmentsHandler::new(repository_service.clone(), sms.clone()));
-    js.register(CleanupOrphanAuthorsHandler::new(repository_service.clone(), sms.clone()));
-    js.register(CleanupOrphanSeriesHandler::new(repository_service.clone(), sms.clone()));
-    js.register(CleanupOrphanPublishersHandler::new(repository_service.clone(), sms.clone()));
-    js.register(CleanupOldJobsHandler::new(repository_service.clone(), sms.clone()));
-    js.register(CleanupOldImportJobsHandler::new(repository_service.clone(), sms.clone()));
-    js.register(CleanupOldSystemMessagesHandler::new(sms.clone()));
-    js.register(CleanupExpiredSessionsHandler::new(core_services.auth_service.clone()));
-    js.register(VerifyFileIntegrityHandler::new(
-        repository_service.clone(),
-        sms.clone(),
-        core_services.file_store.clone(),
-    ));
-    js.register(ResetStaleImportJobsHandler::new(repository_service.clone(), sms));
+    js.register(RecoverEnrichmentsHandler::new(core_services.clone()));
+    js.register(EnsureEnrichmentsHandler::new(core_services.clone()));
+    js.register(CleanupOrphanAuthorsHandler::new(core_services.clone()));
+    js.register(CleanupOrphanSeriesHandler::new(core_services.clone()));
+    js.register(CleanupOrphanPublishersHandler::new(core_services.clone()));
+    js.register(CleanupOldJobsHandler::new(core_services.clone()));
+    js.register(CleanupOldImportJobsHandler::new(core_services.clone()));
+    js.register(CleanupOldSystemMessagesHandler::new(core_services.clone()));
+    js.register(CleanupExpiredSessionsHandler::new(core_services.clone()));
+    js.register(VerifyFileIntegrityHandler::new(core_services.clone()));
+    js.register(ResetStaleImportJobsHandler::new(core_services.clone()));
 
     let health_subsystem = create_health_subsystem(
         core_services.health_service.clone(),

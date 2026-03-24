@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
-use crate::{Error, auth::AuthService, jobs::JobHandler};
+use crate::{CoreServices, Error, jobs::JobHandler};
 
 pub struct CleanupExpiredSessionsHandler {
-    auth_service: Arc<dyn AuthService>,
+    core: Arc<CoreServices>,
 }
 
 impl CleanupExpiredSessionsHandler {
     #[must_use]
-    pub fn new(auth_service: Arc<dyn AuthService>) -> Self {
-        Self { auth_service }
+    pub fn new(core: Arc<CoreServices>) -> Self {
+        Self { core }
     }
 }
 
@@ -18,7 +18,7 @@ impl JobHandler for CleanupExpiredSessionsHandler {
     type Payload = serde_json::Value;
 
     async fn handle(&self, _payload: serde_json::Value) -> Result<(), Error> {
-        let deleted = self.auth_service.delete_by_expiry().await?;
+        let deleted = self.core.auth_service.delete_by_expiry().await?;
 
         if deleted.is_empty() {
             tracing::info!("no stale sessions to clean up");
@@ -33,26 +33,43 @@ impl JobHandler for CleanupExpiredSessionsHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::auth::service::MockAuthService;
+    use crate::{auth::repository::MockSessionRepository, repository::testing::default_repository_service_builder, test_support::*};
 
     #[tokio::test]
     async fn deletes_expired_sessions() {
-        let mut auth = MockAuthService::new();
+        let mut session_repo = MockSessionRepository::new();
 
-        auth.expect_delete_by_expiry()
-            .returning(|| Box::pin(std::future::ready(Ok(vec!["s1".into(), "s2".into(), "s3".into()]))));
+        session_repo
+            .expect_delete_by_expiry()
+            .returning(|_| Box::pin(std::future::ready(Ok(vec!["s1".into(), "s2".into(), "s3".into()]))));
 
-        let handler = CleanupExpiredSessionsHandler::new(Arc::new(auth));
+        let repo_service = Arc::new(default_repository_service_builder().session_repository(Arc::new(session_repo)).build().unwrap());
+
+        let core = crate::create_services(
+            default_external_services_builder().repository_service(repo_service).build().unwrap(),
+            "test-secret",
+        )
+        .unwrap();
+
+        let handler = CleanupExpiredSessionsHandler::new(core);
         handler.handle(serde_json::json!({})).await.unwrap();
     }
 
     #[tokio::test]
     async fn noop_when_no_expired_sessions() {
-        let mut auth = MockAuthService::new();
+        let mut session_repo = MockSessionRepository::new();
 
-        auth.expect_delete_by_expiry().returning(|| Box::pin(std::future::ready(Ok(vec![]))));
+        session_repo.expect_delete_by_expiry().returning(|_| Box::pin(std::future::ready(Ok(vec![]))));
 
-        let handler = CleanupExpiredSessionsHandler::new(Arc::new(auth));
+        let repo_service = Arc::new(default_repository_service_builder().session_repository(Arc::new(session_repo)).build().unwrap());
+
+        let core = crate::create_services(
+            default_external_services_builder().repository_service(repo_service).build().unwrap(),
+            "test-secret",
+        )
+        .unwrap();
+
+        let handler = CleanupExpiredSessionsHandler::new(core);
         handler.handle(serde_json::json!({})).await.unwrap();
     }
 }

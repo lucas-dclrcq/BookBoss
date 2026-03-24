@@ -3,24 +3,20 @@ use std::sync::Arc;
 use chrono::{Duration, Utc};
 
 use crate::{
-    Error,
+    CoreServices, Error,
     jobs::JobHandler,
-    message::{MessageSeverity, NewSystemMessage, SystemMessageService},
-    repository::{RepositoryService, transaction},
+    message::{MessageSeverity, NewSystemMessage},
+    repository::transaction,
 };
 
 pub struct CleanupOldJobsHandler {
-    repository_service: Arc<RepositoryService>,
-    system_message_service: Arc<dyn SystemMessageService>,
+    core: Arc<CoreServices>,
 }
 
 impl CleanupOldJobsHandler {
     #[must_use]
-    pub fn new(repository_service: Arc<RepositoryService>, system_message_service: Arc<dyn SystemMessageService>) -> Self {
-        Self {
-            repository_service,
-            system_message_service,
-        }
+    pub fn new(core: Arc<CoreServices>) -> Self {
+        Self { core }
     }
 }
 
@@ -31,8 +27,8 @@ impl JobHandler for CleanupOldJobsHandler {
     async fn handle(&self, _payload: serde_json::Value) -> Result<(), Error> {
         let cutoff = Utc::now() - Duration::days(7);
 
-        let job_repo = self.repository_service.job_repository().clone();
-        let deleted = transaction(&**self.repository_service.repository(), |tx| {
+        let job_repo = self.core.repository_service.job_repository().clone();
+        let deleted = transaction(&**self.core.repository_service.repository(), |tx| {
             let job_repo = job_repo.clone();
             Box::pin(async move { job_repo.delete_old_jobs(tx, cutoff).await })
         })
@@ -41,7 +37,8 @@ impl JobHandler for CleanupOldJobsHandler {
         if deleted > 0 {
             tracing::info!(count = deleted, "deleted old completed/failed jobs");
 
-            self.system_message_service
+            self.core
+                .system_message_service
                 .add_message(NewSystemMessage {
                     source_task: Self::JOB_TYPE.to_string(),
                     severity: MessageSeverity::Info,
@@ -59,7 +56,7 @@ impl JobHandler for CleanupOldJobsHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{jobs::repository::MockJobRepository, repository::testing::default_repository_service_builder};
+    use crate::{jobs::repository::MockJobRepository, repository::testing::default_repository_service_builder, test_support::*};
 
     #[tokio::test]
     async fn deletes_old_jobs_and_logs_message() {
@@ -90,8 +87,13 @@ mod tests {
                 .unwrap(),
         );
 
-        let sms = crate::message::SystemMessageServiceImpl::new(repo_service.clone(), crate::test_support::nop_event_service());
-        let handler = CleanupOldJobsHandler::new(repo_service, Arc::new(sms));
+        let core = crate::create_services(
+            default_external_services_builder().repository_service(repo_service).build().unwrap(),
+            "test-secret",
+        )
+        .unwrap();
+
+        let handler = CleanupOldJobsHandler::new(core);
         handler.handle(serde_json::json!({})).await.unwrap();
     }
 
@@ -103,8 +105,13 @@ mod tests {
 
         let repo_service = Arc::new(default_repository_service_builder().job_repository(Arc::new(job_repo)).build().unwrap());
 
-        let sms = crate::message::SystemMessageServiceImpl::new(repo_service.clone(), crate::test_support::nop_event_service());
-        let handler = CleanupOldJobsHandler::new(repo_service, Arc::new(sms));
+        let core = crate::create_services(
+            default_external_services_builder().repository_service(repo_service).build().unwrap(),
+            "test-secret",
+        )
+        .unwrap();
+
+        let handler = CleanupOldJobsHandler::new(core);
         handler.handle(serde_json::json!({})).await.unwrap();
     }
 }

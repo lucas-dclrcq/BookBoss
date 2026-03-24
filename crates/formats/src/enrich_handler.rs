@@ -1,28 +1,24 @@
 use std::sync::Arc;
 
 use bb_core::{
-    Error, RepositoryError,
+    CoreServices, Error, RepositoryError,
     book::{AuthorRole, FileFormat, FileRole, book_slug},
-    jobs::{JobHandler, JobRepositoryExt},
+    jobs::{JobHandler, JobRepositoryExt, JobServiceExt},
     repository::{RepositoryService, read_only_transaction, transaction},
-    storage::{BookSidecar, FileStoreService, SidecarAuthor, SidecarIdentifier, SidecarSeries},
+    storage::{BookSidecar, SidecarAuthor, SidecarIdentifier, SidecarSeries},
 };
 use bb_utils::hash::hash_file;
 
 use crate::conversion::{ConvertKepubPayload, EnrichEpubPayload};
 
 pub struct EnrichEpubHandler {
-    repository_service: Arc<RepositoryService>,
-    file_store: Arc<dyn FileStoreService>,
+    core: Arc<CoreServices>,
 }
 
 impl EnrichEpubHandler {
     #[must_use]
-    pub fn new(repository_service: Arc<RepositoryService>, file_store: Arc<dyn FileStoreService>) -> Self {
-        Self {
-            repository_service,
-            file_store,
-        }
+    pub fn new(core: Arc<CoreServices>) -> Self {
+        Self { core }
     }
 }
 
@@ -34,9 +30,9 @@ impl JobHandler for EnrichEpubHandler {
         let book_id = payload.book_id;
 
         // ── 1. Load all book data in a single read transaction ────────────────
-        let repo = self.repository_service.clone();
+        let repo = self.core.repository_service.clone();
         let (book, files, authors, identifiers, genres, tags, series_opt, publisher_opt) =
-            read_only_transaction(&**self.repository_service.repository(), |tx| {
+            read_only_transaction(&**self.core.repository_service.repository(), |tx| {
                 let repo = repo.clone();
                 Box::pin(async move {
                     let book_repo = repo.book_repository().clone();
@@ -86,11 +82,11 @@ impl JobHandler for EnrichEpubHandler {
             .find(|f| f.file_role == FileRole::Original && f.format == FileFormat::Epub)
             .ok_or_else(|| Error::Infrastructure(format!("book {book_id}: no original epub file record")))?;
 
-        let source_path = self.file_store.resolve(&original_file.path);
+        let source_path = self.core.file_store.resolve(&original_file.path);
 
         // ── 3. Load cover bytes (non-fatal if missing) ────────────────────────
         let cover_bytes: Option<Vec<u8>> = if let Some(cover_filename) = &book.cover_path {
-            let cover_path = self.file_store.cover_path(book.token, cover_filename);
+            let cover_path = self.core.file_store.cover_path(book.token, cover_filename);
             match tokio::fs::read(&cover_path).await {
                 Ok(data) => Some(data),
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -168,11 +164,11 @@ impl JobHandler for EnrichEpubHandler {
             .len() as i64;
 
         // ── 8. Move enriched file into the library ────────────────────────────
-        let enriched_path = self.file_store.store_book_file(book.token, &slug, FileFormat::Epub, &temp_path).await?;
+        let enriched_path = self.core.file_store.store_book_file(book.token, &slug, FileFormat::Epub, &temp_path).await?;
 
         // ── 9. Upsert the Enriched book_file record ───────────────────────────
-        let book_repo = self.repository_service.book_repository().clone();
-        transaction(&**self.repository_service.repository(), |tx| {
+        let book_repo = self.core.repository_service.book_repository().clone();
+        transaction(&**self.core.repository_service.repository(), |tx| {
             let book_repo = book_repo.clone();
             let file_hash = file_hash.clone();
             let enriched_path = enriched_path.clone();
@@ -187,15 +183,7 @@ impl JobHandler for EnrichEpubHandler {
         .await?;
 
         // ── 10. Enqueue KEPUB conversion as the next step in the chain ────────
-        let job_repo = self.repository_service.job_repository().clone();
-        transaction(&**self.repository_service.repository(), |tx| {
-            let job_repo = job_repo.clone();
-            Box::pin(async move {
-                job_repo.enqueue(tx, &ConvertKepubPayload { book_id }).await?;
-                Ok(())
-            })
-        })
-        .await?;
+        self.core.job_service.enqueue(&ConvertKepubPayload { book_id }).await?;
 
         tracing::info!(book_id, "EPUB enrichment complete; KEPUB conversion enqueued");
         Ok(())

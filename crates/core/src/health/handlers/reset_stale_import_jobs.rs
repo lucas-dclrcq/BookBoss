@@ -3,25 +3,21 @@ use std::sync::Arc;
 use chrono::{Duration, Utc};
 
 use crate::{
-    Error,
+    CoreServices, Error,
     import::ImportStatus,
     jobs::JobHandler,
-    message::{MessageSeverity, NewSystemMessage, SystemMessageService},
-    repository::{RepositoryService, read_only_transaction, transaction},
+    message::{MessageSeverity, NewSystemMessage},
+    repository::{read_only_transaction, transaction},
 };
 
 pub struct ResetStaleImportJobsHandler {
-    repository_service: Arc<RepositoryService>,
-    system_message_service: Arc<dyn SystemMessageService>,
+    core: Arc<CoreServices>,
 }
 
 impl ResetStaleImportJobsHandler {
     #[must_use]
-    pub fn new(repository_service: Arc<RepositoryService>, system_message_service: Arc<dyn SystemMessageService>) -> Self {
-        Self {
-            repository_service,
-            system_message_service,
-        }
+    pub fn new(core: Arc<CoreServices>) -> Self {
+        Self { core }
     }
 }
 
@@ -32,8 +28,8 @@ impl JobHandler for ResetStaleImportJobsHandler {
     async fn handle(&self, _payload: serde_json::Value) -> Result<(), Error> {
         let cutoff = Utc::now() - Duration::hours(24);
 
-        let import_repo = self.repository_service.import_job_repository().clone();
-        let stale_jobs = read_only_transaction(&**self.repository_service.repository(), |tx| {
+        let import_repo = self.core.repository_service.import_job_repository().clone();
+        let stale_jobs = read_only_transaction(&**self.core.repository_service.repository(), |tx| {
             let import_repo = import_repo.clone();
             Box::pin(async move { import_repo.find_stale_non_terminal_jobs(tx, cutoff).await })
         })
@@ -45,12 +41,12 @@ impl JobHandler for ResetStaleImportJobsHandler {
         }
 
         let count = stale_jobs.len();
-        let import_repo = self.repository_service.import_job_repository().clone();
+        let import_repo = self.core.repository_service.import_job_repository().clone();
 
         // Reset stale jobs: Pending/NeedsReview stay as-is (they may just be waiting),
         // but Extracting/Identifying are stuck in-progress and should be reset to
         // Pending.
-        transaction(&**self.repository_service.repository(), |tx| {
+        transaction(&**self.core.repository_service.repository(), |tx| {
             let import_repo = import_repo.clone();
             let stale_jobs = stale_jobs.clone();
             Box::pin(async move {
@@ -76,7 +72,8 @@ impl JobHandler for ResetStaleImportJobsHandler {
 
         tracing::warn!(count, "reset stale import jobs");
 
-        self.system_message_service
+        self.core
+            .system_message_service
             .add_message(NewSystemMessage {
                 source_task: Self::JOB_TYPE.to_string(),
                 severity: MessageSeverity::Warning,
@@ -96,6 +93,7 @@ mod tests {
         import::{ImportJob, ImportJobToken, repository::import_job::MockImportJobRepository},
         message::repository::MockSystemMessageRepository,
         repository::testing::default_repository_service_builder,
+        test_support::*,
     };
 
     fn make_stale_job(id: u64, status: ImportStatus) -> ImportJob {
@@ -155,8 +153,13 @@ mod tests {
                 .unwrap(),
         );
 
-        let sms = crate::message::SystemMessageServiceImpl::new(repo_service.clone(), crate::test_support::nop_event_service());
-        let handler = ResetStaleImportJobsHandler::new(repo_service, Arc::new(sms));
+        let core = crate::create_services(
+            default_external_services_builder().repository_service(repo_service).build().unwrap(),
+            "test-secret",
+        )
+        .unwrap();
+
+        let handler = ResetStaleImportJobsHandler::new(core);
         handler.handle(serde_json::json!({})).await.unwrap();
     }
 
@@ -175,8 +178,13 @@ mod tests {
                 .unwrap(),
         );
 
-        let sms = crate::message::SystemMessageServiceImpl::new(repo_service.clone(), crate::test_support::nop_event_service());
-        let handler = ResetStaleImportJobsHandler::new(repo_service, Arc::new(sms));
+        let core = crate::create_services(
+            default_external_services_builder().repository_service(repo_service).build().unwrap(),
+            "test-secret",
+        )
+        .unwrap();
+
+        let handler = ResetStaleImportJobsHandler::new(core);
         handler.handle(serde_json::json!({})).await.unwrap();
     }
 }

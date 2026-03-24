@@ -1,24 +1,20 @@
 use std::sync::Arc;
 
 use crate::{
-    Error,
+    CoreServices, Error,
     jobs::{JobHandler, JobRepositoryExt},
-    message::{MessageSeverity, NewSystemMessage, SystemMessageService},
-    repository::{RepositoryService, read_only_transaction, transaction},
+    message::{MessageSeverity, NewSystemMessage},
+    repository::{read_only_transaction, transaction},
 };
 
 pub struct EnsureEnrichmentsHandler {
-    repository_service: Arc<RepositoryService>,
-    system_message_service: Arc<dyn SystemMessageService>,
+    core: Arc<CoreServices>,
 }
 
 impl EnsureEnrichmentsHandler {
     #[must_use]
-    pub fn new(repository_service: Arc<RepositoryService>, system_message_service: Arc<dyn SystemMessageService>) -> Self {
-        Self {
-            repository_service,
-            system_message_service,
-        }
+    pub fn new(core: Arc<CoreServices>) -> Self {
+        Self { core }
     }
 }
 
@@ -48,18 +44,18 @@ impl JobHandler for EnsureEnrichmentsHandler {
     type Payload = serde_json::Value;
 
     async fn handle(&self, _payload: serde_json::Value) -> Result<(), Error> {
-        let book_repo = self.repository_service.book_repository().clone();
+        let book_repo = self.core.repository_service.book_repository().clone();
 
         // Find books missing enriched EPUB.
-        let enrichment_ids = read_only_transaction(&**self.repository_service.repository(), |tx| {
+        let enrichment_ids = read_only_transaction(&**self.core.repository_service.repository(), |tx| {
             let book_repo = book_repo.clone();
             Box::pin(async move { book_repo.find_book_ids_needing_enrichment(tx).await })
         })
         .await?;
 
         // Find books missing KEPUB conversion.
-        let book_repo = self.repository_service.book_repository().clone();
-        let kepub_ids = read_only_transaction(&**self.repository_service.repository(), |tx| {
+        let book_repo = self.core.repository_service.book_repository().clone();
+        let kepub_ids = read_only_transaction(&**self.core.repository_service.repository(), |tx| {
             let book_repo = book_repo.clone();
             Box::pin(async move { book_repo.find_book_ids_needing_kepub_conversion(tx).await })
         })
@@ -67,8 +63,8 @@ impl JobHandler for EnsureEnrichmentsHandler {
 
         // Find books where the enriched EPUB is older than the book's
         // updated_at — metadata changed since last enrichment.
-        let book_repo = self.repository_service.book_repository().clone();
-        let stale_ids = read_only_transaction(&**self.repository_service.repository(), |tx| {
+        let book_repo = self.core.repository_service.book_repository().clone();
+        let stale_ids = read_only_transaction(&**self.core.repository_service.repository(), |tx| {
             let book_repo = book_repo.clone();
             Box::pin(async move { book_repo.find_book_ids_with_stale_enrichment(tx).await })
         })
@@ -92,8 +88,8 @@ impl JobHandler for EnsureEnrichmentsHandler {
         }
 
         if !all_enrich_ids.is_empty() {
-            let job_repo = self.repository_service.job_repository().clone();
-            transaction(&**self.repository_service.repository(), |tx| {
+            let job_repo = self.core.repository_service.job_repository().clone();
+            transaction(&**self.core.repository_service.repository(), |tx| {
                 let job_repo = job_repo.clone();
                 let all_enrich_ids = all_enrich_ids.clone();
                 Box::pin(async move {
@@ -109,8 +105,8 @@ impl JobHandler for EnsureEnrichmentsHandler {
         }
 
         if !kepub_ids.is_empty() {
-            let job_repo = self.repository_service.job_repository().clone();
-            transaction(&**self.repository_service.repository(), |tx| {
+            let job_repo = self.core.repository_service.job_repository().clone();
+            transaction(&**self.core.repository_service.repository(), |tx| {
                 let job_repo = job_repo.clone();
                 let kepub_ids = kepub_ids.clone();
                 Box::pin(async move {
@@ -133,7 +129,8 @@ impl JobHandler for EnsureEnrichmentsHandler {
             parts.push(format!("{kepub_count} KEPUB conversion"));
         }
 
-        self.system_message_service
+        self.core
+            .system_message_service
             .add_message(NewSystemMessage {
                 source_task: Self::JOB_TYPE.to_string(),
                 severity: MessageSeverity::Info,
@@ -150,7 +147,7 @@ mod tests {
     use super::*;
     use crate::{
         book::repository::book::MockBookRepository, jobs::repository::MockJobRepository, message::repository::MockSystemMessageRepository,
-        repository::testing::default_repository_service_builder,
+        repository::testing::default_repository_service_builder, test_support::*,
     };
 
     fn fake_job() -> crate::jobs::Job {
@@ -218,8 +215,13 @@ mod tests {
                 .unwrap(),
         );
 
-        let sms = crate::message::SystemMessageServiceImpl::new(repo_service.clone(), crate::test_support::nop_event_service());
-        let handler = EnsureEnrichmentsHandler::new(repo_service, Arc::new(sms));
+        let core = crate::create_services(
+            default_external_services_builder().repository_service(repo_service).build().unwrap(),
+            "test-secret",
+        )
+        .unwrap();
+
+        let handler = EnsureEnrichmentsHandler::new(core);
         handler.handle(serde_json::json!({})).await.unwrap();
     }
 
@@ -255,8 +257,13 @@ mod tests {
                 .unwrap(),
         );
 
-        let sms = crate::message::SystemMessageServiceImpl::new(repo_service.clone(), crate::test_support::nop_event_service());
-        let handler = EnsureEnrichmentsHandler::new(repo_service, Arc::new(sms));
+        let core = crate::create_services(
+            default_external_services_builder().repository_service(repo_service).build().unwrap(),
+            "test-secret",
+        )
+        .unwrap();
+
+        let handler = EnsureEnrichmentsHandler::new(core);
         handler.handle(serde_json::json!({})).await.unwrap();
     }
 
@@ -295,8 +302,13 @@ mod tests {
                 .unwrap(),
         );
 
-        let sms = crate::message::SystemMessageServiceImpl::new(repo_service.clone(), crate::test_support::nop_event_service());
-        let handler = EnsureEnrichmentsHandler::new(repo_service, Arc::new(sms));
+        let core = crate::create_services(
+            default_external_services_builder().repository_service(repo_service).build().unwrap(),
+            "test-secret",
+        )
+        .unwrap();
+
+        let handler = EnsureEnrichmentsHandler::new(core);
         handler.handle(serde_json::json!({})).await.unwrap();
 
         // Book 1 (missing) + book 2 (stale only) = 2 enqueue calls, not 3.
@@ -321,8 +333,13 @@ mod tests {
 
         let repo_service = Arc::new(default_repository_service_builder().book_repository(Arc::new(book_repo)).build().unwrap());
 
-        let sms = crate::message::SystemMessageServiceImpl::new(repo_service.clone(), crate::test_support::nop_event_service());
-        let handler = EnsureEnrichmentsHandler::new(repo_service, Arc::new(sms));
+        let core = crate::create_services(
+            default_external_services_builder().repository_service(repo_service).build().unwrap(),
+            "test-secret",
+        )
+        .unwrap();
+
+        let handler = EnsureEnrichmentsHandler::new(core);
         handler.handle(serde_json::json!({})).await.unwrap();
     }
 }

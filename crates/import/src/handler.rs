@@ -3,7 +3,7 @@ use std::sync::Arc;
 // ProcessImportPayload is defined in bb-core so that ImportJobServiceImpl can
 // enqueue it without depending on bb-import. Re-export it here for convenience.
 pub use bb_core::import::ProcessImportPayload;
-use bb_core::{Error, RepositoryError, import::ImportJobService, jobs::JobHandler, pipeline::PipelineService};
+use bb_core::{CoreServices, Error, RepositoryError, jobs::JobHandler};
 
 /// Handles `process_import` jobs by fetching the `ImportJob` and running it
 /// through the acquisition pipeline.
@@ -11,13 +11,12 @@ use bb_core::{Error, RepositoryError, import::ImportJobService, jobs::JobHandler
 /// `PipelineService::process_job` is responsible for all status transitions
 /// and DB writes — the handler does not write the updated job itself.
 pub struct ProcessImportHandler {
-    import_job_service: Arc<dyn ImportJobService>,
-    pipeline: Arc<dyn PipelineService>,
+    core: Arc<CoreServices>,
 }
 
 impl ProcessImportHandler {
-    pub fn new(import_job_service: Arc<dyn ImportJobService>, pipeline: Arc<dyn PipelineService>) -> Self {
-        Self { import_job_service, pipeline }
+    pub fn new(core: Arc<CoreServices>) -> Self {
+        Self { core }
     }
 }
 
@@ -27,12 +26,13 @@ impl JobHandler for ProcessImportHandler {
 
     async fn handle(&self, payload: ProcessImportPayload) -> Result<(), Error> {
         let job = self
+            .core
             .import_job_service
             .find_by_id(payload.import_job_id)
             .await?
             .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
-        self.pipeline.process_job(job).await?;
+        self.core.pipeline_service.process_job(job).await?;
 
         Ok(())
     }

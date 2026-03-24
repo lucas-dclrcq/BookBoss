@@ -1,24 +1,20 @@
 use std::sync::Arc;
 
 use crate::{
-    Error,
+    CoreServices, Error,
     jobs::JobHandler,
-    message::{MessageSeverity, NewSystemMessage, SystemMessageService},
-    repository::{RepositoryService, read_only_transaction, transaction},
+    message::{MessageSeverity, NewSystemMessage},
+    repository::{read_only_transaction, transaction},
 };
 
 pub struct CleanupOrphanAuthorsHandler {
-    repository_service: Arc<RepositoryService>,
-    system_message_service: Arc<dyn SystemMessageService>,
+    core: Arc<CoreServices>,
 }
 
 impl CleanupOrphanAuthorsHandler {
     #[must_use]
-    pub fn new(repository_service: Arc<RepositoryService>, system_message_service: Arc<dyn SystemMessageService>) -> Self {
-        Self {
-            repository_service,
-            system_message_service,
-        }
+    pub fn new(core: Arc<CoreServices>) -> Self {
+        Self { core }
     }
 }
 
@@ -27,11 +23,11 @@ impl JobHandler for CleanupOrphanAuthorsHandler {
     type Payload = serde_json::Value;
 
     async fn handle(&self, _payload: serde_json::Value) -> Result<(), Error> {
-        let author_repo = self.repository_service.author_repository().clone();
-        let book_repo = self.repository_service.book_repository().clone();
+        let author_repo = self.core.repository_service.author_repository().clone();
+        let book_repo = self.core.repository_service.book_repository().clone();
 
         // Find all authors.
-        let authors = read_only_transaction(&**self.repository_service.repository(), |tx| {
+        let authors = read_only_transaction(&**self.core.repository_service.repository(), |tx| {
             let author_repo = author_repo.clone();
             Box::pin(async move { author_repo.list_all_authors(tx).await })
         })
@@ -41,7 +37,7 @@ impl JobHandler for CleanupOrphanAuthorsHandler {
         let mut orphan_ids = Vec::new();
         for author in &authors {
             let author_id = author.id;
-            let count = read_only_transaction(&**self.repository_service.repository(), |tx| {
+            let count = read_only_transaction(&**self.core.repository_service.repository(), |tx| {
                 let book_repo = book_repo.clone();
                 Box::pin(async move { book_repo.count_books_for_author(tx, author_id).await })
             })
@@ -59,8 +55,8 @@ impl JobHandler for CleanupOrphanAuthorsHandler {
 
         // Delete orphan authors.
         let delete_count = orphan_ids.len();
-        let author_repo = self.repository_service.author_repository().clone();
-        transaction(&**self.repository_service.repository(), |tx| {
+        let author_repo = self.core.repository_service.author_repository().clone();
+        transaction(&**self.core.repository_service.repository(), |tx| {
             let author_repo = author_repo.clone();
             let orphan_ids = orphan_ids.clone();
             Box::pin(async move {
@@ -74,7 +70,8 @@ impl JobHandler for CleanupOrphanAuthorsHandler {
 
         tracing::info!(count = delete_count, "deleted orphan authors");
 
-        self.system_message_service
+        self.core
+            .system_message_service
             .add_message(NewSystemMessage {
                 source_task: Self::JOB_TYPE.to_string(),
                 severity: MessageSeverity::Info,
@@ -92,6 +89,7 @@ mod tests {
     use crate::{
         book::{Author, AuthorId},
         repository::testing::default_repository_service_builder,
+        test_support::*,
     };
 
     fn make_author(id: AuthorId, name: &str) -> Author {
@@ -147,9 +145,13 @@ mod tests {
                 .unwrap(),
         );
 
-        let sms = crate::message::SystemMessageServiceImpl::new(repo_service.clone(), crate::test_support::nop_event_service());
+        let core = crate::create_services(
+            default_external_services_builder().repository_service(repo_service).build().unwrap(),
+            "test-secret",
+        )
+        .unwrap();
 
-        let handler = CleanupOrphanAuthorsHandler::new(repo_service, Arc::new(sms));
+        let handler = CleanupOrphanAuthorsHandler::new(core);
         handler.handle(serde_json::json!({})).await.unwrap();
     }
 
@@ -179,9 +181,13 @@ mod tests {
                 .unwrap(),
         );
 
-        let sms = crate::message::SystemMessageServiceImpl::new(repo_service.clone(), crate::test_support::nop_event_service());
+        let core = crate::create_services(
+            default_external_services_builder().repository_service(repo_service).build().unwrap(),
+            "test-secret",
+        )
+        .unwrap();
 
-        let handler = CleanupOrphanAuthorsHandler::new(repo_service, Arc::new(sms));
+        let handler = CleanupOrphanAuthorsHandler::new(core);
         handler.handle(serde_json::json!({})).await.unwrap();
     }
 }
