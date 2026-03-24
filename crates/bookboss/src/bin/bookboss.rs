@@ -146,24 +146,14 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     use bb_api::create_api_subsystem;
     use bb_core::{
         ExternalServicesBuilder, create_core_subsystem, create_services,
-        health::{
-            create_health_service, create_health_subsystem, default_health_tasks,
-            handlers::{
-                cleanup_expired_sessions::CleanupExpiredSessionsHandler, cleanup_old_import_jobs::CleanupOldImportJobsHandler,
-                cleanup_old_jobs::CleanupOldJobsHandler, cleanup_old_system_messages::CleanupOldSystemMessagesHandler,
-                cleanup_orphan_authors::CleanupOrphanAuthorsHandler, cleanup_orphan_publishers::CleanupOrphanPublishersHandler,
-                cleanup_orphan_series::CleanupOrphanSeriesHandler, ensure_enrichments::EnsureEnrichmentsHandler,
-                recover_enrichments::RecoverEnrichmentsHandler, reset_stale_import_jobs::ResetStaleImportJobsHandler,
-                verify_file_integrity::VerifyFileIntegrityHandler,
-            },
-        },
-        jobs::{JobServiceExt, create_job_service},
+        health::{create_health_service, create_health_subsystem},
+        jobs::create_job_service,
         pipeline::PipelineServiceImpl,
     };
     use bb_database::{create_repository_service, open_database};
-    use bb_formats::{ConversionServiceImpl, ConvertKepubHandler, EnrichEpubHandler, EpubExtractor};
+    use bb_formats::{ConversionServiceImpl, EpubExtractor};
     use bb_frontend::server::create_frontend_subsystem;
-    use bb_import::{ProcessImportHandler, create_import_subsystem, create_scan_trigger};
+    use bb_import::{create_import_subsystem, create_scan_trigger};
     use bb_metadata::create_metadata_providers;
     use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, SubsystemHandle, Toplevel};
 
@@ -193,9 +183,6 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     // ExternalServices, while receivers go to their respective subsystems.
     let (scan_trigger, scan_receiver) = create_scan_trigger();
     let (health_service, health_kick_rx) = create_health_service();
-    for config in default_health_tasks() {
-        health_service.register_task(config);
-    }
     let external = ExternalServicesBuilder::default()
         .repository_service(repository_service.clone())
         .file_store(file_store)
@@ -217,24 +204,10 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
         core_services.import_job_service.clone(),
     );
 
-    // Register job handlers via JobService
-    let js = &core_services.job_service;
-    js.register(ProcessImportHandler::new(core_services.clone()));
-    js.register(EnrichEpubHandler::new(core_services.clone()));
-    js.register(ConvertKepubHandler::new(core_services.clone()));
-
-    // Health check handlers
-    js.register(RecoverEnrichmentsHandler::new(core_services.clone()));
-    js.register(EnsureEnrichmentsHandler::new(core_services.clone()));
-    js.register(CleanupOrphanAuthorsHandler::new(core_services.clone()));
-    js.register(CleanupOrphanSeriesHandler::new(core_services.clone()));
-    js.register(CleanupOrphanPublishersHandler::new(core_services.clone()));
-    js.register(CleanupOldJobsHandler::new(core_services.clone()));
-    js.register(CleanupOldImportJobsHandler::new(core_services.clone()));
-    js.register(CleanupOldSystemMessagesHandler::new(core_services.clone()));
-    js.register(CleanupExpiredSessionsHandler::new(core_services.clone()));
-    js.register(VerifyFileIntegrityHandler::new(core_services.clone()));
-    js.register(ResetStaleImportJobsHandler::new(core_services.clone()));
+    // Each crate self-registers its job handlers (and health task configs).
+    bb_core::before_start(&core_services);
+    bb_formats::before_start(&core_services);
+    bb_import::before_start(&core_services);
 
     let health_subsystem = create_health_subsystem(
         core_services.health_service.clone(),
