@@ -172,14 +172,14 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
 
     let database = open_database(&config.database).await.context("Couldn't create database connection")?;
     let repository_service = create_repository_service(database).await.context("Couldn't create database connection")?;
-    let library_store = Arc::new(bb_storage::LocalLibraryStore::new(config.library.library_path.clone()));
+    let file_store = Arc::new(bb_storage::LocalFileStore::new(config.library.library_path.clone()));
     let job_service = create_job_service(repository_service.clone());
     let conversion_service = Arc::new(ConversionServiceImpl::new(job_service.clone()));
     let event_service = bb_core::event::create_event_service(64);
 
     let pipeline_service = Arc::new(PipelineServiceImpl::new(
         repository_service.clone(),
-        library_store.clone(),
+        file_store.clone(),
         Arc::new(EpubExtractor),
         create_metadata_providers(&config.metadata),
         conversion_service.clone(),
@@ -194,7 +194,7 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     let (scan_trigger, scan_receiver) = create_scan_trigger();
     let external = ExternalServicesBuilder::default()
         .repository_service(repository_service.clone())
-        .library_store(library_store)
+        .file_store(file_store)
         .pipeline_service(pipeline_service)
         .conversion_service(conversion_service)
         .job_service(job_service)
@@ -217,8 +217,8 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
         core_services.import_job_service.clone(),
         core_services.pipeline_service.clone(),
     ));
-    registry.register(EnrichEpubHandler::new(repository_service.clone(), core_services.library_store.clone()));
-    registry.register(ConvertKepubHandler::new(repository_service.clone(), core_services.library_store.clone()));
+    registry.register(EnrichEpubHandler::new(repository_service.clone(), core_services.file_store.clone()));
+    registry.register(ConvertKepubHandler::new(repository_service.clone(), core_services.file_store.clone()));
 
     // Health check handlers
     let sms = core_services.system_message_service.clone();
@@ -234,7 +234,7 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     registry.register(VerifyFileIntegrityHandler::new(
         repository_service.clone(),
         sms.clone(),
-        core_services.library_store.clone(),
+        core_services.file_store.clone(),
     ));
     registry.register(ResetStaleImportJobsHandler::new(repository_service.clone(), sms));
 

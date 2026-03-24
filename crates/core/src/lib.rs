@@ -40,7 +40,7 @@ use crate::{
     reading::{ReadingService, ReadingServiceImpl},
     repository::RepositoryService,
     shelf::{ShelfService, service::ShelfServiceImpl},
-    storage::LibraryStore,
+    storage::FileStoreService,
     user::{UserService, UserServiceImpl, UserSettingService, UserSettingServiceImpl},
 };
 
@@ -55,7 +55,7 @@ pub mod test_support;
 #[builder(pattern = "owned")]
 pub struct ExternalServices {
     pub repository_service: Arc<RepositoryService>,
-    pub library_store: Arc<dyn LibraryStore>,
+    pub file_store: Arc<dyn FileStoreService>,
     pub pipeline_service: Arc<dyn PipelineService>,
     pub conversion_service: Arc<dyn ConversionService>,
     pub job_service: Arc<dyn JobService>,
@@ -70,7 +70,7 @@ pub struct CoreServices {
     pub book_service: Arc<dyn BookService>,
     pub import_job_service: Arc<dyn ImportJobService>,
     pub import_scanner: Arc<dyn ImportScanner>,
-    pub library_store: Arc<dyn LibraryStore>,
+    pub file_store: Arc<dyn FileStoreService>,
     pub library_service: Arc<dyn LibraryService>,
     pub pipeline_service: Arc<dyn PipelineService>,
     pub conversion_service: Arc<dyn ConversionService>,
@@ -87,7 +87,7 @@ impl CoreServices {
     pub(crate) fn new(external: ExternalServices, encryption_secret: &str) -> Self {
         let ExternalServices {
             repository_service,
-            library_store,
+            file_store,
             pipeline_service,
             conversion_service,
             job_service,
@@ -101,8 +101,8 @@ impl CoreServices {
             book_service: Arc::new(BookServiceImpl::new(repository_service.clone())),
             import_job_service: Arc::new(ImportJobServiceImpl::new(repository_service.clone())),
             import_scanner,
-            library_service: Arc::new(LibraryServiceImpl::new(repository_service.clone(), library_store.clone())),
-            library_store,
+            library_service: Arc::new(LibraryServiceImpl::new(repository_service.clone(), file_store.clone())),
+            file_store,
             pipeline_service,
             conversion_service,
             job_service,

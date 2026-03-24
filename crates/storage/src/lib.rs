@@ -1,2 +1,2 @@
 mod local;
-pub use local::LocalLibraryStore;
+pub use local::LocalFileStore;

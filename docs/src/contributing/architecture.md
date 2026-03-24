@@ -43,7 +43,7 @@ crates/core/src/
 ├── pipeline/           # Port traits: MetadataExtractor, MetadataProvider; PipelineService
 ├── reading/            # Per-user reading state: UserBookMetadata, ReadStatus
 ├── shelf/              # Shelves (manual + smart): Shelf, ShelfFilter, ShelfService
-├── storage/            # LibraryStore port trait + BookSidecar struct
+├── storage/            # FileStoreService port trait + BookSidecar struct
 └── user/               # Users and settings: User, UserService, UserSettingService
 ```
 

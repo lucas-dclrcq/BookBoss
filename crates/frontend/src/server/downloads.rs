@@ -19,7 +19,7 @@ use super::AuthSession;
 /// Route: `GET /api/v1/books/:book_token/download/:format`
 ///
 /// Requires authentication. Resolves the book file path from the stored
-/// `BookFile.path` field via `LibraryStore::resolve`, then streams the file
+/// `BookFile.path` field via `FileStoreService::resolve`, then streams the file
 /// with a `Content-Disposition: attachment` header.
 pub(crate) async fn serve_book_file(
     Path((book_token_str, format_str)): Path<(String, String)>,
@@ -61,7 +61,7 @@ pub(crate) async fn serve_book_file(
 
     // Try the enriched file first; fall back to the original if not yet on disk.
     let data = if let Some(enriched) = enriched_file {
-        let enriched_path = core_services.library_store.resolve(&enriched.path);
+        let enriched_path = core_services.file_store.resolve(&enriched.path);
         match tokio::fs::read(&enriched_path).await {
             Ok(d) => d,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -69,7 +69,7 @@ pub(crate) async fn serve_book_file(
                 let Some(original) = original_file else {
                     return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap();
                 };
-                let orig_path = core_services.library_store.resolve(&original.path);
+                let orig_path = core_services.file_store.resolve(&original.path);
                 match tokio::fs::read(&orig_path).await {
                     Ok(d) => d,
                     Err(_) => return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap(),
@@ -82,7 +82,7 @@ pub(crate) async fn serve_book_file(
         let Some(original) = original_file else {
             return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap();
         };
-        let orig_path = core_services.library_store.resolve(&original.path);
+        let orig_path = core_services.file_store.resolve(&original.path);
         match tokio::fs::read(&orig_path).await {
             Ok(d) => d,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {

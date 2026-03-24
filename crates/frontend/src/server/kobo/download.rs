@@ -1,9 +1,9 @@
 //! `GET /kobo/{sync_token}/v1/download/{book_token}/{format}`
 //!
-//! Streams the best available file for the requested format from LibraryStore.
-//! The `book_token` is the Kobo-facing ID from the `DownloadUrls` array set
-//! during library sync (the `BK_`-stripped token). `format` is `"epub"` or
-//! `"kepub"`, matching what we encoded in that URL.
+//! Streams the best available file for the requested format from
+//! FileStoreService. The `book_token` is the Kobo-facing ID from the
+//! `DownloadUrls` array set during library sync (the `BK_`-stripped token).
+//! `format` is `"epub"` or `"kepub"`, matching what we encoded in that URL.
 //!
 //! File selection: prefer `Enriched` role; fall back to `Original` (including
 //! from the `Originals/` flat directory) when the enriched file is absent.
@@ -77,7 +77,7 @@ pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>
     // 5. Resolve the file path; if enriched isn't on disk yet fall back to the
     //    original in the flat Originals/ directory.
     let (file_size, fs_file) = if let Some(enriched_file) = enriched {
-        let enriched_path = core_services.library_store.resolve(&enriched_file.path);
+        let enriched_path = core_services.file_store.resolve(&enriched_file.path);
         match File::open(&enriched_path).await {
             Ok(f) => (enriched_file.file_size, f),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -85,7 +85,7 @@ pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>
                 let Some(orig_file) = original else {
                     return StatusCode::NOT_FOUND.into_response();
                 };
-                let orig_path = core_services.library_store.resolve(&orig_file.path);
+                let orig_path = core_services.file_store.resolve(&orig_file.path);
                 match File::open(&orig_path).await {
                     Ok(f) => (orig_file.file_size, f),
                     Err(_) => return StatusCode::NOT_FOUND.into_response(),
@@ -101,7 +101,7 @@ pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>
         let Some(orig_file) = original else {
             return StatusCode::NOT_FOUND.into_response();
         };
-        let orig_path = core_services.library_store.resolve(&orig_file.path);
+        let orig_path = core_services.file_store.resolve(&orig_file.path);
         match File::open(&orig_path).await {
             Ok(f) => (orig_file.file_size, f),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {

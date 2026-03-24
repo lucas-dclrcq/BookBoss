@@ -54,7 +54,7 @@ pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>
     };
 
     // Resolve and read the cover file.
-    let cover_path = core_services.library_store.cover_path(token, cover_filename);
+    let cover_path = core_services.file_store.cover_path(token, cover_filename);
     let bytes = match tokio::fs::read(&cover_path).await {
         Ok(b) => b,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {

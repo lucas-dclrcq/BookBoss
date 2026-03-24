@@ -5,13 +5,13 @@ use crate::{
     jobs::JobHandler,
     message::{MessageSeverity, NewSystemMessage, SystemMessageService},
     repository::{RepositoryService, read_only_transaction},
-    storage::LibraryStore,
+    storage::FileStoreService,
 };
 
 pub struct VerifyFileIntegrityHandler {
     repository_service: Arc<RepositoryService>,
     system_message_service: Arc<dyn SystemMessageService>,
-    library_store: Arc<dyn LibraryStore>,
+    file_store: Arc<dyn FileStoreService>,
 }
 
 impl VerifyFileIntegrityHandler {
@@ -19,12 +19,12 @@ impl VerifyFileIntegrityHandler {
     pub fn new(
         repository_service: Arc<RepositoryService>,
         system_message_service: Arc<dyn SystemMessageService>,
-        library_store: Arc<dyn LibraryStore>,
+        file_store: Arc<dyn FileStoreService>,
     ) -> Self {
         Self {
             repository_service,
             system_message_service,
-            library_store,
+            file_store,
         }
     }
 }
@@ -45,7 +45,7 @@ impl JobHandler for VerifyFileIntegrityHandler {
         let mut missing = Vec::new();
 
         for file in &all_files {
-            let abs_path = self.library_store.resolve(&file.path);
+            let abs_path = self.file_store.resolve(&file.path);
             if !abs_path.exists() {
                 missing.push(format!("book_id={}, path={}", file.book_id, file.path));
             }
@@ -90,14 +90,14 @@ mod tests {
         book::{BookFile, FileFormat, FileRole, repository::book::MockBookRepository},
         message::repository::MockSystemMessageRepository,
         repository::testing::default_repository_service_builder,
-        storage::MockLibraryStore,
+        storage::MockFileStoreService,
     };
 
     #[tokio::test]
     async fn reports_info_when_all_files_exist() {
         let mut book_repo = MockBookRepository::new();
         let mut msg_repo = MockSystemMessageRepository::new();
-        let mut store = MockLibraryStore::new();
+        let mut store = MockFileStoreService::new();
 
         book_repo.expect_list_all_book_files().returning(|_| {
             Box::pin(std::future::ready(Ok(vec![BookFile {
@@ -146,7 +146,7 @@ mod tests {
     async fn reports_warning_when_files_missing() {
         let mut book_repo = MockBookRepository::new();
         let mut msg_repo = MockSystemMessageRepository::new();
-        let mut store = MockLibraryStore::new();
+        let mut store = MockFileStoreService::new();
 
         book_repo.expect_list_all_book_files().returning(|_| {
             Box::pin(std::future::ready(Ok(vec![BookFile {

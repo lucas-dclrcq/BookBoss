@@ -9,7 +9,7 @@ use crate::{
     library::{LibraryService, MockLibraryService},
     message::{SystemMessageService, service::MockSystemMessageService},
     pipeline::{PipelineService, service::MockPipelineService},
-    storage::{LibraryStore, MockLibraryStore},
+    storage::{FileStoreService, MockFileStoreService},
 };
 
 #[must_use]
@@ -17,13 +17,13 @@ pub fn nop_conversion_service() -> Arc<dyn ConversionService> {
     Arc::new(MockConversionService::new())
 }
 
-/// No-op `LibraryStore` for use in tests and as a placeholder.
+/// No-op `FileStoreService` for use in tests and as a placeholder.
 ///
 /// Any unexpected call will panic, surfacing the missing expectation
 /// immediately.
 #[must_use]
-pub fn nop_library_store() -> Arc<dyn LibraryStore> {
-    Arc::new(MockLibraryStore::new())
+pub fn nop_file_store() -> Arc<dyn FileStoreService> {
+    Arc::new(MockFileStoreService::new())
 }
 
 #[must_use]
@@ -83,7 +83,7 @@ pub fn nop_system_message_service() -> Arc<dyn SystemMessageService> {
 #[must_use]
 pub fn default_external_services_builder() -> ExternalServicesBuilder {
     ExternalServicesBuilder::default()
-        .library_store(nop_library_store())
+        .file_store(nop_file_store())
         .pipeline_service(nop_pipeline_service())
         .conversion_service(nop_conversion_service())
         .job_service(nop_job_service())

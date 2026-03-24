@@ -582,7 +582,7 @@ pub async fn serve_cover(Path(book_token_str): Path<String>, _opds_user: OpdsUse
             .unwrap();
     };
 
-    let path = core_services.library_store.cover_path(token, &filename);
+    let path = core_services.file_store.cover_path(token, &filename);
 
     match tokio::fs::read(&path).await {
         Ok(data) => {
@@ -641,14 +641,14 @@ pub async fn serve_download(
 
     // Try the enriched file first; fall back to the original if not yet on disk.
     let data = if let Some(enriched) = enriched_file {
-        let enriched_path = core_services.library_store.resolve(&enriched.path);
+        let enriched_path = core_services.file_store.resolve(&enriched.path);
         match tokio::fs::read(&enriched_path).await {
             Ok(d) => d,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 let Some(original) = original_file else {
                     return error_response(StatusCode::NOT_FOUND);
                 };
-                let orig_path = core_services.library_store.resolve(&original.path);
+                let orig_path = core_services.file_store.resolve(&original.path);
                 match tokio::fs::read(&orig_path).await {
                     Ok(d) => d,
                     Err(_) => return error_response(StatusCode::NOT_FOUND),
@@ -660,7 +660,7 @@ pub async fn serve_download(
         let Some(original) = original_file else {
             return error_response(StatusCode::NOT_FOUND);
         };
-        let orig_path = core_services.library_store.resolve(&original.path);
+        let orig_path = core_services.file_store.resolve(&original.path);
         match tokio::fs::read(&orig_path).await {
             Ok(d) => d,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return error_response(StatusCode::NOT_FOUND),

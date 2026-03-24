@@ -5,7 +5,7 @@ use bb_core::{
     book::{FileFormat, FileRole, book_slug},
     jobs::{JobHandler, JobRepositoryExt},
     repository::{RepositoryService, read_only_transaction, transaction},
-    storage::LibraryStore,
+    storage::FileStoreService,
 };
 use bb_utils::hash::hash_file;
 
@@ -13,15 +13,15 @@ use crate::conversion::ConvertKepubPayload;
 
 pub struct ConvertKepubHandler {
     repository_service: Arc<RepositoryService>,
-    library_store: Arc<dyn LibraryStore>,
+    file_store: Arc<dyn FileStoreService>,
 }
 
 impl ConvertKepubHandler {
     #[must_use]
-    pub fn new(repository_service: Arc<RepositoryService>, library_store: Arc<dyn LibraryStore>) -> Self {
+    pub fn new(repository_service: Arc<RepositoryService>, file_store: Arc<dyn FileStoreService>) -> Self {
         Self {
             repository_service,
-            library_store,
+            file_store,
         }
     }
 }
@@ -65,7 +65,7 @@ impl JobHandler for ConvertKepubHandler {
             .find(|f| f.file_role == FileRole::Enriched && f.format == FileFormat::Epub)
             .ok_or_else(|| Error::Infrastructure(format!("book {book_id}: no enriched epub file record")))?;
 
-        let source_path = self.library_store.resolve(&enriched_epub.path);
+        let source_path = self.file_store.resolve(&enriched_epub.path);
 
         // ── 3. Convert in a blocking thread ───────────────────────────────────
         let named_temp = tempfile::NamedTempFile::new().map_err(|e| Error::Infrastructure(format!("temp file: {e}")))?;
@@ -89,7 +89,7 @@ impl JobHandler for ConvertKepubHandler {
         let slug = book_slug(&book.title, first_author_name.as_deref());
 
         // ── 6. Move converted file into the library ───────────────────────────
-        let kepub_path = self.library_store.store_book_file(book.token, &slug, FileFormat::Kepub, &temp_path).await?;
+        let kepub_path = self.file_store.store_book_file(book.token, &slug, FileFormat::Kepub, &temp_path).await?;
 
         // ── 7. Upsert the Enriched Kepub book_file record ────────────────────
         let book_repo = self.repository_service.book_repository().clone();

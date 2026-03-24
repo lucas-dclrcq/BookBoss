@@ -3,13 +3,13 @@ use bb_core::{RepositoryError, book::BookStatus, repository::read_only_transacti
 use crate::{fixtures, setup};
 
 /// Build a `CoreServices` backed by the same repos as `ctx` but with a
-/// `SilentLibraryStore` so that `LibraryService::delete_book` can complete
+/// `SilentFileStore` so that `LibraryService::delete_book` can complete
 /// without panicking on the no-op store.
 fn library_services(ctx: &crate::context::TestContext) -> std::sync::Arc<bb_core::CoreServices> {
     bb_core::create_services(
         bb_core::test_support::default_external_services_builder()
             .repository_service(ctx.repos.clone())
-            .library_store(fixtures::silent_library_store())
+            .file_store(fixtures::silent_file_store())
             .build()
             .unwrap(),
         "test-encryption-secret",

@@ -7,7 +7,7 @@ use crate::{
     book::{Book, BookToken, FileRole},
     filter::BookFilter,
     repository::{RepositoryService, read_only_transaction, transaction},
-    storage::LibraryStore,
+    storage::FileStoreService,
 };
 
 pub struct LibraryStats {
@@ -39,14 +39,14 @@ pub trait LibraryService: Send + Sync {
 
 pub struct LibraryServiceImpl {
     repository_service: Arc<RepositoryService>,
-    library_store: Arc<dyn LibraryStore>,
+    file_store: Arc<dyn FileStoreService>,
 }
 
 impl LibraryServiceImpl {
-    pub(crate) fn new(repository_service: Arc<RepositoryService>, library_store: Arc<dyn LibraryStore>) -> Self {
+    pub(crate) fn new(repository_service: Arc<RepositoryService>, file_store: Arc<dyn FileStoreService>) -> Self {
         Self {
             repository_service,
-            library_store,
+            file_store,
         }
     }
 }
@@ -127,14 +127,14 @@ impl LibraryService for LibraryServiceImpl {
 
         // Best-effort: copy the enriched file to Trash before deleting.
         if let Some(ref file_name) = enriched_filename {
-            if let Err(e) = self.library_store.copy_to_trash(book_token, file_name).await {
+            if let Err(e) = self.file_store.copy_to_trash(book_token, file_name).await {
                 warn!(book_token = %book_token, file_name, error = %e, "failed to copy enriched file to Trash");
             }
         }
 
-        self.library_store.delete_book(book_token).await?;
+        self.file_store.delete_book(book_token).await?;
         for filename in original_filenames {
-            self.library_store.delete_original_file(&filename).await?;
+            self.file_store.delete_original_file(&filename).await?;
         }
 
         Ok(())
@@ -154,7 +154,7 @@ mod tests {
         },
         import::{ImportJob, ImportJobId, ImportJobToken, ImportStatus, repository::import_job::MockImportJobRepository},
         library::MockLibraryRepository,
-        storage::store::MockLibraryStore,
+        storage::store::MockFileStoreService,
     };
 
     // ─── Service builder ──────────────────────────────────────────────────────
@@ -164,7 +164,7 @@ mod tests {
         author_repo: MockAuthorRepository,
         job_repo: MockImportJobRepository,
         library_repo: MockLibraryRepository,
-        library_store: MockLibraryStore,
+        file_store: MockFileStoreService,
     ) -> LibraryServiceImpl {
         let repository_service = Arc::new(
             crate::repository::testing::default_repository_service_builder()
@@ -175,7 +175,7 @@ mod tests {
                 .build()
                 .expect("all fields provided"),
         );
-        LibraryServiceImpl::new(repository_service, Arc::new(library_store))
+        LibraryServiceImpl::new(repository_service, Arc::new(file_store))
     }
 
     fn fake_book_with_id(id: BookId) -> crate::book::Book {
@@ -219,7 +219,7 @@ mod tests {
             MockAuthorRepository::new(),
             MockImportJobRepository::new(),
             library_repo,
-            MockLibraryStore::new(),
+            MockFileStoreService::new(),
         );
 
         let stats = svc.library_stats().await.unwrap();
@@ -239,7 +239,7 @@ mod tests {
             MockAuthorRepository::new(),
             MockImportJobRepository::new(),
             library_repo,
-            MockLibraryStore::new(),
+            MockFileStoreService::new(),
         );
 
         let stats = svc.library_stats().await.unwrap();
@@ -260,7 +260,7 @@ mod tests {
             MockAuthorRepository::new(),
             MockImportJobRepository::new(),
             MockLibraryRepository::new(),
-            MockLibraryStore::new(),
+            MockFileStoreService::new(),
         );
         let token = BookToken::new(99);
 
@@ -291,7 +291,7 @@ mod tests {
         let mut job_repo = MockImportJobRepository::new();
         job_repo.expect_find_by_candidate_book_id().returning(|_, _| Box::pin(async { Ok(None) }));
 
-        let mut store = MockLibraryStore::new();
+        let mut store = MockFileStoreService::new();
         store.expect_delete_book().returning(|_| Box::pin(async { Ok(()) }));
 
         let svc = create_service(book_repo, MockAuthorRepository::new(), job_repo, MockLibraryRepository::new(), store);
@@ -332,7 +332,7 @@ mod tests {
         let mut job_repo = MockImportJobRepository::new();
         job_repo.expect_find_by_candidate_book_id().returning(|_, _| Box::pin(async { Ok(None) }));
 
-        let mut store = MockLibraryStore::new();
+        let mut store = MockFileStoreService::new();
         store.expect_delete_book().returning(|_| Box::pin(async { Ok(()) }));
 
         let svc = create_service(book_repo, author_repo, job_repo, MockLibraryRepository::new(), store);
@@ -371,7 +371,7 @@ mod tests {
         let mut job_repo = MockImportJobRepository::new();
         job_repo.expect_find_by_candidate_book_id().returning(|_, _| Box::pin(async { Ok(None) }));
 
-        let mut store = MockLibraryStore::new();
+        let mut store = MockFileStoreService::new();
         store.expect_delete_book().returning(|_| Box::pin(async { Ok(()) }));
 
         let svc = create_service(book_repo, author_repo, job_repo, MockLibraryRepository::new(), store);
@@ -409,7 +409,7 @@ mod tests {
             .times(1)
             .returning(|_, _| Box::pin(async { Ok(()) }));
 
-        let mut store = MockLibraryStore::new();
+        let mut store = MockFileStoreService::new();
         store.expect_delete_book().returning(|_| Box::pin(async { Ok(()) }));
 
         let svc = create_service(book_repo, MockAuthorRepository::new(), job_repo, MockLibraryRepository::new(), store);
@@ -444,7 +444,7 @@ mod tests {
         let mut job_repo = MockImportJobRepository::new();
         job_repo.expect_find_by_candidate_book_id().returning(|_, _| Box::pin(async { Ok(None) }));
 
-        let mut store = MockLibraryStore::new();
+        let mut store = MockFileStoreService::new();
         store.expect_delete_book().returning(|_| Box::pin(async { Ok(()) }));
         store
             .expect_delete_original_file()
@@ -486,7 +486,7 @@ mod tests {
         let mut job_repo = MockImportJobRepository::new();
         job_repo.expect_find_by_candidate_book_id().returning(|_, _| Box::pin(async { Ok(None) }));
 
-        let mut store = MockLibraryStore::new();
+        let mut store = MockFileStoreService::new();
         store
             .expect_copy_to_trash()
             .withf(|_, name| name == "my-book.epub")
@@ -526,7 +526,7 @@ mod tests {
         let mut job_repo = MockImportJobRepository::new();
         job_repo.expect_find_by_candidate_book_id().returning(|_, _| Box::pin(async { Ok(None) }));
 
-        let mut store = MockLibraryStore::new();
+        let mut store = MockFileStoreService::new();
         // No expectation on copy_to_trash — mockall panics if it is called
         store.expect_delete_book().returning(|_| Box::pin(async { Ok(()) }));
         store.expect_delete_original_file().returning(|_| Box::pin(async { Ok(()) }));
@@ -563,7 +563,7 @@ mod tests {
         let mut job_repo = MockImportJobRepository::new();
         job_repo.expect_find_by_candidate_book_id().returning(|_, _| Box::pin(async { Ok(None) }));
 
-        let mut store = MockLibraryStore::new();
+        let mut store = MockFileStoreService::new();
         store
             .expect_copy_to_trash()
             .returning(|_, _| Box::pin(async { Err(crate::Error::Infrastructure("disk full".to_owned())) }));

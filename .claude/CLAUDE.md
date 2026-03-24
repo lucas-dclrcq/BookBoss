@@ -32,7 +32,7 @@ crates/
 ├── frontend/           # Adapter: user interface, calls into core ports
 ├── import/             # Adapter: library scanner + import job handler (ImportSubsystem)
 ├── metadata/           # Adapter: MetadataProvider implementations (Hardcover, OpenLibrary)
-├── storage/            # Adapter: local filesystem LibraryStore implementation
+├── storage/            # Adapter: local filesystem FileStoreService implementation
 ├── utils/              # Shared utilities: hashing, token generation
 ├── bookboss/           # Application entry point, wires adapters to ports
 └── integration-tests/  # Integration tests
@@ -58,7 +58,7 @@ crates/core/src/
 ├── pipeline/           # Port traits: MetadataExtractor, MetadataProvider
 ├── reading/            # Per-user reading state: UserBookMetadata, ReadStatus
 ├── shelf/              # Shelves (manual + smart): Shelf, ShelfFilter
-├── storage/            # LibraryStore port trait + BookSidecar struct
+├── storage/            # FileStoreService port trait + BookSidecar struct
 └── user/               # Users and settings: User, UserService, UserSettingService
 ```
 

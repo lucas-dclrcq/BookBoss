@@ -4,16 +4,16 @@ use async_trait::async_trait;
 use bb_core::{
     Error,
     book::{BookToken, FileFormat},
-    storage::{BookSidecar, LibraryStore},
+    storage::{BookSidecar, FileStoreService},
 };
 use bb_utils::hash::hash_file;
 use image::{ImageReader, codecs::jpeg::JpegEncoder, imageops::FilterType};
 
-pub struct LocalLibraryStore {
+pub struct LocalFileStore {
     library_path: PathBuf,
 }
 
-impl LocalLibraryStore {
+impl LocalFileStore {
     #[must_use]
     pub fn new(library_path: PathBuf) -> Self {
         Self { library_path }
@@ -78,7 +78,7 @@ fn normalize_jpeg(data: &[u8]) -> Vec<u8> {
 }
 
 #[async_trait]
-impl LibraryStore for LocalLibraryStore {
+impl FileStoreService for LocalFileStore {
     fn resolve(&self, relative_path: &str) -> PathBuf {
         self.library_path.join(relative_path)
     }
@@ -213,14 +213,14 @@ impl LibraryStore for LocalLibraryStore {
 mod tests {
     use bb_core::{
         book::{BookStatus, BookToken, FileFormat},
-        storage::{BookSidecar, LibraryStore},
+        storage::{BookSidecar, FileStoreService},
     };
     use tempfile::tempdir;
 
-    use super::LocalLibraryStore;
+    use super::LocalFileStore;
 
-    fn test_store(library_path: std::path::PathBuf) -> LocalLibraryStore {
-        LocalLibraryStore::new(library_path)
+    fn test_store(library_path: std::path::PathBuf) -> LocalFileStore {
+        LocalFileStore::new(library_path)
     }
 
     fn test_token() -> BookToken {

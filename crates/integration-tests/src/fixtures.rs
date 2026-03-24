@@ -11,7 +11,7 @@ use bb_core::{
     import::{ImportJob, ImportJobId, ImportStatus, NewImportJob},
     pipeline::{ExtractedMetadata, MetadataExtractor, PipelineServiceImpl},
     repository::{RepositoryService, transaction},
-    storage::{BookSidecar, LibraryStore},
+    storage::{BookSidecar, FileStoreService},
     user::{NewUser, User},
 };
 use chrono::Utc;
@@ -19,12 +19,12 @@ use chrono::Utc;
 // ── Silent library store
 // ──────────────────────────────────────────────────────
 
-/// A `LibraryStore` implementation that silently succeeds all operations.
+/// A `FileStoreService` implementation that silently succeeds all operations.
 /// Used in integration tests for code paths that touch the store.
-pub struct SilentLibraryStore;
+pub struct SilentFileStore;
 
 #[async_trait]
-impl LibraryStore for SilentLibraryStore {
+impl FileStoreService for SilentFileStore {
     fn resolve(&self, _relative_path: &str) -> PathBuf {
         PathBuf::new()
     }
@@ -60,8 +60,8 @@ impl LibraryStore for SilentLibraryStore {
     }
 }
 
-pub fn silent_library_store() -> Arc<dyn LibraryStore> {
-    Arc::new(SilentLibraryStore)
+pub fn silent_file_store() -> Arc<dyn FileStoreService> {
+    Arc::new(SilentFileStore)
 }
 
 // ── Silent conversion service
@@ -108,7 +108,7 @@ impl MetadataExtractor for StubMetadataExtractor {
 
 /// Builds a `CoreServices` backed by a real `PipelineServiceImpl` using:
 /// - The provided stub extractor
-/// - `SilentLibraryStore` (no real file I/O)
+/// - `SilentFileStore` (no real file I/O)
 /// - `SilentConversionService` (no-op enqueue)
 /// - No metadata providers (extracted metadata is used as-is)
 pub fn pipeline_services(ctx: &crate::context::TestContext, metadata: ExtractedMetadata) -> Arc<bb_core::CoreServices> {
@@ -116,7 +116,7 @@ pub fn pipeline_services(ctx: &crate::context::TestContext, metadata: ExtractedM
     let extractor = Arc::new(StubMetadataExtractor { metadata });
     let pipeline = Arc::new(PipelineServiceImpl::new(
         ctx.repos.clone(),
-        silent_library_store(),
+        silent_file_store(),
         extractor,
         vec![],
         silent_conversion_service(),
@@ -125,7 +125,7 @@ pub fn pipeline_services(ctx: &crate::context::TestContext, metadata: ExtractedM
     bb_core::create_services(
         bb_core::test_support::default_external_services_builder()
             .repository_service(ctx.repos.clone())
-            .library_store(silent_library_store())
+            .file_store(silent_file_store())
             .pipeline_service(pipeline)
             .conversion_service(silent_conversion_service())
             .event_service(event_service)

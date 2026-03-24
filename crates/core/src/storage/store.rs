@@ -11,7 +11,7 @@ use crate::{
 #[async_trait]
 #[cfg_attr(any(test, feature = "test-support"), mockall::automock)]
 #[allow(unused_lifetimes, reason = "async_trait + mockall expansion emits a spurious 'life0 parameter")]
-pub trait LibraryStore: Send + Sync {
+pub trait FileStoreService: Send + Sync {
     // ── Path resolution (sync, no I/O) ──────────────────────────────────────
 
     /// Resolves a library-root-relative path to an absolute path.

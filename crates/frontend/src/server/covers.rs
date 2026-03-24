@@ -50,7 +50,7 @@ pub(crate) async fn serve_cover(
             .unwrap();
     };
 
-    let path = core_services.library_store.cover_path(token, &filename);
+    let path = core_services.file_store.cover_path(token, &filename);
 
     let (data, content_type) = match tokio::fs::read(&path).await {
         Ok(d) => (d, content_type_for_filename(&filename)),
