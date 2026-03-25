@@ -421,6 +421,11 @@ pub(crate) fn NavBar() -> Element {
                             placeholder: "{search_placeholder}",
                             value: SEARCH_TEXT(),
                             oninput: move |e| *SEARCH_TEXT.write() = e.value(),
+                            onkeydown: move |e: KeyboardEvent| {
+                                if e.key() == Key::Escape {
+                                    *SEARCH_TEXT.write() = String::new();
+                                }
+                            },
                         }
                         // Clear button
                         if !SEARCH_TEXT().is_empty() {
