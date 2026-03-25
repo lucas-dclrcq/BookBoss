@@ -1,3 +1,4 @@
+pub(crate) mod handler;
 pub mod model;
 pub mod repository;
 pub(crate) mod scanner;

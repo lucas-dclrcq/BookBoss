@@ -203,7 +203,6 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
 
     // Each crate self-registers its job handlers (and health task configs).
     bb_core::before_start(&core_services);
-    bb_import::before_start(&core_services);
 
     let health_subsystem = create_health_subsystem(
         core_services.health_service.clone(),

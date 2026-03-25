@@ -4,19 +4,9 @@ pub mod scanner;
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use bb_core::{Error, import::ImportJobService};
-pub use handler::{ProcessImportHandler, ProcessImportPayload};
 use scanner::{LibraryScanner, ScanWorker};
 pub use scanner::{ScanReceiver, ScanTrigger, create_scan_trigger};
 use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, SubsystemHandle};
-
-/// Register import-related job handlers.
-///
-/// Called once after `CoreServices` is built.
-pub fn before_start(core: &Arc<bb_core::CoreServices>) {
-    use bb_core::jobs::JobServiceExt;
-
-    core.job_service.register(ProcessImportHandler::new(core.clone()));
-}
 
 pub struct ImportSubsystem {
     bookdrop_path: PathBuf,

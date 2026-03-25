@@ -136,10 +136,14 @@ pub fn before_start(core: &Arc<CoreServices>) {
             cleanup_orphan_publishers, cleanup_orphan_series, ensure_enrichments, recover_enrichments, reset_stale_import_jobs, verify_file_integrity,
         },
     };
+    use import::handler::ProcessImportHandler;
     use jobs::JobServiceExt;
 
     let js = &core.job_service;
     let hs = &core.health_service;
+
+    // Import pipeline handler
+    js.register(ProcessImportHandler::new(core.clone()));
 
     // Format enrichment handler
     js.register(EnrichBookFilesHandler::new(core.clone()));
