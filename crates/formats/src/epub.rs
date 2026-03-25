@@ -22,7 +22,7 @@ impl MetadataExtractor for EpubExtractor {
     }
 }
 
-fn extract_epub_metadata(path: &Path) -> Result<ExtractedMetadata, CoreError> {
+pub(crate) fn extract_epub_metadata(path: &Path) -> Result<ExtractedMetadata, CoreError> {
     let (opf_bytes, opf_dir) = read_opf_bytes_and_dir(path).map_err(|e| CoreError::Infrastructure(e.to_string()))?;
     let mut meta = crate::opf::extract_metadata(&opf_bytes).map_err(|e| CoreError::Infrastructure(e.to_string()))?;
 
