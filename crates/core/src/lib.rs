@@ -5,6 +5,7 @@ pub mod device;
 pub mod error;
 pub mod event;
 pub mod filter;
+pub mod format;
 pub mod health;
 pub mod import;
 pub mod jobs;
@@ -31,6 +32,7 @@ use crate::{
     conversion::ConversionService,
     device::{DeviceService, service::DeviceServiceImpl},
     event::EventService,
+    format::FormatService,
     health::HealthService,
     import::{ImportJobService, ImportScanner, service::ImportJobServiceImpl},
     jobs::{JobService, JobWorker},
@@ -57,6 +59,7 @@ pub mod test_support;
 pub struct ExternalServices {
     pub repository_service: Arc<RepositoryService>,
     pub file_store: Arc<dyn FileStoreService>,
+    pub format_service: Arc<dyn FormatService>,
     pub pipeline_service: Arc<dyn PipelineService>,
     pub conversion_service: Arc<dyn ConversionService>,
     pub job_service: Arc<dyn JobService>,
@@ -74,6 +77,7 @@ pub struct CoreServices {
     pub import_job_service: Arc<dyn ImportJobService>,
     pub import_scanner: Arc<dyn ImportScanner>,
     pub file_store: Arc<dyn FileStoreService>,
+    pub format_service: Arc<dyn FormatService>,
     pub library_service: Arc<dyn LibraryService>,
     pub pipeline_service: Arc<dyn PipelineService>,
     pub conversion_service: Arc<dyn ConversionService>,
@@ -92,6 +96,7 @@ impl CoreServices {
         let ExternalServices {
             repository_service,
             file_store,
+            format_service,
             pipeline_service,
             conversion_service,
             job_service,
@@ -109,6 +114,7 @@ impl CoreServices {
             import_scanner,
             library_service: Arc::new(LibraryServiceImpl::new(repository_service.clone(), file_store.clone())),
             file_store,
+            format_service,
             pipeline_service,
             conversion_service,
             job_service,

@@ -4,6 +4,7 @@ use crate::{
     ExternalServicesBuilder,
     conversion::{ConversionService, MockConversionService},
     event::{self, EventService},
+    format::{FormatService, MockFormatService},
     health::{self, HealthService},
     import::{ImportJobService, ImportScanner, scanner::MockImportScanner, service::MockImportJobService},
     jobs::{JobService, service::MockJobService},
@@ -16,6 +17,11 @@ use crate::{
 #[must_use]
 pub fn nop_conversion_service() -> Arc<dyn ConversionService> {
     Arc::new(MockConversionService::new())
+}
+
+#[must_use]
+pub fn nop_format_service() -> Arc<dyn FormatService> {
+    Arc::new(MockFormatService::new())
 }
 
 /// No-op `FileStoreService` for use in tests and as a placeholder.
@@ -95,6 +101,7 @@ pub fn nop_health_service() -> Arc<dyn HealthService> {
 pub fn default_external_services_builder() -> ExternalServicesBuilder {
     ExternalServicesBuilder::default()
         .file_store(nop_file_store())
+        .format_service(nop_format_service())
         .pipeline_service(nop_pipeline_service())
         .conversion_service(nop_conversion_service())
         .job_service(nop_job_service())

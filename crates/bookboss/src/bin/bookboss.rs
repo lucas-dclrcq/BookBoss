@@ -183,9 +183,11 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     // ExternalServices, while receivers go to their respective subsystems.
     let (scan_trigger, scan_receiver) = create_scan_trigger();
     let (health_service, health_kick_rx) = create_health_service();
+    let format_service: Arc<dyn bb_core::format::FormatService> = Arc::new(bb_formats::create_format_service());
     let external = ExternalServicesBuilder::default()
         .repository_service(repository_service.clone())
         .file_store(file_store)
+        .format_service(format_service)
         .pipeline_service(pipeline_service)
         .conversion_service(conversion_service)
         .job_service(job_service)
