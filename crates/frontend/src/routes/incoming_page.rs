@@ -29,6 +29,20 @@ use {
     std::sync::Arc,
 };
 
+#[post("/api/v1/incoming/scan_on_enter", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
+async fn scan_on_enter() -> Result<(), ServerFnError> {
+    let current_user = auth_session.current_user.clone().unwrap_or_default();
+    if !Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::POST], true)
+        .requires(Rights::any([Rights::permission(Capability::ApproveImports.as_str())]))
+        .validate(&current_user, &Method::POST, None)
+        .await
+    {
+        return Err(ServerFnError::new("Forbidden"));
+    }
+    core_services.import_job_service.trigger_scan();
+    Ok(())
+}
+
 #[get("/api/v1/incoming", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
 async fn list_incoming_books() -> Result<Vec<IncomingBookSummary>, ServerFnError> {
     let current_user = auth_session.current_user.clone().unwrap_or_default();
@@ -142,6 +156,15 @@ fn LocalTime(iso: String) -> Element {
 #[component]
 pub(crate) fn IncomingPage() -> Element {
     let mut incoming_refresh = use_context::<IncomingRefresh>();
+
+    // Trigger a bookdrop scan automatically when the page is entered
+    use_effect(move || {
+        spawn(async move {
+            let _ = scan_on_enter().await;
+            *incoming_refresh.0.write() += 1;
+        });
+    });
+
     let mut jobs = use_server_future(move || {
         let _rev = (incoming_refresh.0)();
         list_incoming_books()
@@ -176,7 +199,7 @@ pub(crate) fn IncomingPage() -> Element {
                                     tr {
                                         th { class: "px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider", "Title" }
                                         th { class: "px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider", "Authors" }
-                                        th { class: "px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider", "Format" }
+                                        th { class: "px-6 py-3 text-center font-medium text-gray-500 uppercase tracking-wider", "Format" }
                                         th { class: "px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider", "File" }
                                         th { class: "px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider", "Detected" }
                                         th { class: "px-6 py-3" }
@@ -200,7 +223,7 @@ pub(crate) fn IncomingPage() -> Element {
                                                     "{item.author_names.join(\", \")}"
                                                 }
                                             }
-                                            td { class: "px-6 py-4 text-gray-600", "{item.file_format}" }
+                                            td { class: "px-6 py-4 text-gray-600 text-center", "{item.file_format}" }
                                             td { class: "px-6 py-4 text-gray-500 font-mono text-xs", "{item.file_path}" }
                                             td { class: "px-6 py-4 text-gray-500 whitespace-nowrap",
                                                 LocalTime { iso: item.detected_at.clone() }
