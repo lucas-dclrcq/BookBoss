@@ -19,7 +19,11 @@ pub mod storage;
 pub mod types;
 pub mod user;
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use derive_builder::Builder;
 pub use error::{Error, ErrorKind, RepositoryError};
@@ -32,7 +36,11 @@ use crate::{
     event::EventService,
     format::FormatService,
     health::HealthService,
-    import::{ImportJobService, service::ImportJobServiceImpl},
+    import::{
+        ImportJobService,
+        scanner::{BookdropScanner, ScanReceiver, ScanTrigger, ScanWorker, create_scan_channel},
+        service::ImportJobServiceImpl,
+    },
     jobs::{JobService, JobWorker},
     library::{LibraryService, LibraryServiceImpl},
     message::{SystemMessageService, SystemMessageServiceImpl},
@@ -62,6 +70,12 @@ pub struct ExternalServices {
     pub job_service: Arc<dyn JobService>,
     pub health_service: Arc<dyn HealthService>,
     pub event_service: Arc<dyn EventService>,
+    /// Path to the bookdrop directory for automatic import scanning.
+    #[builder(default)]
+    pub bookdrop_path: Option<PathBuf>,
+    /// Polling interval for the bookdrop scanner.
+    #[builder(default)]
+    pub scan_interval: Option<Duration>,
 }
 
 pub struct CoreServices {
@@ -83,6 +97,16 @@ pub struct CoreServices {
     pub opds_service: Arc<dyn OpdsService>,
     pub event_service: Arc<dyn EventService>,
     pub system_message_service: Arc<dyn SystemMessageService>,
+    /// Internal: holds the import scan wiring until `CoreSubsystem` takes it.
+    import_scan_config: Mutex<Option<ImportScanConfig>>,
+}
+
+/// Internal wiring for the import scanner subsystem.
+struct ImportScanConfig {
+    bookdrop_path: PathBuf,
+    scan_interval: Duration,
+    scan_trigger: ScanTrigger,
+    scan_receiver: ScanReceiver,
 }
 
 impl CoreServices {
@@ -95,14 +119,33 @@ impl CoreServices {
             job_service,
             health_service,
             event_service,
+            bookdrop_path,
+            scan_interval,
         } = external;
+
+        // Create the scan channel if bookdrop is configured.
+        let (scan_trigger_for_service, import_scan_config) = if let (Some(path), Some(interval)) = (bookdrop_path, scan_interval) {
+            let (trigger, receiver) = create_scan_channel();
+            (
+                Some(trigger.clone()),
+                Some(ImportScanConfig {
+                    bookdrop_path: path,
+                    scan_interval: interval,
+                    scan_trigger: trigger,
+                    scan_receiver: receiver,
+                }),
+            )
+        } else {
+            (None, None)
+        };
+
         Self {
             repository_service: repository_service.clone(),
             auth_service: Arc::new(AuthServiceImpl::new(repository_service.clone())),
             user_service: Arc::new(UserServiceImpl::new(repository_service.clone())),
             user_setting_service: Arc::new(UserSettingServiceImpl::new(repository_service.clone())),
             book_service: Arc::new(BookServiceImpl::new(repository_service.clone())),
-            import_job_service: Arc::new(ImportJobServiceImpl::new(repository_service.clone())),
+            import_job_service: Arc::new(ImportJobServiceImpl::new(repository_service.clone(), scan_trigger_for_service)),
             library_service: Arc::new(LibraryServiceImpl::new(repository_service.clone(), file_store.clone())),
             file_store,
             format_service,
@@ -115,7 +158,15 @@ impl CoreServices {
             opds_service: Arc::new(OpdsServiceImpl::new(repository_service.clone(), encryption_secret)),
             system_message_service: Arc::new(SystemMessageServiceImpl::new(repository_service, event_service.clone())),
             event_service,
+            import_scan_config: Mutex::new(import_scan_config),
         }
+    }
+
+    /// Takes the import scan config, if configured. Can only be called once
+    /// (returns `None` on subsequent calls). Used by `CoreSubsystem` to start
+    /// the scanner worker and timer.
+    fn take_import_scan_config(&self) -> Option<ImportScanConfig> {
+        self.import_scan_config.lock().expect("import_scan_config mutex poisoned").take()
     }
 }
 
@@ -239,22 +290,36 @@ pub fn before_start(core: &Arc<CoreServices>) {
 }
 
 pub struct CoreSubsystem {
-    job_service: Arc<dyn JobService>,
-    repository_service: Arc<RepositoryService>,
+    core_services: Arc<CoreServices>,
     poll_interval: Duration,
-    event_service: Arc<dyn EventService>,
 }
 
 impl IntoSubsystem<Error> for CoreSubsystem {
     async fn run(self, subsys: &mut SubsystemHandle) -> Result<(), Error> {
         let worker = JobWorker::new(
-            self.job_service,
-            self.repository_service.repository().clone(),
-            self.repository_service.job_repository().clone(),
+            self.core_services.job_service.clone(),
+            self.core_services.repository_service.repository().clone(),
+            self.core_services.repository_service.job_repository().clone(),
             self.poll_interval,
-            self.event_service,
+            self.core_services.event_service.clone(),
         );
         subsys.start(SubsystemBuilder::new("Worker", worker.into_subsystem()));
+
+        // Start the import scanner subsystem if bookdrop is configured.
+        if let Some(config) = self.core_services.take_import_scan_config() {
+            self.core_services.import_job_service.recover_on_startup().await?;
+
+            let worker = ScanWorker::new(
+                config.bookdrop_path,
+                config.scan_receiver.0,
+                self.core_services.import_job_service.clone(),
+                self.core_services.file_store.clone(),
+            );
+            let scanner = BookdropScanner::new(config.scan_interval, config.scan_trigger);
+
+            subsys.start(SubsystemBuilder::new("ScanWorker", worker.into_subsystem()));
+            subsys.start(SubsystemBuilder::new("BookdropScanner", scanner.into_subsystem()));
+        }
 
         tracing::info!("CoreSubsystem started");
 
@@ -266,16 +331,6 @@ impl IntoSubsystem<Error> for CoreSubsystem {
 }
 
 #[must_use]
-pub fn create_core_subsystem(
-    job_service: Arc<dyn JobService>,
-    repository_service: Arc<RepositoryService>,
-    poll_interval: Duration,
-    event_service: Arc<dyn EventService>,
-) -> CoreSubsystem {
-    CoreSubsystem {
-        job_service,
-        repository_service,
-        poll_interval,
-        event_service,
-    }
+pub fn create_core_subsystem(core_services: Arc<CoreServices>, poll_interval: Duration) -> CoreSubsystem {
+    CoreSubsystem { core_services, poll_interval }
 }

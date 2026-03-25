@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 
 use crate::{
     Error,
-    import::{ImportJob, ImportJobId, ImportJobToken, ImportStatus, NewImportJob, ProcessImportPayload},
+    import::{ImportJob, ImportJobId, ImportJobToken, ImportStatus, NewImportJob, ProcessImportPayload, scanner::ScanTrigger},
     jobs::JobRepositoryExt,
     repository::{RepositoryService, read_only_transaction, transaction},
     user::UserId,
@@ -37,11 +37,15 @@ pub trait ImportJobService: Send + Sync {
 
 pub(crate) struct ImportJobServiceImpl {
     repository_service: Arc<RepositoryService>,
+    scan_trigger: Option<ScanTrigger>,
 }
 
 impl ImportJobServiceImpl {
-    pub(crate) fn new(repository_service: Arc<RepositoryService>) -> Self {
-        Self { repository_service }
+    pub(crate) fn new(repository_service: Arc<RepositoryService>, scan_trigger: Option<ScanTrigger>) -> Self {
+        Self {
+            repository_service,
+            scan_trigger,
+        }
     }
 }
 
@@ -123,8 +127,11 @@ impl ImportJobService for ImportJobServiceImpl {
     }
 
     fn trigger_scan(&self) {
-        // No-op until Phase 4 wires the scan channel into this service.
-        tracing::debug!("trigger_scan called but scan channel not yet wired");
+        if let Some(trigger) = &self.scan_trigger {
+            trigger.trigger();
+        } else {
+            tracing::debug!("trigger_scan called but scan channel not wired");
+        }
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
@@ -208,7 +215,7 @@ mod tests {
                 .build()
                 .expect("all fields provided"),
         );
-        ImportJobServiceImpl::new(repository_service)
+        ImportJobServiceImpl::new(repository_service, None)
     }
 
     fn create_service_with_job_repo(import_mock: MockImportJobRepository, job_mock: MockJobRepository) -> ImportJobServiceImpl {
@@ -219,7 +226,7 @@ mod tests {
                 .build()
                 .expect("all fields provided"),
         );
-        ImportJobServiceImpl::new(repository_service)
+        ImportJobServiceImpl::new(repository_service, None)
     }
 
     fn fake_job(status: ImportStatus) -> ImportJob {

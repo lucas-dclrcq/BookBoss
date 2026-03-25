@@ -151,7 +151,6 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     use bb_database::{create_repository_service, open_database};
     use bb_formats::create_format_service;
     use bb_frontend::server::create_frontend_subsystem;
-    use bb_import::{create_import_subsystem, create_scan_trigger};
     use bb_metadata::create_metadata_providers;
     use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, SubsystemHandle, Toplevel};
 
@@ -174,12 +173,8 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
         event_service.clone(),
     )) as Arc<dyn bb_core::pipeline::PipelineService>;
 
-    let scan_interval = Duration::from_secs(config.import.scan_interval_secs);
     let worker_poll_interval = Duration::from_secs(config.import.worker_poll_interval_secs);
 
-    // Create channels before CoreServices so triggers can be passed in via
-    // ExternalServices, while receivers go to their respective subsystems.
-    let (scan_trigger, scan_receiver) = create_scan_trigger();
     let (health_service, health_kick_rx) = create_health_service();
     let external = ExternalServicesBuilder::default()
         .repository_service(repository_service.clone())
@@ -189,17 +184,11 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
         .job_service(job_service)
         .health_service(health_service)
         .event_service(event_service.clone())
+        .bookdrop_path(Some(config.import.bookdrop_path.clone()))
+        .scan_interval(Some(Duration::from_secs(config.import.scan_interval_secs)))
         .build()
         .context("ExternalServices missing required field")?;
     let core_services = create_services(external, &config.encryption_secret).context("Couldn't create core services")?;
-
-    let import_subsystem = create_import_subsystem(
-        config.import.bookdrop_path.clone(),
-        scan_interval,
-        scan_trigger,
-        scan_receiver,
-        core_services.import_job_service.clone(),
-    );
 
     // Each crate self-registers its job handlers (and health task configs).
     bb_core::before_start(&core_services);
@@ -213,12 +202,7 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     );
 
     let api_subsystem = create_api_subsystem(&config.api, core_services.clone());
-    let core_subsystem = create_core_subsystem(
-        core_services.job_service.clone(),
-        repository_service.clone(),
-        worker_poll_interval,
-        event_service,
-    );
+    let core_subsystem = create_core_subsystem(core_services.clone(), worker_poll_interval);
     let frontend_subsystem = create_frontend_subsystem(&config.frontend, core_services.clone());
 
     span.exit();
@@ -226,7 +210,6 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     Toplevel::new(async |s: &mut SubsystemHandle| {
         s.start(SubsystemBuilder::new("Api", api_subsystem.into_subsystem()));
         s.start(SubsystemBuilder::new("Core", core_subsystem.into_subsystem()));
-        s.start(SubsystemBuilder::new("Import", import_subsystem.into_subsystem()));
         s.start(SubsystemBuilder::new("Health", health_subsystem.into_subsystem()));
         s.start(SubsystemBuilder::new("Frontend", frontend_subsystem.into_subsystem()));
     })
