@@ -143,11 +143,13 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     use bb_api::create_api_subsystem;
     use bb_core::{
         ExternalServicesBuilder, create_core_subsystem, create_services,
+        format::FormatService,
         health::{create_health_service, create_health_subsystem},
         jobs::create_job_service,
         pipeline::PipelineServiceImpl,
     };
     use bb_database::{create_repository_service, open_database};
+    use bb_formats::create_format_service;
     use bb_frontend::server::create_frontend_subsystem;
     use bb_import::{create_import_subsystem, create_scan_trigger};
     use bb_metadata::create_metadata_providers;
@@ -162,7 +164,7 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     let job_service = create_job_service(repository_service.clone());
     let event_service = bb_core::event::create_event_service(64);
 
-    let format_service: Arc<dyn bb_core::format::FormatService> = Arc::new(bb_formats::create_format_service());
+    let format_service: Arc<dyn FormatService> = Arc::new(create_format_service());
     let pipeline_service = Arc::new(PipelineServiceImpl::new(
         repository_service.clone(),
         file_store.clone(),

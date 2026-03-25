@@ -9,6 +9,7 @@ use bb_core::{
     book::{Author, AuthorId, AuthorRole, Book, BookId, BookStatus, BookToken, FileFormat, NewAuthor, NewBook},
     format::FormatService,
     import::{ImportJob, ImportJobId, ImportStatus, NewImportJob},
+    jobs::{JobService, service::MockJobService},
     pipeline::{ExtractedMetadata, PipelineServiceImpl},
     repository::{RepositoryService, transaction},
     storage::{BookSidecar, FileStoreService},
@@ -113,7 +114,11 @@ impl FormatService for StubFormatService {
 /// - No metadata providers (extracted metadata is used as-is)
 pub fn pipeline_services(ctx: &crate::context::TestContext, metadata: ExtractedMetadata) -> Arc<bb_core::CoreServices> {
     let event_service = bb_core::test_support::nop_event_service();
-    let job_service = bb_core::test_support::nop_job_service();
+    let job_service: Arc<dyn JobService> = {
+        let mut mock = MockJobService::new();
+        mock.expect_enqueue_raw().returning(|_, _, _| Box::pin(async { Ok(()) }));
+        Arc::new(mock)
+    };
     let format_service: Arc<dyn FormatService> = Arc::new(StubFormatService { metadata });
     let pipeline = Arc::new(PipelineServiceImpl::new(
         ctx.repos.clone(),
