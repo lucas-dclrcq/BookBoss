@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1](https://github.com/szinn/BookBoss/compare/v0.7.0..v0.7.1) - 2026-03-25
+
+### Features
+
+- _(frontend)_ Center format column and auto-scan on incoming page entry - ([137a430](https://github.com/szinn/BookBoss/commit/137a430282d86d545469f0f39cce7a29af7aea0d))
+
+### Bug Fixes
+
+- _(core)_ Fix integration test mock for enrich_book_files job enqueue - ([06bbc59](https://github.com/szinn/BookBoss/commit/06bbc59a2096fe6df20d3d4754a8f3b30971aed3))
+- _(core)_ Clean up stale anonymous sessions in addition to expired ones - ([35f663c](https://github.com/szinn/BookBoss/commit/35f663c95b806f4aa3e6da2bdff97b4e2f22e74f))
+- _(frontend)_ Clear search bar on Escape key press - ([f315c59](https://github.com/szinn/BookBoss/commit/f315c59c530c0cc35a518a0bda7890a051d4936f))
+
+### Refactor
+
+- _(cli)_ Remove bb-import dependency from bookboss - ([2759562](https://github.com/szinn/BookBoss/commit/275956298c4ddcfcff718330ea9616a1e4af1f42))
+- _(cli)_ Update binary wiring for FormatService - ([9b019b9](https://github.com/szinn/BookBoss/commit/9b019b9c4e4048487a1b737b1cfcf5ad657fab3c))
+- _(cli)_ Replace manual handler registration with before_start() calls - ([9fd80c7](https://github.com/szinn/BookBoss/commit/9fd80c78095308e844cb256579d4525e025f6f60))
+- _(core)_ Make import job file_format non-nullable, detect at scan time - ([cc12c47](https://github.com/szinn/BookBoss/commit/cc12c47b01a23a1727f477e4d011160d186acd15))
+- _(core)_ Delete crates/import, clean up workspace references - ([16035ec](https://github.com/szinn/BookBoss/commit/16035ecdd0cfe77268a115682d3be4ed87d455ed))
+- _(core)_ Move ImportSubsystem into CoreSubsystem, wire scan channel - ([cee911b](https://github.com/szinn/BookBoss/commit/cee911b6452d3a1107cbb5126a8641d107456605))
+- _(core)_ Move ProcessImportHandler into core import domain - ([ff41fcf](https://github.com/szinn/BookBoss/commit/ff41fcff8f7297264230627bb0dbeeb9ad69f527))
+- _(core)_ Move scanner into core import domain, make file_format optional - ([f67e5a6](https://github.com/szinn/BookBoss/commit/f67e5a612016bebcc459ea877d15aa0da033ee65))
+- _(core)_ Add list_files to FileStoreService port - ([ca55c08](https://github.com/szinn/BookBoss/commit/ca55c08cb88e98ae476829b74317b54eeacd43ba))
+- _(core)_ Delete deprecated conversion/extractor modules and formats handlers - ([19328c7](https://github.com/szinn/BookBoss/commit/19328c71969d1ab8639d84f8933973aa76ef2eb9))
+- _(core)_ Remove store_metadata from FileStoreService - ([bbeaba4](https://github.com/szinn/BookBoss/commit/bbeaba43813656ff308a64cb156e7ca971940d5c))
+- _(core)_ Move enrichment handler to core and update PipelineServiceImpl - ([b8bf76e](https://github.com/szinn/BookBoss/commit/b8bf76ec0276df69b0589e506a48df8967820da6))
+- _(core)_ Add FormatService port trait and format domain module - ([7ea75e7](https://github.com/szinn/BookBoss/commit/7ea75e72a42114e634872c5d431f806f1b6e2c5b))
+- _(core)_ Add before_start() lifecycle hook per crate - ([d411786](https://github.com/szinn/BookBoss/commit/d411786637be6d32207c474b741bc2c7d4018820))
+- _(core)_ Handlers take Arc<CoreServices> instead of individual deps - ([9293ad3](https://github.com/szinn/BookBoss/commit/9293ad33ba008c9b34b7257426d472172a3e37fb))
+- _(core)_ Expose RepositoryService as pub(crate) on CoreServices - ([3dd17f5](https://github.com/szinn/BookBoss/commit/3dd17f581a319f79edfb6e3313e4c59660eab480))
+- _(core)_ Extract HealthService trait from HealthTaskState + HealthTrigger - ([25f52ec](https://github.com/szinn/BookBoss/commit/25f52ec8d90373e58444db22e64904bf0ab9ccb6))
+- _(core)_ Absorb JobRegistry into JobService - ([e06bfac](https://github.com/szinn/BookBoss/commit/e06bfac07a1424bfa3a5bc6635e44a096b83c278))
+- _(core)_ Rename LibraryStore → FileStoreService, LocalLibraryStore → LocalFileStore - ([1e7c686](https://github.com/szinn/BookBoss/commit/1e7c6867a9c14d4fa4fb25a7b8cc388e3b0eb916))
+- _(formats)_ Implement FormatServiceImpl with real logic - ([e37dc35](https://github.com/szinn/BookBoss/commit/e37dc353f59471505109a68e85c2aacc5338dde1))
+
 ## [0.7.0](https://github.com/szinn/BookBoss/compare/v0.6.1..v0.7.0) - 2026-03-23
 
 ### Features
