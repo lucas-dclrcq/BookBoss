@@ -60,4 +60,8 @@ pub trait FileStoreService: Send + Sync {
     /// Removes a file by its library-root-relative path. No-op if the file
     /// does not exist.
     async fn delete_original_file(&self, relative_path: &str) -> Result<(), Error>;
+
+    /// Returns the paths of all regular files in `path` (non-recursive).
+    /// Directories, symlinks, and other non-file entries are excluded.
+    async fn list_files(&self, path: &Path) -> Result<Vec<PathBuf>, Error>;
 }

@@ -56,6 +56,9 @@ impl FileStoreService for SilentFileStore {
     async fn delete_original_file(&self, _relative_path: &str) -> Result<(), Error> {
         Ok(())
     }
+    async fn list_files(&self, _path: &Path) -> Result<Vec<PathBuf>, Error> {
+        Ok(Vec::new())
+    }
 }
 
 pub fn silent_file_store() -> Arc<dyn FileStoreService> {

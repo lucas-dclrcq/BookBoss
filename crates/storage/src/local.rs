@@ -198,6 +198,17 @@ impl FileStoreService for LocalFileStore {
             Err(e) => Err(io_err(e)),
         }
     }
+
+    async fn list_files(&self, path: &Path) -> Result<Vec<PathBuf>, Error> {
+        let mut entries = tokio::fs::read_dir(path).await.map_err(io_err)?;
+        let mut files = Vec::new();
+        while let Some(entry) = entries.next_entry().await.map_err(io_err)? {
+            if entry.file_type().await.map_err(io_err)?.is_file() {
+                files.push(entry.path());
+            }
+        }
+        Ok(files)
+    }
 }
 
 #[cfg(test)]
@@ -341,6 +352,46 @@ mod tests {
 
         let contents = tokio::fs::read(trash_dir.join("my-book.epub")).await.unwrap();
         assert_eq!(contents, b"new version");
+    }
+
+    #[tokio::test]
+    async fn list_files_returns_only_files() {
+        let dir = tempdir().unwrap();
+        let store = test_store(dir.path().to_path_buf());
+
+        let scan_dir = dir.path().join("scan");
+        tokio::fs::create_dir_all(&scan_dir).await.unwrap();
+        tokio::fs::write(scan_dir.join("book.epub"), b"epub").await.unwrap();
+        tokio::fs::write(scan_dir.join("book.pdf"), b"pdf").await.unwrap();
+        tokio::fs::create_dir_all(scan_dir.join("subdir")).await.unwrap();
+
+        let mut files = store.list_files(&scan_dir).await.unwrap();
+        files.sort();
+
+        assert_eq!(files.len(), 2);
+        assert!(files[0].ends_with("book.epub"));
+        assert!(files[1].ends_with("book.pdf"));
+    }
+
+    #[tokio::test]
+    async fn list_files_empty_directory() {
+        let dir = tempdir().unwrap();
+        let store = test_store(dir.path().to_path_buf());
+
+        let scan_dir = dir.path().join("empty");
+        tokio::fs::create_dir_all(&scan_dir).await.unwrap();
+
+        let files = store.list_files(&scan_dir).await.unwrap();
+        assert!(files.is_empty());
+    }
+
+    #[tokio::test]
+    async fn list_files_nonexistent_directory_returns_error() {
+        let dir = tempdir().unwrap();
+        let store = test_store(dir.path().to_path_buf());
+
+        let result = store.list_files(&dir.path().join("nope")).await;
+        result.unwrap_err();
     }
 
     #[tokio::test]
