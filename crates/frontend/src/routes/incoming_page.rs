@@ -85,7 +85,7 @@ async fn list_incoming_books() -> Result<Vec<IncomingBookSummary>, ServerFnError
         summaries.push(IncomingBookSummary {
             job_token: job.token.to_string(),
             file_path: filename,
-            file_format: format!("{:?}", job.file_format),
+            file_format: job.file_format.as_str().to_owned(),
             detected_at: job.detected_at.to_rfc3339(),
             title,
             author_names,

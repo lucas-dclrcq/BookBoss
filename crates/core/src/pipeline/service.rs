@@ -261,7 +261,6 @@ impl PipelineService for PipelineServiceImpl {
         // ── 3. Extract metadata from the e-book file ──────────────────────────
         let path: PathBuf = job.file_path.clone().into();
         let (detected_format, extracted) = self.format_service.extract_metadata(&path).await?;
-        job.file_format = Some(detected_format.clone());
 
         // ── 4. Mark Identifying ───────────────────────────────────────────────
         job = {

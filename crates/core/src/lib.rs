@@ -314,6 +314,7 @@ impl IntoSubsystem<Error> for CoreSubsystem {
                 config.scan_receiver.0,
                 self.core_services.import_job_service.clone(),
                 self.core_services.file_store.clone(),
+                self.core_services.format_service.clone(),
             );
             let scanner = BookdropScanner::new(config.scan_interval, config.scan_trigger);
 

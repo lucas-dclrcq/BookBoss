@@ -235,6 +235,7 @@ pub async fn insert_import_job(repos: &RepositoryService, file_hash: &str) -> Im
                     NewImportJob {
                         file_path: format!("/watch/{file_hash}.epub"),
                         file_hash,
+                        file_format: bb_core::book::FileFormat::Epub,
                         detected_at: Utc::now(),
                     },
                 )

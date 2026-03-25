@@ -8,7 +8,7 @@ use chrono::Utc;
 use tokio::sync::mpsc;
 use tokio_graceful_shutdown::{IntoSubsystem, SubsystemHandle};
 
-use crate::{Error, import::ImportJobService, storage::FileStoreService};
+use crate::{Error, format::FormatService, import::ImportJobService, storage::FileStoreService};
 
 // ── Channel types ────────────────────────────────────────────────────────────
 
@@ -50,6 +50,7 @@ pub(crate) struct ScanWorker {
     scan_rx: mpsc::Receiver<ScanCommand>,
     import_job_service: Arc<dyn ImportJobService>,
     file_store: Arc<dyn FileStoreService>,
+    format_service: Arc<dyn FormatService>,
 }
 
 impl ScanWorker {
@@ -58,12 +59,14 @@ impl ScanWorker {
         scan_rx: mpsc::Receiver<ScanCommand>,
         import_job_service: Arc<dyn ImportJobService>,
         file_store: Arc<dyn FileStoreService>,
+        format_service: Arc<dyn FormatService>,
     ) -> Self {
         Self {
             bookdrop_path,
             scan_rx,
             import_job_service,
             file_store,
+            format_service,
         }
     }
 
@@ -77,18 +80,18 @@ impl ScanWorker {
         };
 
         for path in files {
-            if !is_known_book_extension(&path) {
+            let Some(file_format) = self.format_service.detect_format(&path) else {
                 tracing::debug!(path = %path.display(), "skipping unrecognised file extension");
                 continue;
-            }
+            };
 
-            if let Err(e) = self.process_file(&path).await {
+            if let Err(e) = self.process_file(&path, file_format).await {
                 tracing::warn!(path = %path.display(), error = %e, "failed to process file — skipping");
             }
         }
     }
 
-    async fn process_file(&self, path: &Path) -> Result<(), Error> {
+    async fn process_file(&self, path: &Path, file_format: crate::book::FileFormat) -> Result<(), Error> {
         let hash = bb_utils::hash::hash_file(path)
             .await
             .map_err(|e| Error::Infrastructure(format!("file hashing failed: {e}")))?;
@@ -96,7 +99,7 @@ impl ScanWorker {
         let file_path_str = path.to_string_lossy().into_owned();
         let detected_at = Utc::now();
 
-        self.import_job_service.queue_file_if_new(file_path_str, hash, detected_at).await
+        self.import_job_service.queue_file_if_new(file_path_str, hash, file_format, detected_at).await
     }
 }
 
@@ -170,38 +173,5 @@ impl IntoSubsystem<Error> for BookdropScanner {
         }
 
         Ok(())
-    }
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-/// Returns `true` if the file has a recognised e-book extension.
-///
-/// Used as a pre-filter to avoid creating noisy import jobs for non-book files
-/// (e.g. `.DS_Store`, `.txt`). The pipeline still does full format detection
-/// via `FormatService::extract_metadata`.
-fn is_known_book_extension(path: &Path) -> bool {
-    matches!(path.extension().and_then(|e| e.to_str()), Some("epub" | "mobi" | "pdf" | "cbz" | "azw3"))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn known_extensions_accepted() {
-        assert!(is_known_book_extension(Path::new("book.epub")));
-        assert!(is_known_book_extension(Path::new("book.mobi")));
-        assert!(is_known_book_extension(Path::new("book.pdf")));
-        assert!(is_known_book_extension(Path::new("book.cbz")));
-        assert!(is_known_book_extension(Path::new("book.azw3")));
-    }
-
-    #[test]
-    fn unknown_and_missing_extensions_rejected() {
-        assert!(!is_known_book_extension(Path::new("book.txt")));
-        assert!(!is_known_book_extension(Path::new("book.zip")));
-        assert!(!is_known_book_extension(Path::new(".DS_Store")));
-        assert!(!is_known_book_extension(Path::new("no_extension")));
     }
 }

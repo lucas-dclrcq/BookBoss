@@ -4,6 +4,7 @@ use chrono::{DateTime, Utc};
 
 use crate::{
     Error,
+    book::FileFormat,
     import::{ImportJob, ImportJobId, ImportJobToken, ImportStatus, NewImportJob, ProcessImportPayload, scanner::ScanTrigger},
     jobs::JobRepositoryExt,
     repository::{RepositoryService, read_only_transaction, transaction},
@@ -24,7 +25,7 @@ pub trait ImportJobService: Send + Sync {
     /// Atomically: check for an existing job with this hash (skip if found),
     /// create a new `ImportJob`, and enqueue a `ProcessImportPayload`
     /// background task — all within one database transaction.
-    async fn queue_file_if_new(&self, file_path: String, file_hash: String, detected_at: DateTime<Utc>) -> Result<(), Error>;
+    async fn queue_file_if_new(&self, file_path: String, file_hash: String, file_format: FileFormat, detected_at: DateTime<Utc>) -> Result<(), Error>;
     /// On startup crash-recovery: resets any `Extracting`/`Identifying` jobs
     /// back to `Pending`, then re-enqueues every `Pending` job so none are
     /// lost if the queue lost its entries.
@@ -104,7 +105,7 @@ impl ImportJobService for ImportJobServiceImpl {
     }
 
     #[tracing::instrument(level = "trace", skip(self, file_path, file_hash))]
-    async fn queue_file_if_new(&self, file_path: String, file_hash: String, detected_at: DateTime<Utc>) -> Result<(), Error> {
+    async fn queue_file_if_new(&self, file_path: String, file_hash: String, file_format: FileFormat, detected_at: DateTime<Utc>) -> Result<(), Error> {
         with_transaction!(self, import_job_repository, job_repository, |tx| {
             if import_job_repository.find_by_hash(tx, &file_hash).await?.is_some() {
                 tracing::debug!(hash = %file_hash, "file already in import_jobs — skipping");
@@ -116,6 +117,7 @@ impl ImportJobService for ImportJobServiceImpl {
                     NewImportJob {
                         file_path,
                         file_hash,
+                        file_format,
                         detected_at,
                     },
                 )
@@ -237,7 +239,7 @@ mod tests {
             token: ImportJobToken::new(id),
             file_path: "/watch/test.epub".to_owned(),
             file_hash: "abc123".to_owned(),
-            file_format: None,
+            file_format: crate::book::FileFormat::Epub,
             detected_at: Utc::now(),
             status,
             candidate_book_id: None,
@@ -381,7 +383,9 @@ mod tests {
         let job_mock = MockJobRepository::new(); // enqueue must NOT be called
         let svc = create_service_with_job_repo(import_mock, job_mock);
 
-        let result = svc.queue_file_if_new("/watch/test.epub".into(), "abc123".into(), Utc::now()).await;
+        let result = svc
+            .queue_file_if_new("/watch/test.epub".into(), "abc123".into(), crate::book::FileFormat::Epub, Utc::now())
+            .await;
 
         result.unwrap();
     }
@@ -418,7 +422,9 @@ mod tests {
         });
         let svc = create_service_with_job_repo(import_mock, job_mock);
 
-        let result = svc.queue_file_if_new("/watch/new.epub".into(), "newHash".into(), Utc::now()).await;
+        let result = svc
+            .queue_file_if_new("/watch/new.epub".into(), "newHash".into(), crate::book::FileFormat::Epub, Utc::now())
+            .await;
 
         result.unwrap();
     }

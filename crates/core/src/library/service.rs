@@ -193,7 +193,7 @@ mod tests {
             token: ImportJobToken::new(id),
             file_path: "/watch/test.epub".to_owned(),
             file_hash: "abc123".to_owned(),
-            file_format: Some(crate::book::FileFormat::Epub),
+            file_format: crate::book::FileFormat::Epub,
             detected_at: chrono::Utc::now(),
             status: ImportStatus::Approved,
             candidate_book_id: Some(book_id),
