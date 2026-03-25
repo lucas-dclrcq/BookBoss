@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use bb_core::{
     Error as CoreError,
     book::FileFormat,
-    pipeline::{ExtractedMetadata, MetadataExtractor},
+    pipeline::{ExtractedMetadata, extractor::MetadataExtractor},
 };
 
 pub struct EpubExtractor;
@@ -138,7 +138,7 @@ pub(crate) fn find_opf_path(xml: &[u8]) -> Result<String, crate::Error> {
 mod tests {
     use std::io::Write;
 
-    use bb_core::{book::FileFormat, pipeline::MetadataExtractor};
+    use bb_core::{book::FileFormat, pipeline::extractor::MetadataExtractor};
 
     use super::EpubExtractor;
 

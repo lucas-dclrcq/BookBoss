@@ -7,9 +7,9 @@ use async_trait::async_trait;
 use bb_core::{
     Error,
     book::{Author, AuthorId, AuthorRole, Book, BookId, BookStatus, BookToken, FileFormat, NewAuthor, NewBook},
-    conversion::ConversionService,
+    format::FormatService,
     import::{ImportJob, ImportJobId, ImportStatus, NewImportJob},
-    pipeline::{ExtractedMetadata, MetadataExtractor, PipelineServiceImpl},
+    pipeline::{ExtractedMetadata, PipelineServiceImpl},
     repository::{RepositoryService, transaction},
     storage::{BookSidecar, FileStoreService},
     user::{NewUser, User},
@@ -64,42 +64,46 @@ pub fn silent_file_store() -> Arc<dyn FileStoreService> {
     Arc::new(SilentFileStore)
 }
 
-// ── Silent conversion service
-// ─────────────────────────────────────────────────
-
-/// A `ConversionService` that silently succeeds all operations.
-pub struct SilentConversionService;
-
-#[async_trait]
-impl ConversionService for SilentConversionService {
-    async fn queue_enrich_epub(&self, _book_id: BookId) -> Result<(), Error> {
-        Ok(())
-    }
-    async fn queue_convert_kepub(&self, _book_id: BookId) -> Result<(), Error> {
-        Ok(())
-    }
-    async fn count_pending(&self) -> Result<u32, Error> {
-        Ok(0)
-    }
-}
-
-pub fn silent_conversion_service() -> Arc<dyn ConversionService> {
-    Arc::new(SilentConversionService)
-}
-
-// ── Stub metadata extractor
+// ── Stub format service
 // ──────────────────────────────────────────────────
 
-/// A `MetadataExtractor` that returns a fixed `ExtractedMetadata` without
-/// reading the file. Used to test the pipeline without real e-book files.
-pub struct StubMetadataExtractor {
+/// A `FormatService` that returns fixed metadata and silently succeeds all
+/// write operations. Used to test the pipeline without real e-book files.
+pub struct StubFormatService {
     pub metadata: ExtractedMetadata,
 }
 
 #[async_trait]
-impl MetadataExtractor for StubMetadataExtractor {
-    async fn extract(&self, _path: &Path, _format: FileFormat) -> Result<ExtractedMetadata, Error> {
-        Ok(self.metadata.clone())
+impl FormatService for StubFormatService {
+    fn detect_format(&self, _path: &Path) -> Option<FileFormat> {
+        Some(FileFormat::Epub)
+    }
+    async fn extract_metadata(&self, _path: &Path) -> Result<(FileFormat, ExtractedMetadata), Error> {
+        Ok((FileFormat::Epub, self.metadata.clone()))
+    }
+    async fn enrich(&self, _request: &bb_core::format::EnrichmentRequest) -> Result<(), Error> {
+        Ok(())
+    }
+    async fn write_sidecar(&self, _path: &Path, _sidecar: &BookSidecar) -> Result<(), Error> {
+        Ok(())
+    }
+    async fn read_sidecar(&self, _path: &Path) -> Result<BookSidecar, Error> {
+        Ok(BookSidecar {
+            title: String::new(),
+            authors: vec![],
+            description: None,
+            publisher: None,
+            published_date: None,
+            language: None,
+            identifiers: vec![],
+            series: None,
+            genres: vec![],
+            tags: vec![],
+            page_count: None,
+            status: BookStatus::Incoming,
+            metadata_source: None,
+            files: vec![],
+        })
     }
 }
 
@@ -107,27 +111,28 @@ impl MetadataExtractor for StubMetadataExtractor {
 // ──────────────────────────────────────────────────
 
 /// Builds a `CoreServices` backed by a real `PipelineServiceImpl` using:
-/// - The provided stub extractor
+/// - `StubFormatService` (returns provided metadata, no-op file ops)
 /// - `SilentFileStore` (no real file I/O)
-/// - `SilentConversionService` (no-op enqueue)
 /// - No metadata providers (extracted metadata is used as-is)
 pub fn pipeline_services(ctx: &crate::context::TestContext, metadata: ExtractedMetadata) -> Arc<bb_core::CoreServices> {
     let event_service = bb_core::test_support::nop_event_service();
-    let extractor = Arc::new(StubMetadataExtractor { metadata });
+    let job_service = bb_core::test_support::nop_job_service();
+    let format_service: Arc<dyn FormatService> = Arc::new(StubFormatService { metadata });
     let pipeline = Arc::new(PipelineServiceImpl::new(
         ctx.repos.clone(),
         silent_file_store(),
-        extractor,
+        format_service.clone(),
         vec![],
-        silent_conversion_service(),
+        job_service.clone(),
         event_service.clone(),
     ));
     bb_core::create_services(
         bb_core::test_support::default_external_services_builder()
             .repository_service(ctx.repos.clone())
             .file_store(silent_file_store())
+            .format_service(format_service)
             .pipeline_service(pipeline)
-            .conversion_service(silent_conversion_service())
+            .job_service(job_service)
             .event_service(event_service)
             .build()
             .unwrap(),

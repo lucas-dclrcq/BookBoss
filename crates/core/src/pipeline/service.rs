@@ -7,11 +7,12 @@ use crate::{
     book::{
         AuthorRole, BookStatus, BookToken, FileRole, IdentifierType, MetadataSource, NewAuthor, NewBook, NewGenre, NewPublisher, NewSeries, NewTag, book_slug,
     },
-    conversion::ConversionService,
     event::EventService,
+    format::{FormatService, handler::EnrichBookFilesPayload},
     import::{ImportJob, ImportJobToken, ImportSource, ImportStatus},
+    jobs::{JobService, JobServiceExt},
     pipeline::{
-        MetadataExtractor, MetadataProvider, ProviderBook,
+        MetadataProvider, ProviderBook,
         model::{BookEdit, ExtractedAuthor, ExtractedIdentifier, ExtractedMetadata},
     },
     repository::{RepositoryService, read_only_transaction, transaction},
@@ -78,9 +79,9 @@ pub trait PipelineService: Send + Sync {
 pub struct PipelineServiceImpl {
     repository_service: Arc<RepositoryService>,
     file_store: Arc<dyn FileStoreService>,
-    extractor: Arc<dyn MetadataExtractor>,
+    format_service: Arc<dyn FormatService>,
     providers: Vec<Arc<dyn MetadataProvider>>,
-    conversion_service: Arc<dyn ConversionService>,
+    job_service: Arc<dyn JobService>,
     event_service: Arc<dyn EventService>,
 }
 
@@ -88,17 +89,17 @@ impl PipelineServiceImpl {
     pub fn new(
         repository_service: Arc<RepositoryService>,
         file_store: Arc<dyn FileStoreService>,
-        extractor: Arc<dyn MetadataExtractor>,
+        format_service: Arc<dyn FormatService>,
         providers: Vec<Arc<dyn MetadataProvider>>,
-        conversion_service: Arc<dyn ConversionService>,
+        job_service: Arc<dyn JobService>,
         event_service: Arc<dyn EventService>,
     ) -> Self {
         Self {
             repository_service,
             file_store,
-            extractor,
+            format_service,
             providers,
-            conversion_service,
+            job_service,
             event_service,
         }
     }
@@ -259,7 +260,7 @@ impl PipelineService for PipelineServiceImpl {
 
         // ── 3. Extract metadata from the e-book file ──────────────────────────
         let path: PathBuf = job.file_path.clone().into();
-        let extracted = self.extractor.extract(&path, job.file_format.clone()).await?;
+        let (_detected_format, extracted) = self.format_service.extract_metadata(&path).await?;
 
         // ── 4. Mark Identifying ───────────────────────────────────────────────
         job = {
@@ -644,7 +645,8 @@ impl PipelineService for PipelineServiceImpl {
                 hash: updated_job.file_hash.clone(),
             }],
         };
-        self.file_store.store_metadata(book.token, &sidecar).await?;
+        let sidecar_path = self.file_store.metadata_path(book.token);
+        self.format_service.write_sidecar(&sidecar_path, &sidecar).await?;
 
         self.event_service.notify_incoming_changed();
 
@@ -1016,10 +1018,11 @@ impl PipelineService for PipelineServiceImpl {
                 })
                 .unwrap_or_default(),
         };
-        self.file_store.store_metadata(book.token, &sidecar).await?;
+        let sidecar_path = self.file_store.metadata_path(book.token);
+        self.format_service.write_sidecar(&sidecar_path, &sidecar).await?;
 
-        // ── 8. Enqueue EPUB enrichment ────────────────────────────────────────
-        self.conversion_service.queue_enrich_epub(book_id).await?;
+        // ── 8. Enqueue book file enrichment ─────────────────────────────────
+        self.job_service.enqueue(&EnrichBookFilesPayload { book_id }).await?;
 
         self.event_service.notify_incoming_changed();
         self.event_service.notify_jobs_changed();
@@ -1299,10 +1302,11 @@ impl PipelineService for PipelineServiceImpl {
                 })
                 .unwrap_or_default(),
         };
-        self.file_store.store_metadata(book.token, &sidecar).await?;
+        let sidecar_path = self.file_store.metadata_path(book.token);
+        self.format_service.write_sidecar(&sidecar_path, &sidecar).await?;
 
-        // ── 7. Enqueue EPUB enrichment ────────────────────────────────────────
-        self.conversion_service.queue_enrich_epub(book_id).await?;
+        // ── 7. Enqueue book file enrichment ─────────────────────────────────
+        self.job_service.enqueue(&EnrichBookFilesPayload { book_id }).await?;
 
         self.event_service.notify_jobs_changed();
 

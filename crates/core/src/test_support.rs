@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use crate::{
     ExternalServicesBuilder,
-    conversion::{ConversionService, MockConversionService},
     event::{self, EventService},
     format::{FormatService, MockFormatService},
     health::{self, HealthService},
@@ -13,11 +12,6 @@ use crate::{
     pipeline::{PipelineService, service::MockPipelineService},
     storage::{FileStoreService, MockFileStoreService},
 };
-
-#[must_use]
-pub fn nop_conversion_service() -> Arc<dyn ConversionService> {
-    Arc::new(MockConversionService::new())
-}
 
 #[must_use]
 pub fn nop_format_service() -> Arc<dyn FormatService> {
@@ -103,7 +97,6 @@ pub fn default_external_services_builder() -> ExternalServicesBuilder {
         .file_store(nop_file_store())
         .format_service(nop_format_service())
         .pipeline_service(nop_pipeline_service())
-        .conversion_service(nop_conversion_service())
         .job_service(nop_job_service())
         .health_service(nop_health_service())
         .import_scanner(nop_import_scanner())

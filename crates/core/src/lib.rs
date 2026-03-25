@@ -29,7 +29,6 @@ use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, SubsystemHandle};
 use crate::{
     auth::{AuthService, AuthServiceImpl},
     book::{BookService, BookServiceImpl},
-    conversion::ConversionService,
     device::{DeviceService, service::DeviceServiceImpl},
     event::EventService,
     format::FormatService,
@@ -61,7 +60,6 @@ pub struct ExternalServices {
     pub file_store: Arc<dyn FileStoreService>,
     pub format_service: Arc<dyn FormatService>,
     pub pipeline_service: Arc<dyn PipelineService>,
-    pub conversion_service: Arc<dyn ConversionService>,
     pub job_service: Arc<dyn JobService>,
     pub health_service: Arc<dyn HealthService>,
     pub import_scanner: Arc<dyn ImportScanner>,
@@ -80,7 +78,6 @@ pub struct CoreServices {
     pub format_service: Arc<dyn FormatService>,
     pub library_service: Arc<dyn LibraryService>,
     pub pipeline_service: Arc<dyn PipelineService>,
-    pub conversion_service: Arc<dyn ConversionService>,
     pub job_service: Arc<dyn JobService>,
     pub health_service: Arc<dyn HealthService>,
     pub shelf_service: Arc<dyn ShelfService>,
@@ -98,7 +95,6 @@ impl CoreServices {
             file_store,
             format_service,
             pipeline_service,
-            conversion_service,
             job_service,
             health_service,
             import_scanner,
@@ -116,7 +112,6 @@ impl CoreServices {
             file_store,
             format_service,
             pipeline_service,
-            conversion_service,
             job_service,
             health_service,
             shelf_service: Arc::new(ShelfServiceImpl::new(repository_service.clone())),
@@ -138,6 +133,7 @@ pub fn create_services(external: ExternalServices, encryption_secret: &str) -> R
 /// Called once after `CoreServices` is built — before the subsystem event loop
 /// starts. Each crate that owns handlers exposes a similar function.
 pub fn before_start(core: &Arc<CoreServices>) {
+    use format::handler::EnrichBookFilesHandler;
     use health::{
         HealthTaskConfig,
         handlers::{
@@ -149,6 +145,9 @@ pub fn before_start(core: &Arc<CoreServices>) {
 
     let js = &core.job_service;
     let hs = &core.health_service;
+
+    // Format enrichment handler
+    js.register(EnrichBookFilesHandler::new(core.clone()));
 
     // Health check handlers + their scheduled tasks
     js.register(recover_enrichments::RecoverEnrichmentsHandler::new(core.clone()));

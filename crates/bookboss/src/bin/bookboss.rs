@@ -39,13 +39,14 @@ async fn main() -> anyhow::Result<()> {
 
 #[cfg(feature = "server")]
 async fn cmd_dump_epub(file: std::path::PathBuf) -> anyhow::Result<()> {
-    use bb_core::{book::FileFormat, pipeline::MetadataExtractor};
-    use bb_formats::{EpubExtractor, parse_sidecar, read_opf_metadata_xml, read_opf_xml};
+    use bb_core::format::FormatService;
+    use bb_formats::{parse_sidecar, read_opf_metadata_xml, read_opf_xml};
 
     let raw = read_opf_metadata_xml(&file)?;
     println!("=== raw OPF metadata ===\n{raw}\n");
 
-    let meta = EpubExtractor.extract(&file, FileFormat::Epub).await?;
+    let format_service = bb_formats::create_format_service();
+    let (_format, meta) = format_service.extract_metadata(&file).await?;
     println!("=== extracted metadata ===");
     println!("title:        {:?}", meta.title);
     println!("authors:      {:?}", meta.authors);
@@ -151,7 +152,6 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
         pipeline::PipelineServiceImpl,
     };
     use bb_database::{create_repository_service, open_database};
-    use bb_formats::{ConversionServiceImpl, EpubExtractor};
     use bb_frontend::server::create_frontend_subsystem;
     use bb_import::{create_import_subsystem, create_scan_trigger};
     use bb_metadata::create_metadata_providers;
@@ -164,15 +164,15 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     let repository_service = create_repository_service(database).await.context("Couldn't create database connection")?;
     let file_store = Arc::new(bb_storage::LocalFileStore::new(config.library.library_path.clone()));
     let job_service = create_job_service(repository_service.clone());
-    let conversion_service = Arc::new(ConversionServiceImpl::new(job_service.clone()));
     let event_service = bb_core::event::create_event_service(64);
 
+    let format_service: Arc<dyn bb_core::format::FormatService> = Arc::new(bb_formats::create_format_service());
     let pipeline_service = Arc::new(PipelineServiceImpl::new(
         repository_service.clone(),
         file_store.clone(),
-        Arc::new(EpubExtractor),
+        format_service.clone(),
         create_metadata_providers(&config.metadata),
-        conversion_service.clone(),
+        job_service.clone(),
         event_service.clone(),
     )) as Arc<dyn bb_core::pipeline::PipelineService>;
 
@@ -183,13 +183,11 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     // ExternalServices, while receivers go to their respective subsystems.
     let (scan_trigger, scan_receiver) = create_scan_trigger();
     let (health_service, health_kick_rx) = create_health_service();
-    let format_service: Arc<dyn bb_core::format::FormatService> = Arc::new(bb_formats::create_format_service());
     let external = ExternalServicesBuilder::default()
         .repository_service(repository_service.clone())
         .file_store(file_store)
         .format_service(format_service)
         .pipeline_service(pipeline_service)
-        .conversion_service(conversion_service)
         .job_service(job_service)
         .health_service(health_service)
         .import_scanner(Arc::new(scan_trigger.clone()))

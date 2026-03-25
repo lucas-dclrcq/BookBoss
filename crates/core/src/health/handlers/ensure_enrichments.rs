@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     CoreServices, Error,
+    format::handler::EnrichBookFilesPayload,
     jobs::{JobHandler, JobRepositoryExt},
     message::{MessageSeverity, NewSystemMessage},
     repository::{read_only_transaction, transaction},
@@ -16,27 +17,6 @@ impl EnsureEnrichmentsHandler {
     pub fn new(core: Arc<CoreServices>) -> Self {
         Self { core }
     }
-}
-
-/// Payload for enrichment jobs — matches `EnrichEpubPayload` in bb-formats.
-#[derive(serde::Serialize)]
-struct EnrichPayload {
-    book_id: u64,
-}
-
-impl crate::jobs::Enqueueable for EnrichPayload {
-    const JOB_TYPE: &'static str = "enrich_epub";
-}
-
-/// Payload for KEPUB conversion jobs — matches `ConvertKepubPayload` in
-/// bb-formats.
-#[derive(serde::Serialize)]
-struct KepubPayload {
-    book_id: u64,
-}
-
-impl crate::jobs::Enqueueable for KepubPayload {
-    const JOB_TYPE: &'static str = "convert_kepub";
 }
 
 impl JobHandler for EnsureEnrichmentsHandler {
@@ -70,71 +50,46 @@ impl JobHandler for EnsureEnrichmentsHandler {
         })
         .await?;
 
-        // Merge stale IDs into the enrichment list (dedup since a book could
-        // appear in both missing and stale sets).
-        let mut all_enrich_ids = enrichment_ids;
+        // Deduplicate: the unified enrichment job handles both EPUB and KEPUB.
+        let mut all_ids = enrichment_ids;
+        for id in kepub_ids {
+            if !all_ids.contains(&id) {
+                all_ids.push(id);
+            }
+        }
         for id in stale_ids {
-            if !all_enrich_ids.contains(&id) {
-                all_enrich_ids.push(id);
+            if !all_ids.contains(&id) {
+                all_ids.push(id);
             }
         }
 
-        let enrich_count = all_enrich_ids.len();
-        let kepub_count = kepub_ids.len();
-
-        if enrich_count == 0 && kepub_count == 0 {
+        if all_ids.is_empty() {
             tracing::info!("all books have up-to-date enrichments");
             return Ok(());
         }
 
-        if !all_enrich_ids.is_empty() {
-            let job_repo = self.core.repository_service.job_repository().clone();
-            transaction(&**self.core.repository_service.repository(), |tx| {
-                let job_repo = job_repo.clone();
-                let all_enrich_ids = all_enrich_ids.clone();
-                Box::pin(async move {
-                    for book_id in all_enrich_ids {
-                        job_repo.enqueue(tx, &EnrichPayload { book_id }).await?;
-                    }
-                    Ok(())
-                })
+        let count = all_ids.len();
+        let job_repo = self.core.repository_service.job_repository().clone();
+        transaction(&**self.core.repository_service.repository(), |tx| {
+            let job_repo = job_repo.clone();
+            let all_ids = all_ids.clone();
+            Box::pin(async move {
+                for book_id in all_ids {
+                    job_repo.enqueue(tx, &EnrichBookFilesPayload { book_id }).await?;
+                }
+                Ok(())
             })
-            .await?;
+        })
+        .await?;
 
-            tracing::info!(count = enrich_count, "enqueued enrichment jobs (missing + stale)");
-        }
-
-        if !kepub_ids.is_empty() {
-            let job_repo = self.core.repository_service.job_repository().clone();
-            transaction(&**self.core.repository_service.repository(), |tx| {
-                let job_repo = job_repo.clone();
-                let kepub_ids = kepub_ids.clone();
-                Box::pin(async move {
-                    for book_id in kepub_ids {
-                        job_repo.enqueue(tx, &KepubPayload { book_id }).await?;
-                    }
-                    Ok(())
-                })
-            })
-            .await?;
-
-            tracing::info!(count = kepub_count, "enqueued missing KEPUB conversion jobs");
-        }
-
-        let mut parts = Vec::new();
-        if enrich_count > 0 {
-            parts.push(format!("{enrich_count} enrichment"));
-        }
-        if kepub_count > 0 {
-            parts.push(format!("{kepub_count} KEPUB conversion"));
-        }
+        tracing::info!(count, "enqueued enrichment jobs (missing + stale)");
 
         self.core
             .system_message_service
             .add_message(NewSystemMessage {
                 source_task: Self::JOB_TYPE.to_string(),
                 severity: MessageSeverity::Info,
-                message: format!("Enqueued {} job(s) for missing/stale enrichments", parts.join(" and ")),
+                message: format!("Enqueued {count} enrichment job(s) for missing/stale enrichments"),
             })
             .await?;
 
@@ -268,23 +223,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn deduplicates_missing_and_stale() {
+    async fn deduplicates_across_all_sources() {
         let mut book_repo = MockBookRepository::new();
         let mut job_repo = MockJobRepository::new();
         let msg_repo = mock_add_message();
 
-        // Book 1 appears in both missing and stale — should only be enqueued once.
+        // Book 1 appears in enrichment + stale, book 3 in kepub + stale.
+        // Should deduplicate to 3 unique books: 1, 3, 2.
         book_repo
             .expect_find_book_ids_needing_enrichment()
             .returning(|_| Box::pin(std::future::ready(Ok(vec![1]))));
 
         book_repo
             .expect_find_book_ids_needing_kepub_conversion()
-            .returning(|_| Box::pin(std::future::ready(Ok(vec![]))));
+            .returning(|_| Box::pin(std::future::ready(Ok(vec![3]))));
 
         book_repo
             .expect_find_book_ids_with_stale_enrichment()
-            .returning(|_| Box::pin(std::future::ready(Ok(vec![1, 2]))));
+            .returning(|_| Box::pin(std::future::ready(Ok(vec![1, 2, 3]))));
 
         let enqueue_count = Arc::new(std::sync::atomic::AtomicU32::new(0));
         let enqueue_count_clone = enqueue_count.clone();
@@ -311,8 +267,8 @@ mod tests {
         let handler = EnsureEnrichmentsHandler::new(core);
         handler.handle(serde_json::json!({})).await.unwrap();
 
-        // Book 1 (missing) + book 2 (stale only) = 2 enqueue calls, not 3.
-        assert_eq!(enqueue_count.load(std::sync::atomic::Ordering::SeqCst), 2);
+        // 3 unique books: 1 (enrichment), 3 (kepub), 2 (stale only).
+        assert_eq!(enqueue_count.load(std::sync::atomic::Ordering::SeqCst), 3);
     }
 
     #[tokio::test]

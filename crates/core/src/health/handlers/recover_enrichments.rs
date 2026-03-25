@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     CoreServices, Error,
+    format::handler::EnrichBookFilesPayload,
     jobs::{JobHandler, JobRepositoryExt},
     message::{MessageSeverity, NewSystemMessage},
     repository::{read_only_transaction, transaction},
@@ -16,27 +17,6 @@ impl RecoverEnrichmentsHandler {
     pub fn new(core: Arc<CoreServices>) -> Self {
         Self { core }
     }
-}
-
-/// Payload for enrichment jobs — matches `EnrichEpubPayload` in bb-formats.
-#[derive(serde::Serialize)]
-struct EnrichPayload {
-    book_id: u64,
-}
-
-impl crate::jobs::Enqueueable for EnrichPayload {
-    const JOB_TYPE: &'static str = "enrich_epub";
-}
-
-/// Payload for KEPUB conversion jobs — matches `ConvertKepubPayload` in
-/// bb-formats.
-#[derive(serde::Serialize)]
-struct KepubPayload {
-    book_id: u64,
-}
-
-impl crate::jobs::Enqueueable for KepubPayload {
-    const JOB_TYPE: &'static str = "convert_kepub";
 }
 
 impl JobHandler for RecoverEnrichmentsHandler {
@@ -61,64 +41,41 @@ impl JobHandler for RecoverEnrichmentsHandler {
         })
         .await?;
 
-        let enrich_count = enrichment_ids.len();
-        let kepub_count = kepub_ids.len();
+        // Deduplicate: the unified enrichment job handles both epub and kepub.
+        let mut all_ids = enrichment_ids.clone();
+        for id in &kepub_ids {
+            if !all_ids.contains(id) {
+                all_ids.push(*id);
+            }
+        }
 
-        if enrich_count == 0 && kepub_count == 0 {
-            tracing::info!("no enrichment or KEPUB recovery needed");
+        if all_ids.is_empty() {
+            tracing::info!("no enrichment recovery needed");
             return Ok(());
         }
 
-        // Enqueue enrichment jobs.
-        if !enrichment_ids.is_empty() {
-            let job_repo = self.core.repository_service.job_repository().clone();
-            transaction(&**self.core.repository_service.repository(), |tx| {
-                let job_repo = job_repo.clone();
-                let enrichment_ids = enrichment_ids.clone();
-                Box::pin(async move {
-                    for book_id in enrichment_ids {
-                        job_repo.enqueue(tx, &EnrichPayload { book_id }).await?;
-                    }
-                    Ok(())
-                })
+        let count = all_ids.len();
+        let job_repo = self.core.repository_service.job_repository().clone();
+        transaction(&**self.core.repository_service.repository(), |tx| {
+            let job_repo = job_repo.clone();
+            let all_ids = all_ids.clone();
+            Box::pin(async move {
+                for book_id in all_ids {
+                    job_repo.enqueue(tx, &EnrichBookFilesPayload { book_id }).await?;
+                }
+                Ok(())
             })
-            .await?;
+        })
+        .await?;
 
-            tracing::info!(count = enrich_count, "enqueued enrichment recovery jobs");
-        }
-
-        // Enqueue KEPUB conversion jobs.
-        if !kepub_ids.is_empty() {
-            let job_repo = self.core.repository_service.job_repository().clone();
-            transaction(&**self.core.repository_service.repository(), |tx| {
-                let job_repo = job_repo.clone();
-                let kepub_ids = kepub_ids.clone();
-                Box::pin(async move {
-                    for book_id in kepub_ids {
-                        job_repo.enqueue(tx, &KepubPayload { book_id }).await?;
-                    }
-                    Ok(())
-                })
-            })
-            .await?;
-
-            tracing::info!(count = kepub_count, "enqueued KEPUB recovery jobs");
-        }
-
-        let mut parts = Vec::new();
-        if enrich_count > 0 {
-            parts.push(format!("{enrich_count} enrichment"));
-        }
-        if kepub_count > 0 {
-            parts.push(format!("{kepub_count} KEPUB conversion"));
-        }
+        tracing::info!(count, "enqueued enrichment recovery jobs");
 
         self.core
             .system_message_service
             .add_message(NewSystemMessage {
                 source_task: Self::JOB_TYPE.to_string(),
                 severity: MessageSeverity::Info,
-                message: format!("Recovered {} job(s)", parts.join(" and ")),
+                message: format!("Recovered {count} enrichment job(s)"),
             })
             .await?;
 
