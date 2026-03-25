@@ -103,7 +103,7 @@ mod tests {
             token: ImportJobToken::new(id),
             file_path: format!("/watch/stale_{id}.epub"),
             file_hash: format!("hash_{id}"),
-            file_format: FileFormat::Epub,
+            file_format: Some(FileFormat::Epub),
             detected_at: Utc::now(),
             status,
             candidate_book_id: None,

@@ -18,7 +18,7 @@ impl MigrationTrait for Migration {
                     .col(string(ImportJobs::Token).unique_key())
                     .col(string(ImportJobs::FilePath))
                     .col(string(ImportJobs::FileHash))
-                    .col(string(ImportJobs::FileFormat))
+                    .col(string(ImportJobs::FileFormat).null())
                     .col(timestamp_with_time_zone(ImportJobs::DetectedAt))
                     .col(string(ImportJobs::Status))
                     .col(big_integer(ImportJobs::CandidateBookId).null())

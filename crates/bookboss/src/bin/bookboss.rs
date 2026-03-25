@@ -188,7 +188,6 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
         .pipeline_service(pipeline_service)
         .job_service(job_service)
         .health_service(health_service)
-        .import_scanner(Arc::new(scan_trigger.clone()))
         .event_service(event_service.clone())
         .build()
         .context("ExternalServices missing required field")?;

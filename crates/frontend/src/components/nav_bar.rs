@@ -20,7 +20,7 @@ async fn trigger_bookdrop_scan() -> Result<(), ServerFnError> {
     if !has_permission {
         return Err(ServerFnError::new("Forbidden"));
     }
-    core_services.import_scanner.trigger_scan().await;
+    core_services.import_job_service.trigger_scan();
     Ok(())
 }
 

@@ -260,7 +260,8 @@ impl PipelineService for PipelineServiceImpl {
 
         // ── 3. Extract metadata from the e-book file ──────────────────────────
         let path: PathBuf = job.file_path.clone().into();
-        let (_detected_format, extracted) = self.format_service.extract_metadata(&path).await?;
+        let (detected_format, extracted) = self.format_service.extract_metadata(&path).await?;
+        job.file_format = Some(detected_format.clone());
 
         // ── 4. Mark Identifying ───────────────────────────────────────────────
         job = {
@@ -493,7 +494,7 @@ impl PipelineService for PipelineServiceImpl {
         let cover_fn = cover_filename.clone();
         let js = job_source.clone();
         let file_hash = job.file_hash.clone();
-        let file_format = job.file_format.clone();
+        let file_format = detected_format.clone();
         let original_filename = actual_original_filename.clone();
         let title_c = title.clone();
         let mut job_c = job;
@@ -613,9 +614,7 @@ impl PipelineService for PipelineServiceImpl {
             let first_author = final_meta.authors.as_deref().and_then(|a| a.first()).map(|a| a.name.as_str());
             book_slug(&book.title, first_author)
         };
-        self.file_store
-            .store_book_file(book.token, &slug, updated_job.file_format.clone(), &path)
-            .await?;
+        self.file_store.store_book_file(book.token, &slug, detected_format.clone(), &path).await?;
 
         // ── 13. Store cover image ──────────────────────────────────────────────
         if let (Some(filename), Some(data)) = (&cover_filename, &cover_bytes) {
@@ -641,7 +640,7 @@ impl PipelineService for PipelineServiceImpl {
             status: BookStatus::Incoming,
             metadata_source: book_metadata_source,
             files: vec![SidecarFile {
-                format: updated_job.file_format.clone(),
+                format: detected_format,
                 hash: updated_job.file_hash.clone(),
             }],
         };

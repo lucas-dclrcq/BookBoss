@@ -111,7 +111,7 @@ pub struct ImportJob {
     pub token: ImportJobToken,
     pub file_path: String,
     pub file_hash: String,
-    pub file_format: FileFormat,
+    pub file_format: Option<FileFormat>,
     pub detected_at: DateTime<Utc>,
     pub status: ImportStatus,
     pub candidate_book_id: Option<BookId>,
@@ -124,11 +124,13 @@ pub struct ImportJob {
 }
 
 /// Input for creating a new import job. Status always starts as `Pending`.
+///
+/// `file_format` is not set at creation time — the pipeline determines it
+/// during the Extracting phase via `FormatService::extract_metadata`.
 #[derive(Debug, Clone)]
 pub struct NewImportJob {
     pub file_path: String,
     pub file_hash: String,
-    pub file_format: FileFormat,
     pub detected_at: DateTime<Utc>,
 }
 

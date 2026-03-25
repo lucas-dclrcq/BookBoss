@@ -24,7 +24,7 @@ impl From<import_jobs::Model> for ImportJob {
             token,
             file_path: m.file_path,
             file_hash: m.file_hash,
-            file_format: m.file_format.parse().expect("DB has unknown file format"),
+            file_format: m.file_format.as_deref().map(|s| s.parse().expect("DB has unknown file format")),
             detected_at: m.detected_at.with_timezone(&Utc),
             status: m.status.parse().expect("DB has unknown import status"),
             candidate_book_id: m.candidate_book_id.map(|id| id as u64),
@@ -61,7 +61,7 @@ impl ImportJobRepository for ImportJobRepositoryAdapter {
             token: Set(token.to_string()),
             file_path: Set(job.file_path),
             file_hash: Set(job.file_hash),
-            file_format: Set(job.file_format.to_string()),
+            file_format: Set(None),
             detected_at: Set(job.detected_at.into()),
             status: Set(ImportStatus::Pending.to_string()),
             candidate_book_id: Set(None),
@@ -97,6 +97,7 @@ impl ImportJobRepository for ImportJobRepositoryAdapter {
         let mut updater: import_jobs::ActiveModel = existing.into();
 
         updater.status = Set(job.status.to_string());
+        updater.file_format = Set(job.file_format.as_ref().map(std::string::ToString::to_string));
         updater.candidate_book_id = Set(job.candidate_book_id.map(|id| id as i64));
         updater.metadata_source = Set(job.metadata_source.as_ref().map(std::string::ToString::to_string));
         updater.error_message = Set(job.error_message);
@@ -281,7 +282,6 @@ mod tests {
         NewImportJob {
             file_path: file_path.to_owned(),
             file_hash: format!("hash_{file_path}"),
-            file_format: FileFormat::Epub,
             detected_at: Utc::now(),
         }
     }
@@ -299,7 +299,7 @@ mod tests {
         let job = result.unwrap();
         assert_ne!(job.id, 0);
         assert_eq!(job.file_path, "/watch/dune.epub");
-        assert_eq!(job.file_format, FileFormat::Epub);
+        assert_eq!(job.file_format, None);
         assert_eq!(job.status, ImportStatus::Pending);
         assert_eq!(job.token.id(), job.id);
     }
@@ -505,7 +505,7 @@ mod tests {
             token: ImportJobToken::new(999),
             file_path: "/watch/ghost.epub".to_owned(),
             file_hash: "ghosthash".to_owned(),
-            file_format: FileFormat::Epub,
+            file_format: Some(FileFormat::Epub),
             detected_at: Utc::now(),
             status: ImportStatus::Pending,
             candidate_book_id: None,
@@ -536,7 +536,7 @@ mod tests {
             token: ImportJobToken::new(1),
             file_path: "/watch/dune.epub".to_owned(),
             file_hash: "hash".to_owned(),
-            file_format: FileFormat::Epub,
+            file_format: Some(FileFormat::Epub),
             detected_at: Utc::now(),
             status: ImportStatus::Pending,
             candidate_book_id: None,

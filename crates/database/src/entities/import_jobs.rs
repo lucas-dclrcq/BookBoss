@@ -13,7 +13,7 @@ pub struct Model {
     pub token: String,
     pub file_path: String,
     pub file_hash: String,
-    pub file_format: String,
+    pub file_format: Option<String>,
     pub detected_at: DateTimeWithTimeZone,
     pub status: String,
     pub candidate_book_id: Option<i64>,

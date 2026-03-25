@@ -31,13 +31,6 @@ impl ScanTrigger {
     }
 }
 
-#[async_trait::async_trait]
-impl bb_core::import::ImportScanner for ScanTrigger {
-    async fn trigger_scan(&self) {
-        self.trigger();
-    }
-}
-
 /// Opaque wrapper around the receiving end of the scan channel.
 ///
 /// Passed to `create_import_subsystem` after the matching `ScanTrigger` has
@@ -96,18 +89,18 @@ impl ScanWorker {
                 continue;
             }
 
-            let Some(format) = detect_format(&path) else {
+            let Some(_format) = detect_format(&path) else {
                 tracing::debug!(path = %path.display(), "skipping unrecognised file extension");
                 continue;
             };
 
-            if let Err(e) = self.process_file(&path, format).await {
+            if let Err(e) = self.process_file(&path).await {
                 tracing::warn!(path = %path.display(), error = %e, "failed to process file — skipping");
             }
         }
     }
 
-    async fn process_file(&self, path: &Path, format: FileFormat) -> Result<(), Error> {
+    async fn process_file(&self, path: &Path) -> Result<(), Error> {
         let path_owned = path.to_owned();
         let hash = tokio::task::spawn_blocking(move || hash_file(&path_owned))
             .await
@@ -117,7 +110,7 @@ impl ScanWorker {
         let file_path_str = path.to_string_lossy().into_owned();
         let detected_at = Utc::now();
 
-        self.import_job_service.queue_file_if_new(file_path_str, hash, format, detected_at).await
+        self.import_job_service.queue_file_if_new(file_path_str, hash, detected_at).await
     }
 }
 

@@ -5,7 +5,7 @@ use crate::{
     event::{self, EventService},
     format::{FormatService, MockFormatService},
     health::{self, HealthService},
-    import::{ImportJobService, ImportScanner, scanner::MockImportScanner, service::MockImportJobService},
+    import::{ImportJobService, service::MockImportJobService},
     jobs::{JobService, service::MockJobService},
     library::{LibraryService, MockLibraryService},
     message::{SystemMessageService, service::MockSystemMessageService},
@@ -35,13 +35,6 @@ pub fn nop_pipeline_service() -> Arc<dyn PipelineService> {
 #[must_use]
 pub fn nop_library_service() -> Arc<dyn LibraryService> {
     Arc::new(MockLibraryService::new())
-}
-
-#[must_use]
-pub fn nop_import_scanner() -> Arc<dyn ImportScanner> {
-    let mut mock = MockImportScanner::new();
-    mock.expect_trigger_scan().returning(|| Box::pin(async {}));
-    Arc::new(mock)
 }
 
 /// Returns a `MockJobService` with no expectations set.
@@ -99,6 +92,5 @@ pub fn default_external_services_builder() -> ExternalServicesBuilder {
         .pipeline_service(nop_pipeline_service())
         .job_service(nop_job_service())
         .health_service(nop_health_service())
-        .import_scanner(nop_import_scanner())
         .event_service(nop_event_service())
 }

@@ -32,7 +32,7 @@ use crate::{
     event::EventService,
     format::FormatService,
     health::HealthService,
-    import::{ImportJobService, ImportScanner, service::ImportJobServiceImpl},
+    import::{ImportJobService, service::ImportJobServiceImpl},
     jobs::{JobService, JobWorker},
     library::{LibraryService, LibraryServiceImpl},
     message::{SystemMessageService, SystemMessageServiceImpl},
@@ -61,7 +61,6 @@ pub struct ExternalServices {
     pub pipeline_service: Arc<dyn PipelineService>,
     pub job_service: Arc<dyn JobService>,
     pub health_service: Arc<dyn HealthService>,
-    pub import_scanner: Arc<dyn ImportScanner>,
     pub event_service: Arc<dyn EventService>,
 }
 
@@ -72,7 +71,6 @@ pub struct CoreServices {
     pub user_setting_service: Arc<dyn UserSettingService>,
     pub book_service: Arc<dyn BookService>,
     pub import_job_service: Arc<dyn ImportJobService>,
-    pub import_scanner: Arc<dyn ImportScanner>,
     pub file_store: Arc<dyn FileStoreService>,
     pub format_service: Arc<dyn FormatService>,
     pub library_service: Arc<dyn LibraryService>,
@@ -96,7 +94,6 @@ impl CoreServices {
             pipeline_service,
             job_service,
             health_service,
-            import_scanner,
             event_service,
         } = external;
         Self {
@@ -106,7 +103,6 @@ impl CoreServices {
             user_setting_service: Arc::new(UserSettingServiceImpl::new(repository_service.clone())),
             book_service: Arc::new(BookServiceImpl::new(repository_service.clone())),
             import_job_service: Arc::new(ImportJobServiceImpl::new(repository_service.clone())),
-            import_scanner,
             library_service: Arc::new(LibraryServiceImpl::new(repository_service.clone(), file_store.clone())),
             file_store,
             format_service,
