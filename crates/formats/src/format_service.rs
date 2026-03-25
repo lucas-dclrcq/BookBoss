@@ -72,7 +72,7 @@ impl FormatService for FormatServiceImpl {
             let sidecar = request.sidecar.clone();
             let cover_bytes = read_cover_bytes(request.cover_path.as_ref()).await?;
 
-            tokio::task::spawn_blocking(move || crate::enrich_epub(&source, &dest, &sidecar, cover_bytes.as_deref()))
+            tokio::task::spawn_blocking(move || crate::epub_enrich::enrich_epub(&source, &dest, &sidecar, cover_bytes.as_deref()))
                 .await
                 .map_err(|e| Error::Infrastructure(format!("enrichment task panicked: {e}")))?
                 .map_err(|e| Error::Infrastructure(e.to_string()))?;

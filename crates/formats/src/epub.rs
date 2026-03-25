@@ -1,26 +1,6 @@
 use std::{io::Read, path::Path};
 
-use async_trait::async_trait;
-use bb_core::{
-    Error as CoreError,
-    book::FileFormat,
-    pipeline::{ExtractedMetadata, extractor::MetadataExtractor},
-};
-
-pub struct EpubExtractor;
-
-#[async_trait]
-impl MetadataExtractor for EpubExtractor {
-    async fn extract(&self, path: &Path, format: FileFormat) -> Result<ExtractedMetadata, CoreError> {
-        if format != FileFormat::Epub {
-            return Ok(ExtractedMetadata::default());
-        }
-        let path = path.to_path_buf();
-        tokio::task::spawn_blocking(move || extract_epub_metadata(&path))
-            .await
-            .map_err(|e| CoreError::Infrastructure(e.to_string()))?
-    }
-}
+use bb_core::{Error as CoreError, pipeline::ExtractedMetadata};
 
 pub(crate) fn extract_epub_metadata(path: &Path) -> Result<ExtractedMetadata, CoreError> {
     let (opf_bytes, opf_dir) = read_opf_bytes_and_dir(path).map_err(|e| CoreError::Infrastructure(e.to_string()))?;
@@ -61,11 +41,6 @@ fn read_opf_bytes_and_dir(path: &Path) -> Result<(Vec<u8>, String), crate::Error
     Ok((buf, opf_dir))
 }
 
-/// Read and return the raw OPF XML bytes from an EPUB file.
-fn read_opf_bytes(path: &Path) -> Result<Vec<u8>, crate::Error> {
-    Ok(read_opf_bytes_and_dir(path)?.0)
-}
-
 /// Resolve a manifest href relative to the OPF directory.
 ///
 /// For example, `opf_dir = "OEBPS"` and `href = "images/cover.jpg"` yields
@@ -83,29 +58,6 @@ fn read_zip_entry(epub_path: &Path, entry_path: &str) -> Result<Vec<u8>, crate::
     let mut buf = Vec::new();
     entry.read_to_end(&mut buf)?;
     Ok(buf)
-}
-
-/// Read and return the raw OPF XML text from an EPUB file.
-///
-/// Useful for diagnostics and exploration tools.
-pub fn read_opf_xml(path: &Path) -> Result<String, crate::Error> {
-    let bytes = read_opf_bytes(path)?;
-    Ok(String::from_utf8_lossy(&bytes).into_owned())
-}
-
-/// Read and return only the `<metadata>` block from the OPF XML in an EPUB
-/// file.
-///
-/// Useful for diagnostics and exploration tools.
-pub fn read_opf_metadata_xml(path: &Path) -> Result<String, crate::Error> {
-    let xml = read_opf_xml(path)?;
-    let start = xml
-        .find("<metadata")
-        .ok_or_else(|| crate::Error::InvalidValue("OPF: no <metadata> element found".to_string()))?;
-    let end = xml
-        .find("</metadata>")
-        .ok_or_else(|| crate::Error::InvalidValue("OPF: no </metadata> closing tag found".to_string()))?;
-    Ok(xml[start..end + "</metadata>".len()].to_string())
 }
 
 /// Parse META-INF/container.xml and return the `full-path` of the rootfile.
@@ -138,9 +90,7 @@ pub(crate) fn find_opf_path(xml: &[u8]) -> Result<String, crate::Error> {
 mod tests {
     use std::io::Write;
 
-    use bb_core::{book::FileFormat, pipeline::extractor::MetadataExtractor};
-
-    use super::EpubExtractor;
+    use super::extract_epub_metadata;
 
     const CONTAINER_XML: &[u8] = br#"<?xml version="1.0"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
@@ -175,23 +125,13 @@ mod tests {
         zip.finish().unwrap().into_inner()
     }
 
-    #[tokio::test]
-    async fn non_epub_returns_empty() {
-        let meta = EpubExtractor
-            .extract(std::path::Path::new("irrelevant.mobi"), FileFormat::Mobi)
-            .await
-            .expect("should succeed");
-        assert!(meta.title.is_none());
-        assert!(meta.authors.is_none());
-    }
-
-    #[tokio::test]
-    async fn epub_extracts_title_and_author() {
+    #[test]
+    fn extracts_title_and_author() {
         let epub_bytes = build_test_epub();
         let path = std::env::temp_dir().join("bookboss_test_epub.epub");
         std::fs::write(&path, &epub_bytes).unwrap();
 
-        let meta = EpubExtractor.extract(&path, FileFormat::Epub).await.expect("extraction failed");
+        let meta = extract_epub_metadata(&path).expect("extraction failed");
 
         assert_eq!(meta.title.as_deref(), Some("Dune"));
         let authors = meta.authors.as_ref().expect("authors missing");
@@ -258,12 +198,12 @@ mod tests {
         zip.finish().unwrap().into_inner()
     }
 
-    #[tokio::test]
-    async fn epub2_cover_extracted() {
+    #[test]
+    fn epub2_cover_extracted() {
         let path = std::env::temp_dir().join("bookboss_test_epub2_cover.epub");
         std::fs::write(&path, build_epub2_with_cover()).unwrap();
 
-        let meta = EpubExtractor.extract(&path, FileFormat::Epub).await.expect("extraction failed");
+        let meta = extract_epub_metadata(&path).expect("extraction failed");
 
         assert!(meta.cover_bytes.is_some(), "expected cover_bytes to be populated");
         assert_eq!(meta.cover_bytes.as_deref(), Some(FAKE_JPEG));
@@ -271,12 +211,12 @@ mod tests {
         let _ = std::fs::remove_file(&path);
     }
 
-    #[tokio::test]
-    async fn epub3_cover_extracted() {
+    #[test]
+    fn epub3_cover_extracted() {
         let path = std::env::temp_dir().join("bookboss_test_epub3_cover.epub");
         std::fs::write(&path, build_epub3_with_cover()).unwrap();
 
-        let meta = EpubExtractor.extract(&path, FileFormat::Epub).await.expect("extraction failed");
+        let meta = extract_epub_metadata(&path).expect("extraction failed");
 
         assert!(meta.cover_bytes.is_some(), "expected cover_bytes to be populated");
         assert_eq!(meta.cover_bytes.as_deref(), Some(FAKE_JPEG));
@@ -284,13 +224,13 @@ mod tests {
         let _ = std::fs::remove_file(&path);
     }
 
-    #[tokio::test]
-    async fn epub_without_cover_returns_none() {
+    #[test]
+    fn epub_without_cover_returns_none() {
         let epub_bytes = build_test_epub();
         let path = std::env::temp_dir().join("bookboss_test_epub_no_cover.epub");
         std::fs::write(&path, &epub_bytes).unwrap();
 
-        let meta = EpubExtractor.extract(&path, FileFormat::Epub).await.expect("extraction failed");
+        let meta = extract_epub_metadata(&path).expect("extraction failed");
 
         assert!(meta.cover_bytes.is_none());
 

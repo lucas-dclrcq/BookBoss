@@ -1,5 +1,3 @@
-/// Deprecated: will be removed once all callers migrate to `FormatService`.
-pub mod extractor;
 pub mod model;
 pub mod provider;
 pub mod service;

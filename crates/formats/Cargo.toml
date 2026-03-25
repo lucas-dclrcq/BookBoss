@@ -14,7 +14,6 @@ bb-core.workspace = true
 bb-utils.workspace = true
 
 async-trait.workspace = true
-chrono.workspace = true
 quick-xml.workspace = true
 serde.workspace = true
 serde_json.workspace = true

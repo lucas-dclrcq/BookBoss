@@ -839,7 +839,6 @@ dependencies = [
  "async-trait",
  "bb-core",
  "bb-utils",
- "chrono",
  "insta",
  "quick-xml",
  "rust_decimal",

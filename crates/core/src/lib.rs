@@ -1,6 +1,5 @@
 pub mod auth;
 pub mod book;
-pub mod conversion;
 pub mod device;
 pub mod error;
 pub mod event;
