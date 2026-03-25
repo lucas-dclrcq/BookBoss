@@ -31,9 +31,9 @@ pub enum GrpcSubcommand {
 pub enum Commands {
     #[command(about = "Start server", display_order = 10)]
     Server,
-    #[command(about = "Dump metadata extracted from an EPUB file", display_order = 20)]
-    DumpEpub {
-        #[arg(help = "Path to the EPUB file")]
+    #[command(about = "Dump metadata extracted from a book file", display_order = 20)]
+    DumpBook {
+        #[arg(help = "Path to the book file")]
         file: std::path::PathBuf,
     },
     #[command(about = "Look up a book by ISBN on Open Library and dump the result", display_order = 30)]

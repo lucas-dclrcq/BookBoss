@@ -26,7 +26,7 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::load().context("Cannot load configuration")?;
 
     match cli.command {
-        Commands::DumpEpub { file } => cmd_dump_epub(file).await,
+        Commands::DumpBook { file } => cmd_dump_book(file).await,
         Commands::OpenLibrary { isbn } => cmd_open_library(isbn).await,
         Commands::Hardcover { isbn } => cmd_hardcover(isbn, config).await,
         Commands::Grpc { host, port, command } => cmd_grpc(host, port, command).await,
@@ -38,16 +38,13 @@ async fn main() -> anyhow::Result<()> {
 }
 
 #[cfg(feature = "server")]
-async fn cmd_dump_epub(file: std::path::PathBuf) -> anyhow::Result<()> {
+async fn cmd_dump_book(file: std::path::PathBuf) -> anyhow::Result<()> {
     use bb_core::format::FormatService;
-    use bb_formats::{parse_sidecar, read_opf_metadata_xml, read_opf_xml};
-
-    let raw = read_opf_metadata_xml(&file)?;
-    println!("=== raw OPF metadata ===\n{raw}\n");
 
     let format_service = bb_formats::create_format_service();
-    let (_format, meta) = format_service.extract_metadata(&file).await?;
-    println!("=== extracted metadata ===");
+
+    let (format, meta) = format_service.extract_metadata(&file).await?;
+    println!("=== extracted metadata ({format:?}) ===");
     println!("title:        {:?}", meta.title);
     println!("authors:      {:?}", meta.authors);
     println!("description:  {:?}", meta.description);
@@ -58,8 +55,7 @@ async fn cmd_dump_epub(file: std::path::PathBuf) -> anyhow::Result<()> {
     println!("series_name:  {:?}", meta.series_name);
     println!("series_num:   {:?}", meta.series_number);
 
-    let opf_xml = read_opf_xml(&file)?;
-    if let Ok(sidecar) = parse_sidecar(opf_xml.as_bytes()) {
+    if let Ok(sidecar) = format_service.read_sidecar(&file).await {
         println!("\n=== bookboss sidecar fields ===");
         println!("genres:       {:?}", sidecar.genres);
         println!("tags:         {:?}", sidecar.tags);
@@ -206,7 +202,6 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
 
     // Each crate self-registers its job handlers (and health task configs).
     bb_core::before_start(&core_services);
-    bb_formats::before_start(&core_services);
     bb_import::before_start(&core_services);
 
     let health_subsystem = create_health_subsystem(
