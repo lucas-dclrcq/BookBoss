@@ -5,7 +5,6 @@ use async_trait::async_trait;
 use crate::{
     Error,
     book::{BookToken, FileFormat},
-    storage::BookSidecar,
 };
 
 #[async_trait]
@@ -45,10 +44,6 @@ pub trait FileStoreService: Send + Sync {
     /// Writes raw bytes as the book's cover image. `filename` determines the
     /// file name within the book's directory (e.g. `"cover.jpg"`).
     async fn store_cover(&self, token: BookToken, filename: &str, data: &[u8]) -> Result<(), Error>;
-
-    /// Serialises `sidecar` and writes it as `metadata.opf` in the book's
-    /// directory.
-    async fn store_metadata(&self, token: BookToken, sidecar: &BookSidecar) -> Result<(), Error>;
 
     /// Renames all `{old_slug}.*` files in the book's directory to
     /// `{new_slug}.*`.

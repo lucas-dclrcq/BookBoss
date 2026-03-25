@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use bb_core::{
     Error,
     book::{BookToken, FileFormat},
-    storage::{BookSidecar, FileStoreService},
+    storage::FileStoreService,
 };
 use bb_utils::hash::hash_file;
 use image::{ImageReader, codecs::jpeg::JpegEncoder, imageops::FilterType};
@@ -157,15 +157,6 @@ impl FileStoreService for LocalFileStore {
         Ok(())
     }
 
-    async fn store_metadata(&self, token: BookToken, sidecar: &BookSidecar) -> Result<(), Error> {
-        let book_dir = self.book_dir(token);
-        tokio::fs::create_dir_all(&book_dir).await.map_err(io_err)?;
-        let bytes = bb_formats::opf::write_sidecar(sidecar).map_err(|e| Error::Infrastructure(e.to_string()))?;
-        let metadata_path = self.metadata_path(token);
-        tokio::fs::write(metadata_path, bytes).await.map_err(io_err)?;
-        Ok(())
-    }
-
     async fn rename_book_files(&self, token: BookToken, old_slug: &str, new_slug: &str) -> Result<(), Error> {
         let book_dir = self.book_dir(token);
         let prefix = format!("{old_slug}.");
@@ -212,8 +203,8 @@ impl FileStoreService for LocalFileStore {
 #[cfg(test)]
 mod tests {
     use bb_core::{
-        book::{BookStatus, BookToken, FileFormat},
-        storage::{BookSidecar, FileStoreService},
+        book::{BookToken, FileFormat},
+        storage::FileStoreService,
     };
     use tempfile::tempdir;
 
@@ -225,25 +216,6 @@ mod tests {
 
     fn test_token() -> BookToken {
         BookToken::new(1)
-    }
-
-    fn minimal_sidecar() -> BookSidecar {
-        BookSidecar {
-            title: "Test Book".to_string(),
-            authors: vec![],
-            description: None,
-            publisher: None,
-            published_date: None,
-            language: None,
-            identifiers: vec![],
-            series: None,
-            genres: vec![],
-            tags: vec![],
-            page_count: None,
-            status: BookStatus::Incoming,
-            metadata_source: None,
-            files: vec![],
-        }
     }
 
     #[tokio::test]
@@ -305,22 +277,6 @@ mod tests {
         assert!(cover.exists(), "cover.jpg should exist");
         let contents = tokio::fs::read(&cover).await.unwrap();
         assert_eq!(contents, data);
-    }
-
-    #[tokio::test]
-    async fn store_metadata_writes_parseable_opf() {
-        let dir = tempdir().unwrap();
-        let store = test_store(dir.path().to_path_buf());
-        let token = test_token();
-        let sidecar = minimal_sidecar();
-
-        store.store_metadata(token, &sidecar).await.unwrap();
-
-        let meta_path = store.metadata_path(token);
-        assert!(meta_path.exists(), "metadata.opf should exist");
-        let bytes = tokio::fs::read(&meta_path).await.unwrap();
-        let parsed = bb_formats::opf::parse_sidecar(&bytes).expect("should be parseable OPF");
-        assert_eq!(parsed.title, sidecar.title);
     }
 
     #[tokio::test]

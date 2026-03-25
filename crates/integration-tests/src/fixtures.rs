@@ -43,9 +43,6 @@ impl FileStoreService for SilentFileStore {
     async fn store_cover(&self, _token: BookToken, _filename: &str, _data: &[u8]) -> Result<(), Error> {
         Ok(())
     }
-    async fn store_metadata(&self, _token: BookToken, _sidecar: &BookSidecar) -> Result<(), Error> {
-        Ok(())
-    }
     async fn rename_book_files(&self, _token: BookToken, _old_slug: &str, _new_slug: &str) -> Result<(), Error> {
         Ok(())
     }
