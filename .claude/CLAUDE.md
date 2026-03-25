@@ -30,7 +30,6 @@ crates/
 ├── database/           # Adapter: implements persistence ports defined in core (SeaORM/Postgres)
 ├── formats/            # Adapter: e-book file format support (OPF, EPUB)
 ├── frontend/           # Adapter: user interface, calls into core ports
-├── import/             # Adapter: library scanner + import job handler (ImportSubsystem)
 ├── metadata/           # Adapter: MetadataProvider implementations (Hardcover, OpenLibrary)
 ├── storage/            # Adapter: local filesystem FileStoreService implementation
 ├── utils/              # Shared utilities: hashing, token generation
@@ -80,7 +79,7 @@ in its `lib.rs` — same pattern as `ApiSubsystem` in `bb-api`. The subsystem's 
 child subsystems via `subsys.start(SubsystemBuilder::new(...))` then awaits `on_shutdown_requested()`.
 `bookboss/main.rs` stays clean: call the factories,
 pass results to `Toplevel`. Existing subsystems: `ApiSubsystem` (bb-api), `CoreSubsystem` (bb-core,
-owns `JobWorker`), `ImportSubsystem` (bb-import, owns `LibraryScanner`).
+owns `JobWorker` and `BookdropScanner`).
 
 ## Frontend
 
@@ -108,5 +107,5 @@ for environment variable setup and SeaORM adapter patterns.
 
 ## Conventions
 
-- **Commits:** Valid scopes: `api`, `cli`, `core`, `database`, `frontend`, `import` (match crate names)
+- **Commits:** Valid scopes: `api`, `cli`, `core`, `database`, `frontend` (match crate names)
 - **Error handling:** `thiserror` for `core`, `api`, `database`; `anyhow` for `bookboss` (binary)

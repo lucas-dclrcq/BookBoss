@@ -17,7 +17,6 @@ bb-core = { path = "crates/core" }
 bb-database = { path = "crates/database" }
 bb-formats = { path = "crates/formats" }
 bb-frontend = { path = "crates/frontend" }
-bb-import = { path = "crates/import" }
 bb-metadata = { path = "crates/metadata" }
 bb-storage = { path = "crates/storage" }
 bb-utils = { path = "crates/utils" }
@@ -272,8 +271,6 @@ opt-level = 1
 [profile.dev.package.bb-formats]
 opt-level = 1
 [profile.dev.package.bb-frontend]
-opt-level = 1
-[profile.dev.package.bb-import]
 opt-level = 1
 [profile.dev.package.bb-metadata]
 opt-level = 1
