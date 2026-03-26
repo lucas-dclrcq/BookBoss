@@ -71,7 +71,6 @@ pub async fn open_database(config: &DatabaseConfig) -> Result<DatabaseConnection
     Ok(Database::connect(opt).await.map_err(handle_dberr)?)
 }
 
-#[tracing::instrument(level = "trace", skip(database))]
 pub async fn create_repository_service(database: DatabaseConnection) -> Result<Arc<RepositoryService>, Error> {
     let span = tracing::span!(tracing::Level::TRACE, "Migrations").entered();
     Migrator::up(&database, None).await.map_err(handle_dberr)?;

@@ -27,13 +27,11 @@ impl UserSettingServiceImpl {
 
 #[async_trait::async_trait]
 impl UserSettingService for UserSettingServiceImpl {
-    #[tracing::instrument(level = "trace", skip(self))]
     async fn get(&self, user_id: UserId, key: &str) -> Result<Option<UserSetting>, Error> {
         let key = key.to_owned();
         with_read_only_transaction!(self, user_setting_repository, |tx| user_setting_repository.get(tx, user_id, &key).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     async fn set(&self, user_id: UserId, key: &str, value: &str) -> Result<UserSetting, Error> {
         let setting = NewUserSetting {
             user_id,
@@ -43,13 +41,11 @@ impl UserSettingService for UserSettingServiceImpl {
         with_transaction!(self, user_setting_repository, |tx| user_setting_repository.set(tx, setting).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     async fn delete(&self, user_id: UserId, key: &str) -> Result<(), Error> {
         let key = key.to_owned();
         with_transaction!(self, user_setting_repository, |tx| user_setting_repository.delete(tx, user_id, &key).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     async fn list_by_user(&self, user_id: UserId) -> Result<Vec<UserSetting>, Error> {
         with_read_only_transaction!(self, user_setting_repository, |tx| user_setting_repository.list_by_user(tx, user_id).await)
     }

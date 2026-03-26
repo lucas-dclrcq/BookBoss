@@ -15,7 +15,6 @@ impl GrpcSystemService {
 
 #[tonic::async_trait]
 impl SystemService for GrpcSystemService {
-    #[tracing::instrument(level = "trace", skip(self))]
     async fn status(&self, request: Request<StatusRequest>) -> Result<Response<StatusResponse>, Status> {
         let response = handler::status(request.into_inner()).await.map_err(map_core_error)?;
         Ok(Response::new(response))
@@ -75,7 +74,6 @@ pub mod api {
         grpc::system_proto::{StatusRequest, StatusResponse, system_service_client::SystemServiceClient},
     };
 
-    #[tracing::instrument(level = "trace")]
     pub async fn status(host: &str, port: u16) -> Result<String, Error> {
         let uri = format!("{host}:{port}");
         let endpoint = tonic::transport::Channel::from_shared(uri.clone()).map_err(|e| Error::from(ApiError::GrpcClient(e.to_string())))?;

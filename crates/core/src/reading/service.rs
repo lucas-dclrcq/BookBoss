@@ -155,14 +155,12 @@ pub(crate) fn apply_transition(mut current: UserBookMetadata, target: ReadStatus
 
 #[async_trait::async_trait]
 impl ReadingService for ReadingServiceImpl {
-    #[tracing::instrument(level = "trace", skip(self))]
     async fn get_reading_state(&self, user_id: UserId, book_id: BookId) -> Result<Option<UserBookMetadata>, Error> {
         with_read_only_transaction!(self, user_book_metadata_repository, |tx| {
             user_book_metadata_repository.find_by_user_and_book(tx, user_id, book_id).await
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     async fn set_status(&self, user_id: UserId, book_id: BookId, new_status: ReadStatus) -> Result<UserBookMetadata, Error> {
         with_transaction!(self, user_book_metadata_repository, |tx| {
             let current = user_book_metadata_repository
@@ -175,7 +173,6 @@ impl ReadingService for ReadingServiceImpl {
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     async fn update_progress(&self, user_id: UserId, book_id: BookId, progress_bps: u16, position_token: Option<String>) -> Result<UserBookMetadata, Error> {
         with_transaction!(self, user_book_metadata_repository, |tx| {
             let now = Utc::now();
@@ -198,7 +195,6 @@ impl ReadingService for ReadingServiceImpl {
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     async fn set_rating(&self, user_id: UserId, book_id: BookId, rating: u8) -> Result<UserBookMetadata, Error> {
         if !(1..=5).contains(&rating) {
             return Err(Error::Validation(format!("rating must be between 1 and 5, got {rating}")));
@@ -215,7 +211,6 @@ impl ReadingService for ReadingServiceImpl {
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     async fn clear_rating(&self, user_id: UserId, book_id: BookId) -> Result<UserBookMetadata, Error> {
         with_transaction!(self, user_book_metadata_repository, |tx| {
             let mut current = user_book_metadata_repository
@@ -228,7 +223,6 @@ impl ReadingService for ReadingServiceImpl {
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     async fn set_notes(&self, user_id: UserId, book_id: BookId, notes: String) -> Result<UserBookMetadata, Error> {
         with_transaction!(self, user_book_metadata_repository, |tx| {
             let mut current = user_book_metadata_repository
@@ -241,14 +235,12 @@ impl ReadingService for ReadingServiceImpl {
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     async fn list_for_user(&self, user_id: UserId, status: Option<ReadStatus>) -> Result<Vec<UserBookMetadata>, Error> {
         with_read_only_transaction!(self, user_book_metadata_repository, |tx| {
             user_book_metadata_repository.list_for_user(tx, user_id, status, None, None).await
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     #[allow(clippy::too_many_arguments, reason = "Required to capture state")]
     async fn sync_device_state(
         &self,

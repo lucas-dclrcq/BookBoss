@@ -30,22 +30,18 @@ impl UserServiceImpl {
 
 #[async_trait::async_trait]
 impl UserService for UserServiceImpl {
-    #[tracing::instrument(level = "trace", skip(self, user))]
     async fn add_user(&self, user: NewUser) -> Result<User, Error> {
         with_transaction!(self, user_repository, |tx| user_repository.add_user(tx, user).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self, user))]
     async fn update_user(&self, user: User) -> Result<User, Error> {
         with_transaction!(self, user_repository, |tx| user_repository.update_user(tx, user).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     async fn list_users(&self, start_id: Option<UserId>, page_size: Option<u64>) -> Result<Vec<User>, Error> {
         with_read_only_transaction!(self, user_repository, |tx| user_repository.list_users(tx, start_id, page_size).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     async fn delete_user(&self, id: UserId) -> Result<User, Error> {
         with_transaction!(self, user_repository, |tx| {
             let user = user_repository
@@ -57,17 +53,14 @@ impl UserService for UserServiceImpl {
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     async fn find_by_id(&self, id: UserId) -> Result<Option<User>, Error> {
         with_read_only_transaction!(self, user_repository, |tx| user_repository.find_by_id(tx, id).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     async fn find_by_token(&self, token: UserToken) -> Result<Option<User>, Error> {
         with_read_only_transaction!(self, user_repository, |tx| user_repository.find_by_id(tx, token.id()).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     async fn find_by_username(&self, username: &str) -> Result<Option<User>, Error> {
         let username = username.to_owned();
         with_read_only_transaction!(self, user_repository, |tx| user_repository.find_by_username(tx, &username).await)

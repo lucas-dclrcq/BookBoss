@@ -216,7 +216,6 @@ fn normalize_name(s: &str) -> String {
 
 #[async_trait::async_trait]
 impl PipelineService for PipelineServiceImpl {
-    #[tracing::instrument(level = "trace", skip(self, job), fields(jobToken = %job.token))]
     async fn process_job(&self, mut job: ImportJob) -> Result<ImportJob, Error> {
         // Guard: only process jobs in Pending state. A duplicate queue entry
         // (e.g. from startup re-enqueue racing with a reset job) must not
@@ -655,7 +654,6 @@ impl PipelineService for PipelineServiceImpl {
         self.providers.iter().map(|p| p.name()).collect()
     }
 
-    #[tracing::instrument(level = "trace", skip(self, authors, identifiers, temp_dir), fields(coverKey = cover_key, provider = provider_name))]
     async fn fetch_from_provider(
         &self,
         provider_name: &str,
@@ -723,7 +721,6 @@ impl PipelineService for PipelineServiceImpl {
         Ok(result)
     }
 
-    #[tracing::instrument(level = "trace", skip(self, edit, temp_dir), fields(jobToken = %job_token))]
     async fn approve_job(&self, job_token: ImportJobToken, edit: BookEdit, temp_dir: &std::path::Path) -> Result<(), Error> {
         // ── 1. Load job and guard status ──────────────────────────────────────
         let import_job_repo = self.repository_service.import_job_repository().clone();
@@ -1028,7 +1025,6 @@ impl PipelineService for PipelineServiceImpl {
         Ok(())
     }
 
-    #[tracing::instrument(level = "trace", skip(self, edit, temp_dir), fields(bookToken = %book_token))]
     async fn edit_book(&self, book_token: BookToken, edit: BookEdit, cover_key: &str, temp_dir: &std::path::Path) -> Result<(), Error> {
         // ── 1. Load book and compute old slug for rename detection ─────────────
         let book_repo = self.repository_service.book_repository().clone();
@@ -1311,7 +1307,6 @@ impl PipelineService for PipelineServiceImpl {
         Ok(())
     }
 
-    #[tracing::instrument(level = "trace", skip(self), fields(jobToken = %job_token))]
     async fn reject_job(&self, job_token: ImportJobToken) -> Result<(), Error> {
         let import_job_repo = self.repository_service.import_job_repository().clone();
         let job = read_only_transaction(&**self.repository_service.repository(), |tx| {

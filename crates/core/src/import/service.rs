@@ -52,31 +52,26 @@ impl ImportJobServiceImpl {
 
 #[async_trait::async_trait]
 impl ImportJobService for ImportJobServiceImpl {
-    #[tracing::instrument(level = "trace", skip(self))]
     async fn list_pending(&self, start_id: Option<ImportJobId>, page_size: Option<u64>) -> Result<Vec<ImportJob>, Error> {
         with_read_only_transaction!(self, import_job_repository, |tx| {
             import_job_repository.list_by_status(tx, ImportStatus::Pending, start_id, page_size).await
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     async fn list_needs_review(&self, start_id: Option<ImportJobId>, page_size: Option<u64>) -> Result<Vec<ImportJob>, Error> {
         with_read_only_transaction!(self, import_job_repository, |tx| {
             import_job_repository.list_by_status(tx, ImportStatus::NeedsReview, start_id, page_size).await
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(self, token))]
     async fn find_by_token(&self, token: ImportJobToken) -> Result<Option<ImportJob>, Error> {
         with_read_only_transaction!(self, import_job_repository, |tx| import_job_repository.find_by_token(tx, token).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     async fn find_by_id(&self, id: ImportJobId) -> Result<Option<ImportJob>, Error> {
         with_read_only_transaction!(self, import_job_repository, |tx| import_job_repository.find_by_id(tx, id).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self, job), fields(jobToken = %job.token))]
     async fn approve_job(&self, job: ImportJob, reviewer_id: UserId) -> Result<ImportJob, Error> {
         if job.status != ImportStatus::NeedsReview {
             return Err(Error::Validation(format!("cannot approve job with status {:?}", job.status)));
@@ -90,7 +85,6 @@ impl ImportJobService for ImportJobServiceImpl {
         with_transaction!(self, import_job_repository, |tx| import_job_repository.update_job(tx, approved).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self, job), fields(jobToken = %job.token))]
     async fn reject_job(&self, job: ImportJob, reviewer_id: UserId) -> Result<ImportJob, Error> {
         if job.status != ImportStatus::NeedsReview {
             return Err(Error::Validation(format!("cannot reject job with status {:?}", job.status)));
@@ -104,7 +98,6 @@ impl ImportJobService for ImportJobServiceImpl {
         with_transaction!(self, import_job_repository, |tx| import_job_repository.update_job(tx, rejected).await)
     }
 
-    #[tracing::instrument(level = "trace", skip(self, file_path, file_hash))]
     async fn queue_file_if_new(&self, file_path: String, file_hash: String, file_format: FileFormat, detected_at: DateTime<Utc>) -> Result<(), Error> {
         with_transaction!(self, import_job_repository, job_repository, |tx| {
             if import_job_repository.find_by_hash(tx, &file_hash).await?.is_some() {
@@ -136,7 +129,6 @@ impl ImportJobService for ImportJobServiceImpl {
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     async fn recover_on_startup(&self) -> Result<(), Error> {
         // Reset any import jobs left in Extracting/Identifying state from a previous
         // crash.
