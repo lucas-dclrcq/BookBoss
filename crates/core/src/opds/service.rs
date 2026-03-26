@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use aes_gcm::{AeadCore, Aes256Gcm, KeyInit, aead::Aead};
+use aes_gcm::aead::generic_array::GenericArray;
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use rand::RngExt;
 use sha2::{Digest, Sha256};
@@ -33,8 +34,9 @@ pub(crate) struct OpdsServiceImpl {
 
 impl OpdsServiceImpl {
     pub(crate) fn new(repository_service: Arc<RepositoryService>, encryption_secret: &str) -> Self {
-        let key = Sha256::digest(encryption_secret.as_bytes());
-        let cipher = Aes256Gcm::new(&key);
+        let hash = Sha256::digest(encryption_secret.as_bytes());
+        let key = GenericArray::from_slice(&hash);
+        let cipher = Aes256Gcm::new(key);
         Self { repository_service, cipher }
     }
 }
@@ -157,8 +159,9 @@ mod tests {
     const TEST_SECRET: &str = "test-encryption-secret";
 
     fn test_cipher() -> Aes256Gcm {
-        let key = Sha256::digest(TEST_SECRET.as_bytes());
-        Aes256Gcm::new(&key)
+        let hash = Sha256::digest(TEST_SECRET.as_bytes());
+        let key = GenericArray::from_slice(&hash);
+        Aes256Gcm::new(key)
     }
 
     #[test]
@@ -208,8 +211,9 @@ mod tests {
         let cipher = test_cipher();
         let encrypted = encrypt_password(&cipher, "secret").unwrap();
 
-        let wrong_key = Sha256::digest(b"wrong-secret");
-        let wrong_cipher = Aes256Gcm::new(&wrong_key);
+        let wrong_hash = Sha256::digest(b"wrong-secret");
+        let wrong_key = GenericArray::from_slice(&wrong_hash);
+        let wrong_cipher = Aes256Gcm::new(wrong_key);
         decrypt_password(&wrong_cipher, &encrypted).unwrap_err();
     }
 

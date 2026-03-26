@@ -19,8 +19,20 @@ pub async fn hash_file(path: &Path) -> Result<String, HashError> {
     tokio::task::spawn_blocking(move || {
         let mut file = std::fs::File::open(&path)?;
         let mut hasher = Sha256::new();
-        std::io::copy(&mut file, &mut hasher)?;
-        Ok(format!("{:x}", hasher.finalize()))
+        let mut buf = [0u8; 8192];
+        loop {
+            let n = std::io::Read::read(&mut file, &mut buf)?;
+            if n == 0 {
+                break;
+            }
+            hasher.update(&buf[..n]);
+        }
+        let hash = hasher.finalize();
+        Ok(hash.iter().fold(String::with_capacity(64), |mut s, b| {
+            use std::fmt::Write;
+            write!(s, "{b:02x}").unwrap();
+            s
+        }))
     })
     .await?
 }
