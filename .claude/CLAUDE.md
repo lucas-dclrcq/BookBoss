@@ -1,5 +1,10 @@
 # BookBoss: Take Control Of Your Digital Library
 
+## Version Control
+
+This is a **jj (jujutsu) repo**. Never use git commands (including `git worktree`).
+Use only `jj` commands for all version control operations.
+
 ## Commands
 
 - Build: `just build`
