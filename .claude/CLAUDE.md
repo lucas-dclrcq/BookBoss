@@ -5,8 +5,6 @@
 This is a **jj (jujutsu) repo**. Never use git commands (including `git worktree`).
 Use only `jj` commands for all version control operations.
 
-Issues for this project is managed with Beads (`bd`). See @Beads.md for more info.
-
 ## Commands
 
 - Build: `just build`
@@ -109,6 +107,9 @@ step, run the end-of-task routine below.
 2. `just clippy` — lint (run separately from fmt, not chained)
 3. `just component-tests` — verify tests pass
 4. `jj desc -m "type(scope): description\n\nbody"` — update working copy description
+5. Update `.scratchpad/feature-{slug}.md` — if working from a feature/bug file, mark completed tasks and note partial work; rename prefix to `completed-` when the feature is fully done
+
+q
 
 ### Workspaces
 
