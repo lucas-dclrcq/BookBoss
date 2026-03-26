@@ -169,7 +169,6 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
         file_store.clone(),
         format_service.clone(),
         create_metadata_providers(&config.metadata),
-        job_service.clone(),
         event_service.clone(),
     )) as Arc<dyn bb_core::pipeline::PipelineService>;
 

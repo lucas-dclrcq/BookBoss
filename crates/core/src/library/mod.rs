@@ -1,5 +1,7 @@
+mod model;
 mod repository;
 mod service;
+pub use model::BookEdit;
 pub use repository::LibraryRepository;
 #[cfg(test)]
 pub use repository::MockLibraryRepository;

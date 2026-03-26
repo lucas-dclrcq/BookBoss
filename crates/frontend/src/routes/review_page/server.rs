@@ -11,7 +11,8 @@ use {
         CoreServices,
         book::{AuthorToken, BookToken, IdentifierType, PublisherToken, SeriesToken},
         import::ImportJobToken,
-        pipeline::{BookEdit, ProviderBook},
+        library::BookEdit,
+        pipeline::ProviderBook,
         types::Capability,
         user::UserId,
     },
@@ -353,8 +354,8 @@ pub(super) async fn approve_book(fields: BookEditFields) -> Result<(), ServerFnE
 
     let temp_dir = std::env::temp_dir();
     core_services
-        .pipeline_service
-        .approve_job(token, edit, &temp_dir)
+        .library_service
+        .approve_book(token, edit, &temp_dir)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
@@ -384,8 +385,8 @@ pub(super) async fn reject_review_book(job_token: String) -> Result<(), ServerFn
     let _ = tokio::fs::remove_file(&cover_path).await;
 
     core_services
-        .pipeline_service
-        .reject_job(token)
+        .library_service
+        .reject_book(token)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
@@ -607,7 +608,7 @@ pub(super) async fn save_library_book(book_token: String, fields: BookEditFields
 
     let temp_dir = std::env::temp_dir();
     core_services
-        .pipeline_service
+        .library_service
         .edit_book(token, edit, &book_token, &temp_dir)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;

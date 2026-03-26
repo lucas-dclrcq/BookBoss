@@ -92,6 +92,10 @@ for environment variable setup and SeaORM adapter patterns.
 
 ## Workflows
 
+**Multi-step implementations:** Each logical step should be its own jj changeset. Before
+starting a step, ensure the working copy is empty (`jj new` if needed). At the end of each
+step, run the end-of-task routine below.
+
 **After completing each task (end-of-task routine — run these as separate commands):**
 
 1. `just fmt` — format code

@@ -124,8 +124,8 @@ async fn reject_incoming_book(job_token: String) -> Result<(), ServerFnError> {
     let token: ImportJobToken = job_token.parse().map_err(|_| ServerFnError::new("Invalid token"))?;
 
     core_services
-        .pipeline_service
-        .reject_job(token)
+        .library_service
+        .reject_book(token)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 

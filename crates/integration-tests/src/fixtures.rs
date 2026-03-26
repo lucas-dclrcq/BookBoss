@@ -128,7 +128,6 @@ pub fn pipeline_services(ctx: &crate::context::TestContext, metadata: ExtractedM
         silent_file_store(),
         format_service.clone(),
         vec![],
-        job_service.clone(),
         event_service.clone(),
     ));
     bb_core::create_services(

@@ -10,7 +10,7 @@ use {
     bb_core::{
         CoreServices,
         book::{AuthorToken, BookToken, IdentifierType, PublisherToken, SeriesToken},
-        pipeline::BookEdit,
+        library::BookEdit,
         reading::ReadStatus,
         types::Capability,
         user::UserId,
@@ -245,7 +245,7 @@ async fn bulk_edit_single_book(
     };
 
     core_services
-        .pipeline_service
+        .library_service
         .edit_book(token, edit, token_str, temp_dir)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
