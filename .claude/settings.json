@@ -48,5 +48,18 @@
       "WebSearch"
     ]
   },
-  "enabledMcpjsonServers": ["github", "mermaid"]
+  "enabledMcpjsonServers": ["github", "mermaid"],
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -Rs '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":(\"# jj Skill\\n\\n\" + .)}}' ~/.claude/skills/jj/SKILL.md 2>/dev/null || true",
+            "statusMessage": "Loading jj skill..."
+          }
+        ]
+      }
+    ]
+  }
 }
