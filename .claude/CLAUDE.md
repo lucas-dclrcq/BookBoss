@@ -109,8 +109,6 @@ step, run the end-of-task routine below.
 4. `jj desc -m "type(scope): description\n\nbody"` — update working copy description
 5. Update `.scratchpad/feature-{slug}.md` — if working from a feature/bug file, mark completed tasks and note partial work; rename prefix to `completed-` when the feature is fully done
 
-q
-
 ### Workspaces
 
 When creating a new workspace, run
