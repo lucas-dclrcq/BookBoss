@@ -59,6 +59,7 @@ jj tag set -r @- "$VERSION"
 echo "    Pushing..."
 jj gp
 jj sync
-git push --tags
+# git push --tags
+jj git push --bookmark "$VERSION" --allow-new
 
 echo "==> Release $VERSION pushed. Monitor the GitHub Actions workflow for progress."
