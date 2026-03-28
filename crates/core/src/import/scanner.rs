@@ -6,13 +6,20 @@ use std::{
 
 use chrono::Utc;
 use tokio::sync::mpsc;
-use tokio_graceful_shutdown::{IntoSubsystem, SubsystemHandle};
+use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, SubsystemHandle};
 
-use crate::{Error, format::FormatService, import::ImportJobService, storage::FileStoreService};
+use crate::{
+    Error,
+    format::FormatService,
+    import::{ImportJobService, service::ImportJobServiceImpl},
+    repository::RepositoryService,
+    storage::FileStoreService,
+};
 
-// ── Channel types ────────────────────────────────────────────────────────────
+// ── Channel types
+// ─────────────────────────────────────────────────────────────
 
-pub(crate) enum ScanCommand {
+enum ScanCommand {
     ScanOnce,
 }
 
@@ -21,31 +28,25 @@ pub(crate) enum ScanCommand {
 /// `trigger()` is non-blocking: if a scan is already queued (channel full),
 /// the call is silently dropped — no pile-up of redundant scans.
 #[derive(Clone)]
-pub(crate) struct ScanTrigger {
+pub(super) struct ScanTrigger {
     tx: mpsc::Sender<ScanCommand>,
 }
 
 impl ScanTrigger {
-    pub(crate) fn trigger(&self) {
+    pub(super) fn trigger(&self) {
         let _ = self.tx.try_send(ScanCommand::ScanOnce);
     }
 }
 
-/// Opaque wrapper around the receiving end of the scan channel.
-pub(crate) struct ScanReceiver(pub(crate) mpsc::Receiver<ScanCommand>);
-
-/// Creates a matched `(ScanTrigger, ScanReceiver)` pair.
-///
-/// Channel capacity is 1: at most one pending scan at a time.
-pub(crate) fn create_scan_channel() -> (ScanTrigger, ScanReceiver) {
+fn create_scan_channel() -> (ScanTrigger, mpsc::Receiver<ScanCommand>) {
     let (tx, rx) = mpsc::channel(1);
-    (ScanTrigger { tx }, ScanReceiver(rx))
+    (ScanTrigger { tx }, rx)
 }
 
 // ── ScanWorker ───────────────────────────────────────────────────────────────
 
 /// Executes bookdrop scans when commanded via the channel.
-pub(crate) struct ScanWorker {
+struct ScanWorker {
     bookdrop_path: PathBuf,
     scan_rx: mpsc::Receiver<ScanCommand>,
     import_job_service: Arc<dyn ImportJobService>,
@@ -54,22 +55,6 @@ pub(crate) struct ScanWorker {
 }
 
 impl ScanWorker {
-    pub(crate) fn new(
-        bookdrop_path: PathBuf,
-        scan_rx: mpsc::Receiver<ScanCommand>,
-        import_job_service: Arc<dyn ImportJobService>,
-        file_store: Arc<dyn FileStoreService>,
-        format_service: Arc<dyn FormatService>,
-    ) -> Self {
-        Self {
-            bookdrop_path,
-            scan_rx,
-            import_job_service,
-            file_store,
-            format_service,
-        }
-    }
-
     async fn scan_once(&self) {
         let files = match self.file_store.list_files(&self.bookdrop_path).await {
             Ok(f) => f,
@@ -134,15 +119,9 @@ impl IntoSubsystem<Error> for ScanWorker {
 /// Fires a `ScanOnce` command on a fixed timer interval.
 ///
 /// Decoupled from scan execution: the actual scan is performed by `ScanWorker`.
-pub(crate) struct BookdropScanner {
+struct BookdropScanner {
     poll_interval: Duration,
     scan_trigger: ScanTrigger,
-}
-
-impl BookdropScanner {
-    pub(crate) fn new(poll_interval: Duration, scan_trigger: ScanTrigger) -> Self {
-        Self { poll_interval, scan_trigger }
-    }
 }
 
 impl IntoSubsystem<Error> for BookdropScanner {
@@ -174,4 +153,63 @@ impl IntoSubsystem<Error> for BookdropScanner {
 
         Ok(())
     }
+}
+
+// ── BookdropScanSubsystem ────────────────────────────────────────────────────
+
+/// Owns the bookdrop scan wiring: startup recovery, the scan worker, and the
+/// periodic trigger timer.
+pub(crate) struct BookdropScanSubsystem {
+    import_job_service: Arc<dyn ImportJobService>,
+    scan_worker: ScanWorker,
+    scanner: BookdropScanner,
+}
+
+impl IntoSubsystem<Error> for BookdropScanSubsystem {
+    async fn run(self, subsys: &mut SubsystemHandle) -> Result<(), Error> {
+        self.import_job_service.recover_on_startup().await?;
+
+        subsys.start(SubsystemBuilder::new("ScanWorker", self.scan_worker.into_subsystem()));
+        subsys.start(SubsystemBuilder::new("BookdropScanner", self.scanner.into_subsystem()));
+
+        tracing::info!("BookdropScanSubsystem started");
+
+        subsys.on_shutdown_requested().await;
+        tracing::info!("BookdropScanSubsystem shutting down...");
+
+        Ok(())
+    }
+}
+
+/// Creates an [`ImportJobService`] and its paired [`BookdropScanSubsystem`].
+///
+/// The scan channel and trigger wiring are internal implementation details —
+/// callers never see `ScanTrigger` or `ScanReceiver`.
+#[must_use]
+pub(crate) fn create_bookdrop_scan_subsystem(
+    repository_service: Arc<RepositoryService>,
+    file_store: Arc<dyn FileStoreService>,
+    format_service: Arc<dyn FormatService>,
+    bookdrop_path: PathBuf,
+    scan_interval: Duration,
+) -> (Arc<dyn ImportJobService>, BookdropScanSubsystem) {
+    let (trigger, scan_rx) = create_scan_channel();
+    let import_job_service: Arc<dyn ImportJobService> = Arc::new(ImportJobServiceImpl::new(repository_service, Some(trigger.clone())));
+    let scan_worker = ScanWorker {
+        bookdrop_path,
+        scan_rx,
+        import_job_service: import_job_service.clone(),
+        file_store,
+        format_service,
+    };
+    let scanner = BookdropScanner {
+        poll_interval: scan_interval,
+        scan_trigger: trigger,
+    };
+    let subsystem = BookdropScanSubsystem {
+        import_job_service: import_job_service.clone(),
+        scan_worker,
+        scanner,
+    };
+    (import_job_service, subsystem)
 }

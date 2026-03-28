@@ -9,8 +9,7 @@ use bb_core::{
     book::{Author, AuthorId, AuthorRole, Book, BookId, BookStatus, BookToken, FileFormat, NewAuthor, NewBook},
     format::FormatService,
     import::{ImportJob, ImportJobId, ImportStatus, NewImportJob},
-    jobs::{JobService, service::MockJobService},
-    pipeline::{ExtractedMetadata, PipelineServiceImpl},
+    pipeline::ExtractedMetadata,
     repository::{RepositoryService, transaction},
     storage::{BookSidecar, FileStoreService},
     user::{NewUser, User},
@@ -116,28 +115,12 @@ impl FormatService for StubFormatService {
 /// - `SilentFileStore` (no real file I/O)
 /// - No metadata providers (extracted metadata is used as-is)
 pub fn pipeline_services(ctx: &crate::context::TestContext, metadata: ExtractedMetadata) -> Arc<bb_core::CoreServices> {
-    let event_service = bb_core::test_support::nop_event_service();
-    let job_service: Arc<dyn JobService> = {
-        let mut mock = MockJobService::new();
-        mock.expect_enqueue_raw().returning(|_, _, _| Box::pin(async { Ok(()) }));
-        Arc::new(mock)
-    };
     let format_service: Arc<dyn FormatService> = Arc::new(StubFormatService { metadata });
-    let pipeline = Arc::new(PipelineServiceImpl::new(
-        ctx.repos.clone(),
-        silent_file_store(),
-        format_service.clone(),
-        bb_core::metadata::create_metadata_service(),
-        event_service.clone(),
-    ));
     bb_core::create_services(
         bb_core::test_support::default_external_services_builder()
             .repository_service(ctx.repos.clone())
             .file_store(silent_file_store())
             .format_service(format_service)
-            .pipeline_service(pipeline)
-            .job_service(job_service)
-            .event_service(event_service)
             .build()
             .unwrap(),
         "test-encryption-secret",

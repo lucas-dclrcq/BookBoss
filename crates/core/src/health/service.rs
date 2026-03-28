@@ -65,15 +65,16 @@ impl HealthService for HealthServiceImpl {
 }
 
 /// Receiving end of the kick channel, consumed by `HealthCheckSubsystem`.
-pub struct HealthKickReceiver(pub(super) mpsc::Receiver<String>);
+pub(super) struct HealthKickReceiver(pub(super) mpsc::Receiver<String>);
 
 /// Creates a `HealthService` and its paired kick receiver.
 ///
-/// The receiver should be passed to
-/// [`create_health_subsystem`](super::create_health_subsystem).
+/// Private to the `health` module — external code uses
+/// [`create_health_subsystem`](super::create_health_subsystem) which
+/// keeps the channel as an internal implementation detail.
 /// Channel capacity is 16 — enough to buffer a burst of "Run Now" clicks.
 #[must_use]
-pub fn create_health_service() -> (Arc<dyn HealthService>, HealthKickReceiver) {
+pub(super) fn create_health_service() -> (Arc<dyn HealthService>, HealthKickReceiver) {
     let (tx, rx) = mpsc::channel(16);
     let service = HealthServiceImpl {
         state: HealthTaskState::new(),

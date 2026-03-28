@@ -7,7 +7,6 @@ use std::sync::Arc;
 /// Default HTTP request timeout for all metadata provider clients.
 pub(crate) const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
-use bb_core::metadata::MetadataService;
 pub use google_books::GoogleBooksAdapter;
 pub use hardcover::HardcoverAdapter;
 pub use open_library::OpenLibraryAdapter;
@@ -25,7 +24,8 @@ pub struct MetadataConfig {
 /// Called once at startup after `CoreServices` is built. Providers are
 /// registered in priority order: Hardcover → Google Books →
 /// Open Library (always the final fallback).
-pub fn before_start(service: &dyn MetadataService, config: &MetadataConfig) {
+pub fn before_start(core: &Arc<bb_core::CoreServices>, config: &MetadataConfig) {
+    let service = &*core.metadata_service;
     if let Some(token) = &config.hardcover_api_token {
         service.register(Arc::new(HardcoverAdapter::new(token.clone())));
     }

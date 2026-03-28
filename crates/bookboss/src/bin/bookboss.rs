@@ -143,14 +143,7 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
 
     use anyhow::Context;
     use bb_api::create_api_subsystem;
-    use bb_core::{
-        ExternalServicesBuilder, create_core_subsystem, create_services,
-        format::FormatService,
-        health::{create_health_service, create_health_subsystem},
-        jobs::create_job_service,
-        metadata::create_metadata_service,
-        pipeline::PipelineServiceImpl,
-    };
+    use bb_core::{ExternalServicesBuilder, create_core_subsystem, create_services, format::FormatService};
     use bb_database::{create_repository_service, open_database};
     use bb_formats::create_format_service;
     use bb_frontend::server::create_frontend_subsystem;
@@ -163,31 +156,13 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     let database = open_database(&config.database).await.context("Couldn't create database connection")?;
     let repository_service = create_repository_service(database).await.context("Couldn't create database connection")?;
     let file_store = Arc::new(bb_storage::LocalFileStore::new(config.library.library_path.clone()));
-    let job_service = create_job_service(repository_service.clone());
-    let event_service = bb_core::event::create_event_service(64);
-
     let format_service: Arc<dyn FormatService> = Arc::new(create_format_service());
-    let metadata_service = create_metadata_service();
-    let pipeline_service = Arc::new(PipelineServiceImpl::new(
-        repository_service.clone(),
-        file_store.clone(),
-        format_service.clone(),
-        metadata_service.clone(),
-        event_service.clone(),
-    )) as Arc<dyn bb_core::pipeline::PipelineService>;
-
     let worker_poll_interval = Duration::from_secs(config.import.worker_poll_interval_secs);
 
-    let (health_service, health_kick_rx) = create_health_service();
     let external = ExternalServicesBuilder::default()
         .repository_service(repository_service.clone())
         .file_store(file_store)
         .format_service(format_service)
-        .metadata_service(metadata_service)
-        .pipeline_service(pipeline_service)
-        .job_service(job_service)
-        .health_service(health_service)
-        .event_service(event_service.clone())
         .bookdrop_path(Some(config.import.bookdrop_path.clone()))
         .scan_interval(Some(Duration::from_secs(config.import.scan_interval_secs)))
         .build()
@@ -197,14 +172,7 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     // Each crate self-registers its job handlers and health task configs.
     bb_core::before_start(&core_services);
     // Register configured metadata providers into the metadata service.
-    metadata_before_start(&*core_services.metadata_service, &config.metadata);
-
-    let health_subsystem = create_health_subsystem(
-        core_services.health_service.clone(),
-        core_services.job_service.clone(),
-        event_service.clone(),
-        health_kick_rx,
-    );
+    metadata_before_start(&core_services, &config.metadata);
 
     let api_subsystem = create_api_subsystem(&config.api, core_services.clone());
     let core_subsystem = create_core_subsystem(core_services.clone(), worker_poll_interval);
@@ -215,7 +183,6 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     Toplevel::new(async |s: &mut SubsystemHandle| {
         s.start(SubsystemBuilder::new("Api", api_subsystem.into_subsystem()));
         s.start(SubsystemBuilder::new("Core", core_subsystem.into_subsystem()));
-        s.start(SubsystemBuilder::new("Health", health_subsystem.into_subsystem()));
         s.start(SubsystemBuilder::new("Frontend", frontend_subsystem.into_subsystem()));
     })
     .catch_signals()

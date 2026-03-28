@@ -42,12 +42,21 @@ pub(crate) struct ImportJobServiceImpl {
 }
 
 impl ImportJobServiceImpl {
-    pub(crate) fn new(repository_service: Arc<RepositoryService>, scan_trigger: Option<ScanTrigger>) -> Self {
+    pub(super) fn new(repository_service: Arc<RepositoryService>, scan_trigger: Option<ScanTrigger>) -> Self {
         Self {
             repository_service,
             scan_trigger,
         }
     }
+}
+
+/// Creates an [`ImportJobService`] with no bookdrop scan wiring.
+///
+/// Use [`create_bookdrop_scan_subsystem`](super::scanner::create_bookdrop_scan_subsystem)
+/// when bookdrop scanning is required.
+#[must_use]
+pub(crate) fn create_import_job_service(repository_service: Arc<RepositoryService>) -> Arc<dyn ImportJobService> {
+    Arc::new(ImportJobServiceImpl::new(repository_service, None))
 }
 
 #[async_trait::async_trait]

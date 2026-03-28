@@ -4,7 +4,6 @@ use crate::{
     ExternalServicesBuilder,
     event::{self, EventService},
     format::{FormatService, MockFormatService},
-    health::{self, HealthService},
     import::{ImportJobService, service::MockImportJobService},
     jobs::{JobService, service::MockJobService},
     library::{LibraryService, MockLibraryService},
@@ -68,16 +67,6 @@ pub fn nop_system_message_service() -> Arc<dyn SystemMessageService> {
     Arc::new(MockSystemMessageService::new())
 }
 
-/// Returns a no-op `HealthService` with no tasks registered.
-///
-/// Suitable for tests that wire up `CoreServices` but never exercise
-/// health task scheduling.
-#[must_use]
-pub fn nop_health_service() -> Arc<dyn HealthService> {
-    let (svc, _rx) = health::create_health_service();
-    svc
-}
-
 /// Returns an `ExternalServicesBuilder` pre-populated with nop implementations
 /// for all fields except `repository_service`, which callers must always
 /// provide.
@@ -89,9 +78,4 @@ pub fn default_external_services_builder() -> ExternalServicesBuilder {
     ExternalServicesBuilder::default()
         .file_store(nop_file_store())
         .format_service(nop_format_service())
-        .metadata_service(crate::metadata::create_metadata_service())
-        .pipeline_service(nop_pipeline_service())
-        .job_service(nop_job_service())
-        .health_service(nop_health_service())
-        .event_service(nop_event_service())
 }

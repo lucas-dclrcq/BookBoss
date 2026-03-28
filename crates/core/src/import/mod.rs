@@ -6,4 +6,6 @@ pub mod service;
 
 pub use model::{ImportJob, ImportJobId, ImportJobToken, ImportSource, ImportStatus, NewImportJob, ProcessImportPayload};
 pub use repository::ImportJobRepository;
+pub(crate) use scanner::{BookdropScanSubsystem, create_bookdrop_scan_subsystem};
 pub use service::ImportJobService;
+pub(crate) use service::create_import_job_service;

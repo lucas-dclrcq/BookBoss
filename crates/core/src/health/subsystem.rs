@@ -5,7 +5,7 @@ use tokio_graceful_shutdown::{IntoSubsystem, SubsystemHandle};
 use crate::{
     Error,
     event::EventService,
-    health::service::{HealthKickReceiver, HealthService},
+    health::service::{HealthService, create_health_service},
     jobs::JobService,
 };
 
@@ -17,7 +17,7 @@ pub struct HealthCheckSubsystem {
     health_service: Arc<dyn HealthService>,
     job_service: Arc<dyn JobService>,
     event_service: Arc<dyn EventService>,
-    kick_rx: HealthKickReceiver,
+    kick_rx: tokio::sync::mpsc::Receiver<String>,
 }
 
 impl HealthCheckSubsystem {
@@ -71,7 +71,7 @@ impl IntoSubsystem<Error> for HealthCheckSubsystem {
                     break;
                 }
                 // Manual trigger from "Run Now" button.
-                Some(job_type) = self.kick_rx.0.recv() => {
+                Some(job_type) = self.kick_rx.recv() => {
                     self.health_service.mark_due_now(&job_type).await;
                     self.process_due_tasks(&[job_type]).await;
                 }
@@ -87,17 +87,18 @@ impl IntoSubsystem<Error> for HealthCheckSubsystem {
     }
 }
 
+/// Creates a [`HealthService`] and its paired [`HealthCheckSubsystem`].
+///
+/// The channel connecting `kick()` calls to the subsystem event loop is an
+/// internal implementation detail — callers never see the receiver end.
 #[must_use]
-pub fn create_health_subsystem(
-    health_service: Arc<dyn HealthService>,
-    job_service: Arc<dyn JobService>,
-    event_service: Arc<dyn EventService>,
-    kick_rx: HealthKickReceiver,
-) -> HealthCheckSubsystem {
-    HealthCheckSubsystem {
-        health_service,
+pub fn create_health_subsystem(job_service: Arc<dyn JobService>, event_service: Arc<dyn EventService>) -> (Arc<dyn HealthService>, HealthCheckSubsystem) {
+    let (health_service, kick_rx) = create_health_service();
+    let subsystem = HealthCheckSubsystem {
+        health_service: health_service.clone(),
         job_service,
         event_service,
-        kick_rx,
-    }
+        kick_rx: kick_rx.0,
+    };
+    (health_service, subsystem)
 }
