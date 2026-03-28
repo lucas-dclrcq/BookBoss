@@ -29,19 +29,20 @@ Source of truth for the protocol: [koreader-sync-server](https://github.com/kore
 
 ## API Endpoints
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `POST` | `/users/create` | None | Always returns 402 (registration disabled) |
-| `GET` | `/users/auth` | Yes | Verify credentials |
-| `PUT` | `/syncs/progress` | Yes | Push reading progress |
-| `GET` | `/syncs/progress/:document` | Yes | Pull reading progress |
-| `GET` | `/healthcheck` | None | Returns `{"state": "OK"}` |
+| Method | Path                        | Auth | Description                                |
+| ------ | --------------------------- | ---- | ------------------------------------------ |
+| `POST` | `/users/create`             | None | Always returns 402 (registration disabled) |
+| `GET`  | `/users/auth`               | Yes  | Verify credentials                         |
+| `PUT`  | `/syncs/progress`           | Yes  | Push reading progress                      |
+| `GET`  | `/syncs/progress/:document` | Yes  | Pull reading progress                      |
+| `GET`  | `/healthcheck`              | None | Returns `{"state": "OK"}`                  |
 
 Auth headers: `x-auth-user: <username>`, `x-auth-key: <md5(password)>`
 
 ## Integration Surface
 
 `UserBookMetadata` already has compatible fields:
+
 - `progress_percentage` — basis points (0–10000), maps to KOReader percentage × 10000
 - `position_type` / `position_token` — store XPointer string or page number
 - `last_progress_at` — maps to KOReader timestamp

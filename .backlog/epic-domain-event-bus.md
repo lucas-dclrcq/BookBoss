@@ -28,24 +28,26 @@ priority: P2
 
 ## Proposed Service Responsibilities
 
-| Method | Current owner | New owner |
-|--------|--------------|-----------|
-| `create_book` (DB transaction from approve_job) | PipelineService | BookService |
-| `edit_book` (DB transaction) | PipelineService | BookService |
-| `delete_book` | LibraryService | LibraryService (unchanged) |
-| `approve_job` | PipelineService | PipelineService (thins to: validate → BookService → flip status → emit event) |
-| File rename / sidecar rewrite / enrichment | PipelineService (inline) | Domain event handler |
+| Method                                          | Current owner            | New owner                                                                     |
+| ----------------------------------------------- | ------------------------ | ----------------------------------------------------------------------------- |
+| `create_book` (DB transaction from approve_job) | PipelineService          | BookService                                                                   |
+| `edit_book` (DB transaction)                    | PipelineService          | BookService                                                                   |
+| `delete_book`                                   | LibraryService           | LibraryService (unchanged)                                                    |
+| `approve_job`                                   | PipelineService          | PipelineService (thins to: validate → BookService → flip status → emit event) |
+| File rename / sidecar rewrite / enrichment      | PipelineService (inline) | Domain event handler                                                          |
 
 ## Phase Plan
 
 ### Phase 1: Preparatory Refactoring (no event bus needed)
-- [x] Rename `LibraryStore` → `FileStoreService`, `LocalLibraryStore` → `LocalFileStore` *(done)*
+
+- [x] Rename `LibraryStore` → `FileStoreService`, `LocalLibraryStore` → `LocalFileStore` _(done)_
 - [ ] Extract shared DB mutation logic from `approve_job` and `edit_book` into `BookService::edit_book`
 - [ ] Extract book creation logic from `approve_job` into `BookService::create_book`
 - [ ] `PipelineService` calls `BookService` for mutations, keeps pipeline-specific logic
 - [ ] Eliminate duplication between `approve_job` and `edit_book`
 
 ### Phase 2: Domain Event Bus
+
 - [ ] Define `DomainEventPayload` marker trait and `DomainEventHandler<E>` trait in `crates/core/src/event/`
 - [ ] Define event payload structs: `BookAdded`, `BookChanged`
 - [ ] Define `DomainEventBus` port trait (emit + subscribe)
@@ -55,12 +57,14 @@ priority: P2
 - [ ] Add bridge handler: `BookChanged` / `BookAdded` → `EventService::notify_incoming_changed()`
 
 ### Phase 3: Migrate Reactive Work to Event Handlers
+
 - [ ] Create handler for `BookChanged`: cover storage, file rename, sidecar rewrite, enrichment
 - [ ] `BookService::edit_book` emits `BookChanged` after DB commit
 - [ ] `PipelineService::approve_job` uses `BookService` + emits `BookApproved` / `BookChanged`
 - [ ] Remove inline file/sidecar/enrichment logic from `PipelineService`
 
 ### Phase 4: Future Extensions
+
 - [ ] `BookDeleted` event (if `delete_book` ever moves to event-driven)
 - [ ] Additional subscribers (OPDS cache invalidation, audit log)
 

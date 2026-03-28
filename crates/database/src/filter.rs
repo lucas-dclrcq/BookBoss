@@ -9,7 +9,7 @@ use sea_orm::{
     sea_query::{BinOper, Expr, Func, Query},
 };
 
-use crate::entities::{authors, book_authors, book_genres, book_tags, books, user_book_metadata};
+use crate::entities::{authors, book_authors, book_genres, book_shelves, book_tags, books, user_book_metadata};
 
 // ── Public entry point
 // ────────────────────────────────────────────────────────
@@ -47,6 +47,7 @@ fn rule_condition(rule: &FilterRule, user_id: UserId) -> Result<Condition, Repos
         FilterRule::Genre { op, values } => Ok(genre_condition(*op, values)),
         FilterRule::Tag { op, values } => Ok(tag_condition(*op, values)),
         FilterRule::Publisher { op, values } => Ok(publisher_condition(*op, values)),
+        FilterRule::Shelf { op, values } => Ok(shelf_condition(*op, values)),
         FilterRule::Language { op, values } => Ok(language_condition(*op, values)),
         FilterRule::ReadStatus { op, values } => read_status_condition(*op, values, user_id),
         FilterRule::Rating { op, value } => Ok(rating_condition(*op, *value)),
@@ -218,6 +219,34 @@ fn tag_condition(op: SetOp, values: &[EntityRef]) -> Condition {
     let all_subq = || {
         let mut q = Query::select();
         q.column(book_tags::Column::BookId).from(book_tags::Entity);
+        q
+    };
+
+    junction_set_condition(op, ids, any_subq, one_subq, all_subq)
+}
+
+fn shelf_condition(op: SetOp, values: &[EntityRef]) -> Condition {
+    let ids: Vec<i64> = values.iter().map(|e| e.id).collect();
+
+    let any_subq = |ids: Vec<i64>| {
+        let mut q = Query::select();
+        q.column(book_shelves::Column::BookId)
+            .from(book_shelves::Entity)
+            .and_where(book_shelves::Column::ShelfId.is_in(ids));
+        q
+    };
+
+    let one_subq = |id: i64| {
+        let mut q = Query::select();
+        q.column(book_shelves::Column::BookId)
+            .from(book_shelves::Entity)
+            .and_where(book_shelves::Column::ShelfId.eq(id));
+        q
+    };
+
+    let all_subq = || {
+        let mut q = Query::select();
+        q.column(book_shelves::Column::BookId).from(book_shelves::Entity);
         q
     };
 

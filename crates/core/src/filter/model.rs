@@ -176,6 +176,10 @@ pub enum FilterRule {
         op: SetOp,
         values: Vec<EntityRef>,
     },
+    Shelf {
+        op: SetOp,
+        values: Vec<EntityRef>,
+    },
 
     // Other fields
     Language {
@@ -326,6 +330,10 @@ mod tests {
             FilterRule::Publisher {
                 op: SetOp::IsNotEmpty,
                 values: vec![],
+            },
+            FilterRule::Shelf {
+                op: SetOp::IncludesAny,
+                values: vec![entity(10, "Fantasy Reads")],
             },
             FilterRule::Language {
                 op: SetOp::IncludesAny,

@@ -68,9 +68,9 @@ Shelf {
 
 ## Files to Touch
 
-| File | Change |
-|------|--------|
-| `crates/core/src/filter/model.rs` | Add `Shelf` variant + test |
-| `crates/database/src/filter.rs` | Add `shelf_condition()` + dispatch arm + import |
-| `crates/frontend/src/components/filter_builder.rs` | Add variant, `FilterEntityOptions` field, field key/default/summary/editor/picker |
-| `crates/frontend/src/routes/shelf_page.rs` | Fetch manual shelves in `get_filter_entity_options`, pass `current_shelf_id` to `FilterBuilder` |
+| File                                               | Change                                                                                          |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `crates/core/src/filter/model.rs`                  | Add `Shelf` variant + test                                                                      |
+| `crates/database/src/filter.rs`                    | Add `shelf_condition()` + dispatch arm + import                                                 |
+| `crates/frontend/src/components/filter_builder.rs` | Add variant, `FilterEntityOptions` field, field key/default/summary/editor/picker               |
+| `crates/frontend/src/routes/shelf_page.rs`         | Fetch manual shelves in `get_filter_entity_options`, pass `current_shelf_id` to `FilterBuilder` |
