@@ -53,8 +53,19 @@ pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>
     };
     let best_file = dto::select_best_file(&files);
 
+    let series_name = if let Some(series_id) = book.series_id {
+        core_services
+            .book_service
+            .list_all_series()
+            .await
+            .ok()
+            .and_then(|all| all.into_iter().find(|s| s.id == series_id).map(|s| s.name))
+    } else {
+        None
+    };
+
     let base = base_url.trim_end_matches('/');
-    let metadata = dto::build_book_metadata(&book, best_file, &kobo.sync_token, base);
+    let metadata = dto::build_book_metadata(&book, best_file, &kobo.sync_token, base, series_name);
 
     Json(vec![metadata]).into_response()
 }

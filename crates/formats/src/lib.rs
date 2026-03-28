@@ -1,4 +1,4 @@
-pub(crate) mod epub;
+pub mod epub;
 pub(crate) mod epub_enrich;
 mod error;
 mod format_service;

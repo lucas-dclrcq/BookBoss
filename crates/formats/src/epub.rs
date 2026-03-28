@@ -2,6 +2,12 @@ use std::{io::Read, path::Path};
 
 use bb_core::{Error as CoreError, pipeline::ExtractedMetadata};
 
+/// Read the raw OPF XML bytes from an EPUB file.
+pub fn read_epub_opf_xml(path: &Path) -> Result<String, crate::Error> {
+    let (bytes, _dir) = read_opf_bytes_and_dir(path)?;
+    String::from_utf8(bytes).map_err(|e| crate::Error::InvalidValue(e.to_string()))
+}
+
 pub(crate) fn extract_epub_metadata(path: &Path) -> Result<ExtractedMetadata, CoreError> {
     let (opf_bytes, opf_dir) = read_opf_bytes_and_dir(path).map_err(|e| CoreError::Infrastructure(e.to_string()))?;
     let mut meta = crate::opf::extract_metadata(&opf_bytes).map_err(|e| CoreError::Infrastructure(e.to_string()))?;

@@ -64,6 +64,29 @@ async fn cmd_dump_book(file: std::path::PathBuf) -> anyhow::Result<()> {
         println!("series:       {:?}", sidecar.series);
         println!("metadata_src: {:?}", sidecar.metadata_source);
     }
+
+    if format == bb_core::book::FileFormat::Epub {
+        match tokio::task::spawn_blocking({
+            let path = file.clone();
+            move || bb_formats::epub::read_epub_opf_xml(&path)
+        })
+        .await
+        {
+            Ok(Ok(xml)) => {
+                println!("\n=== OPF metadata ===");
+                if let (Some(start), Some(end)) =
+                    (xml.find("<metadata"), xml.find("</metadata>"))
+                {
+                    println!("{}", &xml[start..end + "</metadata>".len()]);
+                } else {
+                    println!("{xml}");
+                }
+            }
+            Ok(Err(e)) => println!("\n=== raw OPF XML (error: {e}) ==="),
+            Err(_) => {}
+        }
+    }
+
     Ok(())
 }
 

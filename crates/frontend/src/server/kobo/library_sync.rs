@@ -82,7 +82,17 @@ pub async fn handle(kobo: KoboDevice, req_headers: HeaderMap, core_services: Arc
         }
     }
 
-    // 5. Build response body.
+    // 5. Build series lookup map for this sync page.
+    let series_map: std::collections::HashMap<bb_core::book::SeriesId, String> = core_services
+        .book_service
+        .list_all_series()
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(|s| (s.id, s.name))
+        .collect();
+
+    // 6. Build response body.
     let base = base_url.trim_end_matches('/');
     let t = &kobo.sync_token;
     let mut items: Vec<KoboSyncItem> =
@@ -96,14 +106,16 @@ pub async fn handle(kobo: KoboDevice, req_headers: HeaderMap, core_services: Arc
     // New books → NewEntitlement.
     for entry in &diff.new_books {
         let rs = state_map.get(&entry.book.id);
-        items.push(dto::build_new_entitlement(entry, t, base, rs));
+        let series = entry.book.series_id.and_then(|id| series_map.get(&id)).cloned();
+        items.push(dto::build_new_entitlement(entry, t, base, rs, series));
     }
 
     // Upgraded (format changed) and refreshed (metadata changed) books →
     // ChangedEntitlement so the device replaces its existing copy.
     for entry in diff.upgraded_books.iter().chain(diff.refreshed_books.iter()) {
         let rs = state_map.get(&entry.book.id);
-        items.push(dto::build_changed_entitlement(entry, t, base, rs));
+        let series = entry.book.series_id.and_then(|id| series_map.get(&id)).cloned();
+        items.push(dto::build_changed_entitlement(entry, t, base, rs, series));
     }
 
     // 6. Compute cursor for next request.

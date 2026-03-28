@@ -82,6 +82,21 @@ pub(super) struct KoboPublisher {
     pub name: String,
 }
 
+/// Series metadata sent to the Kobo device.
+///
+/// Field names validated against Komga (`KoboSeriesDto.kt`) and
+/// Calibre-Web (`kobo.py :: get_series_metadata()`).
+#[derive(Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub(super) struct KoboSeries {
+    pub id: String,
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub number: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub number_float: Option<f64>,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub(super) struct KoboBookMetadata {
@@ -110,7 +125,7 @@ pub(super) struct KoboBookMetadata {
     pub publisher: Option<KoboPublisher>,
     pub revision_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub series: Option<()>,
+    pub series: Option<KoboSeries>,
     pub title: String,
     pub work_id: String,
 }
@@ -188,7 +203,7 @@ pub(super) fn select_best_file(files: &[BookFile]) -> Option<&BookFile> {
 /// Builds the `KoboBookMetadata` for a book, optionally with a download URL
 /// if a best file is provided. Used by both the library sync and per-book
 /// metadata endpoints.
-pub(super) fn build_book_metadata(book: &Book, file: Option<&BookFile>, sync_token: &str, base: &str) -> KoboBookMetadata {
+pub(super) fn build_book_metadata(book: &Book, file: Option<&BookFile>, sync_token: &str, base: &str, series_name: Option<String>) -> KoboBookMetadata {
     let uuid = book_uuid_from_token(book.token);
 
     let download_urls = if let Some(file) = file {
@@ -236,20 +251,28 @@ pub(super) fn build_book_metadata(book: &Book, file: Option<&BookFile>, sync_tok
         publication_date: book.published_date.map(|y| format!("{y}-01-01T00:00:00Z")),
         publisher: None,
         revision_id: uuid.clone(),
-        series: None,
+        series: series_name.map(|name| {
+            let number_f64 = book.series_number.as_ref().and_then(|n| n.to_string().parse::<f64>().ok());
+            KoboSeries {
+                id: book.series_id.map(|id| id.to_string()).unwrap_or_default(),
+                name,
+                number: number_f64,
+                number_float: number_f64,
+            }
+        }),
         title: book.title.clone(),
         work_id: uuid,
     }
 }
 
-pub(super) fn build_new_entitlement(entry: &BookSyncEntry, sync_token: &str, base: &str, reading_state: Option<&UserBookMetadata>) -> KoboSyncItem {
+pub(super) fn build_new_entitlement(entry: &BookSyncEntry, sync_token: &str, base: &str, reading_state: Option<&UserBookMetadata>, series_name: Option<String>) -> KoboSyncItem {
     let book = &entry.book;
     let uuid = book_uuid_from_token(book.token);
     let created = book.created_at.to_rfc3339();
     let last_modified = book.updated_at.to_rfc3339();
 
     let entitlement = build_entitlement(&uuid, false, &created, &last_modified);
-    let metadata = build_book_metadata(book, Some(&entry.file), sync_token, base);
+    let metadata = build_book_metadata(book, Some(&entry.file), sync_token, base, series_name);
 
     KoboSyncItem::NewEntitlement(KoboEntitlementContainer {
         book_entitlement: entitlement,
@@ -260,14 +283,14 @@ pub(super) fn build_new_entitlement(entry: &BookSyncEntry, sync_token: &str, bas
 
 /// Builds a `ChangedEntitlement` for a book that the device already has but
 /// whose file or metadata has changed (upgrade to KEPUB, metadata edit, etc.).
-pub(super) fn build_changed_entitlement(entry: &BookSyncEntry, sync_token: &str, base: &str, reading_state: Option<&UserBookMetadata>) -> KoboSyncItem {
+pub(super) fn build_changed_entitlement(entry: &BookSyncEntry, sync_token: &str, base: &str, reading_state: Option<&UserBookMetadata>, series_name: Option<String>) -> KoboSyncItem {
     let book = &entry.book;
     let uuid = book_uuid_from_token(book.token);
     let created = book.created_at.to_rfc3339();
     let last_modified = book.updated_at.to_rfc3339();
 
     let entitlement = build_entitlement(&uuid, false, &created, &last_modified);
-    let metadata = build_book_metadata(book, Some(&entry.file), sync_token, base);
+    let metadata = build_book_metadata(book, Some(&entry.file), sync_token, base, series_name);
 
     KoboSyncItem::ChangedEntitlement(KoboEntitlementContainer {
         book_entitlement: entitlement,
