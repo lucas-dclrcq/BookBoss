@@ -159,15 +159,11 @@ pub(crate) fn sort_books_client_side(mut books: Vec<BookSummary>, sort: SortOrde
 pub(crate) fn SortControl() -> Element {
     let sort = SORT_ORDER();
 
-    let segments: [(SortField, &str); 3] = [
-        (SortField::DateAdded, "Date added"),
-        (SortField::Title, "Title"),
-        (SortField::AuthorTitle, "Author"),
-    ];
+    let segments: [SortField; 3] = [SortField::DateAdded, SortField::Title, SortField::AuthorTitle];
 
     rsx! {
         div { class: "inline-flex items-center border border-gray-300 rounded-md overflow-hidden",
-            for (idx, (field, label)) in segments.iter().enumerate() {
+            for (idx, field) in segments.iter().enumerate() {
                 {
                     let field = *field;
                     let is_active = sort.field == field;
@@ -190,11 +186,17 @@ pub(crate) fn SortControl() -> Element {
                         _ => "",
                     };
 
+                    let tooltip = if is_active {
+                        tooltip_text(field, sort.dir)
+                    } else {
+                        tooltip_text(field, field.default_dir())
+                    };
+
                     rsx! {
                         button {
                             r#type: "button",
                             class: "flex items-center justify-center gap-0.5 px-2 py-1.5 text-xs font-medium cursor-pointer select-none {bg} {border} {rounding}",
-                            title: *label,
+                            title: tooltip,
                             onclick: move |_| {
                                 let new_sort = if is_active {
                                     SortOrder {
@@ -224,6 +226,17 @@ pub(crate) fn SortControl() -> Element {
                 }
             }
         }
+    }
+}
+
+fn tooltip_text(field: SortField, dir: SortDir) -> &'static str {
+    match (field, dir) {
+        (SortField::DateAdded, SortDir::Desc) => "Newest first",
+        (SortField::DateAdded, SortDir::Asc) => "Oldest first",
+        (SortField::Title, SortDir::Asc) => "Title A → Z",
+        (SortField::Title, SortDir::Desc) => "Title Z → A",
+        (SortField::AuthorTitle, SortDir::Asc) => "Author A → Z",
+        (SortField::AuthorTitle, SortDir::Desc) => "Author Z → A",
     }
 }
 
