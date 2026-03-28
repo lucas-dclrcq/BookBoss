@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use bb_core::{
     Error, RepositoryError,
     book::{NewTag, Tag, TagId, TagRepository, TagToken},
@@ -152,6 +154,39 @@ impl TagRepository for TagRepositoryAdapter {
         let rows = query.all(transaction).await.map_err(handle_dberr)?;
 
         Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn delete_tag(&self, transaction: &dyn Transaction, id: TagId) -> Result<(), Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        prelude::Tags::delete_by_id(id as i64).exec(transaction).await.map_err(handle_dberr)?;
+
+        Ok(())
+    }
+
+    async fn list_tags_with_counts(&self, transaction: &dyn Transaction) -> Result<Vec<(Tag, u64)>, Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        let tags = prelude::Tags::find()
+            .order_by_asc(tags::Column::Name)
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        let book_tag_rows = prelude::BookTags::find().all(transaction).await.map_err(handle_dberr)?;
+
+        let mut counts: HashMap<i64, u64> = HashMap::new();
+        for row in book_tag_rows {
+            *counts.entry(row.tag_id).or_insert(0) += 1;
+        }
+
+        Ok(tags
+            .into_iter()
+            .map(|t| {
+                let count = counts.get(&t.id).copied().unwrap_or(0);
+                (t.into(), count)
+            })
+            .collect())
     }
 }
 

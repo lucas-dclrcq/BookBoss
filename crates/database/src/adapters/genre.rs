@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use bb_core::{
     Error, RepositoryError,
     book::{Genre, GenreId, GenreRepository, GenreToken, NewGenre},
@@ -152,6 +154,39 @@ impl GenreRepository for GenreRepositoryAdapter {
         let rows = query.all(transaction).await.map_err(handle_dberr)?;
 
         Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn delete_genre(&self, transaction: &dyn Transaction, id: GenreId) -> Result<(), Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        prelude::Genres::delete_by_id(id as i64).exec(transaction).await.map_err(handle_dberr)?;
+
+        Ok(())
+    }
+
+    async fn list_genres_with_counts(&self, transaction: &dyn Transaction) -> Result<Vec<(Genre, u64)>, Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        let genres = prelude::Genres::find()
+            .order_by_asc(genres::Column::Name)
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        let book_genre_rows = prelude::BookGenres::find().all(transaction).await.map_err(handle_dberr)?;
+
+        let mut counts: HashMap<i64, u64> = HashMap::new();
+        for row in book_genre_rows {
+            *counts.entry(row.genre_id).or_insert(0) += 1;
+        }
+
+        Ok(genres
+            .into_iter()
+            .map(|g| {
+                let count = counts.get(&g.id).copied().unwrap_or(0);
+                (g.into(), count)
+            })
+            .collect())
     }
 }
 

@@ -14,4 +14,6 @@ pub trait GenreRepository: Send + Sync {
     async fn find_by_name(&self, transaction: &dyn Transaction, name: &str) -> Result<Option<Genre>, Error>;
     async fn list_genres(&self, transaction: &dyn Transaction, start_id: Option<GenreId>, page_size: Option<u64>) -> Result<Vec<Genre>, Error>;
     async fn list_all_genres(&self, transaction: &dyn Transaction) -> Result<Vec<Genre>, Error>;
+    async fn delete_genre(&self, transaction: &dyn Transaction, id: GenreId) -> Result<(), Error>;
+    async fn list_genres_with_counts(&self, transaction: &dyn Transaction) -> Result<Vec<(Genre, u64)>, Error>;
 }

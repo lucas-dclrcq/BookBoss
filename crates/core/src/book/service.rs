@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
 use crate::{
-    Error,
+    Error, RepositoryError,
     book::{
-        Author, AuthorId, AuthorToken, Book, BookAuthor, BookFile, BookId, BookIdentifier, BookQuery, BookToken, Genre, Publisher, Series, SeriesId,
-        SeriesToken, Tag,
+        Author, AuthorId, AuthorToken, Book, BookAuthor, BookFile, BookId, BookIdentifier, BookQuery, BookToken, Genre, GenreToken, NewGenre, NewTag,
+        Publisher, Series, SeriesId, SeriesToken, Tag, TagToken,
     },
     repository::RepositoryService,
-    with_read_only_transaction,
+    with_read_only_transaction, with_transaction,
 };
 
 #[async_trait::async_trait]
@@ -26,6 +26,12 @@ pub trait BookService: Send + Sync {
     async fn tags_for_book(&self, book_id: BookId) -> Result<Vec<Tag>, Error>;
     async fn list_all_genres(&self) -> Result<Vec<Genre>, Error>;
     async fn list_all_tags(&self) -> Result<Vec<Tag>, Error>;
+    async fn create_genre(&self, name: String) -> Result<Genre, Error>;
+    async fn create_tag(&self, name: String) -> Result<Tag, Error>;
+    async fn delete_genre(&self, token: GenreToken) -> Result<(), Error>;
+    async fn delete_tag(&self, token: TagToken) -> Result<(), Error>;
+    async fn list_genres_with_counts(&self) -> Result<Vec<(Genre, u64)>, Error>;
+    async fn list_tags_with_counts(&self) -> Result<Vec<(Tag, u64)>, Error>;
     async fn list_all_series(&self) -> Result<Vec<Series>, Error>;
     async fn list_all_authors(&self) -> Result<Vec<Author>, Error>;
     async fn list_all_publishers(&self) -> Result<Vec<Publisher>, Error>;
@@ -101,6 +107,42 @@ impl BookService for BookServiceImpl {
 
     async fn list_all_tags(&self) -> Result<Vec<Tag>, Error> {
         with_read_only_transaction!(self, tag_repository, |tx| tag_repository.list_all_tags(tx).await)
+    }
+
+    async fn create_genre(&self, name: String) -> Result<Genre, Error> {
+        with_transaction!(self, genre_repository, |tx| genre_repository.add_genre(tx, NewGenre { name }).await)
+    }
+
+    async fn create_tag(&self, name: String) -> Result<Tag, Error> {
+        with_transaction!(self, tag_repository, |tx| tag_repository.add_tag(tx, NewTag { name }).await)
+    }
+
+    async fn delete_genre(&self, token: GenreToken) -> Result<(), Error> {
+        with_transaction!(self, genre_repository, |tx| {
+            let genre = genre_repository.find_by_token(tx, token).await?;
+            let Some(genre) = genre else {
+                return Err(Error::RepositoryError(RepositoryError::NotFound));
+            };
+            genre_repository.delete_genre(tx, genre.id).await
+        })
+    }
+
+    async fn delete_tag(&self, token: TagToken) -> Result<(), Error> {
+        with_transaction!(self, tag_repository, |tx| {
+            let tag = tag_repository.find_by_token(tx, token).await?;
+            let Some(tag) = tag else {
+                return Err(Error::RepositoryError(RepositoryError::NotFound));
+            };
+            tag_repository.delete_tag(tx, tag.id).await
+        })
+    }
+
+    async fn list_genres_with_counts(&self) -> Result<Vec<(Genre, u64)>, Error> {
+        with_read_only_transaction!(self, genre_repository, |tx| genre_repository.list_genres_with_counts(tx).await)
+    }
+
+    async fn list_tags_with_counts(&self) -> Result<Vec<(Tag, u64)>, Error> {
+        with_read_only_transaction!(self, tag_repository, |tx| tag_repository.list_tags_with_counts(tx).await)
     }
 
     async fn list_all_series(&self) -> Result<Vec<Series>, Error> {
