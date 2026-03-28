@@ -189,10 +189,7 @@ fn book_matches(book: &BookSummary, tokens: &[SearchToken]) -> bool {
             SearchField::Genre => genres_combined.contains(value.as_str()),
             SearchField::Tag => tags_combined.contains(value.as_str()),
             SearchField::Status => {
-                let book_status = book
-                    .reading_state
-                    .as_ref()
-                    .map_or_else(|| "unread".to_string(), |s| s.status.to_lowercase());
+                let book_status = book.reading_state.as_ref().map_or_else(|| "unread".to_string(), |s| s.status.to_lowercase());
                 book_status == value.as_str()
             }
         },
@@ -475,10 +472,7 @@ mod tests {
 
     #[test]
     fn status_unread_matches_no_reading_state() {
-        let books = vec![
-            make_book_with_status("Dune", None),
-            make_book_with_status("Neuromancer", Some("Reading")),
-        ];
+        let books = vec![make_book_with_status("Dune", None), make_book_with_status("Neuromancer", Some("Reading"))];
         let result = filter_books_by_search(books, "status:unread");
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].title, "Dune");
@@ -486,10 +480,7 @@ mod tests {
 
     #[test]
     fn status_reading_matches_reading_state() {
-        let books = vec![
-            make_book_with_status("Dune", None),
-            make_book_with_status("Neuromancer", Some("Reading")),
-        ];
+        let books = vec![make_book_with_status("Dune", None), make_book_with_status("Neuromancer", Some("Reading"))];
         let result = filter_books_by_search(books, "status:reading");
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].title, "Neuromancer");

@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.5](https://github.com/szinn/BookBoss/compare/v0.7.4..v0.7.5) - 2026-03-28
+
+### Features
+
+- _(core)_ Add LibraryService::replace_cover - ([e43e43d](https://github.com/szinn/BookBoss/commit/e43e43d7bf4f5db084b1f5a6ee64208527d9336c))
+- _(frontend)_ Add status: field to book search - ([63659c1](https://github.com/szinn/BookBoss/commit/63659c12e726155c6914f7f1e351eb6c9c019477))
+- _(frontend)_ Drag-and-drop cover replacement on review and edit screens - ([bb0370b](https://github.com/szinn/BookBoss/commit/bb0370b2c7c297457f0817a154a92f771dc5a571))
+- _(storage,core)_ Normalize all covers to JPEG regardless of source format - ([6bd6f6a](https://github.com/szinn/BookBoss/commit/6bd6f6a3f59448012d65b770dd0a999bb92e4b8b))
+
+### Bug Fixes
+
+- _(frontend)_ Stage dropped cover in temp dir; commit only on Save/Approve - ([750fe4b](https://github.com/szinn/BookBoss/commit/750fe4b4985156046dff5022f6a400291d8d841d))
+
 ## [0.7.4](https://github.com/szinn/BookBoss/compare/v0.7.3..v0.7.4) - 2026-03-28
 
 ### Features
