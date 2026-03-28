@@ -19,6 +19,10 @@ Different users may want access to different subsets of books. Virtual libraries
 - Users can remove a book from their personal library (does not delete the book)
 - Admins can add any book to any library (location TBD — possibly edit metadata / bulk edit screens)
 
+## Spec
+
+See [spec-virtual-library.md](spec-virtual-library.md) for the full architecture and implementation plan.
+
 ## Open Questions / Plan Needed
 
 - How are virtual libraries represented in the DB? New `libraries` table + `library_books` junction? Or reuse shelves?
