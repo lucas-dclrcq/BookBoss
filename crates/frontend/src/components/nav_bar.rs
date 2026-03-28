@@ -368,7 +368,7 @@ pub(crate) fn NavBar() -> Element {
     };
 
     rsx! {
-        nav { class: "bg-indigo-700 text-white px-6 py-3 flex items-center shadow-sm gap-4",
+        nav { class: "relative bg-indigo-700 text-white px-6 py-3 flex items-center shadow-sm",
             div { class: "flex items-center gap-6 shrink-0",
                 button {
                     class: "flex items-center cursor-pointer hover:opacity-80",
@@ -398,9 +398,9 @@ pub(crate) fn NavBar() -> Element {
                     JobQueueBadge {}
                 }
             }
-            div { class: "flex-1 flex justify-center",
+            div { class: "absolute left-1/2 -translate-x-1/2 w-full max-w-md px-4",
                 if search_active {
-                    div { class: "relative w-full max-w-md",
+                    div { class: "relative w-full",
                         // Search icon
                         svg {
                             class: "absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none",
@@ -450,7 +450,7 @@ pub(crate) fn NavBar() -> Element {
                     }
                 }
             }
-            div { class: "flex items-center gap-4 shrink-0",
+            div { class: "flex items-center gap-4 shrink-0 ml-auto",
                 SuspenseBoundary {
                     fallback: |_| rsx! {},
                     AdminSettingsButton {}
