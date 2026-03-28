@@ -1,7 +1,7 @@
 ---
 slug: feature-shelf-rule
 type: feature
-status: not-started
+status: complete
 description: Add a Shelf filter rule for smart shelves (include/exclude by manual shelf membership)
 priority: P2
 ---
