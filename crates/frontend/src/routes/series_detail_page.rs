@@ -17,17 +17,19 @@ pub(crate) struct SeriesPageData {
 
 #[cfg(feature = "server")]
 use {
-    crate::routes::{books_page::hydrate_books, server_helpers::authenticated_user},
+    crate::routes::{book_detail_page::to_reading_state_dto, books_page::hydrate_books, server_helpers::authenticated_user},
     crate::server::AuthSession,
     bb_core::CoreServices,
     bb_core::book::{BookQuery, SeriesToken},
+    bb_core::reading::ReadStatus,
     std::str::FromStr,
     std::sync::Arc,
 };
 
 #[post("/api/v1/series", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
 async fn get_series(token: String) -> Result<SeriesPageData, ServerFnError> {
-    authenticated_user(&auth_session)?;
+    use std::collections::HashMap;
+    let current_user = authenticated_user(&auth_session)?;
 
     let book_service = &core_services.book_service;
 
@@ -56,7 +58,18 @@ async fn get_series(token: String) -> Result<SeriesPageData, ServerFnError> {
         (None, None) => std::cmp::Ordering::Equal,
     });
 
-    let book_summaries = hydrate_books(&books, &core_services, None).await?;
+    let reading_metas = core_services
+        .reading_service
+        .list_for_user(current_user.id(), None)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let reading_map: HashMap<u64, _> = reading_metas
+        .iter()
+        .filter(|m| m.read_status != ReadStatus::Unread)
+        .map(|m| (m.book_id, to_reading_state_dto(m)))
+        .collect();
+
+    let book_summaries = hydrate_books(&books, &core_services, Some(&reading_map)).await?;
 
     Ok(SeriesPageData {
         token: series.token.to_string(),
