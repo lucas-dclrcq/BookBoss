@@ -33,8 +33,8 @@ pub trait ImportJobRepository: Send + Sync {
     /// Permanently deletes an import job record.
     async fn delete_job(&self, transaction: &dyn Transaction, job_id: ImportJobId) -> Result<(), Error>;
 
-    /// Sets the job status to `Approved`.
-    async fn approve_job(&self, transaction: &dyn Transaction, job_id: ImportJobId) -> Result<(), Error>;
+    /// Sets the job status to `Approved` and records who approved it.
+    async fn approve_job(&self, transaction: &dyn Transaction, job_id: ImportJobId, reviewer_id: crate::user::UserId) -> Result<(), Error>;
 
     /// Delete import jobs in terminal states (Approved/Rejected) older than the
     /// cutoff. Returns the number of jobs deleted.

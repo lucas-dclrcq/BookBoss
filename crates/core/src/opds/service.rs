@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
-use aes_gcm::{AeadCore, Aes256Gcm, KeyInit, aead::Aead};
-use aes_gcm::aead::generic_array::GenericArray;
+use aes_gcm::{
+    AeadCore, Aes256Gcm, KeyInit,
+    aead::{Aead, generic_array::GenericArray},
+};
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use rand::RngExt;
 use sha2::{Digest, Sha256};

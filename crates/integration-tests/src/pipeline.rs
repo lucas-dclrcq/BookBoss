@@ -227,7 +227,7 @@ async fn approve_job_transitions_book_to_available() {
     let book_token = book.token;
     let edit = minimal_edit("Approved Book", "Test Author");
 
-    svc.library_service.approve_book(job.token, edit, &std::env::temp_dir()).await.unwrap();
+    svc.library_service.approve_book(job.token, 1, edit, &std::env::temp_dir()).await.unwrap();
 
     let book = svc.book_service.find_book_by_token(book_token).await.unwrap().expect("book found");
     assert_eq!(book.status, BookStatus::Available);
@@ -242,7 +242,7 @@ async fn approve_job_fails_when_not_needs_review() {
     // Job is still Pending — approve must fail
     let edit = minimal_edit("Title", "Author");
 
-    let result = svc.library_service.approve_book(job.token, edit, &std::env::temp_dir()).await;
+    let result = svc.library_service.approve_book(job.token, 1, edit, &std::env::temp_dir()).await;
 
     assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::NotFound) | Error::Validation(_))));
 }

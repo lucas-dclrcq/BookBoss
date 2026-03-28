@@ -206,7 +206,7 @@ impl ImportJobRepository for ImportJobRepositoryAdapter {
         Ok(())
     }
 
-    async fn approve_job(&self, transaction: &dyn Transaction, job_id: ImportJobId) -> Result<(), Error> {
+    async fn approve_job(&self, transaction: &dyn Transaction, job_id: ImportJobId, reviewer_id: bb_core::user::UserId) -> Result<(), Error> {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
         let now = Utc::now();
 
@@ -218,6 +218,7 @@ impl ImportJobRepository for ImportJobRepositoryAdapter {
 
         let mut updater: import_jobs::ActiveModel = existing.into();
         updater.status = Set(ImportStatus::Approved.to_string());
+        updater.reviewed_by = Set(Some(reviewer_id as i64));
         updater.reviewed_at = Set(Some(now.into()));
         updater.update(transaction).await.map_err(handle_dberr)?;
 
@@ -267,6 +268,7 @@ mod tests {
         book::FileFormat,
         import::{ImportJob, ImportStatus, NewImportJob},
         repository::RepositoryService,
+        user::NewUser,
     };
     use chrono::Utc;
     use sea_orm::Database;
@@ -276,6 +278,11 @@ mod tests {
     async fn setup() -> Arc<RepositoryService> {
         let db = Database::connect("sqlite::memory:").await.unwrap();
         create_repository_service(db).await.unwrap()
+    }
+
+    fn new_user() -> NewUser {
+        use std::collections::HashSet;
+        NewUser::new("tester", "hash", "tester@example.com", HashSet::new(), "Tester", false).unwrap()
     }
 
     fn new_job(file_path: &str) -> NewImportJob {
@@ -601,8 +608,9 @@ mod tests {
         let svc = setup().await;
         let tx = svc.repository().begin().await.unwrap();
 
+        let user = svc.user_repository().add_user(&*tx, new_user()).await.unwrap();
         let job = svc.import_job_repository().add_job(&*tx, new_job("/watch/old.epub")).await.unwrap();
-        svc.import_job_repository().approve_job(&*tx, job.id).await.unwrap();
+        svc.import_job_repository().approve_job(&*tx, job.id, user.id).await.unwrap();
 
         // Cutoff in the future — everything is "old".
         let cutoff = Utc::now() + chrono::Duration::hours(1);
@@ -629,8 +637,9 @@ mod tests {
         let svc = setup().await;
         let tx = svc.repository().begin().await.unwrap();
 
+        let user = svc.user_repository().add_user(&*tx, new_user()).await.unwrap();
         let job = svc.import_job_repository().add_job(&*tx, new_job("/watch/recent.epub")).await.unwrap();
-        svc.import_job_repository().approve_job(&*tx, job.id).await.unwrap();
+        svc.import_job_repository().approve_job(&*tx, job.id, user.id).await.unwrap();
 
         // Cutoff in the past — nothing is old enough.
         let cutoff = Utc::now() - chrono::Duration::hours(1);
@@ -661,8 +670,9 @@ mod tests {
         let svc = setup().await;
         let tx = svc.repository().begin().await.unwrap();
 
+        let user = svc.user_repository().add_user(&*tx, new_user()).await.unwrap();
         let job = svc.import_job_repository().add_job(&*tx, new_job("/watch/approved.epub")).await.unwrap();
-        svc.import_job_repository().approve_job(&*tx, job.id).await.unwrap();
+        svc.import_job_repository().approve_job(&*tx, job.id, user.id).await.unwrap();
 
         let cutoff = Utc::now() + chrono::Duration::hours(1);
         let stale = svc.import_job_repository().find_stale_non_terminal_jobs(&*tx, cutoff).await.unwrap();

@@ -47,7 +47,7 @@ pub trait LibraryService: Send + Sync {
     ///
     /// File renames (when title or primary author changed) and sidecar rewrites
     /// are performed as part of this operation.
-    async fn approve_book(&self, job_token: ImportJobToken, edit: BookEdit, temp_dir: &std::path::Path) -> Result<(), Error>;
+    async fn approve_book(&self, job_token: ImportJobToken, reviewer_id: crate::user::UserId, edit: BookEdit, temp_dir: &std::path::Path) -> Result<(), Error>;
 
     /// Rejects a `NeedsReview` import job, cleaning up all associated
     /// artifacts: removes the library directory, deletes the candidate book
@@ -179,7 +179,7 @@ impl LibraryService for LibraryServiceImpl {
         Ok(())
     }
 
-    async fn approve_book(&self, job_token: ImportJobToken, edit: BookEdit, temp_dir: &std::path::Path) -> Result<(), Error> {
+    async fn approve_book(&self, job_token: ImportJobToken, reviewer_id: crate::user::UserId, edit: BookEdit, temp_dir: &std::path::Path) -> Result<(), Error> {
         // ── 1. Load job and guard status ──────────────────────────────────────
         let import_job_repo = self.repository_service.import_job_repository().clone();
         let job = read_only_transaction(&**self.repository_service.repository(), |tx| {
@@ -366,7 +366,7 @@ impl LibraryService for LibraryServiceImpl {
                 }
 
                 // Mark import job approved
-                import_job_repo2.approve_job(tx, job_id).await?;
+                import_job_repo2.approve_job(tx, job_id, reviewer_id).await?;
 
                 Ok(())
             })

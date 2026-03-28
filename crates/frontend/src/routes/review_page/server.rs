@@ -355,7 +355,7 @@ pub(super) async fn approve_book(fields: BookEditFields) -> Result<(), ServerFnE
     let temp_dir = std::env::temp_dir();
     core_services
         .library_service
-        .approve_book(token, edit, &temp_dir)
+        .approve_book(token, current_user.id(), edit, &temp_dir)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
