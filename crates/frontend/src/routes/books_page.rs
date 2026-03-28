@@ -221,7 +221,7 @@ pub(crate) fn BooksPage() -> Element {
         let sort = crate::components::SORT_ORDER();
         list_books(sort)
     })?;
-    let shelves_resource = use_server_future(list_all_accessible_shelves)?;
+    let mut shelves_resource = use_server_future(list_all_accessible_shelves)?;
     let shelves: Vec<ShelfSummary> = shelves_resource().and_then(std::result::Result::ok).unwrap_or_default();
     rsx! {
         match page_data() {
@@ -264,7 +264,10 @@ pub(crate) fn BooksPage() -> Element {
                     }
                     SelectionActionBar {
                         all_book_tokens: book_tokens,
-                        on_action: move |()| page_data.restart(),
+                        on_action: move |()| {
+                            page_data.restart();
+                            shelves_resource.restart();
+                        },
                     }
                 }
             },

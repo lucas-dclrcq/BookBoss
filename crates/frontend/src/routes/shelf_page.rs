@@ -833,7 +833,10 @@ pub(crate) fn ShelfPage(token: String) -> Element {
 
         SelectionActionBar {
             all_book_tokens: book_tokens,
-            on_action: move |()| books_resource.restart(),
+            on_action: move |()| {
+                books_resource.restart();
+                shelves_resource.restart();
+            },
         }
 
         // Delete shelf modal
