@@ -1,8 +1,10 @@
+mod genre_tags_section;
 mod messages_section;
 mod tasks_section;
 mod users_section;
 
 use dioxus::prelude::*;
+use genre_tags_section::GenreTagsSection;
 use messages_section::MessagesSection;
 use tasks_section::TasksSection;
 use users_section::UsersSection;
@@ -50,6 +52,7 @@ enum Section {
     Users,
     Tasks,
     Messages,
+    GenreTags,
 }
 
 impl Section {
@@ -57,6 +60,7 @@ impl Section {
         match hash.trim_start_matches('#') {
             "tasks" => Self::Tasks,
             "messages" => Self::Messages,
+            "genre-tags" => Self::GenreTags,
             _ => Self::Users,
         }
     }
@@ -66,6 +70,7 @@ impl Section {
             Self::Users => "#users",
             Self::Tasks => "#tasks",
             Self::Messages => "#messages",
+            Self::GenreTags => "#genre-tags",
         }
     }
 }
@@ -155,6 +160,13 @@ pub(crate) fn SettingsPage() -> Element {
                             "Messages"
                         }
                     }
+                    li {
+                        button {
+                            class: nav_button_class(Section::GenreTags),
+                            onclick: move |_| active_section.set(Section::GenreTags),
+                            "Genre/Tags"
+                        }
+                    }
                 }
             }
             // ----------------------------------------------------------------
@@ -173,6 +185,9 @@ pub(crate) fn SettingsPage() -> Element {
                     },
                     Section::Messages => rsx! {
                         MessagesSection {}
+                    },
+                    Section::GenreTags => rsx! {
+                        GenreTagsSection {}
                     },
                 }
             }

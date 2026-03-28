@@ -1,7 +1,7 @@
 ---
 slug: feature-genre-tags-settings
 type: feature
-status: not-started
+status: complete
 description: Admin settings page to view, add, and delete genres and tags, showing book counts per entry
 priority: P2
 ---
