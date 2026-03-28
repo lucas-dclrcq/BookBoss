@@ -194,8 +194,7 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
 
     let health_subsystem = create_health_subsystem(
         core_services.health_service.clone(),
-        repository_service.repository().clone(),
-        repository_service.job_repository().clone(),
+        core_services.job_service.clone(),
         event_service.clone(),
         health_kick_rx,
     );

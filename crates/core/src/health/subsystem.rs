@@ -6,8 +6,7 @@ use crate::{
     Error,
     event::EventService,
     health::service::{HealthKickReceiver, HealthService},
-    jobs::JobRepository,
-    repository::{Repository, transaction},
+    jobs::JobService,
 };
 
 const POLL_INTERVAL: Duration = Duration::from_secs(30);
@@ -16,8 +15,7 @@ const POLL_INTERVAL: Duration = Duration::from_secs(30);
 
 pub struct HealthCheckSubsystem {
     health_service: Arc<dyn HealthService>,
-    repository: Arc<dyn Repository>,
-    job_repo: Arc<dyn JobRepository>,
+    job_service: Arc<dyn JobService>,
     event_service: Arc<dyn EventService>,
     kick_rx: HealthKickReceiver,
 }
@@ -28,29 +26,14 @@ impl HealthCheckSubsystem {
     /// Uses `count_pending_by_type` to avoid duplicate enqueues — if a job of
     /// the same type is already pending/running, we skip it.
     async fn enqueue_task(&self, job_type: &str) -> Result<(), Error> {
-        let job_repo = self.job_repo.clone();
-        let jt = job_type.to_string();
-
-        let pending = transaction(&*self.repository, |tx| {
-            let job_repo = job_repo.clone();
-            let jt = jt.clone();
-            Box::pin(async move { job_repo.count_pending_by_type(tx, &jt).await })
-        })
-        .await?;
+        let pending = self.job_service.count_pending_by_type(job_type).await?;
 
         if pending > 0 {
             tracing::debug!(job_type, "health task already pending/running, skipping");
             return Ok(());
         }
 
-        let job_repo = self.job_repo.clone();
-        let jt = job_type.to_string();
-        transaction(&*self.repository, |tx| {
-            let job_repo = job_repo.clone();
-            let jt = jt.clone();
-            Box::pin(async move { job_repo.enqueue_raw(tx, &jt, serde_json::json!({}), 0).await })
-        })
-        .await?;
+        self.job_service.enqueue_raw(job_type, serde_json::json!({}), 0).await?;
 
         tracing::info!(job_type, "enqueued health check task");
         self.event_service.notify_jobs_changed();
@@ -107,15 +90,13 @@ impl IntoSubsystem<Error> for HealthCheckSubsystem {
 #[must_use]
 pub fn create_health_subsystem(
     health_service: Arc<dyn HealthService>,
-    repository: Arc<dyn Repository>,
-    job_repo: Arc<dyn JobRepository>,
+    job_service: Arc<dyn JobService>,
     event_service: Arc<dyn EventService>,
     kick_rx: HealthKickReceiver,
 ) -> HealthCheckSubsystem {
     HealthCheckSubsystem {
         health_service,
-        repository,
-        job_repo,
+        job_service,
         event_service,
         kick_rx,
     }
