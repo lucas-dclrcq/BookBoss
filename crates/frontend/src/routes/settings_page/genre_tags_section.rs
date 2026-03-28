@@ -16,6 +16,7 @@ pub(crate) struct GenreTagEntry {
     pub token: String,
     pub name: String,
     pub book_count: u64,
+    pub has_incoming: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -43,10 +44,11 @@ pub(crate) async fn get_genre_tags() -> Result<GenreTagsData, ServerFnError> {
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?
         .into_iter()
-        .map(|(g, count)| GenreTagEntry {
+        .map(|(g, count, has_incoming)| GenreTagEntry {
             token: g.token.to_string(),
             name: g.name,
             book_count: count,
+            has_incoming,
         })
         .collect();
 
@@ -55,10 +57,11 @@ pub(crate) async fn get_genre_tags() -> Result<GenreTagsData, ServerFnError> {
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?
         .into_iter()
-        .map(|(t, count)| GenreTagEntry {
+        .map(|(t, count, has_incoming)| GenreTagEntry {
             token: t.token.to_string(),
             name: t.name,
             book_count: count,
+            has_incoming,
         })
         .collect();
 
@@ -179,6 +182,7 @@ fn EntityPanel(
     entries: Vec<GenreTagEntry>,
     on_add: EventHandler<String>,
     on_delete: EventHandler<String>,
+    on_click_name: EventHandler<String>,
     add_error: Option<String>,
 ) -> Element {
     let mut adding = use_signal(|| false);
@@ -260,13 +264,31 @@ fn EntityPanel(
                         for entry in entries {
                             {
                                 let token = entry.token.clone();
+                                let name = entry.name.clone();
                                 let book_label = if entry.book_count == 1 { "book" } else { "books" };
+                                let is_active = entry.book_count > 0;
                                 rsx! {
                                     li { class: "flex items-center justify-between px-4 py-2.5 hover:bg-gray-50",
-                                        span { class: "text-sm text-gray-900", "{entry.name}" }
+                                        // Name — clickable button when active, plain text otherwise
+                                        if is_active {
+                                            button {
+                                                class: "text-sm text-indigo-600 hover:underline text-left",
+                                                onclick: move |_| on_click_name.call(name.clone()),
+                                                "{entry.name}"
+                                            }
+                                        } else {
+                                            span { class: "text-sm text-gray-900", "{entry.name}" }
+                                        }
                                         div { class: "flex items-center gap-3",
                                             span { class: "text-xs text-gray-400",
                                                 "{entry.book_count} {book_label}"
+                                            }
+                                            // Incoming badge — only when no available books but pipeline references exist
+                                            if entry.has_incoming {
+                                                span {
+                                                    class: "inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-600 border border-amber-200",
+                                                    "incoming"
+                                                }
                                             }
                                             button {
                                                 class: "p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded text-xs",
@@ -292,6 +314,7 @@ fn EntityPanel(
 
 #[component]
 pub(crate) fn GenreTagsSection() -> Element {
+    let navigator = use_navigator();
     let mut refresh = use_signal(|| 0u32);
 
     let data_resource = use_resource(move || async move {
@@ -352,6 +375,10 @@ pub(crate) fn GenreTagsSection() -> Element {
                                 delete_target.set(Some(entry));
                             }
                         },
+                        on_click_name: move |name: String| {
+                            *crate::components::SEARCH_TEXT.write() = format!("genre:{name}");
+                            navigator.push(crate::Route::BooksPage {});
+                        },
                     }
                     EntityPanel {
                         title: "Tags",
@@ -376,6 +403,10 @@ pub(crate) fn GenreTagsSection() -> Element {
                                 delete_kind.set(Some("tag"));
                                 delete_target.set(Some(entry));
                             }
+                        },
+                        on_click_name: move |name: String| {
+                            *crate::components::SEARCH_TEXT.write() = format!("tag:{name}");
+                            navigator.push(crate::Route::BooksPage {});
                         },
                     }
                 },

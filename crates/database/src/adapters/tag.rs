@@ -14,7 +14,7 @@ use sea_orm::{
 };
 
 use crate::{
-    entities::{prelude, tags},
+    entities::{books, prelude, tags},
     error::handle_dberr,
     transaction::TransactionImpl,
 };
@@ -164,7 +164,7 @@ impl TagRepository for TagRepositoryAdapter {
         Ok(())
     }
 
-    async fn list_tags_with_counts(&self, transaction: &dyn Transaction) -> Result<Vec<(Tag, u64)>, Error> {
+    async fn list_tags_with_counts(&self, transaction: &dyn Transaction) -> Result<Vec<(Tag, u64, bool)>, Error> {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
         let tags = prelude::Tags::find()
@@ -175,16 +175,36 @@ impl TagRepository for TagRepositoryAdapter {
 
         let book_tag_rows = prelude::BookTags::find().all(transaction).await.map_err(handle_dberr)?;
 
-        let mut counts: HashMap<i64, u64> = HashMap::new();
+        let book_ids: Vec<i64> = book_tag_rows.iter().map(|r| r.book_id).collect();
+        let book_available: HashMap<i64, bool> = if book_ids.is_empty() {
+            HashMap::new()
+        } else {
+            prelude::Books::find()
+                .filter(books::Column::Id.is_in(book_ids))
+                .all(transaction)
+                .await
+                .map_err(handle_dberr)?
+                .into_iter()
+                .map(|b| (b.id, b.status == "available"))
+                .collect()
+        };
+
+        let mut counts: HashMap<i64, (u64, bool)> = HashMap::new();
         for row in book_tag_rows {
-            *counts.entry(row.tag_id).or_insert(0) += 1;
+            let is_available = book_available.get(&row.book_id).copied().unwrap_or(false);
+            let entry = counts.entry(row.tag_id).or_insert((0, false));
+            if is_available {
+                entry.0 += 1;
+            } else {
+                entry.1 = true;
+            }
         }
 
         Ok(tags
             .into_iter()
             .map(|t| {
-                let count = counts.get(&t.id).copied().unwrap_or(0);
-                (t.into(), count)
+                let (available_count, has_incoming) = counts.get(&t.id).copied().unwrap_or((0, false));
+                (t.into(), available_count, has_incoming)
             })
             .collect())
     }

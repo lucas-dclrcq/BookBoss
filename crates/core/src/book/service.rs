@@ -30,8 +30,8 @@ pub trait BookService: Send + Sync {
     async fn create_tag(&self, name: String) -> Result<Tag, Error>;
     async fn delete_genre(&self, token: GenreToken) -> Result<(), Error>;
     async fn delete_tag(&self, token: TagToken) -> Result<(), Error>;
-    async fn list_genres_with_counts(&self) -> Result<Vec<(Genre, u64)>, Error>;
-    async fn list_tags_with_counts(&self) -> Result<Vec<(Tag, u64)>, Error>;
+    async fn list_genres_with_counts(&self) -> Result<Vec<(Genre, u64, bool)>, Error>;
+    async fn list_tags_with_counts(&self) -> Result<Vec<(Tag, u64, bool)>, Error>;
     async fn list_all_series(&self) -> Result<Vec<Series>, Error>;
     async fn list_all_authors(&self) -> Result<Vec<Author>, Error>;
     async fn list_all_publishers(&self) -> Result<Vec<Publisher>, Error>;
@@ -137,11 +137,11 @@ impl BookService for BookServiceImpl {
         })
     }
 
-    async fn list_genres_with_counts(&self) -> Result<Vec<(Genre, u64)>, Error> {
+    async fn list_genres_with_counts(&self) -> Result<Vec<(Genre, u64, bool)>, Error> {
         with_read_only_transaction!(self, genre_repository, |tx| genre_repository.list_genres_with_counts(tx).await)
     }
 
-    async fn list_tags_with_counts(&self) -> Result<Vec<(Tag, u64)>, Error> {
+    async fn list_tags_with_counts(&self) -> Result<Vec<(Tag, u64, bool)>, Error> {
         with_read_only_transaction!(self, tag_repository, |tx| tag_repository.list_tags_with_counts(tx).await)
     }
 

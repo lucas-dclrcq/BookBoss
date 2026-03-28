@@ -14,7 +14,7 @@ use sea_orm::{
 };
 
 use crate::{
-    entities::{genres, prelude},
+    entities::{books, genres, prelude},
     error::handle_dberr,
     transaction::TransactionImpl,
 };
@@ -164,7 +164,7 @@ impl GenreRepository for GenreRepositoryAdapter {
         Ok(())
     }
 
-    async fn list_genres_with_counts(&self, transaction: &dyn Transaction) -> Result<Vec<(Genre, u64)>, Error> {
+    async fn list_genres_with_counts(&self, transaction: &dyn Transaction) -> Result<Vec<(Genre, u64, bool)>, Error> {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
         let genres = prelude::Genres::find()
@@ -175,16 +175,38 @@ impl GenreRepository for GenreRepositoryAdapter {
 
         let book_genre_rows = prelude::BookGenres::find().all(transaction).await.map_err(handle_dberr)?;
 
-        let mut counts: HashMap<i64, u64> = HashMap::new();
+        // Collect book_ids that appear in book_genres, then load their statuses.
+        let book_ids: Vec<i64> = book_genre_rows.iter().map(|r| r.book_id).collect();
+        let book_available: HashMap<i64, bool> = if book_ids.is_empty() {
+            HashMap::new()
+        } else {
+            prelude::Books::find()
+                .filter(books::Column::Id.is_in(book_ids))
+                .all(transaction)
+                .await
+                .map_err(handle_dberr)?
+                .into_iter()
+                .map(|b| (b.id, b.status == "available"))
+                .collect()
+        };
+
+        // Per-genre: count available books and flag any non-available references.
+        let mut counts: HashMap<i64, (u64, bool)> = HashMap::new();
         for row in book_genre_rows {
-            *counts.entry(row.genre_id).or_insert(0) += 1;
+            let is_available = book_available.get(&row.book_id).copied().unwrap_or(false);
+            let entry = counts.entry(row.genre_id).or_insert((0, false));
+            if is_available {
+                entry.0 += 1;
+            } else {
+                entry.1 = true;
+            }
         }
 
         Ok(genres
             .into_iter()
             .map(|g| {
-                let count = counts.get(&g.id).copied().unwrap_or(0);
-                (g.into(), count)
+                let (available_count, has_incoming) = counts.get(&g.id).copied().unwrap_or((0, false));
+                (g.into(), available_count, has_incoming)
             })
             .collect())
     }

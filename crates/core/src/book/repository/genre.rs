@@ -15,5 +15,8 @@ pub trait GenreRepository: Send + Sync {
     async fn list_genres(&self, transaction: &dyn Transaction, start_id: Option<GenreId>, page_size: Option<u64>) -> Result<Vec<Genre>, Error>;
     async fn list_all_genres(&self, transaction: &dyn Transaction) -> Result<Vec<Genre>, Error>;
     async fn delete_genre(&self, transaction: &dyn Transaction, id: GenreId) -> Result<(), Error>;
-    async fn list_genres_with_counts(&self, transaction: &dyn Transaction) -> Result<Vec<(Genre, u64)>, Error>;
+    /// Returns `(Genre, available_count, has_incoming)` where `available_count`
+    /// is the number of Available books with this genre, and `has_incoming`
+    /// is true if any non-Available book references it.
+    async fn list_genres_with_counts(&self, transaction: &dyn Transaction) -> Result<Vec<(Genre, u64, bool)>, Error>;
 }
