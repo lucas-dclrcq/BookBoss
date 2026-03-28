@@ -709,3 +709,70 @@ pub(crate) async fn get_picklist_data((): ()) -> Result<PicklistData, ServerFnEr
         publishers,
     })
 }
+
+// ── Cover replacement server functions
+// ────────────────────────────────────
+
+#[put(
+    "/api/v1/incoming/review/cover",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+pub(super) async fn replace_incoming_cover(job_token: String, data_base64: String) -> Result<(), ServerFnError> {
+    let current_user = auth_session.current_user.clone().unwrap_or_default();
+    if !Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::PUT], true)
+        .requires(Rights::any([Rights::permission(Capability::ApproveImports.as_str())]))
+        .validate(&current_user, &Method::PUT, None)
+        .await
+    {
+        return Err(ServerFnError::new("Forbidden"));
+    }
+
+    let token: ImportJobToken = job_token.parse().map_err(|_| ServerFnError::new("Invalid token"))?;
+    let import_service = &core_services.import_job_service;
+
+    let job = import_service
+        .find_by_token(token)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .ok_or_else(|| ServerFnError::new("Job not found"))?;
+
+    let book_id = job.candidate_book_id.ok_or_else(|| ServerFnError::new("No candidate book"))?;
+
+    let cover_bytes = B64.decode(&data_base64).map_err(|_| ServerFnError::new("Invalid base64"))?;
+
+    core_services
+        .library_service
+        .replace_cover(BookToken::new(book_id), cover_bytes)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(())
+}
+
+#[put(
+    "/api/v1/books/cover",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+pub(super) async fn replace_library_cover(book_token: String, data_base64: String) -> Result<(), ServerFnError> {
+    let current_user = auth_session.current_user.clone().unwrap_or_default();
+    if !Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::PUT], true)
+        .requires(Rights::any([Rights::permission(Capability::EditBook.as_str())]))
+        .validate(&current_user, &Method::PUT, None)
+        .await
+    {
+        return Err(ServerFnError::new("Forbidden"));
+    }
+
+    let token = BookToken::from_str(&book_token).map_err(|_| ServerFnError::new("Invalid book token"))?;
+    let cover_bytes = B64.decode(&data_base64).map_err(|_| ServerFnError::new("Invalid base64"))?;
+
+    core_services
+        .library_service
+        .replace_cover(token, cover_bytes)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(())
+}

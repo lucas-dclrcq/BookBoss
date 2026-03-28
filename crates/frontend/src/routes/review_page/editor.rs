@@ -1,7 +1,12 @@
+use base64::{Engine, engine::general_purpose::STANDARD as B64};
+use dioxus::html::HasFileData;
 use dioxus::prelude::*;
 
 use super::{
-    server::{approve_book, fetch_provider_for_edit, fetch_provider_metadata, get_picklist_data, reject_review_book, save_library_book},
+    server::{
+        approve_book, fetch_provider_for_edit, fetch_provider_metadata, get_picklist_data, reject_review_book, replace_incoming_cover, replace_library_cover,
+        save_library_book,
+    },
     types::{BookEditFields, BookReviewData, IdentifierMap, ProviderResult},
 };
 use crate::components::{AutocompleteInput, ChipInput};
@@ -50,8 +55,9 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
     let mut identifiers: Signal<IdentifierMap> = use_signal(|| data.identifiers.clone());
     let mut use_fetched_cover = use_signal(|| false);
     let cover_url = format!("/api/v1/covers/{}", data.book_token);
-    let mut current_cover = use_signal(|| cover_url);
+    let mut current_cover = use_signal(|| cover_url.clone());
     let mut current_cover_dimensions: Signal<Option<(u32, u32)>> = use_signal(|| data.cover_dimensions);
+    let mut cover_drag_over = use_signal(|| false);
 
     // ── Provider fetch state ──────────────────────────────────────────────────
     let mut provider_result: Signal<Option<ProviderResult>> = use_signal(|| None);
@@ -730,7 +736,90 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                         tr {
                             td { class: "py-2 pr-4 text-gray-500 font-medium whitespace-nowrap align-top pt-3", "Cover" }
                             td { class: "py-2 pr-4",
-                                div { class: "flex flex-col items-center gap-0.5",
+                                div {
+                                    class: if *cover_drag_over.read() {
+                                        "flex flex-col items-center gap-0.5 outline outline-2 outline-indigo-400 rounded"
+                                    } else {
+                                        "flex flex-col items-center gap-0.5"
+                                    },
+                                    ondragover: move |evt: DragEvent| {
+                                        evt.prevent_default();
+                                        cover_drag_over.set(true);
+                                    },
+                                    ondragleave: move |_| cover_drag_over.set(false),
+                                    ondrop: move |evt: DragEvent| {
+                                        evt.prevent_default();
+                                        let files = evt.files();
+                                        let jt = job_token.clone();
+                                        let bt = book_token_for_edit.clone();
+                                        async move {
+                                            cover_drag_over.set(false);
+                                            let Some(file) = files.into_iter().next() else { return; };
+
+                                            let lower = file.name().to_lowercase();
+                                            if !lower.ends_with(".jpg")
+                                                && !lower.ends_with(".jpeg")
+                                                && !lower.ends_with(".png")
+                                                && !lower.ends_with(".gif")
+                                                && !lower.ends_with(".webp")
+                                            {
+                                                error_msg.set(Some(
+                                                    "Please drop an image file (JPG, PNG, GIF, or WebP)".to_string(),
+                                                ));
+                                                return;
+                                            }
+
+                                            if file.size() > 10 * 1024 * 1024 {
+                                                error_msg.set(Some("Image must be under 10 MB".to_string()));
+                                                return;
+                                            }
+
+                                            let Ok(bytes_obj) = file.read_bytes().await else {
+                                                error_msg.set(Some("Failed to read image file".to_string()));
+                                                return;
+                                            };
+                                            let bytes = bytes_obj.as_ref();
+
+                                            // Detect MIME type for preview data URL
+                                            let mime = if bytes.starts_with(&[0xFF, 0xD8]) {
+                                                "image/jpeg"
+                                            } else if bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+                                                "image/png"
+                                            } else if bytes.starts_with(&[0x47, 0x49, 0x46]) {
+                                                "image/gif"
+                                            } else if bytes.len() >= 12
+                                                && bytes.starts_with(b"RIFF")
+                                                && bytes.get(8..12) == Some(b"WEBP")
+                                            {
+                                                "image/webp"
+                                            } else {
+                                                "image/jpeg"
+                                            };
+
+                                            let encoded = B64.encode(&bytes);
+                                            // Optimistic preview
+                                            current_cover
+                                                .set(format!("data:{mime};base64,{}", encoded.clone()));
+                                            current_cover_dimensions.set(None);
+                                            // Clear any staged provider cover — the uploaded cover is
+                                            // saved immediately so use_fetched_cover must not override it.
+                                            use_fetched_cover.set(false);
+                                            error_msg.set(None);
+
+                                            let bt_revert = bt.clone();
+                                            let result = if edit_mode {
+                                                replace_library_cover(bt, encoded).await
+                                            } else {
+                                                replace_incoming_cover(jt, encoded).await
+                                            };
+
+                                            if let Err(e) = result {
+                                                error_msg.set(Some(format!("Failed to replace cover: {e}")));
+                                                current_cover
+                                                    .set(format!("/api/v1/covers/{bt_revert}"));
+                                            }
+                                        }
+                                    },
                                     img {
                                         class: "max-h-32 max-w-24 object-contain rounded shadow-sm",
                                         src: "{current_cover}",
@@ -739,6 +828,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                     if let Some((w, h)) = *current_cover_dimensions.read() {
                                         span { class: "text-gray-400 text-xs", "{w} × {h}" }
                                     }
+                                    span { class: "text-gray-400 text-xs mt-1", "drop image to replace" }
                                 }
                             }
                             td { class: "py-2 pr-4 text-center align-top pt-3",

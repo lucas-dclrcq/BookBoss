@@ -1,7 +1,7 @@
 ---
 slug: feature-replace-cover
 type: feature
-status: not-started
+status: complete
 description: Allow replacing a book's cover by dragging an image file onto the cover in the review/edit metadata screens
 priority: P2
 ---
