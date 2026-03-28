@@ -8,6 +8,10 @@ assets-source/
 .gitignore
 .jj
 
+# Exclude project-related files
+.backlog/
+.scratchpad/
+
 # Exclude common development environment files
 .DS_Store
 Thumbs.db
