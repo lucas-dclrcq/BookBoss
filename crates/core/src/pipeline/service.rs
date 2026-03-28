@@ -9,10 +9,7 @@ use crate::{
     format::FormatService,
     import::{ImportJob, ImportSource, ImportStatus},
     metadata::MetadataService,
-    pipeline::{
-        ProviderBook,
-        model::{ExtractedAuthor, ExtractedIdentifier, ExtractedMetadata},
-    },
+    pipeline::ProviderBook,
     repository::{RepositoryService, read_only_transaction, transaction},
     storage::{BookSidecar, FileStoreService, SidecarAuthor, SidecarFile, SidecarIdentifier, SidecarSeries},
 };
@@ -31,25 +28,6 @@ pub trait PipelineService: Send + Sync {
     /// Returns the human-readable names of all configured metadata providers,
     /// in priority order.
     fn list_provider_names(&self) -> Vec<&'static str>;
-
-    /// Fetches metadata from a named provider.
-    ///
-    /// `title` and `identifiers` are used as search context. Returns `None`
-    /// when the provider finds no match or has insufficient data to query.
-    /// Returns an error if the provider name is unknown.
-    ///
-    /// If the result includes cover bytes they are written to the temp cover
-    /// store keyed by `cover_key` for later retrieval (e.g. during
-    /// `approve_book`).
-    async fn fetch_from_provider(
-        &self,
-        provider_name: &str,
-        title: Option<String>,
-        authors: Vec<String>,
-        identifiers: Vec<(IdentifierType, String)>,
-        cover_key: &str,
-        temp_dir: &std::path::Path,
-    ) -> Result<Option<crate::pipeline::ProviderBook>, Error>;
 }
 
 pub struct PipelineServiceImpl {
@@ -624,72 +602,5 @@ impl PipelineService for PipelineServiceImpl {
 
     fn list_provider_names(&self) -> Vec<&'static str> {
         self.metadata_service.list_provider_names()
-    }
-
-    async fn fetch_from_provider(
-        &self,
-        provider_name: &str,
-        title: Option<String>,
-        authors: Vec<String>,
-        identifiers: Vec<(IdentifierType, String)>,
-        cover_key: &str,
-        temp_dir: &std::path::Path,
-    ) -> Result<Option<crate::pipeline::ProviderBook>, Error> {
-        let provider = self
-            .metadata_service
-            .providers()
-            .into_iter()
-            .find(|p| p.name() == provider_name)
-            .ok_or_else(|| Error::Validation(format!("unknown provider: {provider_name}")))?;
-
-        let extracted = ExtractedMetadata {
-            title,
-            authors: if authors.is_empty() {
-                None
-            } else {
-                Some(
-                    authors
-                        .into_iter()
-                        .enumerate()
-                        .map(|(i, name)| ExtractedAuthor {
-                            name,
-                            role: None,
-                            sort_order: i as i32,
-                        })
-                        .collect(),
-                )
-            },
-            identifiers: if identifiers.is_empty() {
-                None
-            } else {
-                Some(
-                    identifiers
-                        .into_iter()
-                        .map(|(identifier_type, value)| ExtractedIdentifier { identifier_type, value })
-                        .collect(),
-                )
-            },
-            ..Default::default()
-        };
-
-        let result = provider.enrich(&extracted).await?;
-
-        // Persist cover bytes to temp store keyed by cover_key so the caller
-        // (approve_job or save_book_metadata) can retrieve them without a
-        // round-trip through the frontend.
-        if let Some(pb) = &result {
-            if let Some(cover) = &pb.cover_bytes {
-                let cover_dir = temp_dir.join("bookboss-covers");
-                tokio::fs::create_dir_all(&cover_dir)
-                    .await
-                    .map_err(|e| Error::Infrastructure(format!("failed to create temp cover dir: {e}")))?;
-                let cover_path = cover_dir.join(cover_key);
-                tokio::fs::write(&cover_path, cover)
-                    .await
-                    .map_err(|e| Error::Infrastructure(format!("failed to write temp cover: {e}")))?;
-            }
-        }
-
-        Ok(result)
     }
 }
