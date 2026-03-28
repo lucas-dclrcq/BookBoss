@@ -390,7 +390,7 @@ pub(crate) fn ShelfBar(
 
                     div { class: "mb-6",
                         p { class: "text-sm font-medium text-gray-700 mb-2", "Filter rules" }
-                        FilterBuilder { filter: smart_filter, entity_options: entity_options.clone() }
+                        FilterBuilder { filter: smart_filter, entity_options: entity_options.clone(), current_shelf_id: None }
                     }
 
                     if let Some(msg) = smart_error() {

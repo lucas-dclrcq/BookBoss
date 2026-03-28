@@ -25,6 +25,7 @@ pub(crate) struct ShelfBooksPage {
 /// Lightweight shelf descriptor returned by list and create operations.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct ShelfSummary {
+    pub id: i64,
     pub token: String,
     pub name: String,
     /// `"Private"` or `"Public"`
@@ -115,6 +116,7 @@ pub(crate) async fn list_my_shelves() -> Result<Vec<ShelfSummary>, ServerFnError
                 None
             };
             ShelfSummary {
+                id: s.id as i64,
                 token: s.token.to_string(),
                 name: s.name.clone(),
                 visibility: visibility_str(&s.visibility).to_string(),
@@ -276,7 +278,7 @@ pub(crate) async fn update_shelf(token: String, name: String, visibility: String
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 pub(crate) async fn get_filter_entity_options() -> Result<FilterEntityOptions, ServerFnError> {
-    authenticated_user(&auth_session)?;
+    let user_id = authenticated_user(&auth_session)?.id();
 
     let book_service = &core_services.book_service;
 
@@ -320,12 +322,23 @@ pub(crate) async fn get_filter_entity_options() -> Result<FilterEntityOptions, S
         .map(|p| (p.id as i64, p.name))
         .collect();
 
+    let shelves = core_services
+        .shelf_service
+        .list_shelves_for_user(user_id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .into_iter()
+        .filter(|s| s.shelf_type == ShelfType::Manual)
+        .map(|s| (s.id as i64, s.name))
+        .collect();
+
     Ok(FilterEntityOptions {
         authors,
         series,
         genres,
         tags,
         publishers,
+        shelves,
     })
 }
 
@@ -364,6 +377,7 @@ pub(crate) async fn list_all_accessible_shelves() -> Result<Vec<ShelfSummary>, S
             None
         };
         own.push(ShelfSummary {
+            id: s.id as i64,
             token: s.token.to_string(),
             name: s.name.clone(),
             visibility: visibility_str(&s.visibility).to_string(),
@@ -381,6 +395,7 @@ pub(crate) async fn list_all_accessible_shelves() -> Result<Vec<ShelfSummary>, S
         .map_err(|e| ServerFnError::new(e.to_string()))?
         .into_iter()
         .map(|s| ShelfSummary {
+            id: s.id as i64,
             token: s.token.to_string(),
             name: s.name.clone(),
             visibility: visibility_str(&s.visibility).to_string(),
@@ -808,7 +823,11 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                         if current_is_smart {
                             div { class: "mb-6",
                                 p { class: "text-sm font-medium text-gray-700 mb-2", "Filter rules" }
-                                FilterBuilder { filter: edit_filter, entity_options: entity_options.clone() }
+                                FilterBuilder {
+                                    filter: edit_filter,
+                                    entity_options: entity_options.clone(),
+                                    current_shelf_id: current_shelf.as_ref().map(|s| s.id),
+                                }
                             }
                         }
 
