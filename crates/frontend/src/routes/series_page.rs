@@ -25,12 +25,7 @@ async fn get_all_series() -> Result<Vec<SeriesTileData>, ServerFnError> {
 
     let mut tiles = Vec::with_capacity(all_series.len());
     for series in &all_series {
-        let book_count = book_service
-            .count_books_for_series(series.id)
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
-
-        // Load books for this series, sort by series_number, take first 3 for cover art
+        // Load only Available books for this series (list_books filters by status).
         let filter = BookQuery {
             series_id: Some(series.id),
             ..Default::default()
@@ -39,6 +34,13 @@ async fn get_all_series() -> Result<Vec<SeriesTileData>, ServerFnError> {
             .list_books(&filter, None, None)
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        // Skip series with no available books (e.g. all still incoming).
+        if books.is_empty() {
+            continue;
+        }
+
+        let book_count = books.len() as u64;
 
         books.sort_by(|a, b| match (&a.series_number, &b.series_number) {
             (Some(a), Some(b)) => a.cmp(b),

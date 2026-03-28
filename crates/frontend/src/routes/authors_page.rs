@@ -11,7 +11,12 @@ pub(crate) struct AuthorRow {
 }
 
 #[cfg(feature = "server")]
-use {crate::routes::server_helpers::authenticated_user, crate::server::AuthSession, bb_core::CoreServices, std::sync::Arc};
+use {
+    crate::routes::server_helpers::authenticated_user,
+    crate::server::AuthSession,
+    bb_core::{CoreServices, book::BookQuery},
+    std::sync::Arc,
+};
 
 #[get("/api/v1/authors/list", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
 async fn get_authors() -> Result<Vec<AuthorRow>, ServerFnError> {
@@ -23,14 +28,28 @@ async fn get_authors() -> Result<Vec<AuthorRow>, ServerFnError> {
 
     let mut rows = Vec::with_capacity(authors.len());
     for author in &authors {
-        let count = book_service
-            .count_books_for_author(author.id)
+        // list_books filters by Available status, so this excludes incoming books.
+        let books = book_service
+            .list_books(
+                &BookQuery {
+                    author_id: Some(author.id),
+                    ..Default::default()
+                },
+                None,
+                None,
+            )
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        // Skip authors with no available books (e.g. all still incoming).
+        if books.is_empty() {
+            continue;
+        }
+
         rows.push(AuthorRow {
             token: author.token.to_string(),
             name: author.name.clone(),
-            book_count: count,
+            book_count: books.len() as u64,
         });
     }
 
