@@ -107,6 +107,13 @@ async fn list_incoming_books() -> Result<Vec<IncomingBookSummary>, ServerFnError
         });
     }
 
+    summaries.sort_by(|a, b| match (&a.title, &b.title) {
+        (Some(a), Some(b)) => a.to_lowercase().cmp(&b.to_lowercase()),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => std::cmp::Ordering::Equal,
+    });
+
     Ok(summaries)
 }
 
