@@ -17,6 +17,7 @@ enum SearchField {
     Series,
     Genre,
     Tag,
+    Status,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -102,11 +103,12 @@ fn parse_field_prefix(prefix: &str) -> Option<SearchField> {
         "series" => Some(SearchField::Series),
         "genre" => Some(SearchField::Genre),
         "tag" => Some(SearchField::Tag),
+        "status" => Some(SearchField::Status),
         _ => None,
     }
 }
 
-const FIELD_NAMES: [&str; 5] = ["title", "author", "series", "genre", "tag"];
+const FIELD_NAMES: [&str; 6] = ["title", "author", "series", "genre", "tag", "status"];
 
 /// Returns `true` if `word` is a known field name or a prefix of one. Used to
 /// suppress intermediate bare-word filtering while the user is typing a field
@@ -186,6 +188,13 @@ fn book_matches(book: &BookSummary, tokens: &[SearchToken]) -> bool {
             SearchField::Series => series.as_ref().is_some_and(|s| s.contains(value.as_str())),
             SearchField::Genre => genres_combined.contains(value.as_str()),
             SearchField::Tag => tags_combined.contains(value.as_str()),
+            SearchField::Status => {
+                let book_status = book
+                    .reading_state
+                    .as_ref()
+                    .map_or_else(|| "unread".to_string(), |s| s.status.to_lowercase());
+                book_status == value.as_str()
+            }
         },
     })
 }
@@ -264,6 +273,7 @@ mod tests {
             ("series", SearchField::Series),
             ("genre", SearchField::Genre),
             ("tag", SearchField::Tag),
+            ("status", SearchField::Status),
         ] {
             let tokens = parse_search_query(&format!("{prefix}:test"));
             assert_eq!(tokens, vec![SearchToken::Field(expected, "test".into())]);
@@ -448,5 +458,60 @@ mod tests {
         let books = vec![make_book("Dune", &["Frank Herbert"], None, &[], &[])];
         let result = filter_books_by_search(books, "xyz");
         assert!(result.is_empty());
+    }
+
+    fn make_book_with_status(title: &str, status: Option<&str>) -> BookSummary {
+        use crate::routes::book_detail_page::ReadingStateDto;
+        let mut book = make_book(title, &[], None, &[], &[]);
+        book.reading_state = status.map(|s| ReadingStateDto {
+            status: s.to_string(),
+            progress_pct: None,
+            personal_rating: None,
+            times_read: 0,
+            notes: None,
+        });
+        book
+    }
+
+    #[test]
+    fn status_unread_matches_no_reading_state() {
+        let books = vec![
+            make_book_with_status("Dune", None),
+            make_book_with_status("Neuromancer", Some("Reading")),
+        ];
+        let result = filter_books_by_search(books, "status:unread");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].title, "Dune");
+    }
+
+    #[test]
+    fn status_reading_matches_reading_state() {
+        let books = vec![
+            make_book_with_status("Dune", None),
+            make_book_with_status("Neuromancer", Some("Reading")),
+        ];
+        let result = filter_books_by_search(books, "status:reading");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].title, "Neuromancer");
+    }
+
+    #[test]
+    fn status_all_variants_match() {
+        for status in ["Reading", "Paused", "Rereading", "Read", "Abandoned"] {
+            let books = vec![
+                make_book_with_status("Book A", Some(status)),
+                make_book_with_status("Book B", None), // Unread — won't match any named status
+            ];
+            let result = filter_books_by_search(books, &format!("status:{}", status.to_lowercase()));
+            assert_eq!(result.len(), 1, "status:{status} should match exactly one book");
+            assert_eq!(result[0].title, "Book A");
+        }
+    }
+
+    #[test]
+    fn status_case_insensitive() {
+        let books = vec![make_book_with_status("Dune", Some("Reading"))];
+        let result = filter_books_by_search(books, "status:READING");
+        assert_eq!(result.len(), 1);
     }
 }
