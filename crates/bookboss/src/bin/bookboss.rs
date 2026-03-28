@@ -74,9 +74,7 @@ async fn cmd_dump_book(file: std::path::PathBuf) -> anyhow::Result<()> {
         {
             Ok(Ok(xml)) => {
                 println!("\n=== OPF metadata ===");
-                if let (Some(start), Some(end)) =
-                    (xml.find("<metadata"), xml.find("</metadata>"))
-                {
+                if let (Some(start), Some(end)) = (xml.find("<metadata"), xml.find("</metadata>")) {
                     println!("{}", &xml[start..end + "</metadata>".len()]);
                 } else {
                     println!("{xml}");

@@ -265,7 +265,13 @@ pub(super) fn build_book_metadata(book: &Book, file: Option<&BookFile>, sync_tok
     }
 }
 
-pub(super) fn build_new_entitlement(entry: &BookSyncEntry, sync_token: &str, base: &str, reading_state: Option<&UserBookMetadata>, series_name: Option<String>) -> KoboSyncItem {
+pub(super) fn build_new_entitlement(
+    entry: &BookSyncEntry,
+    sync_token: &str,
+    base: &str,
+    reading_state: Option<&UserBookMetadata>,
+    series_name: Option<String>,
+) -> KoboSyncItem {
     let book = &entry.book;
     let uuid = book_uuid_from_token(book.token);
     let created = book.created_at.to_rfc3339();
@@ -283,7 +289,13 @@ pub(super) fn build_new_entitlement(entry: &BookSyncEntry, sync_token: &str, bas
 
 /// Builds a `ChangedEntitlement` for a book that the device already has but
 /// whose file or metadata has changed (upgrade to KEPUB, metadata edit, etc.).
-pub(super) fn build_changed_entitlement(entry: &BookSyncEntry, sync_token: &str, base: &str, reading_state: Option<&UserBookMetadata>, series_name: Option<String>) -> KoboSyncItem {
+pub(super) fn build_changed_entitlement(
+    entry: &BookSyncEntry,
+    sync_token: &str,
+    base: &str,
+    reading_state: Option<&UserBookMetadata>,
+    series_name: Option<String>,
+) -> KoboSyncItem {
     let book = &entry.book;
     let uuid = book_uuid_from_token(book.token);
     let created = book.created_at.to_rfc3339();

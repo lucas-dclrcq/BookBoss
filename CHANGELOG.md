@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.4](https://github.com/szinn/BookBoss/compare/v0.7.3..v0.7.4) - 2026-03-28
+
+### Features
+
+- _(core)_ Add Shelf filter rule variant - ([dabc0c9](https://github.com/szinn/BookBoss/commit/dabc0c93ed185a91ecc7f8555572bb4467365d9d))
+- _(core,database)_ Add delete/create/list_with_counts for genres and tags - ([35d1ca1](https://github.com/szinn/BookBoss/commit/35d1ca1f96644b77503da7fd99e7d5dd31e3ae52))
+- _(core,database,frontend)_ Available-only counts, incoming badge, clickable genre/tag names - ([a9d28ff](https://github.com/szinn/BookBoss/commit/a9d28ff3f15ec41cdb4eed23b86e69da89d55e61))
+- _(frontend)_ Send series metadata in Kobo sync responses - ([d904cd7](https://github.com/szinn/BookBoss/commit/d904cd7212a0d901410a1dc66b4816e1e3236abe))
+- _(frontend)_ Move Genre/Tags nav item to second position in settings sidebar - ([c7c1d3e](https://github.com/szinn/BookBoss/commit/c7c1d3edd0de9cf0fc5b0b0a6478c7c96f2f9d8b))
+- _(frontend)_ Add Genre/Tags settings section with create/delete for genres and tags - ([b1ba442](https://github.com/szinn/BookBoss/commit/b1ba44218e253f1d6230ffe70af2349efb12c8c0))
+- _(frontend)_ Add Shelf filter rule UI and populate shelves in FilterEntityOptions - ([7f4f741](https://github.com/szinn/BookBoss/commit/7f4f7417316fc40d10e947f693f9ec76dbff5540))
+
+### Bug Fixes
+
+- _(frontend)_ Refresh books after bulk status change on author/series pages - ([43c12ac](https://github.com/szinn/BookBoss/commit/43c12ac2e47f59ce2c49e6fa0f03bdd6eb06111d))
+
 ## [0.7.3](https://github.com/szinn/BookBoss/compare/v0.7.2..v0.7.3) - 2026-03-28
 
 ### Miscellaneous Tasks
