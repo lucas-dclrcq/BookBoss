@@ -1,11 +1,10 @@
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
-use dioxus::html::HasFileData;
-use dioxus::prelude::*;
+use dioxus::{html::HasFileData, prelude::*};
 
 use super::{
     server::{
-        approve_book, fetch_provider_for_edit, fetch_provider_metadata, get_picklist_data, reject_review_book, replace_incoming_cover, replace_library_cover,
-        save_library_book,
+        approve_book, fetch_provider_for_edit, fetch_provider_metadata, get_picklist_data, reject_review_book, save_library_book, stage_incoming_cover,
+        stage_library_cover,
     },
     types::{BookEditFields, BookReviewData, IdentifierMap, ProviderResult},
 };
@@ -796,21 +795,21 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                                 "image/jpeg"
                                             };
 
-                                            let encoded = B64.encode(&bytes);
+                                            let encoded = B64.encode(bytes);
                                             // Optimistic preview
                                             current_cover
                                                 .set(format!("data:{mime};base64,{}", encoded.clone()));
                                             current_cover_dimensions.set(None);
-                                            // Clear any staged provider cover — the uploaded cover is
-                                            // saved immediately so use_fetched_cover must not override it.
-                                            use_fetched_cover.set(false);
+                                            // Stage the dropped cover in the temp dir; it will be
+                                            // committed to disk only when the user saves/approves.
+                                            use_fetched_cover.set(true);
                                             error_msg.set(None);
 
                                             let bt_revert = bt.clone();
                                             let result = if edit_mode {
-                                                replace_library_cover(bt, encoded).await
+                                                stage_library_cover(bt, encoded).await
                                             } else {
-                                                replace_incoming_cover(jt, encoded).await
+                                                stage_incoming_cover(jt, encoded).await
                                             };
 
                                             if let Err(e) = result {
