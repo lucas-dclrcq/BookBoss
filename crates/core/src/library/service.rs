@@ -62,6 +62,13 @@ pub trait LibraryService: Send + Sync {
     /// temp store (written there by `fetch_from_provider`). File renames and
     /// sidecar rewrites are performed when the title or primary author changes.
     async fn edit_book(&self, book_token: BookToken, edit: BookEdit, cover_key: &str, temp_dir: &std::path::Path) -> Result<(), Error>;
+
+    /// Replaces the cover image for a book (candidate or library book).
+    ///
+    /// Writes `cover_bytes` to the book's directory as `cover.jpg`, normalizing
+    /// the image to JPEG in the storage layer. Updates `book.cover_path` in the
+    /// database.
+    async fn replace_cover(&self, book_token: BookToken, cover_bytes: Vec<u8>) -> Result<(), Error>;
 }
 
 pub struct LibraryServiceImpl {
@@ -839,6 +846,41 @@ impl LibraryService for LibraryServiceImpl {
         self.job_service.enqueue(&EnrichBookFilesPayload { book_id }).await?;
 
         self.event_service.notify_jobs_changed();
+
+        Ok(())
+    }
+
+    async fn replace_cover(&self, book_token: BookToken, cover_bytes: Vec<u8>) -> Result<(), Error> {
+        // ── 1. Find book ──────────────────────────────────────────────────────
+        let book_repo = self.repository_service.book_repository().clone();
+        let book = read_only_transaction(&**self.repository_service.repository(), |tx| {
+            Box::pin(async move { book_repo.find_by_token(tx, book_token).await })
+        })
+        .await?
+        .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
+
+        let book_id = book.id;
+        let book_version = book.version;
+
+        // ── 2. Store cover (normalization happens in the storage layer) ───────
+        self.file_store.store_cover(book_token, "cover.jpg", &cover_bytes).await?;
+
+        // ── 3. Update cover_path in DB ────────────────────────────────────────
+        let book_repo2 = self.repository_service.book_repository().clone();
+        transaction(&**self.repository_service.repository(), |tx| {
+            Box::pin(async move {
+                let mut updated_book = book_repo2
+                    .find_by_id(tx, book_id)
+                    .await?
+                    .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
+                if updated_book.version != book_version {
+                    return Err(Error::RepositoryError(RepositoryError::Conflict));
+                }
+                updated_book.cover_path = Some("cover.jpg".to_string());
+                book_repo2.update_book(tx, updated_book).await
+            })
+        })
+        .await?;
 
         Ok(())
     }
