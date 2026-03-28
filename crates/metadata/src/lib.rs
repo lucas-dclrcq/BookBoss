@@ -7,7 +7,7 @@ use std::sync::Arc;
 /// Default HTTP request timeout for all metadata provider clients.
 pub(crate) const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
-use bb_core::pipeline::MetadataProvider;
+use bb_core::metadata::MetadataService;
 pub use google_books::GoogleBooksAdapter;
 pub use hardcover::HardcoverAdapter;
 pub use open_library::OpenLibraryAdapter;
@@ -20,20 +20,17 @@ pub struct MetadataConfig {
     pub googlebooks_api_token: Option<String>,
 }
 
-/// Build the ordered list of configured metadata providers.
+/// Register configured metadata providers into the registry.
 ///
-/// Providers are tried in order during the acquisition pipeline — the first
-/// one that returns a result wins. Priority: Hardcover → Google Books →
+/// Called once at startup after `CoreServices` is built. Providers are
+/// registered in priority order: Hardcover → Google Books →
 /// Open Library (always the final fallback).
-#[must_use]
-pub fn create_metadata_providers(config: &MetadataConfig) -> Vec<Arc<dyn MetadataProvider>> {
-    let mut providers: Vec<Arc<dyn MetadataProvider>> = vec![];
+pub fn before_start(service: &dyn MetadataService, config: &MetadataConfig) {
     if let Some(token) = &config.hardcover_api_token {
-        providers.push(Arc::new(HardcoverAdapter::new(token.clone())));
+        service.register(Arc::new(HardcoverAdapter::new(token.clone())));
     }
     if let Some(token) = &config.googlebooks_api_token {
-        providers.push(Arc::new(GoogleBooksAdapter::new(token.clone())));
+        service.register(Arc::new(GoogleBooksAdapter::new(token.clone())));
     }
-    providers.push(Arc::new(OpenLibraryAdapter::new()));
-    providers
+    service.register(Arc::new(OpenLibraryAdapter::new()));
 }

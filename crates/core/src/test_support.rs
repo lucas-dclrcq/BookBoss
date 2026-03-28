@@ -89,6 +89,7 @@ pub fn default_external_services_builder() -> ExternalServicesBuilder {
     ExternalServicesBuilder::default()
         .file_store(nop_file_store())
         .format_service(nop_format_service())
+        .metadata_service(crate::metadata::create_metadata_service())
         .pipeline_service(nop_pipeline_service())
         .job_service(nop_job_service())
         .health_service(nop_health_service())

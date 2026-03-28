@@ -8,8 +8,9 @@ use crate::{
     event::EventService,
     format::FormatService,
     import::{ImportJob, ImportSource, ImportStatus},
+    metadata::MetadataService,
     pipeline::{
-        MetadataProvider, ProviderBook,
+        ProviderBook,
         model::{ExtractedAuthor, ExtractedIdentifier, ExtractedMetadata},
     },
     repository::{RepositoryService, read_only_transaction, transaction},
@@ -55,7 +56,7 @@ pub struct PipelineServiceImpl {
     repository_service: Arc<RepositoryService>,
     file_store: Arc<dyn FileStoreService>,
     format_service: Arc<dyn FormatService>,
-    providers: Vec<Arc<dyn MetadataProvider>>,
+    metadata_service: Arc<dyn MetadataService>,
     event_service: Arc<dyn EventService>,
 }
 
@@ -64,14 +65,14 @@ impl PipelineServiceImpl {
         repository_service: Arc<RepositoryService>,
         file_store: Arc<dyn FileStoreService>,
         format_service: Arc<dyn FormatService>,
-        providers: Vec<Arc<dyn MetadataProvider>>,
+        metadata_service: Arc<dyn MetadataService>,
         event_service: Arc<dyn EventService>,
     ) -> Self {
         Self {
             repository_service,
             file_store,
             format_service,
-            providers,
+            metadata_service,
             event_service,
         }
     }
@@ -261,8 +262,7 @@ impl PipelineService for PipelineServiceImpl {
             } else {
                 // Spawn one task per provider and run all concurrently.
                 let mut join_set = tokio::task::JoinSet::new();
-                for provider in &self.providers {
-                    let provider = Arc::clone(provider);
+                for provider in self.metadata_service.providers() {
                     let ex = extracted.clone();
                     join_set.spawn(async move {
                         let name = provider.name();
@@ -623,7 +623,7 @@ impl PipelineService for PipelineServiceImpl {
     }
 
     fn list_provider_names(&self) -> Vec<&'static str> {
-        self.providers.iter().map(|p| p.name()).collect()
+        self.metadata_service.list_provider_names()
     }
 
     async fn fetch_from_provider(
@@ -636,11 +636,11 @@ impl PipelineService for PipelineServiceImpl {
         temp_dir: &std::path::Path,
     ) -> Result<Option<crate::pipeline::ProviderBook>, Error> {
         let provider = self
-            .providers
-            .iter()
+            .metadata_service
+            .providers()
+            .into_iter()
             .find(|p| p.name() == provider_name)
-            .ok_or_else(|| Error::Validation(format!("unknown provider: {provider_name}")))?
-            .clone();
+            .ok_or_else(|| Error::Validation(format!("unknown provider: {provider_name}")))?;
 
         let extracted = ExtractedMetadata {
             title,

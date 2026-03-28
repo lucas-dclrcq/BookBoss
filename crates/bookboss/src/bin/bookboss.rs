@@ -71,7 +71,8 @@ async fn cmd_dump_book(file: std::path::PathBuf) -> anyhow::Result<()> {
 async fn cmd_open_library(isbn: String) -> anyhow::Result<()> {
     use bb_core::{
         book::IdentifierType,
-        pipeline::{ExtractedIdentifier, ExtractedMetadata, MetadataProvider},
+        metadata::MetadataProvider,
+        pipeline::{ExtractedIdentifier, ExtractedMetadata},
     };
     use bb_metadata::OpenLibraryAdapter;
 
@@ -96,7 +97,8 @@ async fn cmd_open_library(isbn: String) -> anyhow::Result<()> {
 async fn cmd_hardcover(isbn: String, config: bookboss::config::Config) -> anyhow::Result<()> {
     use bb_core::{
         book::IdentifierType,
-        pipeline::{ExtractedIdentifier, ExtractedMetadata, MetadataProvider},
+        metadata::MetadataProvider,
+        pipeline::{ExtractedIdentifier, ExtractedMetadata},
     };
     use bb_metadata::HardcoverAdapter;
 
@@ -146,12 +148,13 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
         format::FormatService,
         health::{create_health_service, create_health_subsystem},
         jobs::create_job_service,
+        metadata::create_metadata_service,
         pipeline::PipelineServiceImpl,
     };
     use bb_database::{create_repository_service, open_database};
     use bb_formats::create_format_service;
     use bb_frontend::server::create_frontend_subsystem;
-    use bb_metadata::create_metadata_providers;
+    use bb_metadata::before_start as metadata_before_start;
     use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, SubsystemHandle, Toplevel};
 
     tracing::info!("BookBoss {}", clap::crate_version!());
@@ -164,11 +167,12 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     let event_service = bb_core::event::create_event_service(64);
 
     let format_service: Arc<dyn FormatService> = Arc::new(create_format_service());
+    let metadata_service = create_metadata_service();
     let pipeline_service = Arc::new(PipelineServiceImpl::new(
         repository_service.clone(),
         file_store.clone(),
         format_service.clone(),
-        create_metadata_providers(&config.metadata),
+        metadata_service.clone(),
         event_service.clone(),
     )) as Arc<dyn bb_core::pipeline::PipelineService>;
 
@@ -179,6 +183,7 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
         .repository_service(repository_service.clone())
         .file_store(file_store)
         .format_service(format_service)
+        .metadata_service(metadata_service)
         .pipeline_service(pipeline_service)
         .job_service(job_service)
         .health_service(health_service)
@@ -189,8 +194,10 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
         .context("ExternalServices missing required field")?;
     let core_services = create_services(external, &config.encryption_secret).context("Couldn't create core services")?;
 
-    // Each crate self-registers its job handlers (and health task configs).
+    // Each crate self-registers its job handlers and health task configs.
     bb_core::before_start(&core_services);
+    // Register configured metadata providers into the metadata service.
+    metadata_before_start(&*core_services.metadata_service, &config.metadata);
 
     let health_subsystem = create_health_subsystem(
         core_services.health_service.clone(),

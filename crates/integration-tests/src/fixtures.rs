@@ -127,7 +127,7 @@ pub fn pipeline_services(ctx: &crate::context::TestContext, metadata: ExtractedM
         ctx.repos.clone(),
         silent_file_store(),
         format_service.clone(),
-        vec![],
+        bb_core::metadata::create_metadata_service(),
         event_service.clone(),
     ));
     bb_core::create_services(

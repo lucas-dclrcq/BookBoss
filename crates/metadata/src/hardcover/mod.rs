@@ -5,7 +5,8 @@ use bb_core::{
     Error,
     book::{AuthorRole, IdentifierType},
     import::ImportSource,
-    pipeline::{ExtractedAuthor, ExtractedIdentifier, ExtractedMetadata, MetadataProvider, ProviderBook},
+    metadata::MetadataProvider,
+    pipeline::{ExtractedAuthor, ExtractedIdentifier, ExtractedMetadata, ProviderBook},
 };
 use bb_utils::similarity::{author_similarity, combined_score, title_similarity};
 use model::{GraphQlResponse, HcBookDocument};

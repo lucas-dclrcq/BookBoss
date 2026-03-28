@@ -10,6 +10,7 @@ pub mod import;
 pub mod jobs;
 pub mod library;
 pub mod message;
+pub mod metadata;
 pub mod opds;
 pub mod pipeline;
 pub mod reading;
@@ -44,6 +45,7 @@ use crate::{
     jobs::{JobService, JobWorker},
     library::{LibraryService, LibraryServiceImpl},
     message::{SystemMessageService, SystemMessageServiceImpl},
+    metadata::MetadataService,
     opds::{OpdsService, OpdsServiceImpl},
     pipeline::PipelineService,
     reading::{ReadingService, ReadingServiceImpl},
@@ -66,6 +68,7 @@ pub struct ExternalServices {
     pub repository_service: Arc<RepositoryService>,
     pub file_store: Arc<dyn FileStoreService>,
     pub format_service: Arc<dyn FormatService>,
+    pub metadata_service: Arc<dyn MetadataService>,
     pub pipeline_service: Arc<dyn PipelineService>,
     pub job_service: Arc<dyn JobService>,
     pub health_service: Arc<dyn HealthService>,
@@ -87,6 +90,7 @@ pub struct CoreServices {
     pub import_job_service: Arc<dyn ImportJobService>,
     pub file_store: Arc<dyn FileStoreService>,
     pub format_service: Arc<dyn FormatService>,
+    pub metadata_service: Arc<dyn MetadataService>,
     pub library_service: Arc<dyn LibraryService>,
     pub pipeline_service: Arc<dyn PipelineService>,
     pub job_service: Arc<dyn JobService>,
@@ -115,6 +119,7 @@ impl CoreServices {
             repository_service,
             file_store,
             format_service,
+            metadata_service,
             pipeline_service,
             job_service,
             health_service,
@@ -155,6 +160,7 @@ impl CoreServices {
             )),
             file_store,
             format_service,
+            metadata_service,
             pipeline_service,
             job_service,
             health_service,
