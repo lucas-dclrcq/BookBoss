@@ -78,11 +78,11 @@ async fn get_author(token: String) -> Result<AuthorPageData, ServerFnError> {
 #[component]
 pub(crate) fn AuthorDetailPage(token: String) -> Element {
     use_context_provider(|| Signal::new(None::<String>)); // DraggedBookToken
-    let author = use_server_future(move || get_author(token.clone()))?;
+    let mut author_resource = use_server_future(move || get_author(token.clone()))?;
 
     rsx! {
         div { class: "flex-1 overflow-auto p-6",
-            match author() {
+            match author_resource() {
                 None => rsx! {
                     div { class: "flex items-center justify-center h-full text-gray-400 text-sm",
                         "Loading…"
@@ -124,10 +124,13 @@ pub(crate) fn AuthorDetailPage(token: String) -> Element {
                                     current_author_token: Some(author.token.clone()),
                                     current_series_token: None,
                                 },
-                                on_action: |()| {},
+                                on_action: move |()| author_resource.restart(),
                             }
                         }
-                        SelectionActionBar { all_book_tokens: book_tokens }
+                        SelectionActionBar {
+                            all_book_tokens: book_tokens,
+                            on_action: move |()| author_resource.restart(),
+                        }
                     }
                 },
             }

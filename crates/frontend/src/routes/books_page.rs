@@ -217,8 +217,10 @@ async fn list_books(sort: crate::components::SortOrder) -> Result<ListBooksRespo
 #[component]
 pub(crate) fn BooksPage() -> Element {
     use_context_provider(|| Signal::new(None::<String>)); // DraggedBookToken
+    let mut books_refresh = use_signal(|| 0u32);
     let mut page_data = use_server_future(move || {
         let sort = crate::components::SORT_ORDER();
+        let _ = books_refresh();
         list_books(sort)
     })?;
     let mut shelves_resource = use_server_future(list_all_accessible_shelves)?;
@@ -265,7 +267,7 @@ pub(crate) fn BooksPage() -> Element {
                     SelectionActionBar {
                         all_book_tokens: book_tokens,
                         on_action: move |()| {
-                            page_data.restart();
+                            *books_refresh.write() += 1;
                             shelves_resource.restart();
                         },
                     }

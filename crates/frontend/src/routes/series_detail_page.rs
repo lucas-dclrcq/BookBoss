@@ -82,11 +82,11 @@ async fn get_series(token: String) -> Result<SeriesPageData, ServerFnError> {
 #[component]
 pub(crate) fn SeriesDetailPage(token: String) -> Element {
     use_context_provider(|| Signal::new(None::<String>)); // DraggedBookToken
-    let series = use_server_future(move || get_series(token.clone()))?;
+    let mut series_resource = use_server_future(move || get_series(token.clone()))?;
 
     rsx! {
         div { class: "flex-1 overflow-auto p-6",
-            match series() {
+            match series_resource() {
                 None => rsx! {
                     div { class: "flex items-center justify-center h-full text-gray-400 text-sm",
                         "Loading…"
@@ -128,10 +128,13 @@ pub(crate) fn SeriesDetailPage(token: String) -> Element {
                                     current_author_token: None,
                                     current_series_token: Some(series.token.clone()),
                                 },
-                                on_action: |()| {},
+                                on_action: move |()| series_resource.restart(),
                             }
                         }
-                        SelectionActionBar { all_book_tokens: book_tokens }
+                        SelectionActionBar {
+                            all_book_tokens: book_tokens,
+                            on_action: move |()| series_resource.restart(),
+                        }
                     }
                 },
             }

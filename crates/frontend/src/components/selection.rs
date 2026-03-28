@@ -955,8 +955,8 @@ pub(crate) fn SelectionActionBar(
                                                     Ok(_) => {
                                                         busy.set(false);
                                                         status_message.set(None);
-                                                        exit_selection_mode();
                                                         on_action.call(());
+                                                        exit_selection_mode();
                                                     }
                                                     Err(e) => {
                                                         status_message.set(Some(format!("Error: {e}")));
