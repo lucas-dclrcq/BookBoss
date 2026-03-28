@@ -148,6 +148,13 @@ pub(crate) fn SettingsPage() -> Element {
                     }
                     li {
                         button {
+                            class: nav_button_class(Section::GenreTags),
+                            onclick: move |_| active_section.set(Section::GenreTags),
+                            "Genre/Tags"
+                        }
+                    }
+                    li {
+                        button {
                             class: nav_button_class(Section::Tasks),
                             onclick: move |_| active_section.set(Section::Tasks),
                             "Tasks"
@@ -158,13 +165,6 @@ pub(crate) fn SettingsPage() -> Element {
                             class: nav_button_class(Section::Messages),
                             onclick: move |_| active_section.set(Section::Messages),
                             "Messages"
-                        }
-                    }
-                    li {
-                        button {
-                            class: nav_button_class(Section::GenreTags),
-                            onclick: move |_| active_section.set(Section::GenreTags),
-                            "Genre/Tags"
                         }
                     }
                 }
