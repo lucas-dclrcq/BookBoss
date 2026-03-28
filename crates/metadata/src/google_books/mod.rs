@@ -64,6 +64,14 @@ impl GoogleBooksAdapter {
             .map(|id| id.value.clone())
     }
 
+    /// Normalises a BCP 47 language tag to its root subtag.
+    ///
+    /// `"en-US"` and `"en_US"` both become `"en"`. Already-root codes like
+    /// `"en"` pass through unchanged.
+    fn normalize_language(lang: &str) -> String {
+        lang.split(['-', '_']).next().unwrap_or(lang).to_lowercase()
+    }
+
     /// Scans a freeform date string for the first plausible 4-digit year.
     ///
     /// Google Books `publishedDate` values vary: "2010-11-17", "2010", "Nov
@@ -132,7 +140,7 @@ impl GoogleBooksAdapter {
             description: info.description.clone(),
             publisher: info.publisher.clone(),
             published_date: info.published_date.as_deref().and_then(Self::parse_year),
-            language: info.language.clone(),
+            language: info.language.as_deref().map(Self::normalize_language),
             identifiers: Some(identifiers),
             series_name: None,
             series_number: None,
@@ -566,6 +574,15 @@ mod tests {
                 .iter()
                 .any(|id| id.identifier_type == IdentifierType::GoogleBooks && id.value == "2")
         );
+    }
+
+    #[test]
+    fn normalize_language_strips_region_subtag() {
+        assert_eq!(GoogleBooksAdapter::normalize_language("en-US"), "en");
+        assert_eq!(GoogleBooksAdapter::normalize_language("en_US"), "en");
+        assert_eq!(GoogleBooksAdapter::normalize_language("pt-BR"), "pt");
+        assert_eq!(GoogleBooksAdapter::normalize_language("en"), "en");
+        assert_eq!(GoogleBooksAdapter::normalize_language("EN"), "en");
     }
 
     #[test]
