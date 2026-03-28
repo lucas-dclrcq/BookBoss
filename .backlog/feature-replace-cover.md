@@ -31,6 +31,7 @@ While reviewing an incoming book or editing a book's metadata, the user should b
 ### Changeset 1 — Normalize all covers to JPEG in storage
 
 **`crates/storage/src/local.rs`**
+
 - Rename `normalize_jpeg` → `normalize_to_jpeg` to signal it accepts any format as input
 - In `store_cover`, detect input format via magic bytes (same logic as `detect_cover_filename`):
   - JPEG → `normalize_to_jpeg` (strips metadata + conditional resize)
@@ -39,11 +40,13 @@ While reviewing an incoming book or editing a book's metadata, the user should b
 - Always write as `cover.jpg` regardless of input format; remove filename-conditional branch
 
 **`crates/core/src/library/service.rs`** and pipeline call sites
+
 - Simplify `detect_cover_filename` to always return `"cover.jpg"`, or remove it and hardcode at call sites
 
 ### Changeset 2 — `LibraryService::replace_cover`
 
 **`crates/core/src/library/service.rs`** — add to trait:
+
 ```rust
 async fn replace_cover(
     &self,
@@ -53,6 +56,7 @@ async fn replace_cover(
 ```
 
 Implementation:
+
 1. Find book by token — return error if not found
 2. Call `file_store.store_cover(token, "cover.jpg", &cover_bytes)` — normalization is transparent
 3. Update `book.cover_path = Some("cover.jpg".to_string())`
@@ -64,9 +68,11 @@ Implementation:
 ### Changeset 3 — Frontend server fns + drag-drop UI
 
 **`crates/frontend/src/routes/review_page/server.rs`** — two server fns:
+
 - `replace_incoming_cover(job_token: String, data_base64: String)` — requires `ApproveImports`; resolves candidate `book_token` from the job, decodes base64, calls `replace_cover`
 - `replace_library_cover(book_token: String, data_base64: String)` — requires `EditBook`; decodes base64, calls `replace_cover`
 
 **`crates/frontend/src/routes/review_page/editor.rs`** — drag-drop on the cover `<img>`:
+
 - `ondragover` — prevent default to allow drop; show hover state (dashed border or opacity change)
 - `ondrop` — validate `file.type` starts with `image/`; reject if size > 10 MB; create object URL for optimistic preview; call appropriate server fn (`replace_incoming_cover` or `replace_library_cover` based on `edit_mode`); revert preview on error

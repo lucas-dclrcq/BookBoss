@@ -135,17 +135,9 @@ fn cover_min_side(data: &[u8]) -> u32 {
     image_dimensions(data).map_or(0, |(w, h)| w.min(h))
 }
 
-/// Detect a cover image filename from leading magic bytes.
-fn detect_cover_filename(data: &[u8]) -> &'static str {
-    if data.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
-        "cover.png"
-    } else if data.starts_with(&[0x47, 0x49, 0x46]) {
-        "cover.gif"
-    } else if data.len() >= 12 && data.starts_with(b"RIFF") && &data[8..12] == b"WEBP" {
-        "cover.webp"
-    } else {
-        "cover.jpg"
-    }
+/// All covers are stored as normalized JPEG regardless of source format.
+fn detect_cover_filename(_data: &[u8]) -> &'static str {
+    "cover.jpg"
 }
 
 /// Priority order for breaking ties between providers with equal scores.

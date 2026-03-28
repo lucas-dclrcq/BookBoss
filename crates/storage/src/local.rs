@@ -47,12 +47,13 @@ fn io_err(e: impl ToString) -> Error {
     Error::Infrastructure(e.to_string())
 }
 
-/// Resizes a JPEG cover to fit within 1024×1536 and re-encodes at quality 85.
+/// Converts any recognized image format to JPEG, resizing to fit within
+/// 1024×1536 if needed, and re-encodes at quality 85.
 ///
 /// Re-encoding strips all embedded metadata (EXIF, XMP, IPTC, ICC profiles)
 /// and keeps covers small enough for Kobo firmware to decode reliably.
 /// Falls back to the original bytes if decoding fails.
-fn normalize_jpeg(data: &[u8]) -> Vec<u8> {
+fn normalize_to_jpeg(data: &[u8]) -> Vec<u8> {
     const MAX_W: u32 = 1024;
     const MAX_H: u32 = 1536;
     const QUALITY: u8 = 85;
@@ -143,15 +144,16 @@ impl FileStoreService for LocalFileStore {
         tokio::fs::create_dir_all(&book_dir).await.map_err(io_err)?;
         let cover_path = self.cover_path(token, filename);
 
-        // Normalise JPEG covers: resize to fit within 1024×1536 and re-encode
-        // at quality 85. This strips all metadata (EXIF, XMP, IPTC, ICC) and
-        // keeps file size small enough for Kobo firmware to decode without
-        // hanging. Falls back to the original bytes on any decode error.
-        let bytes = if filename.ends_with(".jpg") || filename.ends_with(".jpeg") {
-            normalize_jpeg(data)
-        } else {
-            data.to_vec()
-        };
+        // Normalize all recognized image formats to JPEG: resize to fit within
+        // 1024×1536 if needed, re-encode at quality 85, strip all metadata
+        // (EXIF, XMP, IPTC, ICC). Non-image data (unrecognized magic bytes) is
+        // stored as-is. Falls back to original bytes on any decode error.
+        let is_recognized_image = data.starts_with(&[0xFF, 0xD8])
+            || data.starts_with(&[0x89, 0x50, 0x4E, 0x47])
+            || data.starts_with(&[0x47, 0x49, 0x46])
+            || (data.len() >= 12 && data.starts_with(b"RIFF") && data.get(8..12) == Some(b"WEBP"));
+
+        let bytes = if is_recognized_image { normalize_to_jpeg(data) } else { data.to_vec() };
 
         tokio::fs::write(cover_path, bytes).await.map_err(io_err)?;
         Ok(())
