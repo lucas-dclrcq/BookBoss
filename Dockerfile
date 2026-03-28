@@ -21,7 +21,7 @@ RUN apt-get update && \
     protobuf-compiler && \
     rm -rf /var/lib/apt/lists/*
 
-RUN curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/DioxusLabs/dioxus/refs/heads/main/.github/install.sh | bash
+RUN cargo install dioxus-cli --locked --version 0.7.3
 
 RUN curl -fsSL -o /usr/local/bin/tailwindcss \
     https://github.com/tailwindlabs/tailwindcss/releases/download/v4.2.1/tailwindcss-linux-x64 && \
