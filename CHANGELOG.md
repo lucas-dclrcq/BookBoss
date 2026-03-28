@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2](https://github.com/szinn/BookBoss/compare/v0.7.1..v0.7.2) - 2026-03-28
+
+### Bug Fixes
+
+- _(core,database)_ Fill in reviewed_by on approve_book - ([9c364e2](https://github.com/szinn/BookBoss/commit/9c364e251f2ea4abeac3eaa5fd2f03aa00d9202a))
+- _(core,utils)_ Adapt to sha2 0.11 breaking API changes - ([828437b](https://github.com/szinn/BookBoss/commit/828437b3a6cf60a34ecda4ed735b0af5d9377e5d))
+- _(frontend)_ Show descriptive sort button tooltips - ([f239582](https://github.com/szinn/BookBoss/commit/f239582effca824f5f9331d9e7e50c625a003473))
+- _(frontend)_ Exclude incoming books from series and authors pages - ([f952cb5](https://github.com/szinn/BookBoss/commit/f952cb5ae13ee0c18eab0ed3976984cf2ab26986))
+- _(frontend)_ Sort incoming books by title - ([7da9873](https://github.com/szinn/BookBoss/commit/7da98737af4d19de184dfd1ce5d28a6eaa26b8f5))
+- _(frontend)_ Refresh shelf counts after bulk operations - ([d9465cf](https://github.com/szinn/BookBoss/commit/d9465cfb61ca4de821f5d0b7214bcea4abda4b5b))
+- _(frontend)_ Fix search bar shifting when nav badge counts change - ([0465c28](https://github.com/szinn/BookBoss/commit/0465c28ab6188652d5915b1bfeecd2cb90febc99))
+- _(frontend)_ Decorate book tiles with reading state on series/author pages - ([2a54785](https://github.com/szinn/BookBoss/commit/2a5478506a86c3d7dfe70c40191a1d0ba7f7b181))
+- _(metadata)_ Normalize Google Books language tags to root subtag - ([8bd6ac9](https://github.com/szinn/BookBoss/commit/8bd6ac9789906c26ce2089349ba05b3785326476))
+
+### Refactor
+
+- _(core)_ Hide scan channel wiring inside import module - ([8e82987](https://github.com/szinn/BookBoss/commit/8e82987ca72a10265f0425c75f6f38aa3bf41d8b))
+- _(core)_ Route health job enqueueing through JobService - ([9c065ce](https://github.com/szinn/BookBoss/commit/9c065cef5afdfd423f8ccc0a641125575f14af0b))
+- _(core)_ Move approve/reject/edit from PipelineService to LibraryService - ([d3b8ec5](https://github.com/szinn/BookBoss/commit/d3b8ec5d645b31766bf5e7d5a3025dbe56d4dd7d))
+- _(core,frontend)_ Move fetch_from_provider to MetadataService - ([32d78dd](https://github.com/szinn/BookBoss/commit/32d78dd10ad72756c8ed6220eafff8012978b34c))
+- _(core,metadata)_ Promote MetadataProvider to its own domain - ([159f844](https://github.com/szinn/BookBoss/commit/159f8441194b2c74d52d961d1c0381cce2fc0873))
+
+### Miscellaneous Tasks
+
+- _(release)_ Use jj git push for the bookmark - ([b3126a7](https://github.com/szinn/BookBoss/commit/b3126a733187d09b0ad1c40497f3a541fca592ca))
+
 ## [0.7.1](https://github.com/szinn/BookBoss/compare/v0.7.0..v0.7.1) - 2026-03-25
 
 ### Features
