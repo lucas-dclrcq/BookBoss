@@ -120,10 +120,18 @@ impl CoreServices {
             event_service.clone(),
         ));
         let (health_service, health_subsystem) = create_health_subsystem(job_service.clone(), event_service.clone());
+        let system_message_service: Arc<dyn SystemMessageService> = Arc::new(SystemMessageServiceImpl::new(repository_service.clone(), event_service.clone()));
 
         // Create the bookdrop scan subsystem if configured.
         let (import_job_service, bookdrop_scan_subsystem) = if let (Some(path), Some(interval)) = (bookdrop_path, scan_interval) {
-            let (svc, subsystem) = create_bookdrop_scan_subsystem(repository_service.clone(), file_store.clone(), format_service.clone(), path, interval);
+            let (svc, subsystem) = create_bookdrop_scan_subsystem(
+                repository_service.clone(),
+                file_store.clone(),
+                format_service.clone(),
+                system_message_service.clone(),
+                path,
+                interval,
+            );
             (svc, Some(subsystem))
         } else {
             (create_import_job_service(repository_service.clone()), None)
@@ -153,7 +161,7 @@ impl CoreServices {
             reading_service: Arc::new(ReadingServiceImpl::new(repository_service.clone())),
             device_service: Arc::new(DeviceServiceImpl::new(repository_service.clone())),
             opds_service: Arc::new(OpdsServiceImpl::new(repository_service.clone(), encryption_secret)),
-            system_message_service: Arc::new(SystemMessageServiceImpl::new(repository_service, event_service.clone())),
+            system_message_service,
             event_service,
             bookdrop_scan_subsystem: Mutex::new(bookdrop_scan_subsystem),
             health_subsystem: Mutex::new(Some(health_subsystem)),

@@ -1,7 +1,7 @@
 ---
 slug: feature-bookdrop-duplicate-removal
 type: feature
-status: not-started
+status: complete
 description: Notify user and remove duplicate files from bookdrop instead of silently skipping them forever
 priority: P2
 ---

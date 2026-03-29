@@ -11,7 +11,11 @@ use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, SubsystemHandle};
 use crate::{
     Error,
     format::FormatService,
-    import::{ImportJobService, service::ImportJobServiceImpl},
+    import::{
+        ImportJobService,
+        service::{FileQueueStatus, ImportJobServiceImpl},
+    },
+    message::{MessageSeverity, NewSystemMessage, SystemMessageService},
     repository::RepositoryService,
     storage::FileStoreService,
 };
@@ -52,6 +56,7 @@ struct ScanWorker {
     import_job_service: Arc<dyn ImportJobService>,
     file_store: Arc<dyn FileStoreService>,
     format_service: Arc<dyn FormatService>,
+    system_message_service: Arc<dyn SystemMessageService>,
 }
 
 impl ScanWorker {
@@ -81,10 +86,53 @@ impl ScanWorker {
             .await
             .map_err(|e| Error::Infrastructure(format!("file hashing failed: {e}")))?;
 
+        let file_name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         let file_path_str = path.to_string_lossy().into_owned();
         let detected_at = Utc::now();
 
-        self.import_job_service.queue_file_if_new(file_path_str, hash, file_format, detected_at).await.map(|_| ())
+        let status = self.import_job_service.queue_file_if_new(file_path_str, hash, file_format, detected_at).await?;
+
+        match status {
+            FileQueueStatus::DuplicateLibraryFile { title, author } => {
+                let message = format!(r#""{file_name}" is already in your library – {author} / {title}. Removed from bookdrop."#);
+                tracing::info!(%message, "duplicate bookdrop file removed");
+                if let Err(e) = self
+                    .system_message_service
+                    .add_message(NewSystemMessage {
+                        source_task: "bookdrop.scanner".into(),
+                        severity: MessageSeverity::Info,
+                        message,
+                    })
+                    .await
+                {
+                    tracing::warn!(error = %e, "failed to post duplicate-library system message");
+                }
+                if let Err(e) = tokio::fs::remove_file(path).await {
+                    tracing::warn!(path = %path.display(), error = %e, "failed to remove duplicate bookdrop file");
+                }
+            }
+            FileQueueStatus::DuplicateIncomingQueue => {
+                let message = format!(r#""{file_name}" is already in the Incoming Review list. Removed from bookdrop."#);
+                tracing::info!(%message, "duplicate bookdrop file removed");
+                if let Err(e) = self
+                    .system_message_service
+                    .add_message(NewSystemMessage {
+                        source_task: "bookdrop.scanner".into(),
+                        severity: MessageSeverity::Info,
+                        message,
+                    })
+                    .await
+                {
+                    tracing::warn!(error = %e, "failed to post duplicate-queue system message");
+                }
+                if let Err(e) = tokio::fs::remove_file(path).await {
+                    tracing::warn!(path = %path.display(), error = %e, "failed to remove duplicate bookdrop file");
+                }
+            }
+            FileQueueStatus::Queued => {}
+        }
+
+        Ok(())
     }
 }
 
@@ -190,6 +238,7 @@ pub(crate) fn create_bookdrop_scan_subsystem(
     repository_service: Arc<RepositoryService>,
     file_store: Arc<dyn FileStoreService>,
     format_service: Arc<dyn FormatService>,
+    system_message_service: Arc<dyn SystemMessageService>,
     bookdrop_path: PathBuf,
     scan_interval: Duration,
 ) -> (Arc<dyn ImportJobService>, BookdropScanSubsystem) {
@@ -201,6 +250,7 @@ pub(crate) fn create_bookdrop_scan_subsystem(
         import_job_service: import_job_service.clone(),
         file_store,
         format_service,
+        system_message_service,
     };
     let scanner = BookdropScanner {
         poll_interval: scan_interval,
@@ -212,4 +262,117 @@ pub(crate) fn create_bookdrop_scan_subsystem(
         scanner,
     };
     (import_job_service, subsystem)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use tempfile::tempdir;
+    use tokio::sync::mpsc;
+
+    use super::{ScanCommand, ScanWorker};
+    use crate::{
+        book::FileFormat,
+        format::MockFormatService,
+        import::service::{FileQueueStatus, MockImportJobService},
+        message::{MessageSeverity, service::MockSystemMessageService},
+        storage::MockFileStoreService,
+    };
+
+    fn make_worker(import_svc: MockImportJobService, msg_svc: MockSystemMessageService) -> ScanWorker {
+        let (_tx, scan_rx) = mpsc::channel::<ScanCommand>(1);
+        ScanWorker {
+            bookdrop_path: std::path::PathBuf::from("/tmp"),
+            scan_rx,
+            import_job_service: Arc::new(import_svc),
+            file_store: Arc::new(MockFileStoreService::new()),
+            format_service: Arc::new(MockFormatService::new()),
+            system_message_service: Arc::new(msg_svc),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_process_file_duplicate_library_file_posts_message_and_removes_file() {
+        let dir = tempdir().expect("tempdir");
+        let file_path = dir.path().join("dune.epub");
+        tokio::fs::write(&file_path, b"fake epub content").await.expect("write file");
+
+        let mut import_svc = MockImportJobService::new();
+        import_svc.expect_queue_file_if_new().returning(|_, _, _, _| {
+            Box::pin(async {
+                Ok(FileQueueStatus::DuplicateLibraryFile {
+                    title: "Dune".into(),
+                    author: "Frank Herbert".into(),
+                })
+            })
+        });
+
+        let mut msg_svc = MockSystemMessageService::new();
+        msg_svc
+            .expect_add_message()
+            .withf(|msg| {
+                msg.severity == MessageSeverity::Info
+                    && msg.message.contains("dune.epub")
+                    && msg.message.contains("Frank Herbert")
+                    && msg.message.contains("Dune")
+                    && msg.message.contains("Removed from bookdrop")
+            })
+            .once()
+            .returning(|msg| {
+                Box::pin(async move {
+                    Ok(crate::message::SystemMessage {
+                        id: 1,
+                        source_task: msg.source_task,
+                        severity: msg.severity,
+                        message: msg.message,
+                        created_at: chrono::Utc::now(),
+                    })
+                })
+            });
+
+        let worker = make_worker(import_svc, msg_svc);
+        worker.process_file(&file_path, FileFormat::Epub).await.expect("process_file");
+
+        assert!(!file_path.exists(), "duplicate file should have been removed");
+    }
+
+    #[tokio::test]
+    async fn test_process_file_duplicate_incoming_queue_posts_message_and_removes_file() {
+        let dir = tempdir().expect("tempdir");
+        let file_path = dir.path().join("already-queued.epub");
+        tokio::fs::write(&file_path, b"fake epub content").await.expect("write file");
+
+        let mut import_svc = MockImportJobService::new();
+        import_svc
+            .expect_queue_file_if_new()
+            .returning(|_, _, _, _| Box::pin(async { Ok(FileQueueStatus::DuplicateIncomingQueue) }));
+
+        let mut msg_svc = MockSystemMessageService::new();
+        msg_svc
+            .expect_add_message()
+            .withf(|msg| {
+                msg.severity == MessageSeverity::Info
+                    && msg.message.contains("already-queued.epub")
+                    && msg.message.contains("Incoming Review")
+                    && msg.message.contains("Removed from bookdrop")
+            })
+            .once()
+            .returning(|msg| {
+                Box::pin(async move {
+                    Ok(crate::message::SystemMessage {
+                        id: 2,
+                        source_task: msg.source_task,
+                        severity: msg.severity,
+                        message: msg.message,
+                        created_at: chrono::Utc::now(),
+                    })
+                })
+            });
+
+        let worker = make_worker(import_svc, msg_svc);
+        worker.process_file(&file_path, FileFormat::Epub).await.expect("process_file");
+
+        assert!(!file_path.exists(), "duplicate file should have been removed");
+    }
 }
