@@ -8,6 +8,19 @@ use crate::{Error, jobs::model::Job, repository::Transaction};
 pub trait JobRepository: Send + Sync {
     async fn enqueue_raw(&self, transaction: &dyn Transaction, job_type: &str, payload: serde_json::Value, priority: i16) -> Result<Job, Error>;
 
+    /// Enqueue a job with a future `scheduled_at = now + delay`.
+    ///
+    /// The worker already filters `scheduled_at <= now` in `claim_next`, so
+    /// delayed jobs are invisible until their scheduled time arrives.
+    async fn enqueue_delayed(
+        &self,
+        transaction: &dyn Transaction,
+        job_type: &str,
+        payload: serde_json::Value,
+        priority: i16,
+        delay: chrono::Duration,
+    ) -> Result<Job, Error>;
+
     /// Claim the next pending job. The version-based optimistic locking loop
     /// lives in the adapter; this returns a claimed job or `None` if the queue
     /// is empty.

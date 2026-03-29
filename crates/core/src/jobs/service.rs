@@ -28,6 +28,11 @@ pub trait JobService: Send + Sync {
     /// Prefer [`JobServiceExt::enqueue`] for typed payloads.
     async fn enqueue_raw(&self, job_type: &str, payload: serde_json::Value, priority: i16) -> Result<(), Error>;
 
+    /// Enqueue a raw job that won't be picked up until `now + delay`.
+    ///
+    /// Prefer [`JobServiceExt::enqueue_after`] for typed payloads.
+    async fn enqueue_raw_delayed(&self, job_type: &str, payload: serde_json::Value, priority: i16, delay: chrono::Duration) -> Result<(), Error>;
+
     /// Count jobs of the given type that are currently pending or running.
     async fn count_pending_by_type(&self, job_type: &str) -> Result<u64, Error>;
 
@@ -57,6 +62,19 @@ pub trait JobServiceExt: JobService {
         async move {
             let value = value.map_err(|e| Error::Infrastructure(format!("failed to serialize job payload: {e}")))?;
             self.enqueue_raw(P::JOB_TYPE, value, P::DEFAULT_PRIORITY).await
+        }
+    }
+
+    /// Enqueue a typed job that won't run until `now + delay`.
+    fn enqueue_after<P: Enqueueable + Serialize + Send + Sync>(
+        &self,
+        payload: &P,
+        delay: chrono::Duration,
+    ) -> impl std::future::Future<Output = Result<(), Error>> + Send {
+        let value = serde_json::to_value(payload);
+        async move {
+            let value = value.map_err(|e| Error::Infrastructure(format!("failed to serialize job payload: {e}")))?;
+            self.enqueue_raw_delayed(P::JOB_TYPE, value, P::DEFAULT_PRIORITY, delay).await
         }
     }
 
@@ -93,6 +111,21 @@ impl JobService for JobServiceImpl {
             let payload = payload.clone();
             Box::pin(async move {
                 job_repo.enqueue_raw(tx, &job_type, payload, priority).await?;
+                Ok(())
+            })
+        })
+        .await
+    }
+
+    async fn enqueue_raw_delayed(&self, job_type: &str, payload: serde_json::Value, priority: i16, delay: chrono::Duration) -> Result<(), Error> {
+        let job_type = job_type.to_owned();
+        let job_repo = self.repository_service.job_repository().clone();
+        transaction(&**self.repository_service.repository(), |tx| {
+            let job_repo = job_repo.clone();
+            let job_type = job_type.clone();
+            let payload = payload.clone();
+            Box::pin(async move {
+                job_repo.enqueue_delayed(tx, &job_type, payload, priority, delay).await?;
                 Ok(())
             })
         })
@@ -221,5 +254,40 @@ mod tests {
 
         let result = svc.dispatch("unknown.job", serde_json::json!({})).await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn enqueue_raw_delayed_delegates_to_repo() {
+        use chrono::Duration;
+
+        use crate::jobs::{PRIORITY_NORMAL, repository::MockJobRepository};
+
+        let mut mock = MockJobRepository::new();
+        mock.expect_enqueue_delayed().once().returning(|_, job_type, _, priority, delay| {
+            assert_eq!(job_type, "test.job");
+            assert_eq!(priority, PRIORITY_NORMAL);
+            assert!(delay == Duration::minutes(5));
+            Box::pin(std::future::ready(Ok(crate::jobs::Job {
+                id: 1,
+                job_type: job_type.to_owned(),
+                payload: serde_json::json!({}),
+                status: crate::jobs::JobStatus::Pending,
+                priority,
+                attempt: 0,
+                max_attempts: 3,
+                version: 0,
+                scheduled_at: chrono::Utc::now() + delay,
+                started_at: None,
+                completed_at: None,
+                error_message: None,
+                created_at: chrono::Utc::now(),
+                updated_at: chrono::Utc::now(),
+            })))
+        });
+
+        let svc = create_service(mock);
+        svc.enqueue_raw_delayed("test.job", serde_json::json!({}), PRIORITY_NORMAL, Duration::minutes(5))
+            .await
+            .unwrap();
     }
 }

@@ -87,6 +87,28 @@ impl JobRepository for JobRepositoryAdapter {
         Ok(inserted.into())
     }
 
+    async fn enqueue_delayed(
+        &self,
+        transaction: &dyn Transaction,
+        job_type: &str,
+        payload: serde_json::Value,
+        priority: i16,
+        delay: chrono::Duration,
+    ) -> Result<Job, Error> {
+        let db_tx = TransactionImpl::get_db_transaction(transaction)?;
+
+        let model = jobs::ActiveModel {
+            job_type: Set(job_type.to_owned()),
+            payload: Set(payload),
+            priority: Set(priority),
+            scheduled_at: Set((Utc::now() + delay).into()),
+            ..jobs::ActiveModel::new()
+        };
+
+        let inserted = model.insert(db_tx).await.map_err(handle_dberr)?;
+        Ok(inserted.into())
+    }
+
     async fn claim_next(&self, transaction: &dyn Transaction) -> Result<Option<Job>, Error> {
         let db_tx = TransactionImpl::get_db_transaction(transaction)?;
         let now = Utc::now();
