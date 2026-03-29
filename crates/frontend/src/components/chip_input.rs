@@ -10,15 +10,15 @@ pub(crate) fn word_match(candidate: &str, query: &str) -> bool {
 /// Multi-value chip input with a live pick-list dropdown.
 ///
 /// - Each selected value renders as a removable chip with an ✕ button.
-/// - Typing 1+ characters filters `options` and shows a dropdown (up to 8
-///   items). The filter is word-order-independent.
+/// - Typing 1+ characters filters `options` and shows a dropdown with all
+///   matching items. The filter is word-order-independent.
 /// - Press **Enter** or click a dropdown item to add a chip.
 /// - Press **Backspace** on an empty input to remove the last chip.
 /// - Chips whose value is not found in `options` (case-insensitive) display a
 ///   **new** badge in green, giving the user a visual cue that the entry will
 ///   be created in the database on save.
-/// - Focusing an empty input immediately shows up to 8 options, signalling that
-///   a pick-list is available even before any typing.
+/// - Focusing an empty input immediately shows all options, signalling that a
+///   pick-list is available even before any typing.
 /// - `max_chips`: when set, the text input is hidden once the limit is reached,
 ///   preventing additional entries (useful for single-value fields like
 ///   Publisher).
@@ -38,7 +38,6 @@ pub(crate) fn ChipInput(mut values: Signal<Vec<String>>, options: Vec<String>, p
             options
                 .iter()
                 .filter(|opt| !current.iter().any(|v| v.eq_ignore_ascii_case(opt)))
-                .take(8)
                 .cloned()
                 .collect()
         } else {
@@ -48,7 +47,6 @@ pub(crate) fn ChipInput(mut values: Signal<Vec<String>>, options: Vec<String>, p
         options
             .iter()
             .filter(|opt| word_match(opt, &query) && !current.iter().any(|v| v.eq_ignore_ascii_case(opt)))
-            .take(8)
             .cloned()
             .collect()
     };
