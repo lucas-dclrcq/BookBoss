@@ -84,7 +84,7 @@ impl ScanWorker {
         let file_path_str = path.to_string_lossy().into_owned();
         let detected_at = Utc::now();
 
-        self.import_job_service.queue_file_if_new(file_path_str, hash, file_format, detected_at).await
+        self.import_job_service.queue_file_if_new(file_path_str, hash, file_format, detected_at).await.map(|_| ())
     }
 }
 

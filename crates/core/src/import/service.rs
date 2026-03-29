@@ -12,6 +12,17 @@ use crate::{
     with_read_only_transaction, with_transaction,
 };
 
+/// Describes the outcome of [`ImportJobService::queue_file_if_new`].
+#[derive(Debug, PartialEq)]
+pub enum FileQueueStatus {
+    /// The file was new; an import job has been created and enqueued.
+    Queued,
+    /// The file hash matches a record already in `book_files`.
+    DuplicateLibraryFile { title: String, author: String },
+    /// The file hash matches a record already in `import_jobs`.
+    DuplicateIncomingQueue,
+}
+
 #[async_trait::async_trait]
 #[cfg_attr(any(test, feature = "test-support"), mockall::automock)]
 #[allow(unused_lifetimes, reason = "async_trait + mockall expansion emits a spurious 'life0 parameter")]
@@ -25,7 +36,13 @@ pub trait ImportJobService: Send + Sync {
     /// Atomically: check for an existing job with this hash (skip if found),
     /// create a new `ImportJob`, and enqueue a `ProcessImportPayload`
     /// background task — all within one database transaction.
-    async fn queue_file_if_new(&self, file_path: String, file_hash: String, file_format: FileFormat, detected_at: DateTime<Utc>) -> Result<(), Error>;
+    async fn queue_file_if_new(
+        &self,
+        file_path: String,
+        file_hash: String,
+        file_format: FileFormat,
+        detected_at: DateTime<Utc>,
+    ) -> Result<FileQueueStatus, Error>;
     /// On startup crash-recovery: resets any `Extracting`/`Identifying` jobs
     /// back to `Pending`, then re-enqueues every `Pending` job so none are
     /// lost if the queue lost its entries.
@@ -107,15 +124,28 @@ impl ImportJobService for ImportJobServiceImpl {
         with_transaction!(self, import_job_repository, |tx| import_job_repository.update_job(tx, rejected).await)
     }
 
-    async fn queue_file_if_new(&self, file_path: String, file_hash: String, file_format: FileFormat, detected_at: DateTime<Utc>) -> Result<(), Error> {
-        with_transaction!(self, import_job_repository, book_repository, job_repository, |tx| {
-            if book_repository.find_file_by_hash(tx, &file_hash).await?.is_some() {
+    async fn queue_file_if_new(
+        &self,
+        file_path: String,
+        file_hash: String,
+        file_format: FileFormat,
+        detected_at: DateTime<Utc>,
+    ) -> Result<FileQueueStatus, Error> {
+        with_transaction!(self, import_job_repository, book_repository, author_repository, job_repository, |tx| {
+            if let Some(book_file) = book_repository.find_file_by_hash(tx, &file_hash).await? {
                 tracing::debug!(hash = %file_hash, "file already in book_files — skipping");
-                return Ok(());
+                let book = book_repository.find_by_id(tx, book_file.book_id).await?.map(|b| b.title).unwrap_or_default();
+                let book_authors = book_repository.authors_for_book(tx, book_file.book_id).await?;
+                let author = if let Some(ba) = book_authors.first() {
+                    author_repository.find_by_id(tx, ba.author_id).await?.map(|a| a.name).unwrap_or_default()
+                } else {
+                    String::new()
+                };
+                return Ok(FileQueueStatus::DuplicateLibraryFile { title: book, author });
             }
             if import_job_repository.find_by_hash(tx, &file_hash).await?.is_some() {
                 tracing::debug!(hash = %file_hash, "file already in import_jobs — skipping");
-                return Ok(());
+                return Ok(FileQueueStatus::DuplicateIncomingQueue);
             }
             let job = import_job_repository
                 .add_job(
@@ -130,7 +160,7 @@ impl ImportJobService for ImportJobServiceImpl {
                 .await?;
             job_repository.enqueue(tx, &ProcessImportPayload { import_job_id: job.id }).await?;
             tracing::info!(token = %job.token, "queued import job");
-            Ok(())
+            Ok(FileQueueStatus::Queued)
         })
     }
 
@@ -206,15 +236,15 @@ mod tests {
 
     use chrono::Utc;
 
-    use super::{ImportJobService, ImportJobServiceImpl};
+    use super::{FileQueueStatus, ImportJobService, ImportJobServiceImpl};
     use crate::{
         Error, RepositoryError,
-        book::repository::book::MockBookRepository,
+        book::repository::{author::MockAuthorRepository, book::MockBookRepository},
         import::{ImportJob, ImportJobId, ImportJobToken, ImportStatus, repository::import_job::MockImportJobRepository},
         jobs::repository::MockJobRepository,
     };
 
-    // ─── Helper ───────────────────────────────────────────────────────────────
+    // ─── Helpers ──────────────────────────────────────────────────────────────
 
     fn create_service(mock: MockImportJobRepository) -> ImportJobServiceImpl {
         let repository_service = Arc::new(
@@ -231,6 +261,24 @@ mod tests {
             crate::repository::testing::default_repository_service_builder()
                 .import_job_repository(Arc::new(import_mock))
                 .book_repository(Arc::new(book_mock))
+                .job_repository(Arc::new(job_mock))
+                .build()
+                .expect("all fields provided"),
+        );
+        ImportJobServiceImpl::new(repository_service, None)
+    }
+
+    fn create_service_with_author_repos(
+        import_mock: MockImportJobRepository,
+        book_mock: MockBookRepository,
+        author_mock: MockAuthorRepository,
+        job_mock: MockJobRepository,
+    ) -> ImportJobServiceImpl {
+        let repository_service = Arc::new(
+            crate::repository::testing::default_repository_service_builder()
+                .import_job_repository(Arc::new(import_mock))
+                .book_repository(Arc::new(book_mock))
+                .author_repository(Arc::new(author_mock))
                 .job_repository(Arc::new(job_mock))
                 .build()
                 .expect("all fields provided"),
@@ -407,8 +455,19 @@ mod tests {
         book_mock
             .expect_find_file_by_hash()
             .returning(|_, _| Box::pin(async { Ok(Some(crate::book::model::book_file::BookFile::fake(1, "epub"))) }));
+        book_mock.expect_find_by_id().returning(|_, _| {
+            Box::pin(async {
+                Ok(Some(crate::book::model::book::Book::fake(
+                    1,
+                    "Test Book",
+                    crate::book::model::book::BookStatus::Available,
+                )))
+            })
+        });
+        book_mock.expect_authors_for_book().returning(|_, _| Box::pin(async { Ok(vec![]) }));
+        let author_mock = MockAuthorRepository::new();
         let job_mock = MockJobRepository::new(); // enqueue must NOT be called
-        let svc = create_service_with_all_repos(import_mock, book_mock, job_mock);
+        let svc = create_service_with_author_repos(import_mock, book_mock, author_mock, job_mock);
 
         let result = svc
             .queue_file_if_new("/watch/test.epub".into(), "abc123".into(), crate::book::FileFormat::Epub, Utc::now())
@@ -456,6 +515,112 @@ mod tests {
             .await;
 
         result.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_queue_file_if_new_returns_duplicate_library_file_status() {
+        let mut import_mock = MockImportJobRepository::new();
+        import_mock.expect_find_by_hash().returning(|_, _| Box::pin(async { Ok(None) }));
+        let mut book_mock = MockBookRepository::new();
+        book_mock
+            .expect_find_file_by_hash()
+            .returning(|_, _| Box::pin(async { Ok(Some(crate::book::model::book_file::BookFile::fake(1, "epub"))) }));
+        book_mock.expect_find_by_id().returning(|_, _| {
+            Box::pin(async {
+                Ok(Some(crate::book::model::book::Book::fake(
+                    1,
+                    "Dune",
+                    crate::book::model::book::BookStatus::Available,
+                )))
+            })
+        });
+        book_mock
+            .expect_authors_for_book()
+            .returning(|_, _| Box::pin(async { Ok(vec![crate::book::model::author::BookAuthor::fake(1, 42, "author", 0)]) }));
+        let mut author_mock = MockAuthorRepository::new();
+        author_mock
+            .expect_find_by_id()
+            .returning(|_, _| Box::pin(async { Ok(Some(crate::book::model::author::Author::fake(42, "Frank Herbert"))) }));
+        let job_mock = MockJobRepository::new();
+        let svc = create_service_with_author_repos(import_mock, book_mock, author_mock, job_mock);
+
+        let result = svc
+            .queue_file_if_new("/watch/dupe.epub".into(), "dupeHash".into(), crate::book::FileFormat::Epub, Utc::now())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            result,
+            FileQueueStatus::DuplicateLibraryFile {
+                title: "Dune".into(),
+                author: "Frank Herbert".into(),
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn test_queue_file_if_new_returns_duplicate_incoming_queue_status() {
+        let existing = fake_job(ImportStatus::Pending);
+        let mut import_mock = MockImportJobRepository::new();
+        import_mock.expect_find_by_hash().returning(move |_, _| {
+            let j = existing.clone();
+            Box::pin(async move { Ok(Some(j)) })
+        });
+        let mut book_mock = MockBookRepository::new();
+        book_mock.expect_find_file_by_hash().returning(|_, _| Box::pin(async { Ok(None) }));
+        let author_mock = MockAuthorRepository::new();
+        let job_mock = MockJobRepository::new();
+        let svc = create_service_with_author_repos(import_mock, book_mock, author_mock, job_mock);
+
+        let result = svc
+            .queue_file_if_new("/watch/dupe.epub".into(), "abc123".into(), crate::book::FileFormat::Epub, Utc::now())
+            .await
+            .unwrap();
+
+        assert_eq!(result, FileQueueStatus::DuplicateIncomingQueue);
+    }
+
+    #[tokio::test]
+    async fn test_queue_file_if_new_returns_queued_status() {
+        let job = fake_job(ImportStatus::Pending);
+        let mut import_mock = MockImportJobRepository::new();
+        import_mock.expect_find_by_hash().returning(|_, _| Box::pin(async { Ok(None) }));
+        let mut book_mock = MockBookRepository::new();
+        book_mock.expect_find_file_by_hash().returning(|_, _| Box::pin(async { Ok(None) }));
+        import_mock.expect_add_job().returning(move |_, _| {
+            let j = job.clone();
+            Box::pin(async move { Ok(j) })
+        });
+        let author_mock = MockAuthorRepository::new();
+        let mut job_mock = MockJobRepository::new();
+        job_mock.expect_enqueue_raw().returning(|_, _, _, _| {
+            Box::pin(async {
+                Ok(crate::jobs::model::Job {
+                    id: 1,
+                    job_type: "process_import".into(),
+                    payload: serde_json::Value::Null,
+                    status: crate::jobs::JobStatus::Pending,
+                    priority: 1,
+                    attempt: 0,
+                    max_attempts: 3,
+                    version: 1,
+                    scheduled_at: Utc::now(),
+                    started_at: None,
+                    completed_at: None,
+                    error_message: None,
+                    created_at: Utc::now(),
+                    updated_at: Utc::now(),
+                })
+            })
+        });
+        let svc = create_service_with_author_repos(import_mock, book_mock, author_mock, job_mock);
+
+        let result = svc
+            .queue_file_if_new("/watch/new.epub".into(), "newHash".into(), crate::book::FileFormat::Epub, Utc::now())
+            .await
+            .unwrap();
+
+        assert_eq!(result, FileQueueStatus::Queued);
     }
 
     // ─── approve_job ──────────────────────────────────────────────────────────

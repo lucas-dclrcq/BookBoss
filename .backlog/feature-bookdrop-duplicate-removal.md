@@ -25,6 +25,7 @@ skip, and discards it again — indefinitely.
 ## Technical Approach
 
 1. Add a new enum to `crates/core/src/import/service.rs` (public, alongside the trait):
+
    ```rust
    pub enum FileQueueStatus {
        Queued,
