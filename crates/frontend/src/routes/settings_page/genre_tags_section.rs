@@ -436,7 +436,7 @@ pub(crate) fn GenreTagsSection() -> Element {
                         }
                         button {
                             class: "px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50",
-                            autofocus: true,
+                            onmounted: move |e| { spawn(async move { let _ = e.set_focus(true).await; }); },
                             disabled: deleting(),
                             onclick: move |_| {
                                 let tok = target.token.clone();
