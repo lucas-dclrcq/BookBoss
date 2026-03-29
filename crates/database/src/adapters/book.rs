@@ -730,13 +730,11 @@ impl BookRepository for BookRepositoryAdapter {
     }
 
     async fn find_available_books_for_sweep(&self, transaction: &dyn Transaction, after_id: Option<BookId>, batch_size: u64) -> Result<Vec<BookId>, Error> {
-        use sea_orm::{QueryOrder, QuerySelect};
-
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
         let mut query = prelude::Books::find()
             .select_only()
-            .column(books::Column::Id)
+            .column_as(books::Column::Id, "book_id")
             .filter(books::Column::Status.eq("available"))
             .order_by_asc(books::Column::Id)
             .limit(batch_size);
@@ -748,6 +746,119 @@ impl BookRepository for BookRepositoryAdapter {
         let rows = query.into_model::<BookIdOnly>().all(transaction).await.map_err(handle_dberr)?;
 
         Ok(rows.into_iter().map(|r| r.book_id as u64).collect())
+    }
+
+    async fn find_book_ids_needing_any_enrichment(
+        &self,
+        transaction: &dyn Transaction,
+        after_id: Option<BookId>,
+        batch_size: u64,
+    ) -> Result<Vec<BookId>, Error> {
+        use std::collections::HashSet;
+
+        use sea_orm::{JoinType, sea_query::Query};
+
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        // Query 1: books with original EPUB but no enriched EPUB, available,
+        // id > after_id, ORDER BY book_id ASC, LIMIT batch_size.
+        let mut q1 = prelude::BookFiles::find()
+            .select_only()
+            .column(book_files::Column::BookId)
+            .filter(book_files::Column::Format.eq("epub"))
+            .filter(book_files::Column::FileRole.eq("original"))
+            .filter(book_files::Column::BookId.not_in_subquery({
+                let mut q = Query::select();
+                q.column(book_files::Column::BookId)
+                    .from(book_files::Entity)
+                    .and_where(book_files::Column::Format.eq("epub"))
+                    .and_where(book_files::Column::FileRole.eq("enriched"));
+                q
+            }))
+            .filter(book_files::Column::BookId.in_subquery({
+                let mut q = Query::select();
+                q.column(books::Column::Id).from(books::Entity).and_where(books::Column::Status.eq("available"));
+                q
+            }))
+            .order_by_asc(book_files::Column::BookId)
+            .limit(batch_size);
+        if let Some(id) = after_id {
+            q1 = q1.filter(book_files::Column::BookId.gt(id as i64));
+        }
+        let rows1 = q1.into_model::<BookIdOnly>().all(transaction).await.map_err(handle_dberr)?;
+
+        // Query 2: books with enriched EPUB but no enriched KEPUB, available,
+        // id > after_id, ORDER BY book_id ASC, LIMIT batch_size.
+        let mut q2 = prelude::BookFiles::find()
+            .select_only()
+            .column(book_files::Column::BookId)
+            .filter(book_files::Column::Format.eq("epub"))
+            .filter(book_files::Column::FileRole.eq("enriched"))
+            .filter(book_files::Column::BookId.not_in_subquery({
+                let mut q = Query::select();
+                q.column(book_files::Column::BookId)
+                    .from(book_files::Entity)
+                    .and_where(book_files::Column::Format.eq("kepub"))
+                    .and_where(book_files::Column::FileRole.eq("enriched"));
+                q
+            }))
+            .filter(book_files::Column::BookId.in_subquery({
+                let mut q = Query::select();
+                q.column(books::Column::Id).from(books::Entity).and_where(books::Column::Status.eq("available"));
+                q
+            }))
+            .order_by_asc(book_files::Column::BookId)
+            .limit(batch_size);
+        if let Some(id) = after_id {
+            q2 = q2.filter(book_files::Column::BookId.gt(id as i64));
+        }
+        let rows2 = q2.into_model::<BookIdOnly>().all(transaction).await.map_err(handle_dberr)?;
+
+        // Query 3: books with stale enriched EPUB (created_at < books.updated_at),
+        // available, id > after_id, ORDER BY book_id ASC, LIMIT batch_size.
+        // ExprTrait is scoped to this block to avoid method resolution conflicts
+        // with ColumnTrait::eq used in queries 1 and 2.
+        let rows3 = {
+            use sea_orm::{ExprTrait, sea_query::Expr};
+            let mut q3 = prelude::BookFiles::find()
+                .select_only()
+                .column(book_files::Column::BookId)
+                .join_as(
+                    JoinType::InnerJoin,
+                    book_files::Entity::belongs_to(books::Entity)
+                        .from(book_files::Column::BookId)
+                        .to(books::Column::Id)
+                        .into(),
+                    books::Entity,
+                )
+                .filter(book_files::Column::Format.eq("epub"))
+                .filter(book_files::Column::FileRole.eq("enriched"))
+                .filter(books::Column::Status.eq("available"))
+                .filter(Expr::col((book_files::Entity, book_files::Column::CreatedAt)).lt(Expr::col((books::Entity, books::Column::UpdatedAt))))
+                .order_by_asc(book_files::Column::BookId)
+                .limit(batch_size);
+            if let Some(id) = after_id {
+                q3 = q3.filter(book_files::Column::BookId.gt(id as i64));
+            }
+            q3.into_model::<BookIdOnly>().all(transaction).await.map_err(handle_dberr)?
+        };
+
+        // Union all three result sets: deduplicate, sort ascending, limit to
+        // batch_size. The caller uses the last returned ID as the next cursor.
+        let mut seen = HashSet::new();
+        let mut combined: Vec<BookId> = rows1
+            .into_iter()
+            .chain(rows2)
+            .chain(rows3)
+            .filter_map(|r| {
+                let id = r.book_id as u64;
+                seen.insert(id).then_some(id)
+            })
+            .collect();
+        combined.sort_unstable();
+        combined.truncate(batch_size as usize);
+
+        Ok(combined)
     }
 }
 

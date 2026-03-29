@@ -2,25 +2,34 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    CoreServices, Error,
-    book::BookId,
-    jobs::PRIORITY_SWEEP,
-    repository::read_only_transaction,
-};
+use crate::{CoreServices, Error, book::BookId, jobs::PRIORITY_SWEEP, repository::read_only_transaction};
 
 /// Shared payload shape for all cursor sweep jobs.
 ///
 /// Every `BookIdSweep` implementation uses this as its `JobHandler::Payload`.
 /// Each sweep type has its own `Enqueueable` with its own `JOB_TYPE`, so
 /// different sweeps are independent queue entries despite sharing this shape.
+///
+/// `#[serde(default)]` lets the health-check trigger fire with `{}` (empty
+/// JSON) — missing fields resolve via `Default`, giving `after_id = None`
+/// (start from the beginning) and `batch_size = 100`.
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(default)]
 pub struct BookSweepPayload {
     /// Resume from this book ID (exclusive). `None` means start from the
     /// beginning.
     pub after_id: Option<BookId>,
     /// Maximum number of books to process in this slice.
     pub batch_size: u64,
+}
+
+impl Default for BookSweepPayload {
+    fn default() -> Self {
+        Self {
+            after_id: None,
+            batch_size: 100,
+        }
+    }
 }
 
 /// Trait for cursor sweep jobs that iterate over Available books in bounded

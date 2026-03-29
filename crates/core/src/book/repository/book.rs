@@ -81,4 +81,21 @@ pub trait BookRepository: Send + Sync {
     /// ordered by id ASC. Used by cursor sweep jobs to process the library in
     /// bounded batches without loading the full library into memory.
     async fn find_available_books_for_sweep(&self, transaction: &dyn Transaction, after_id: Option<BookId>, batch_size: u64) -> Result<Vec<BookId>, Error>;
+
+    /// Returns up to `batch_size` IDs of Available books that need any
+    /// enrichment work, with `id > after_id`, ordered by id ASC.
+    ///
+    /// A book qualifies if any of the following are true:
+    /// - Has an original EPUB but no enriched EPUB (needs initial enrichment)
+    /// - Has an enriched EPUB but no enriched KEPUB (needs KEPUB conversion)
+    /// - Has an enriched EPUB whose `created_at` is older than the book's
+    ///   `updated_at` (metadata changed, enrichment is stale)
+    ///
+    /// Used by the `EnsureEnrichmentsHandler` cursor sweep.
+    async fn find_book_ids_needing_any_enrichment(
+        &self,
+        transaction: &dyn Transaction,
+        after_id: Option<BookId>,
+        batch_size: u64,
+    ) -> Result<Vec<BookId>, Error>;
 }

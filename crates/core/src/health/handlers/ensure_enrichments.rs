@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use crate::{
     CoreServices, Error,
+    book::BookId,
     format::handler::EnrichBookFilesPayload,
-    jobs::{JobHandler, JobRepositoryExt},
-    message::{MessageSeverity, NewSystemMessage},
+    jobs::{BookIdSweep, BookSweepPayload, JobHandler, JobRepositoryExt, run_book_id_sweep},
     repository::{read_only_transaction, transaction},
 };
 
@@ -19,62 +19,28 @@ impl EnsureEnrichmentsHandler {
     }
 }
 
-impl JobHandler for EnsureEnrichmentsHandler {
-    const JOB_TYPE: &'static str = "health.ensure_enrichments";
-    type Payload = serde_json::Value;
+#[async_trait::async_trait]
+impl BookIdSweep for EnsureEnrichmentsHandler {
+    fn job_type(&self) -> &'static str {
+        Self::JOB_TYPE
+    }
 
-    async fn handle(&self, _payload: serde_json::Value) -> Result<(), Error> {
-        let book_repo = self.core.repository_service.book_repository().clone();
-
-        // Find books missing enriched EPUB.
-        let enrichment_ids = read_only_transaction(&**self.core.repository_service.repository(), |tx| {
-            let book_repo = book_repo.clone();
-            Box::pin(async move { book_repo.find_book_ids_needing_enrichment(tx).await })
+    async fn fetch_batch(&self, core: &CoreServices, after_id: Option<BookId>, batch_size: u64) -> Result<Vec<BookId>, Error> {
+        let book_repo = core.repository_service.book_repository().clone();
+        read_only_transaction(&**core.repository_service.repository(), |tx| {
+            Box::pin(async move { book_repo.find_book_ids_needing_any_enrichment(tx, after_id, batch_size).await })
         })
-        .await?;
+        .await
+    }
 
-        // Find books missing KEPUB conversion.
-        let book_repo = self.core.repository_service.book_repository().clone();
-        let kepub_ids = read_only_transaction(&**self.core.repository_service.repository(), |tx| {
-            let book_repo = book_repo.clone();
-            Box::pin(async move { book_repo.find_book_ids_needing_kepub_conversion(tx).await })
-        })
-        .await?;
-
-        // Find books where the enriched EPUB is older than the book's
-        // updated_at — metadata changed since last enrichment.
-        let book_repo = self.core.repository_service.book_repository().clone();
-        let stale_ids = read_only_transaction(&**self.core.repository_service.repository(), |tx| {
-            let book_repo = book_repo.clone();
-            Box::pin(async move { book_repo.find_book_ids_with_stale_enrichment(tx).await })
-        })
-        .await?;
-
-        // Deduplicate: the unified enrichment job handles both EPUB and KEPUB.
-        let mut all_ids = enrichment_ids;
-        for id in kepub_ids {
-            if !all_ids.contains(&id) {
-                all_ids.push(id);
-            }
-        }
-        for id in stale_ids {
-            if !all_ids.contains(&id) {
-                all_ids.push(id);
-            }
-        }
-
-        if all_ids.is_empty() {
-            tracing::info!("all books have up-to-date enrichments");
-            return Ok(());
-        }
-
-        let count = all_ids.len();
-        let job_repo = self.core.repository_service.job_repository().clone();
-        transaction(&**self.core.repository_service.repository(), |tx| {
+    async fn process_batch(&self, core: &Arc<CoreServices>, ids: Vec<BookId>) -> Result<(), Error> {
+        let count = ids.len();
+        let job_repo = core.repository_service.job_repository().clone();
+        transaction(&**core.repository_service.repository(), |tx| {
             let job_repo = job_repo.clone();
-            let all_ids = all_ids.clone();
+            let ids = ids.clone();
             Box::pin(async move {
-                for book_id in all_ids {
+                for book_id in ids {
                     job_repo.enqueue(tx, &EnrichBookFilesPayload { book_id }).await?;
                 }
                 Ok(())
@@ -83,17 +49,16 @@ impl JobHandler for EnsureEnrichmentsHandler {
         .await?;
 
         tracing::info!(count, "enqueued enrichment jobs (missing + stale)");
-
-        self.core
-            .system_message_service
-            .add_message(NewSystemMessage {
-                source_task: Self::JOB_TYPE.to_string(),
-                severity: MessageSeverity::Info,
-                message: format!("Enqueued {count} enrichment job(s) for missing/stale enrichments"),
-            })
-            .await?;
-
         Ok(())
+    }
+}
+
+impl JobHandler for EnsureEnrichmentsHandler {
+    const JOB_TYPE: &'static str = "health.ensure_enrichments";
+    type Payload = BookSweepPayload;
+
+    async fn handle(&self, payload: BookSweepPayload) -> Result<(), Error> {
+        run_book_id_sweep(self, &self.core, payload).await
     }
 }
 
@@ -101,8 +66,8 @@ impl JobHandler for EnsureEnrichmentsHandler {
 mod tests {
     use super::*;
     use crate::{
-        book::repository::book::MockBookRepository, jobs::repository::MockJobRepository, message::repository::MockSystemMessageRepository,
-        repository::testing::default_repository_service_builder, test_support::*,
+        book::repository::book::MockBookRepository, jobs::repository::MockJobRepository, repository::testing::default_repository_service_builder,
+        test_support::*,
     };
 
     fn fake_job() -> crate::jobs::Job {
@@ -124,48 +89,26 @@ mod tests {
         }
     }
 
-    fn mock_add_message() -> MockSystemMessageRepository {
-        let mut msg_repo = MockSystemMessageRepository::new();
-        msg_repo.expect_add_message().returning(|_, msg| {
-            let msg = crate::message::SystemMessage {
-                id: 1,
-                source_task: msg.source_task,
-                severity: msg.severity,
-                message: msg.message,
-                created_at: chrono::Utc::now(),
-            };
-            Box::pin(std::future::ready(Ok(msg)))
-        });
-        msg_repo
-    }
-
     #[tokio::test]
-    async fn enqueues_missing_enrichments() {
+    async fn enqueues_jobs_for_books_needing_enrichment() {
         let mut book_repo = MockBookRepository::new();
         let mut job_repo = MockJobRepository::new();
-        let msg_repo = mock_add_message();
 
+        // Return two books needing enrichment; batch < batch_size so no continuation.
         book_repo
-            .expect_find_book_ids_needing_enrichment()
-            .returning(|_| Box::pin(std::future::ready(Ok(vec![1]))));
+            .expect_find_book_ids_needing_any_enrichment()
+            .returning(|_, _, _| Box::pin(std::future::ready(Ok(vec![1, 5]))));
 
-        book_repo
-            .expect_find_book_ids_needing_kepub_conversion()
-            .returning(|_| Box::pin(std::future::ready(Ok(vec![]))));
-
-        book_repo
-            .expect_find_book_ids_with_stale_enrichment()
-            .returning(|_| Box::pin(std::future::ready(Ok(vec![]))));
-
+        // Expect exactly two enqueue calls (one per book), no delayed enqueue.
         job_repo
             .expect_enqueue_raw()
+            .times(2)
             .returning(|_, _, _, _| Box::pin(std::future::ready(Ok(fake_job()))));
 
         let repo_service = Arc::new(
             default_repository_service_builder()
                 .book_repository(Arc::new(book_repo))
                 .job_repository(Arc::new(job_repo))
-                .system_message_repository(Arc::new(msg_repo))
                 .build()
                 .unwrap(),
         );
@@ -177,98 +120,7 @@ mod tests {
         .unwrap();
 
         let handler = EnsureEnrichmentsHandler::new(core);
-        handler.handle(serde_json::json!({})).await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn enqueues_stale_enrichments() {
-        let mut book_repo = MockBookRepository::new();
-        let mut job_repo = MockJobRepository::new();
-        let msg_repo = mock_add_message();
-
-        // No missing enrichments, but book 5 has a stale enriched EPUB.
-        book_repo
-            .expect_find_book_ids_needing_enrichment()
-            .returning(|_| Box::pin(std::future::ready(Ok(vec![]))));
-
-        book_repo
-            .expect_find_book_ids_needing_kepub_conversion()
-            .returning(|_| Box::pin(std::future::ready(Ok(vec![]))));
-
-        book_repo
-            .expect_find_book_ids_with_stale_enrichment()
-            .returning(|_| Box::pin(std::future::ready(Ok(vec![5]))));
-
-        job_repo
-            .expect_enqueue_raw()
-            .returning(|_, _, _, _| Box::pin(std::future::ready(Ok(fake_job()))));
-
-        let repo_service = Arc::new(
-            default_repository_service_builder()
-                .book_repository(Arc::new(book_repo))
-                .job_repository(Arc::new(job_repo))
-                .system_message_repository(Arc::new(msg_repo))
-                .build()
-                .unwrap(),
-        );
-
-        let core = crate::create_services(
-            default_external_services_builder().repository_service(repo_service).build().unwrap(),
-            "test-secret",
-        )
-        .unwrap();
-
-        let handler = EnsureEnrichmentsHandler::new(core);
-        handler.handle(serde_json::json!({})).await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn deduplicates_across_all_sources() {
-        let mut book_repo = MockBookRepository::new();
-        let mut job_repo = MockJobRepository::new();
-        let msg_repo = mock_add_message();
-
-        // Book 1 appears in enrichment + stale, book 3 in kepub + stale.
-        // Should deduplicate to 3 unique books: 1, 3, 2.
-        book_repo
-            .expect_find_book_ids_needing_enrichment()
-            .returning(|_| Box::pin(std::future::ready(Ok(vec![1]))));
-
-        book_repo
-            .expect_find_book_ids_needing_kepub_conversion()
-            .returning(|_| Box::pin(std::future::ready(Ok(vec![3]))));
-
-        book_repo
-            .expect_find_book_ids_with_stale_enrichment()
-            .returning(|_| Box::pin(std::future::ready(Ok(vec![1, 2, 3]))));
-
-        let enqueue_count = Arc::new(std::sync::atomic::AtomicU32::new(0));
-        let enqueue_count_clone = enqueue_count.clone();
-        job_repo.expect_enqueue_raw().returning(move |_, _, _, _| {
-            enqueue_count_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            Box::pin(std::future::ready(Ok(fake_job())))
-        });
-
-        let repo_service = Arc::new(
-            default_repository_service_builder()
-                .book_repository(Arc::new(book_repo))
-                .job_repository(Arc::new(job_repo))
-                .system_message_repository(Arc::new(msg_repo))
-                .build()
-                .unwrap(),
-        );
-
-        let core = crate::create_services(
-            default_external_services_builder().repository_service(repo_service).build().unwrap(),
-            "test-secret",
-        )
-        .unwrap();
-
-        let handler = EnsureEnrichmentsHandler::new(core);
-        handler.handle(serde_json::json!({})).await.unwrap();
-
-        // 3 unique books: 1 (enrichment), 3 (kepub), 2 (stale only).
-        assert_eq!(enqueue_count.load(std::sync::atomic::Ordering::SeqCst), 3);
+        handler.handle(BookSweepPayload::default()).await.unwrap();
     }
 
     #[tokio::test]
@@ -276,16 +128,8 @@ mod tests {
         let mut book_repo = MockBookRepository::new();
 
         book_repo
-            .expect_find_book_ids_needing_enrichment()
-            .returning(|_| Box::pin(std::future::ready(Ok(vec![]))));
-
-        book_repo
-            .expect_find_book_ids_needing_kepub_conversion()
-            .returning(|_| Box::pin(std::future::ready(Ok(vec![]))));
-
-        book_repo
-            .expect_find_book_ids_with_stale_enrichment()
-            .returning(|_| Box::pin(std::future::ready(Ok(vec![]))));
+            .expect_find_book_ids_needing_any_enrichment()
+            .returning(|_, _, _| Box::pin(std::future::ready(Ok(vec![]))));
 
         let repo_service = Arc::new(default_repository_service_builder().book_repository(Arc::new(book_repo)).build().unwrap());
 
@@ -296,6 +140,45 @@ mod tests {
         .unwrap();
 
         let handler = EnsureEnrichmentsHandler::new(core);
-        handler.handle(serde_json::json!({})).await.unwrap();
+        handler.handle(BookSweepPayload::default()).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn full_batch_re_enqueues_continuation() {
+        let mut book_repo = MockBookRepository::new();
+        let mut job_repo = MockJobRepository::new();
+
+        // Return exactly batch_size books so the sweep re-enqueues a continuation.
+        let batch_size = BookSweepPayload::default().batch_size;
+        let ids: Vec<BookId> = (1..=batch_size).collect();
+        book_repo
+            .expect_find_book_ids_needing_any_enrichment()
+            .returning(move |_, _, _| Box::pin(std::future::ready(Ok(ids.clone()))));
+
+        // Expect one enqueue per book, plus one delayed enqueue for the continuation.
+        job_repo
+            .expect_enqueue_raw()
+            .returning(|_, _, _, _| Box::pin(std::future::ready(Ok(fake_job()))));
+        job_repo
+            .expect_enqueue_delayed()
+            .once()
+            .returning(|_, _, _, _, _| Box::pin(std::future::ready(Ok(fake_job()))));
+
+        let repo_service = Arc::new(
+            default_repository_service_builder()
+                .book_repository(Arc::new(book_repo))
+                .job_repository(Arc::new(job_repo))
+                .build()
+                .unwrap(),
+        );
+
+        let core = crate::create_services(
+            default_external_services_builder().repository_service(repo_service).build().unwrap(),
+            "test-secret",
+        )
+        .unwrap();
+
+        let handler = EnsureEnrichmentsHandler::new(core);
+        handler.handle(BookSweepPayload::default()).await.unwrap();
     }
 }
