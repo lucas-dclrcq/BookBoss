@@ -116,6 +116,7 @@ When creating a new workspace, run
 ```bash
 direnv allow
 mise trust
+just tailwindcss
 ```
 
 To verify the baseline state, run `just component-tests`.
