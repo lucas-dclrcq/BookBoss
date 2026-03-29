@@ -201,7 +201,10 @@ pub(crate) async fn admin_update_user(
 
     if let Some(pw) = password.filter(|p| !p.is_empty()) {
         user.password_hash = bb_core::user::User::encrypt_password(pw).map_err(|e| ServerFnError::new(e.to_string()))?;
-        user.change_password_on_login = true;
+        let is_self = bb_core::user::UserToken::new(actor.id()).to_string() == token;
+        if !is_self {
+            user.change_password_on_login = true;
+        }
     }
 
     core_services
@@ -440,6 +443,7 @@ pub(crate) fn UsersSection(is_super_admin: bool, current_user_token: String) -> 
         // ── User create/edit modal ──────────────────────────────────────────
         if let Some(target) = modal_target() {
             UserModal {
+                is_self: target.as_ref().is_some_and(|r| r.token == current_user_token),
                 editing: target,
                 is_super_admin,
                 on_close: move || modal_target.set(None),
@@ -524,7 +528,7 @@ impl RoleChoice {
 }
 
 #[component]
-fn UserModal(editing: Option<UserAdminRow>, is_super_admin: bool, on_close: EventHandler<()>, on_saved: EventHandler<()>) -> Element {
+fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool, on_close: EventHandler<()>, on_saved: EventHandler<()>) -> Element {
     let is_edit = editing.is_some();
 
     let initial_role = editing.as_ref().map_or(RoleChoice::User, |r| RoleChoice::from_caps(&r.capabilities));
@@ -630,7 +634,11 @@ fn UserModal(editing: Option<UserAdminRow>, is_super_admin: bool, on_close: Even
                         label { class: "block text-sm font-medium text-gray-700 mb-1", "Password" }
                         if is_edit {
                             p { class: "text-xs text-gray-400 mb-1",
-                                "Leave blank to keep current password. Setting a new password will require the user to change it on next login."
+                                if is_self {
+                                    "Leave blank to keep your current password."
+                                } else {
+                                    "Leave blank to keep current password. Setting a new password will require the user to change it on next login."
+                                }
                             }
                         }
                         div { class: "flex gap-2",
