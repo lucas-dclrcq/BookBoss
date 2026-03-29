@@ -76,4 +76,9 @@ pub trait BookRepository: Send + Sync {
     /// Returns IDs of Available books that have the given tag attached.
     /// Used to enqueue re-enrichment after a tag is deleted.
     async fn available_book_ids_for_tag(&self, transaction: &dyn Transaction, tag_id: TagId) -> Result<Vec<BookId>, Error>;
+
+    /// Returns up to `batch_size` IDs of Available books with `id > after_id`,
+    /// ordered by id ASC. Used by cursor sweep jobs to process the library in
+    /// bounded batches without loading the full library into memory.
+    async fn find_available_books_for_sweep(&self, transaction: &dyn Transaction, after_id: Option<BookId>, batch_size: u64) -> Result<Vec<BookId>, Error>;
 }

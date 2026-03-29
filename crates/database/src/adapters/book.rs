@@ -728,6 +728,27 @@ impl BookRepository for BookRepositoryAdapter {
 
         Ok(rows.into_iter().map(|r| r.book_id as u64).collect())
     }
+
+    async fn find_available_books_for_sweep(&self, transaction: &dyn Transaction, after_id: Option<BookId>, batch_size: u64) -> Result<Vec<BookId>, Error> {
+        use sea_orm::{QueryOrder, QuerySelect};
+
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        let mut query = prelude::Books::find()
+            .select_only()
+            .column(books::Column::Id)
+            .filter(books::Column::Status.eq("available"))
+            .order_by_asc(books::Column::Id)
+            .limit(batch_size);
+
+        if let Some(id) = after_id {
+            query = query.filter(books::Column::Id.gt(id as i64));
+        }
+
+        let rows = query.into_model::<BookIdOnly>().all(transaction).await.map_err(handle_dberr)?;
+
+        Ok(rows.into_iter().map(|r| r.book_id as u64).collect())
+    }
 }
 
 #[cfg(test)]
