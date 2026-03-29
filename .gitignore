@@ -39,3 +39,6 @@ Library/
 
 # Superpowers scratchpad
 .superpowers/
+
+# Tokensave
+.tokensave/*.db*
