@@ -50,7 +50,7 @@ pub(crate) fn BookGrid(
     use_context_provider(|| context);
     use_context_provider(|| on_action);
     rsx! {
-        div { class: "flex-1 overflow-auto p-4",
+        div { class: "p-4",
             div { class: "grid gap-x-8 gap-y-4",
                 style: "grid-template-columns: repeat(auto-fill, minmax(120px, 1fr))",
                 for book in &books {

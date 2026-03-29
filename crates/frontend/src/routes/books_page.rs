@@ -252,16 +252,18 @@ pub(crate) fn BooksPage() -> Element {
                             on_edit_shelf: |()| {},
                             on_delete_shelf: |()| {},
                         }
-                        CurrentlyReadingSection { books: filtered_reading }
-                        if filtered_books.is_empty() && has_search {
-                            div { class: "flex-1 flex items-center justify-center text-gray-400 text-sm",
-                                "No books match your search."
-                            }
-                        } else {
-                            BookGrid {
-                                books: filtered_books,
-                                context: BookGridContext::AllBooks { can_delete: can_delete_books },
-                                on_action: move |()| page_data.restart(),
+                        div { class: "flex-1 overflow-auto",
+                            CurrentlyReadingSection { books: filtered_reading }
+                            if filtered_books.is_empty() && has_search {
+                                div { class: "p-8 text-center text-gray-400 text-sm",
+                                    "No books match your search."
+                                }
+                            } else {
+                                BookGrid {
+                                    books: filtered_books,
+                                    context: BookGridContext::AllBooks { can_delete: can_delete_books },
+                                    on_action: move |()| page_data.restart(),
+                                }
                             }
                         }
                     }
