@@ -37,7 +37,5 @@ docs/book/
 # Local library
 Library/
 
-# Beads / Dolt files (added by bd init)
-.dolt/
-*.db
-.beads-credential-key
+# Superpowers scratchpad
+.superpowers/
