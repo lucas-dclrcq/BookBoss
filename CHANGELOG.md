@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.9](https://github.com/szinn/BookBoss/compare/v0.7.8..v0.7.9) - 2026-03-29
+
+### Features
+
+- _(core)_ Post system message and remove duplicate bookdrop files - ([027d047](https://github.com/szinn/BookBoss/commit/027d0474d9765f5db17dd79e91053bf7403b4295))
+- _(core)_ Return FileQueueStatus from queue_file_if_new - ([170ee9c](https://github.com/szinn/BookBoss/commit/170ee9c80d152ea4416a9f5e607056fc75266933))
+
+### Bug Fixes
+
+- _(core)_ Add error context and system message to EnrichBookFilesHandler - ([c1fec31](https://github.com/szinn/BookBoss/commit/c1fec3106c56a238bcec1370d3943eeee147c7a3))
+- _(core)_ Check book_files before import_jobs in scanner dedup - ([f62cd96](https://github.com/szinn/BookBoss/commit/f62cd969854b0630707c06aae78c54b6a9c43c5e))
+
+### Miscellaneous Tasks
+
+- _(core)_ Mark bug-bad-log-enrich-book-files-job complete - ([be5532f](https://github.com/szinn/BookBoss/commit/be5532ff87638146d7ca715f487a60f3d394aae5))
+- _(core)_ Triage bug-bad-log-enrich-book-files-job - ([fb6aa2b](https://github.com/szinn/BookBoss/commit/fb6aa2b7015c13843c7db73910ac7f16569941a0))
+
 ## [0.7.8](https://github.com/szinn/BookBoss/compare/v0.7.7..v0.7.8) - 2026-03-29
 
 ### Features
