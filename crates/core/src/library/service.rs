@@ -882,6 +882,11 @@ impl LibraryService for LibraryServiceImpl {
         })
         .await?;
 
+        // ── 4. Enqueue book file enrichment ─────────────────────────────────
+        self.job_service.enqueue(&EnrichBookFilesPayload { book_id }).await?;
+
+        self.event_service.notify_jobs_changed();
+
         Ok(())
     }
 }
@@ -1337,5 +1342,52 @@ mod tests {
 
         // Should succeed despite trash copy failure
         svc.delete_book(token).await.unwrap();
+    }
+
+    // ─── replace_cover ────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn replace_cover_enqueues_enrichment() {
+        use crate::jobs::service::MockJobService;
+
+        let book_id: BookId = 42;
+        let book = fake_book_with_id(book_id);
+
+        let mut book_repo = MockBookRepository::new();
+        let book_for_token = book.clone();
+        book_repo.expect_find_by_token().returning(move |_, _| {
+            let b = book_for_token.clone();
+            Box::pin(async move { Ok(Some(b)) })
+        });
+        let book_for_id = book.clone();
+        book_repo.expect_find_by_id().returning(move |_, _| {
+            let b = book_for_id.clone();
+            Box::pin(async move { Ok(Some(b)) })
+        });
+        book_repo.expect_update_book().returning(|_, b| Box::pin(async move { Ok(b) }));
+
+        let mut store = MockFileStoreService::new();
+        store.expect_store_cover().returning(|_, _, _| Box::pin(async { Ok(()) }));
+
+        let mut job_svc = MockJobService::new();
+        job_svc.expect_enqueue_raw().once().returning(|_, _, _| Box::pin(async { Ok(()) }));
+
+        let repository_service = Arc::new(
+            crate::repository::testing::default_repository_service_builder()
+                .book_repository(Arc::new(book_repo))
+                .import_job_repository(Arc::new(MockImportJobRepository::new()))
+                .library_repository(Arc::new(MockLibraryRepository::new()))
+                .build()
+                .expect("all fields provided"),
+        );
+        let svc = LibraryServiceImpl::new(
+            repository_service,
+            Arc::new(store),
+            nop_format_service(),
+            Arc::new(job_svc),
+            nop_event_service(),
+        );
+
+        svc.replace_cover(BookToken::new(book_id), vec![0u8; 4]).await.unwrap();
     }
 }
