@@ -147,6 +147,41 @@ pub(crate) struct FilterEntityOptions {
 // ── Public helpers
 // ────────────────────────────────────────────────────────────
 
+/// Refreshes the display labels on all entity-based rules in a filter using the
+/// current option lists.  Labels stored in `EntityRef` are purely cosmetic —
+/// the `id` field is authoritative — but they become stale when an entity (e.g.
+/// a shelf) is renamed after the filter was saved.  Call this before displaying
+/// a filter in the editor so the user always sees current names.
+pub(crate) fn freshen_entity_labels(filter: &mut BookFilter, options: &FilterEntityOptions) {
+    match filter {
+        BookFilter::Group(g) => {
+            for item in &mut g.items {
+                freshen_entity_labels(item, options);
+            }
+        }
+        BookFilter::Rule(rule) => freshen_rule_labels(rule, options),
+    }
+}
+
+fn freshen_rule_labels(rule: &mut FilterRule, options: &FilterEntityOptions) {
+    fn apply(refs: &mut Vec<EntityRef>, lookup: &[(i64, String)]) {
+        for r in refs {
+            if let Some((_, name)) = lookup.iter().find(|(id, _)| *id == r.id) {
+                r.label.clone_from(name);
+            }
+        }
+    }
+    match rule {
+        FilterRule::Author { values, .. } => apply(values, &options.authors),
+        FilterRule::Series { values, .. } => apply(values, &options.series),
+        FilterRule::Genre { values, .. } => apply(values, &options.genres),
+        FilterRule::Tag { values, .. } => apply(values, &options.tags),
+        FilterRule::Publisher { values, .. } => apply(values, &options.publishers),
+        FilterRule::Shelf { values, .. } => apply(values, &options.shelves),
+        _ => {}
+    }
+}
+
 /// Converts a `BookFilter` into a compact human-readable summary string,
 /// suitable for use as a tooltip.
 pub(crate) fn filter_to_summary(filter: &BookFilter) -> String {

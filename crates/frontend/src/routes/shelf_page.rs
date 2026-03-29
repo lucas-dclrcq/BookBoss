@@ -5,7 +5,7 @@ use crate::{
     Route,
     components::{
         BookFilter, BookGrid, BookGridContext, FilterBuilder, FilterEntityOptions, SORT_ORDER, SelectionActionBar, ShelfBar, default_book_filter,
-        filter_books_by_search, sort_books_client_side,
+        filter_books_by_search, freshen_entity_labels, sort_books_client_side,
     },
     routes::books_page::BookSummary,
 };
@@ -610,13 +610,15 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                     let name_for_edit = current_name.clone();
                     let vis_for_edit = current_vis.clone();
                     let filter_json_for_edit = current_filter_json.clone();
+                    let options_for_edit = entity_options.clone();
                     move |()| {
                         edit_name.set(name_for_edit.clone());
                         edit_private.set(vis_for_edit == "Private");
-                        let parsed = filter_json_for_edit
+                        let mut parsed = filter_json_for_edit
                             .as_deref()
                             .and_then(|j| serde_json::from_str::<BookFilter>(j).ok())
                             .unwrap_or_else(default_book_filter);
+                        freshen_entity_labels(&mut parsed, &options_for_edit);
                         edit_filter.set(parsed);
                         edit_error.set(None);
                         show_edit.set(true);
