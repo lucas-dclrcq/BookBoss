@@ -108,7 +108,11 @@ impl ImportJobService for ImportJobServiceImpl {
     }
 
     async fn queue_file_if_new(&self, file_path: String, file_hash: String, file_format: FileFormat, detected_at: DateTime<Utc>) -> Result<(), Error> {
-        with_transaction!(self, import_job_repository, job_repository, |tx| {
+        with_transaction!(self, import_job_repository, book_repository, job_repository, |tx| {
+            if book_repository.find_file_by_hash(tx, &file_hash).await?.is_some() {
+                tracing::debug!(hash = %file_hash, "file already in book_files — skipping");
+                return Ok(());
+            }
             if import_job_repository.find_by_hash(tx, &file_hash).await?.is_some() {
                 tracing::debug!(hash = %file_hash, "file already in import_jobs — skipping");
                 return Ok(());
@@ -205,6 +209,7 @@ mod tests {
     use super::{ImportJobService, ImportJobServiceImpl};
     use crate::{
         Error, RepositoryError,
+        book::repository::book::MockBookRepository,
         import::{ImportJob, ImportJobId, ImportJobToken, ImportStatus, repository::import_job::MockImportJobRepository},
         jobs::repository::MockJobRepository,
     };
@@ -221,10 +226,11 @@ mod tests {
         ImportJobServiceImpl::new(repository_service, None)
     }
 
-    fn create_service_with_job_repo(import_mock: MockImportJobRepository, job_mock: MockJobRepository) -> ImportJobServiceImpl {
+    fn create_service_with_all_repos(import_mock: MockImportJobRepository, book_mock: MockBookRepository, job_mock: MockJobRepository) -> ImportJobServiceImpl {
         let repository_service = Arc::new(
             crate::repository::testing::default_repository_service_builder()
                 .import_job_repository(Arc::new(import_mock))
+                .book_repository(Arc::new(book_mock))
                 .job_repository(Arc::new(job_mock))
                 .build()
                 .expect("all fields provided"),
@@ -381,8 +387,28 @@ mod tests {
             let j = existing.clone();
             Box::pin(async move { Ok(Some(j)) })
         });
+        let mut book_mock = MockBookRepository::new();
+        book_mock.expect_find_file_by_hash().returning(|_, _| Box::pin(async { Ok(None) }));
         let job_mock = MockJobRepository::new(); // enqueue must NOT be called
-        let svc = create_service_with_job_repo(import_mock, job_mock);
+        let svc = create_service_with_all_repos(import_mock, book_mock, job_mock);
+
+        let result = svc
+            .queue_file_if_new("/watch/test.epub".into(), "abc123".into(), crate::book::FileFormat::Epub, Utc::now())
+            .await;
+
+        result.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_queue_file_if_new_skips_existing_book_file_hash() {
+        let mut import_mock = MockImportJobRepository::new();
+        import_mock.expect_find_by_hash().returning(|_, _| Box::pin(async { Ok(None) }));
+        let mut book_mock = MockBookRepository::new();
+        book_mock
+            .expect_find_file_by_hash()
+            .returning(|_, _| Box::pin(async { Ok(Some(crate::book::model::book_file::BookFile::fake(1, "epub"))) }));
+        let job_mock = MockJobRepository::new(); // enqueue must NOT be called
+        let svc = create_service_with_all_repos(import_mock, book_mock, job_mock);
 
         let result = svc
             .queue_file_if_new("/watch/test.epub".into(), "abc123".into(), crate::book::FileFormat::Epub, Utc::now())
@@ -396,6 +422,8 @@ mod tests {
         let job = fake_job(ImportStatus::Pending);
         let mut import_mock = MockImportJobRepository::new();
         import_mock.expect_find_by_hash().returning(|_, _| Box::pin(async { Ok(None) }));
+        let mut book_mock = MockBookRepository::new();
+        book_mock.expect_find_file_by_hash().returning(|_, _| Box::pin(async { Ok(None) }));
         import_mock.expect_add_job().returning(move |_, _| {
             let j = job.clone();
             Box::pin(async move { Ok(j) })
@@ -421,7 +449,7 @@ mod tests {
                 })
             })
         });
-        let svc = create_service_with_job_repo(import_mock, job_mock);
+        let svc = create_service_with_all_repos(import_mock, book_mock, job_mock);
 
         let result = svc
             .queue_file_if_new("/watch/new.epub".into(), "newHash".into(), crate::book::FileFormat::Epub, Utc::now())

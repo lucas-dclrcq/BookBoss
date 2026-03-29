@@ -307,7 +307,7 @@ pub(super) async fn fetch_provider_metadata(
         if let Some(cover) = &pb.cover_bytes {
             let cover_dir = temp_dir.join("bookboss-covers");
             tokio::fs::create_dir_all(&cover_dir).await.map_err(|e| ServerFnError::new(e.to_string()))?;
-            let pending_name = format!("{}-provider", token);
+            let pending_name = format!("{token}-provider");
             tokio::fs::write(cover_dir.join(pending_name), cover)
                 .await
                 .map_err(|e| ServerFnError::new(e.to_string()))?;
