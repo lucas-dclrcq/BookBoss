@@ -61,19 +61,19 @@ pub mod test_support;
 #[derive(Builder)]
 #[builder(pattern = "owned")]
 pub struct ExternalServices {
-    pub repository_service: Arc<RepositoryService>,
-    pub file_store: Arc<dyn FileStoreService>,
-    pub format_service: Arc<dyn FormatService>,
+    pub(crate) repository_service: Arc<RepositoryService>,
+    pub(crate) file_store: Arc<dyn FileStoreService>,
+    pub(crate) format_service: Arc<dyn FormatService>,
     /// Path to the bookdrop directory for automatic import scanning.
     #[builder(default)]
-    pub bookdrop_path: Option<PathBuf>,
+    pub(crate) bookdrop_path: Option<PathBuf>,
     /// Polling interval for the bookdrop scanner.
     #[builder(default)]
-    pub scan_interval: Option<Duration>,
+    pub(crate) scan_interval: Option<Duration>,
 }
 
 pub struct CoreServices {
-    pub repository_service: Arc<RepositoryService>,
+    pub(crate) repository_service: Arc<RepositoryService>,
     pub auth_service: Arc<dyn AuthService>,
     pub user_service: Arc<dyn UserService>,
     pub user_setting_service: Arc<dyn UserSettingService>,
