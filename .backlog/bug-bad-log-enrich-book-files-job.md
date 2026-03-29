@@ -1,7 +1,7 @@
 ---
 slug: bug-bad-log-enrichment-job
 type: bug
-status: not-started
+status: complete
 description: Log message doesn't indicate which file had the issue
 priority: P2
 ---

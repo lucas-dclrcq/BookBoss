@@ -4,7 +4,7 @@ use chrono::{Duration, Utc};
 
 use crate::{
     CoreServices, Error,
-    import::ImportStatus,
+    import::{ImportJobToken, ImportStatus},
     jobs::JobHandler,
     message::{MessageSeverity, NewSystemMessage},
     repository::{read_only_transaction, transaction},
@@ -40,46 +40,66 @@ impl JobHandler for ResetStaleImportJobsHandler {
             return Ok(());
         }
 
-        let count = stale_jobs.len();
+        // Pre-check file existence for stuck in-progress jobs so we can move
+        // missing-file jobs to Error rather than endlessly resetting them.
+        let mut missing_file_jobs: Vec<(ImportJobToken, String)> = Vec::new();
+        let mut jobs_to_update = stale_jobs.clone();
+        for job in &mut jobs_to_update {
+            if matches!(job.status, ImportStatus::Extracting | ImportStatus::Identifying) {
+                if std::path::Path::new(&job.file_path).exists() {
+                    job.status = ImportStatus::Pending;
+                    job.error_message = Some("Reset by health check: stuck in processing state".to_string());
+                } else {
+                    missing_file_jobs.push((job.token, job.file_path.clone()));
+                    job.status = ImportStatus::Error;
+                    job.error_message = Some(format!("file no longer exists at {}", job.file_path));
+                }
+            } else if matches!(job.status, ImportStatus::Pending | ImportStatus::NeedsReview) {
+                // These are "stale" by age but not stuck — log but don't change status.
+                job.error_message = Some("Flagged by health check: stale for >24h".to_string());
+            }
+        }
+
+        let count = jobs_to_update.len();
         let import_repo = self.core.repository_service.import_job_repository().clone();
 
-        // Reset stale jobs: Pending/NeedsReview stay as-is (they may just be waiting),
-        // but Extracting/Identifying are stuck in-progress and should be reset to
-        // Pending.
         transaction(&**self.core.repository_service.repository(), |tx| {
             let import_repo = import_repo.clone();
-            let stale_jobs = stale_jobs.clone();
+            let jobs_to_update = jobs_to_update.clone();
             Box::pin(async move {
-                for mut job in stale_jobs {
-                    match job.status {
-                        ImportStatus::Extracting | ImportStatus::Identifying => {
-                            job.status = ImportStatus::Pending;
-                            job.error_message = Some("Reset by health check: stuck in processing state".to_string());
-                            import_repo.update_job(tx, job).await?;
-                        }
-                        ImportStatus::Pending | ImportStatus::NeedsReview => {
-                            // These are "stale" by age but not stuck — log but don't change.
-                            job.error_message = Some("Flagged by health check: stale for >24h".to_string());
-                            import_repo.update_job(tx, job).await?;
-                        }
-                        _ => {}
-                    }
+                for job in jobs_to_update {
+                    import_repo.update_job(tx, job).await?;
                 }
                 Ok(())
             })
         })
         .await?;
 
-        tracing::warn!(count, "reset stale import jobs");
+        // Post individual error messages for jobs whose file has gone missing.
+        for (token, file_path) in &missing_file_jobs {
+            tracing::error!(%token, %file_path, "import job moved to Error: file no longer exists");
+            self.core
+                .system_message_service
+                .add_message(NewSystemMessage {
+                    source_task: Self::JOB_TYPE.to_string(),
+                    severity: MessageSeverity::Error,
+                    message: format!("Import job {token} moved to Error: file no longer exists at {file_path}"),
+                })
+                .await?;
+        }
 
-        self.core
-            .system_message_service
-            .add_message(NewSystemMessage {
-                source_task: Self::JOB_TYPE.to_string(),
-                severity: MessageSeverity::Warning,
-                message: format!("Found {count} stale import job(s) — reset stuck jobs to Pending"),
-            })
-            .await?;
+        tracing::warn!(count, "processed stale import jobs");
+
+        if count > missing_file_jobs.len() {
+            self.core
+                .system_message_service
+                .add_message(NewSystemMessage {
+                    source_task: Self::JOB_TYPE.to_string(),
+                    severity: MessageSeverity::Warning,
+                    message: format!("Found {count} stale import job(s) — reset stuck jobs to Pending"),
+                })
+                .await?;
+        }
 
         Ok(())
     }
@@ -90,18 +110,18 @@ mod tests {
     use super::*;
     use crate::{
         book::FileFormat,
-        import::{ImportJob, ImportJobToken, repository::import_job::MockImportJobRepository},
+        import::{ImportJob, repository::import_job::MockImportJobRepository},
         message::repository::MockSystemMessageRepository,
         repository::testing::default_repository_service_builder,
         test_support::*,
     };
 
-    fn make_stale_job(id: u64, status: ImportStatus) -> ImportJob {
+    fn make_stale_job(id: u64, status: ImportStatus, file_path: impl Into<String>) -> ImportJob {
         ImportJob {
             id,
             version: 0,
             token: ImportJobToken::new(id),
-            file_path: format!("/watch/stale_{id}.epub"),
+            file_path: file_path.into(),
             file_hash: format!("hash_{id}"),
             file_format: FileFormat::Epub,
             detected_at: Utc::now(),
@@ -121,7 +141,9 @@ mod tests {
         let mut import_repo = MockImportJobRepository::new();
         let mut msg_repo = MockSystemMessageRepository::new();
 
-        let stale = make_stale_job(1, ImportStatus::Extracting);
+        // Use a real temp file so the existence check passes → reset to Pending
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let stale = make_stale_job(1, ImportStatus::Extracting, tmp.path().to_str().unwrap());
 
         import_repo.expect_find_stale_non_terminal_jobs().returning(move |_, _| {
             let stale = stale.clone();
@@ -133,8 +155,57 @@ mod tests {
             Box::pin(std::future::ready(Ok(job)))
         });
 
-        msg_repo.expect_add_message().returning(|_, msg| {
+        msg_repo.expect_add_message().once().returning(|_, msg| {
             assert_eq!(msg.severity, MessageSeverity::Warning);
+            let msg = crate::message::SystemMessage {
+                id: 1,
+                source_task: msg.source_task,
+                severity: msg.severity,
+                message: msg.message,
+                created_at: chrono::Utc::now(),
+            };
+            Box::pin(std::future::ready(Ok(msg)))
+        });
+
+        let repo_service = Arc::new(
+            default_repository_service_builder()
+                .import_job_repository(Arc::new(import_repo))
+                .system_message_repository(Arc::new(msg_repo))
+                .build()
+                .unwrap(),
+        );
+
+        let core = crate::create_services(
+            default_external_services_builder().repository_service(repo_service).build().unwrap(),
+            "test-secret",
+        )
+        .unwrap();
+
+        let handler = ResetStaleImportJobsHandler::new(core);
+        handler.handle(serde_json::json!({})).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn moves_to_error_when_file_missing() {
+        let mut import_repo = MockImportJobRepository::new();
+        let mut msg_repo = MockSystemMessageRepository::new();
+
+        // Non-existent path → should move to Error
+        let stale = make_stale_job(2, ImportStatus::Extracting, "/nonexistent/missing.epub");
+
+        import_repo.expect_find_stale_non_terminal_jobs().returning(move |_, _| {
+            let stale = stale.clone();
+            Box::pin(std::future::ready(Ok(vec![stale])))
+        });
+
+        import_repo.expect_update_job().returning(|_, job| {
+            assert_eq!(job.status, ImportStatus::Error);
+            Box::pin(std::future::ready(Ok(job)))
+        });
+
+        msg_repo.expect_add_message().once().returning(|_, msg| {
+            assert_eq!(msg.severity, MessageSeverity::Error);
+            assert!(msg.message.contains("missing.epub"), "message should include file path");
             let msg = crate::message::SystemMessage {
                 id: 1,
                 source_task: msg.source_task,
