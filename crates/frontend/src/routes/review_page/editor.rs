@@ -3,8 +3,8 @@ use dioxus::{html::HasFileData, prelude::*};
 
 use super::{
     server::{
-        approve_book, fetch_provider_for_edit, fetch_provider_metadata, get_picklist_data, reject_review_book, save_library_book, stage_incoming_cover,
-        stage_library_cover,
+        accept_incoming_provider_cover, accept_library_provider_cover, approve_book, fetch_provider_for_edit, fetch_provider_metadata, get_picklist_data,
+        reject_review_book, save_library_book, stage_incoming_cover, stage_library_cover,
     },
     types::{BookEditFields, BookReviewData, IdentifierMap, ProviderResult},
 };
@@ -836,6 +836,15 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                                         current_cover.set(thumb);
                                                         current_cover_dimensions.set(pr.cover_dimensions);
                                                         use_fetched_cover.set(true);
+                                                        let ck = cover_key.clone();
+                                                        let is_edit = edit_mode;
+                                                        spawn(async move {
+                                                            if is_edit {
+                                                                let _ = accept_library_provider_cover(ck).await;
+                                                            } else {
+                                                                let _ = accept_incoming_provider_cover(ck).await;
+                                                            }
+                                                        });
                                                     }
                                                 }
                                             },

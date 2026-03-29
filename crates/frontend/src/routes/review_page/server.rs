@@ -307,13 +307,37 @@ pub(super) async fn fetch_provider_metadata(
         if let Some(cover) = &pb.cover_bytes {
             let cover_dir = temp_dir.join("bookboss-covers");
             tokio::fs::create_dir_all(&cover_dir).await.map_err(|e| ServerFnError::new(e.to_string()))?;
-            tokio::fs::write(cover_dir.join(token.to_string()), cover)
+            let pending_name = format!("{}-provider", token);
+            tokio::fs::write(cover_dir.join(pending_name), cover)
                 .await
                 .map_err(|e| ServerFnError::new(e.to_string()))?;
         }
     }
 
     Ok(result.as_ref().map(provider_book_to_result))
+}
+
+#[put(
+    "/api/v1/incoming/review/cover/accept",
+    auth_session: axum::Extension<AuthSession>
+)]
+pub(super) async fn accept_incoming_provider_cover(job_token: String) -> Result<(), ServerFnError> {
+    let current_user = auth_session.current_user.clone().unwrap_or_default();
+    if !Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::PUT], true)
+        .requires(Rights::any([Rights::permission(Capability::ApproveImports.as_str())]))
+        .validate(&current_user, &Method::PUT, None)
+        .await
+    {
+        return Err(ServerFnError::new("Forbidden"));
+    }
+
+    let cover_dir = std::env::temp_dir().join("bookboss-covers");
+    tokio::fs::create_dir_all(&cover_dir).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let pending = cover_dir.join(format!("{job_token}-provider"));
+    let committed = cover_dir.join(&job_token);
+    tokio::fs::rename(&pending, &committed).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(())
 }
 
 #[put(
@@ -369,6 +393,9 @@ pub(super) async fn approve_book(fields: BookEditFields) -> Result<(), ServerFnE
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
+    // Clean up any unaccepted provider cover
+    let _ = tokio::fs::remove_file(temp_dir.join("bookboss-covers").join(format!("{token}-provider"))).await;
+
     Ok(())
 }
 
@@ -390,9 +417,10 @@ pub(super) async fn reject_review_book(job_token: String) -> Result<(), ServerFn
     let token: ImportJobToken = job_token.parse().map_err(|_| ServerFnError::new("Invalid token"))?;
     let temp_dir = std::env::temp_dir();
 
-    // Remove any temp cover that may have been fetched
-    let cover_path = temp_dir.join("bookboss-covers").join(job_token);
-    let _ = tokio::fs::remove_file(&cover_path).await;
+    // Remove any temp covers that may have been staged or fetched
+    let cover_dir = temp_dir.join("bookboss-covers");
+    let _ = tokio::fs::remove_file(cover_dir.join(&job_token)).await;
+    let _ = tokio::fs::remove_file(cover_dir.join(format!("{job_token}-provider"))).await;
 
     core_services
         .library_service
@@ -571,13 +599,37 @@ pub(super) async fn fetch_provider_for_edit(
         if let Some(cover) = &pb.cover_bytes {
             let cover_dir = temp_dir.join("bookboss-covers");
             tokio::fs::create_dir_all(&cover_dir).await.map_err(|e| ServerFnError::new(e.to_string()))?;
-            tokio::fs::write(cover_dir.join(&book_token), cover)
+            let pending_name = format!("{book_token}-provider");
+            tokio::fs::write(cover_dir.join(pending_name), cover)
                 .await
                 .map_err(|e| ServerFnError::new(e.to_string()))?;
         }
     }
 
     Ok(result.as_ref().map(provider_book_to_result))
+}
+
+#[put(
+    "/api/v1/books/cover/accept",
+    auth_session: axum::Extension<AuthSession>
+)]
+pub(super) async fn accept_library_provider_cover(book_token: String) -> Result<(), ServerFnError> {
+    let current_user = auth_session.current_user.clone().unwrap_or_default();
+    if !Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::PUT], true)
+        .requires(Rights::any([Rights::permission(Capability::EditBook.as_str())]))
+        .validate(&current_user, &Method::PUT, None)
+        .await
+    {
+        return Err(ServerFnError::new("Forbidden"));
+    }
+
+    let cover_dir = std::env::temp_dir().join("bookboss-covers");
+    tokio::fs::create_dir_all(&cover_dir).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let pending = cover_dir.join(format!("{book_token}-provider"));
+    let committed = cover_dir.join(&book_token);
+    tokio::fs::rename(&pending, &committed).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(())
 }
 
 #[put(
@@ -632,6 +684,9 @@ pub(super) async fn save_library_book(book_token: String, fields: BookEditFields
         .edit_book(token, edit, &book_token, &temp_dir)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    // Clean up any unaccepted provider cover
+    let _ = tokio::fs::remove_file(temp_dir.join("bookboss-covers").join(format!("{book_token}-provider"))).await;
 
     Ok(())
 }
