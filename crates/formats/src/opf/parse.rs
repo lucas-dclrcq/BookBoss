@@ -5,6 +5,7 @@ use bb_core::{
     pipeline::{ExtractedAuthor, ExtractedIdentifier, ExtractedMetadata},
     storage::{BookSidecar, SidecarAuthor, SidecarFile, SidecarIdentifier, SidecarSeries},
 };
+use bb_utils::language::normalize_language;
 use quick_xml::{
     NsReader,
     events::Event,
@@ -342,7 +343,7 @@ fn parse_dc(xml: &[u8]) -> Result<DcFields, Error> {
                     ParseState::InDescription => fields.description = Some(text),
                     ParseState::InPublisher => fields.publisher = Some(text),
                     ParseState::InDate => fields.published_date = Some(text),
-                    ParseState::InLanguage => fields.language = Some(text),
+                    ParseState::InLanguage => fields.language = normalize_language(&text),
                     ParseState::InSubject => {
                         let s = text.trim().to_string();
                         if !s.is_empty() {

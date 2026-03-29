@@ -8,7 +8,10 @@ use bb_core::{
     metadata::MetadataProvider,
     pipeline::{ExtractedAuthor, ExtractedIdentifier, ExtractedMetadata, ProviderBook},
 };
-use bb_utils::similarity::{author_similarity, combined_score, title_similarity};
+use bb_utils::{
+    language::normalize_language,
+    similarity::{author_similarity, combined_score, title_similarity},
+};
 use model::{Volume, VolumeInfo, VolumeList};
 use tracing::warn;
 
@@ -62,14 +65,6 @@ impl GoogleBooksAdapter {
             .find(|id| id.identifier_type == IdentifierType::Isbn13)
             .or_else(|| identifiers.iter().find(|id| id.identifier_type == IdentifierType::Isbn10))
             .map(|id| id.value.clone())
-    }
-
-    /// Normalises a BCP 47 language tag to its root subtag.
-    ///
-    /// `"en-US"` and `"en_US"` both become `"en"`. Already-root codes like
-    /// `"en"` pass through unchanged.
-    fn normalize_language(lang: &str) -> String {
-        lang.split(['-', '_']).next().unwrap_or(lang).to_lowercase()
     }
 
     /// Scans a freeform date string for the first plausible 4-digit year.
@@ -140,7 +135,7 @@ impl GoogleBooksAdapter {
             description: info.description.clone(),
             publisher: info.publisher.clone(),
             published_date: info.published_date.as_deref().and_then(Self::parse_year),
-            language: info.language.as_deref().map(Self::normalize_language),
+            language: info.language.as_deref().and_then(normalize_language),
             identifiers: Some(identifiers),
             series_name: None,
             series_number: None,
@@ -574,15 +569,6 @@ mod tests {
                 .iter()
                 .any(|id| id.identifier_type == IdentifierType::GoogleBooks && id.value == "2")
         );
-    }
-
-    #[test]
-    fn normalize_language_strips_region_subtag() {
-        assert_eq!(GoogleBooksAdapter::normalize_language("en-US"), "en");
-        assert_eq!(GoogleBooksAdapter::normalize_language("en_US"), "en");
-        assert_eq!(GoogleBooksAdapter::normalize_language("pt-BR"), "pt");
-        assert_eq!(GoogleBooksAdapter::normalize_language("en"), "en");
-        assert_eq!(GoogleBooksAdapter::normalize_language("EN"), "en");
     }
 
     #[test]

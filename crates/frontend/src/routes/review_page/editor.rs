@@ -8,13 +8,7 @@ use super::{
     },
     types::{BookEditFields, BookReviewData, IdentifierMap, ProviderResult},
 };
-use crate::components::{AutocompleteInput, ChipInput};
-
-/// ISO 639-1 language codes — North American / European subset.
-const LANGUAGE_CODES: &[&str] = &[
-    "af", "be", "bg", "ca", "cs", "cy", "da", "de", "el", "en", "es", "et", "fi", "fr", "ga", "hr", "hu", "is", "it", "lv", "lt", "mk", "nl", "no", "pl", "pt",
-    "ro", "ru", "sk", "sl", "sq", "sr", "sv", "tr", "uk",
-];
+use crate::components::{AutocompleteInput, ChipInput, LANGUAGE_CODES};
 
 const ALL_IDENTIFIER_TYPES: &[(&str, &str)] = &[
     ("Isbn13", "ISBN-13"),
