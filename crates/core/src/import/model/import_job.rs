@@ -140,5 +140,5 @@ pub struct ProcessImportPayload {
 
 impl crate::jobs::Enqueueable for ProcessImportPayload {
     const JOB_TYPE: &'static str = "process_import";
-    const DEFAULT_PRIORITY: i16 = 1;
+    const DEFAULT_PRIORITY: i16 = crate::jobs::PRIORITY_USER;
 }

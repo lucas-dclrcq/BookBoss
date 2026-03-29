@@ -21,6 +21,7 @@ pub struct EnrichBookFilesPayload {
 
 impl Enqueueable for EnrichBookFilesPayload {
     const JOB_TYPE: &'static str = "enrich_book_files";
+    const DEFAULT_PRIORITY: i16 = crate::jobs::PRIORITY_NORMAL;
 }
 
 pub struct EnrichBookFilesHandler {

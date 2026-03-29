@@ -6,7 +6,7 @@ use crate::{
     Error,
     event::EventService,
     health::service::{HealthService, create_health_service},
-    jobs::JobService,
+    jobs::{JobService, PRIORITY_HEALTH},
 };
 
 const POLL_INTERVAL: Duration = Duration::from_secs(30);
@@ -33,7 +33,7 @@ impl HealthCheckSubsystem {
             return Ok(());
         }
 
-        self.job_service.enqueue_raw(job_type, serde_json::json!({}), 0).await?;
+        self.job_service.enqueue_raw(job_type, serde_json::json!({}), PRIORITY_HEALTH).await?;
 
         tracing::info!(job_type, "enqueued health check task");
         self.event_service.notify_jobs_changed();

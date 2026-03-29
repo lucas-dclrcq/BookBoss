@@ -41,7 +41,7 @@ pub trait JobRepository: Send + Sync {
 /// alongside `JobHandler` in your handler crate.
 pub trait Enqueueable: Serialize {
     const JOB_TYPE: &'static str;
-    const DEFAULT_PRIORITY: i16 = 0;
+    const DEFAULT_PRIORITY: i16;
 }
 
 /// Extension methods on any `JobRepository` for typed enqueueing.

@@ -51,6 +51,6 @@ mod tests {
     #[test]
     fn payload_job_type_and_priority() {
         assert_eq!(ProcessImportPayload::JOB_TYPE, "process_import");
-        assert_eq!(ProcessImportPayload::DEFAULT_PRIORITY, 1);
+        assert_eq!(ProcessImportPayload::DEFAULT_PRIORITY, crate::jobs::PRIORITY_USER);
     }
 }
