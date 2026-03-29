@@ -107,7 +107,7 @@ Existing user creation form gains:
 
 - "Create personal library" checkbox
 - When checked: enables an input field pre-filled with "{full_name}'s Library" (editable)
-- Library assignment pill picker (multi-select of non-system libraries)
+- Library assignment pill picker (multi-select including system libraries)
 - Default library picker (dropdown from assigned libraries)
 - If "Create personal library" is checked, the new library is pre-selected as default
 
@@ -130,7 +130,14 @@ Existing user creation form gains:
 
 - New "Libraries" pill picker alongside genres/tags/publisher
 - Shows non-system libraries only ("All Books" membership is implicit)
-- During incoming book review: same picker, defaults to empty (book is only in "All Books")
+- During incoming book review: same picker, defaults all non-system libraries so administrator would
+  delete the libraries that shouldn't get the book
+
+#### Bulk Select Add to Library
+
+- the administrator should be able to multi-select books and then bulk add them to a library to
+  make them available a user. All non-system libraries should be available as targets
+- this is a short-cut to editing metadata to assign the libraries
 
 #### Library Filter Rule (Admin Only)
 
