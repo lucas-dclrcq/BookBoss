@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.10](https://github.com/szinn/BookBoss/compare/v0.7.9..v0.7.10) - 2026-03-29
+
+### Features
+
+- _(core)_ Convert EnsureEnrichmentsHandler to BookIdSweep cursor pattern - ([a1b047c](https://github.com/szinn/BookBoss/commit/a1b047cea53c1ff6e0bedbe124cac93189610264))
+- _(core)_ Add BookIdSweep trait, runner, and find_available_books_for_sweep - ([8246971](https://github.com/szinn/BookBoss/commit/8246971ddd9d6e1f46d317ad714f235db8bad438))
+- _(core)_ Add enqueue_after API for delayed job scheduling - ([414fc2c](https://github.com/szinn/BookBoss/commit/414fc2c83c667218eb9103a2323df75f113a70ef))
+- _(core)_ Formalize job priority constants - ([edd3a72](https://github.com/szinn/BookBoss/commit/edd3a72f1b9bf33ab27606048ef894f8b5dd646f))
+
+### Bug Fixes
+
+- _(core)_ Enqueue enrichment immediately after replace_cover - ([3076bc9](https://github.com/szinn/BookBoss/commit/3076bc93591365a1e94fea9380b87eeea48ba372))
+- _(core)_ Enqueue enrichment for affected books when genre/tag deleted - ([6a7a149](https://github.com/szinn/BookBoss/commit/6a7a149f3198165653c510e9dcf38f425bed5c62))
+- _(core)_ Fix scanner dedup for incoming-queue and rejected files - ([84308d5](https://github.com/szinn/BookBoss/commit/84308d58048c233bcb1d3288f2b01a14669a6aa3))
+- _(frontend)_ Focus delete button on every modal open in genre/tag settings - ([1e5f50b](https://github.com/szinn/BookBoss/commit/1e5f50b430b199807b3169899877724822ab80fa))
+
 ## [0.7.9](https://github.com/szinn/BookBoss/compare/v0.7.8..v0.7.9) - 2026-03-29
 
 ### Features
