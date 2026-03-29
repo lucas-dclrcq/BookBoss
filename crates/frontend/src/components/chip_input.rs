@@ -22,11 +22,14 @@ pub(crate) fn word_match(candidate: &str, query: &str) -> bool {
 /// - `max_chips`: when set, the text input is hidden once the limit is reached,
 ///   preventing additional entries (useful for single-value fields like
 ///   Publisher).
+/// - Arrow keys navigate the dropdown without moving DOM focus away from the
+///   input; Enter selects the highlighted item.
 #[component]
 pub(crate) fn ChipInput(mut values: Signal<Vec<String>>, options: Vec<String>, placeholder: String, #[props(default)] max_chips: Option<usize>) -> Element {
     let mut input_text = use_signal(String::new);
     let mut show_dropdown = use_signal(|| false);
     let mut focus_on_mount = use_signal(|| false);
+    let mut focused_index = use_signal(|| None::<usize>);
 
     let query = input_text.read().clone();
     let current = values.read().clone();
@@ -50,6 +53,8 @@ pub(crate) fn ChipInput(mut values: Signal<Vec<String>>, options: Vec<String>, p
             .cloned()
             .collect()
     };
+
+    let filtered_for_keys = filtered.clone();
 
     let ph = if current.is_empty() { placeholder.as_str() } else { "" };
 
@@ -101,20 +106,51 @@ pub(crate) fn ChipInput(mut values: Signal<Vec<String>>, options: Vec<String>, p
                     oninput: move |e| {
                         input_text.set(e.value());
                         show_dropdown.set(true);
+                        focused_index.set(None);
                     },
                     onkeydown: move |e| {
                         match e.key() {
+                            Key::ArrowDown => {
+                                e.prevent_default();
+                                if *show_dropdown.read() && !filtered_for_keys.is_empty() {
+                                    let next = match *focused_index.read() {
+                                        None => 0,
+                                        Some(n) => (n + 1).min(filtered_for_keys.len() - 1),
+                                    };
+                                    focused_index.set(Some(next));
+                                }
+                            }
+                            Key::ArrowUp => {
+                                e.prevent_default();
+                                let current_idx = *focused_index.read();
+                                if let Some(n) = current_idx {
+                                    focused_index.set(if n == 0 { None } else { Some(n - 1) });
+                                }
+                            }
                             Key::Enter => {
                                 e.prevent_default();
-                                let text = input_text.read().trim().to_string();
-                                if !text.is_empty() {
-                                    let mut v = values.write();
-                                    if !v.iter().any(|x| x.eq_ignore_ascii_case(&text)) {
-                                        v.push(text);
+                                let current_idx = *focused_index.read();
+                                if let Some(idx) = current_idx {
+                                    let name = filtered_for_keys[idx].trim().to_string();
+                                    if !name.is_empty() {
+                                        let mut v = values.write();
+                                        if !v.iter().any(|x| x.eq_ignore_ascii_case(&name)) {
+                                            v.push(name);
+                                        }
                                     }
-                                    drop(v);
                                     input_text.set(String::new());
                                     show_dropdown.set(false);
+                                    focused_index.set(None);
+                                } else {
+                                    let text = input_text.read().trim().to_string();
+                                    if !text.is_empty() {
+                                        let mut v = values.write();
+                                        if !v.iter().any(|x| x.eq_ignore_ascii_case(&text)) {
+                                            v.push(text);
+                                        }
+                                        input_text.set(String::new());
+                                        show_dropdown.set(false);
+                                    }
                                 }
                             }
                             Key::Backspace if input_text.read().is_empty() => {
@@ -126,8 +162,12 @@ pub(crate) fn ChipInput(mut values: Signal<Vec<String>>, options: Vec<String>, p
                             Key::Escape => {
                                 input_text.set(String::new());
                                 show_dropdown.set(false);
+                                focused_index.set(None);
                             }
-                            _ => {}
+                            _ => {
+                                // Any other key clears the highlight so it doesn't stray
+                                focused_index.set(None);
+                            }
                         }
                     },
                     onfocus: move |_| {
@@ -135,6 +175,7 @@ pub(crate) fn ChipInput(mut values: Signal<Vec<String>>, options: Vec<String>, p
                     },
                     onfocusout: move |_| {
                         show_dropdown.set(false);
+                        focused_index.set(None);
                     },
                 }
                 } // end if !at_limit
@@ -142,14 +183,20 @@ pub(crate) fn ChipInput(mut values: Signal<Vec<String>>, options: Vec<String>, p
             // ── Dropdown ───────────────────────────────────────────────────────
             if *show_dropdown.read() && !filtered.is_empty() {
                 div { class: "absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded shadow-lg z-50 max-h-48 overflow-y-auto",
-                    for option in filtered {
+                    for (i, option) in filtered.iter().enumerate() {
                         {
                             let label = option.clone();
-                            let click_val = option;
+                            let click_val = option.clone();
+                            let is_focused = focused_index() == Some(i);
+                            let row_class = if is_focused {
+                                "px-3 py-1.5 text-sm text-gray-700 cursor-pointer bg-indigo-50 border-l-2 border-indigo-400"
+                            } else {
+                                "px-3 py-1.5 text-sm text-gray-700 hover:bg-indigo-50 cursor-pointer"
+                            };
                             rsx! {
                                 div {
                                     key: "{label}",
-                                    class: "px-3 py-1.5 text-sm text-gray-700 hover:bg-indigo-50 cursor-pointer",
+                                    class: "{row_class}",
                                     onmousedown: move |e| e.prevent_default(),
                                     onclick: move |_| {
                                         let name = click_val.trim().to_string();
@@ -161,6 +208,7 @@ pub(crate) fn ChipInput(mut values: Signal<Vec<String>>, options: Vec<String>, p
                                         }
                                         input_text.set(String::new());
                                         show_dropdown.set(false);
+                                        focused_index.set(None);
                                     },
                                     "{label}"
                                 }
