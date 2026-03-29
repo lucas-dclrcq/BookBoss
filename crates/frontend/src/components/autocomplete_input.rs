@@ -6,9 +6,12 @@ use super::chip_input::word_match;
 ///
 /// - When a value is committed, it renders as a removable pill. Chips whose
 ///   name is not found in `options` display a **new** badge in green.
-/// - When empty or editing, shows a text input. Focusing immediately shows up
-///   to 8 options from the pick-list.
+/// - Clicking the pill re-opens the input pre-populated with the current value.
+/// - When empty or editing, shows a text input. Focusing immediately shows all
+///   options from the pick-list.
 /// - Typing 1+ characters filters `options` by word-order-independent matching.
+/// - Press `↓`/`↑` to navigate the dropdown; `Enter` to select the highlighted
+///   item or commit the typed text; `Escape` to cancel.
 /// - Clicking a suggestion commits the value, closes the dropdown, and fires
 ///   `on_series_selected` with `(series_name, suggested_next_number)`.
 /// - The × on the pill clears the value and fires `on_cleared`.
@@ -25,6 +28,7 @@ pub(crate) fn AutocompleteInput(
     let mut editing = use_signal(|| false);
     let mut input_text = use_signal(String::new);
     let mut show_dropdown = use_signal(|| false);
+    let mut focused_index = use_signal(|| None::<usize>);
 
     let is_editing = *editing.read();
     let committed = value.read().clone();
@@ -35,13 +39,15 @@ pub(crate) fn AutocompleteInput(
     let show = *show_dropdown.read();
     let filtered: Vec<(String, u32)> = if is_editing {
         if query.is_empty() {
-            if show { options.iter().take(8).cloned().collect() } else { vec![] }
+            if show { options.clone() } else { vec![] }
         } else {
-            options.iter().filter(|(name, _)| word_match(name, &query)).take(8).cloned().collect()
+            options.iter().filter(|(name, _)| word_match(name, &query)).cloned().collect()
         }
     } else {
         vec![]
     };
+
+    let filtered_for_keys = filtered.clone();
 
     let is_new = is_set && !options.iter().any(|(name, _)| name.eq_ignore_ascii_case(&committed));
 
@@ -95,6 +101,7 @@ pub(crate) fn AutocompleteInput(
                     oninput: move |e| {
                         input_text.set(e.value());
                         show_dropdown.set(true);
+                        focused_index.set(None);
                     },
                     onfocus: move |_| {
                         editing.set(true);
@@ -104,6 +111,7 @@ pub(crate) fn AutocompleteInput(
                         let text = input_text.read().clone();
                         show_dropdown.set(false);
                         editing.set(false);
+                        focused_index.set(None);
                         if !text.is_empty() {
                             value.set(text.clone());
                             on_blur.call(text);
@@ -116,18 +124,55 @@ pub(crate) fn AutocompleteInput(
                         }
                     },
                     onkeydown: move |e| {
-                        if e.key() == Key::Escape {
-                            show_dropdown.set(false);
-                            editing.set(false);
-                            // Restore previous committed value.
-                            input_text.set(value.read().clone());
-                        } else if e.key() == Key::Enter {
-                            let text = input_text.read().clone();
-                            if !text.is_empty() {
+                        match e.key() {
+                            Key::ArrowDown => {
+                                e.prevent_default();
+                                if *show_dropdown.read() && !filtered_for_keys.is_empty() {
+                                    let current = *focused_index.read();
+                                    let next = match current {
+                                        None => 0,
+                                        Some(n) => (n + 1).min(filtered_for_keys.len() - 1),
+                                    };
+                                    focused_index.set(Some(next));
+                                }
+                            }
+                            Key::ArrowUp => {
+                                e.prevent_default();
+                                let current = *focused_index.read();
+                                if let Some(n) = current {
+                                    focused_index.set(if n == 0 { None } else { Some(n - 1) });
+                                }
+                            }
+                            Key::Enter => {
+                                e.prevent_default();
+                                let current = *focused_index.read();
+                                if let Some(idx) = current {
+                                    let (name, next_num) = filtered_for_keys[idx].clone();
+                                    value.set(name.clone());
+                                    input_text.set(name.clone());
+                                    show_dropdown.set(false);
+                                    editing.set(false);
+                                    focused_index.set(None);
+                                    on_series_selected.call((name, next_num));
+                                } else {
+                                    let text = input_text.read().clone();
+                                    if !text.is_empty() {
+                                        show_dropdown.set(false);
+                                        editing.set(false);
+                                        value.set(text.clone());
+                                        on_blur.call(text);
+                                    }
+                                }
+                            }
+                            Key::Escape => {
                                 show_dropdown.set(false);
                                 editing.set(false);
-                                value.set(text.clone());
-                                on_blur.call(text);
+                                focused_index.set(None);
+                                // Restore previous committed value.
+                                input_text.set(value.read().clone());
+                            }
+                            _ => {
+                                focused_index.set(None);
                             }
                         }
                     },
@@ -136,20 +181,28 @@ pub(crate) fn AutocompleteInput(
             // ── Dropdown ──────────────────────────────────────────────────────
             if show && !filtered.is_empty() {
                 div { class: "absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded shadow-lg z-50 max-h-48 overflow-y-auto",
-                    for (name, next_num) in filtered {
+                    for (i, (name, next_num)) in filtered.iter().enumerate() {
                         {
                             let label = name.clone();
-                            let click_name = name;
+                            let click_name = name.clone();
+                            let is_focused = focused_index() == Some(i);
+                            let row_class = if is_focused {
+                                "px-3 py-1.5 text-sm text-gray-700 cursor-pointer bg-indigo-50 border-l-2 border-indigo-400"
+                            } else {
+                                "px-3 py-1.5 text-sm text-gray-700 hover:bg-indigo-50 cursor-pointer"
+                            };
+                            let next_num = *next_num;
                             rsx! {
                                 div {
                                     key: "{label}",
-                                    class: "px-3 py-1.5 text-sm text-gray-700 hover:bg-indigo-50 cursor-pointer",
+                                    class: "{row_class}",
                                     onmousedown: move |e| e.prevent_default(),
                                     onclick: move |_| {
                                         value.set(click_name.clone());
                                         input_text.set(click_name.clone());
                                         show_dropdown.set(false);
                                         editing.set(false);
+                                        focused_index.set(None);
                                         on_series_selected.call((click_name.clone(), next_num));
                                     },
                                     "{label}"

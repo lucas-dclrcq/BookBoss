@@ -61,7 +61,19 @@ pub(crate) fn ChipInput(mut values: Signal<Vec<String>>, options: Vec<String>, p
     rsx! {
         div { class: "relative",
             // ── Chip container ─────────────────────────────────────────────────
-            div { class: "flex flex-wrap gap-1 items-center border border-gray-300 rounded px-2 py-1 min-h-[34px] focus-within:ring-1 focus-within:ring-indigo-400",
+            div {
+                class: "flex flex-wrap gap-1 items-center border border-gray-300 rounded px-2 py-1 min-h-[34px] focus-within:ring-1 focus-within:ring-indigo-400",
+                // When max_chips is 1 and the field is full, clicking anywhere on the
+                // container re-opens the input pre-populated with the current value.
+                onclick: move |_| {
+                    if at_limit && max_chips == Some(1) {
+                        let current_val = values.write().pop().unwrap_or_default();
+                        input_text.set(current_val);
+                        show_dropdown.set(true);
+                        focused_index.set(None);
+                        focus_on_mount.set(true);
+                    }
+                },
                 for (i, chip) in current.iter().enumerate() {
                     {
                         let is_new = !options.iter().any(|o| o.eq_ignore_ascii_case(chip));
@@ -80,7 +92,8 @@ pub(crate) fn ChipInput(mut values: Signal<Vec<String>>, options: Vec<String>, p
                                 button {
                                     r#type: "button",
                                     class: "ml-0.5 text-gray-400 hover:text-gray-700 cursor-pointer leading-none",
-                                    onclick: move |_| {
+                                    onclick: move |e| {
+                                        e.stop_propagation();
                                         values.write().remove(i);
                                         if max_chips.is_some() {
                                             focus_on_mount.set(true);
