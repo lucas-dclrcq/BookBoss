@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.8](https://github.com/szinn/BookBoss/compare/v0.7.7..v0.7.8) - 2026-03-29
+
+### Features
+
+- _(frontend)_ Add arrow-key navigation to ChipInput dropdown - ([dfa40da](https://github.com/szinn/BookBoss/commit/dfa40da38e5f2af8e894991f3d1a8385664b0b87))
+
+### Bug Fixes
+
+- _(frontend)_ Fix provider cover overwriting user-staged cover in review/edit - ([6e5b08d](https://github.com/szinn/BookBoss/commit/6e5b08d3a1991b127aa78b9adabfb560dd9657ed))
+- _(frontend)_ Make Delete the default action in genre/tag confirm dialog - ([402e8a2](https://github.com/szinn/BookBoss/commit/402e8a221f3f78197fcedb6f9a188f25b66f3dbd))
+- _(frontend)_ Freshen stale entity labels when opening smart shelf editor - ([ebbb4a2](https://github.com/szinn/BookBoss/commit/ebbb4a258d01e041a6c74098e2109847f090ea36))
+- _(frontend)_ Fix single-value picklist UX and add keyboard nav to AutocompleteInput - ([a020a28](https://github.com/szinn/BookBoss/commit/a020a28b43e1d613b6cc27cfb100d30008bf918b))
+- _(frontend)_ Remove 8-item cap from ChipInput dropdown - ([0ba776f](https://github.com/szinn/BookBoss/commit/0ba776fb7fb21d454733b1674df59fe5f2be4e85))
+- _(frontend)_ Skip force-password-change when admin edits own account - ([21d6387](https://github.com/szinn/BookBoss/commit/21d63873a570ca9bf4d54b8f64488405b6c04902))
+- _(frontend)_ Allow currently reading section to scroll with library - ([f292ce8](https://github.com/szinn/BookBoss/commit/f292ce85d759d4a29299d39e66140ecabec06d13))
+
+### Refactor
+
+- _(core)_ Centralise language normalisation in bb-utils - ([f3aa5a7](https://github.com/szinn/BookBoss/commit/f3aa5a7dce171e9209edbf9b5ec64a67c19a738b))
+- _(core)_ Reduce visibility of CoreServices - ([90fecbd](https://github.com/szinn/BookBoss/commit/90fecbd9a378313ae8fe4de57a42bc3716ab2f02))
+
 ## [0.7.7](https://github.com/szinn/BookBoss/compare/v0.7.6..v0.7.7) - 2026-03-29
 
 ### Bug Fixes
