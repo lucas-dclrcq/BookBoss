@@ -6,6 +6,8 @@ use crate::{
         Author, AuthorId, AuthorToken, Book, BookAuthor, BookFile, BookId, BookIdentifier, BookQuery, BookToken, Genre, GenreToken, NewGenre, NewTag,
         Publisher, Series, SeriesId, SeriesToken, Tag, TagToken,
     },
+    format::handler::EnrichBookFilesPayload,
+    jobs::{JobService, JobServiceExt},
     repository::RepositoryService,
     with_read_only_transaction, with_transaction,
 };
@@ -42,11 +44,15 @@ pub trait BookService: Send + Sync {
 
 pub(crate) struct BookServiceImpl {
     repository_service: Arc<RepositoryService>,
+    job_service: Arc<dyn JobService>,
 }
 
 impl BookServiceImpl {
-    pub(crate) fn new(repository_service: Arc<RepositoryService>) -> Self {
-        Self { repository_service }
+    pub(crate) fn new(repository_service: Arc<RepositoryService>, job_service: Arc<dyn JobService>) -> Self {
+        Self {
+            repository_service,
+            job_service,
+        }
     }
 }
 
@@ -118,23 +124,35 @@ impl BookService for BookServiceImpl {
     }
 
     async fn delete_genre(&self, token: GenreToken) -> Result<(), Error> {
-        with_transaction!(self, genre_repository, |tx| {
+        let book_ids = with_transaction!(self, genre_repository, book_repository, |tx| {
             let genre = genre_repository.find_by_token(tx, token).await?;
             let Some(genre) = genre else {
                 return Err(Error::RepositoryError(RepositoryError::NotFound));
             };
-            genre_repository.delete_genre(tx, genre.id).await
-        })
+            let book_ids = book_repository.available_book_ids_for_genre(tx, genre.id).await?;
+            genre_repository.delete_genre(tx, genre.id).await?;
+            Ok(book_ids)
+        })?;
+        for book_id in book_ids {
+            self.job_service.enqueue(&EnrichBookFilesPayload { book_id }).await?;
+        }
+        Ok(())
     }
 
     async fn delete_tag(&self, token: TagToken) -> Result<(), Error> {
-        with_transaction!(self, tag_repository, |tx| {
+        let book_ids = with_transaction!(self, tag_repository, book_repository, |tx| {
             let tag = tag_repository.find_by_token(tx, token).await?;
             let Some(tag) = tag else {
                 return Err(Error::RepositoryError(RepositoryError::NotFound));
             };
-            tag_repository.delete_tag(tx, tag.id).await
-        })
+            let book_ids = book_repository.available_book_ids_for_tag(tx, tag.id).await?;
+            tag_repository.delete_tag(tx, tag.id).await?;
+            Ok(book_ids)
+        })?;
+        for book_id in book_ids {
+            self.job_service.enqueue(&EnrichBookFilesPayload { book_id }).await?;
+        }
+        Ok(())
     }
 
     async fn list_genres_with_counts(&self) -> Result<Vec<(Genre, u64, bool)>, Error> {
@@ -195,9 +213,11 @@ mod tests {
     use crate::{
         Error, RepositoryError,
         book::{
-            Author, AuthorId, AuthorToken, Book, BookAuthor, BookFile, BookId, BookIdentifier, BookQuery, BookStatus, BookToken, Series, SeriesId, SeriesToken,
+            Author, AuthorId, AuthorToken, Book, BookAuthor, BookFile, BookId, BookIdentifier, BookQuery, BookStatus, BookToken, Genre, GenreToken, Series,
+            SeriesId, SeriesToken, Tag, TagToken,
             repository::{author::MockAuthorRepository, book::MockBookRepository, series::MockSeriesRepository},
         },
+        jobs::service::MockJobService,
     };
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -223,7 +243,7 @@ mod tests {
                 .build()
                 .expect("all fields provided"),
         );
-        BookServiceImpl::new(repository_service)
+        BookServiceImpl::new(repository_service, Arc::new(MockJobService::new()))
     }
 
     fn default_service_with_book_repo(book_repo: MockBookRepository) -> BookServiceImpl {
@@ -647,5 +667,105 @@ mod tests {
         let result = svc.count_books_for_series(1).await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::Database(_)))));
+    }
+
+    // ─── delete_genre ────────────────────────────────────────────────────────
+
+    fn fake_genre(name: &str) -> Genre {
+        use chrono::Utc;
+        let token = GenreToken::generate();
+        let id = token.id();
+        Genre {
+            id,
+            version: 1,
+            token,
+            name: name.to_string(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }
+    }
+
+    fn fake_tag(name: &str) -> Tag {
+        use chrono::Utc;
+        let token = TagToken::generate();
+        let id = token.id();
+        Tag {
+            id,
+            version: 1,
+            token,
+            name: name.to_string(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_delete_genre_enqueues_enrichment_for_affected_books() {
+        use crate::{book::repository::genre::MockGenreRepository, repository::testing::default_repository_service_builder};
+
+        let genre = fake_genre("Fantasy");
+        let token = genre.token;
+
+        let mut genre_repo = MockGenreRepository::new();
+        let g = genre.clone();
+        genre_repo.expect_find_by_token().returning(move |_, _| {
+            let g = g.clone();
+            Box::pin(async move { Ok(Some(g)) })
+        });
+        genre_repo.expect_delete_genre().returning(|_, _| Box::pin(async { Ok(()) }));
+
+        let mut book_repo = MockBookRepository::new();
+        book_repo
+            .expect_available_book_ids_for_genre()
+            .returning(|_, _| Box::pin(async { Ok(vec![1u64, 2u64]) }));
+
+        let mut job_svc = MockJobService::new();
+        job_svc.expect_enqueue_raw().times(2).returning(|_, _, _| Box::pin(async { Ok(()) }));
+
+        let repository_service = Arc::new(
+            default_repository_service_builder()
+                .book_repository(Arc::new(book_repo))
+                .genre_repository(Arc::new(genre_repo))
+                .build()
+                .expect("all fields provided"),
+        );
+        let svc = BookServiceImpl::new(repository_service, Arc::new(job_svc));
+
+        svc.delete_genre(token).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_delete_tag_enqueues_enrichment_for_affected_books() {
+        use crate::{book::repository::tag::MockTagRepository, repository::testing::default_repository_service_builder};
+
+        let tag = fake_tag("Space Opera");
+        let token = tag.token;
+
+        let mut tag_repo = MockTagRepository::new();
+        let t = tag.clone();
+        tag_repo.expect_find_by_token().returning(move |_, _| {
+            let t = t.clone();
+            Box::pin(async move { Ok(Some(t)) })
+        });
+        tag_repo.expect_delete_tag().returning(|_, _| Box::pin(async { Ok(()) }));
+
+        let mut book_repo = MockBookRepository::new();
+        book_repo
+            .expect_available_book_ids_for_tag()
+            .returning(|_, _| Box::pin(async { Ok(vec![5u64]) }));
+
+        let mut job_svc = MockJobService::new();
+        job_svc.expect_enqueue_raw().times(1).returning(|_, _, _| Box::pin(async { Ok(()) }));
+
+        let repository_service = Arc::new(
+            default_repository_service_builder()
+                .book_repository(Arc::new(book_repo))
+                .tag_repository(Arc::new(tag_repo))
+                .build()
+                .expect("all fields provided"),
+        );
+        let svc = BookServiceImpl::new(repository_service, Arc::new(job_svc));
+
+        svc.delete_tag(token).await.unwrap();
     }
 }

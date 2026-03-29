@@ -142,7 +142,7 @@ impl CoreServices {
             auth_service: Arc::new(AuthServiceImpl::new(repository_service.clone())),
             user_service: Arc::new(UserServiceImpl::new(repository_service.clone())),
             user_setting_service: Arc::new(UserSettingServiceImpl::new(repository_service.clone())),
-            book_service: Arc::new(BookServiceImpl::new(repository_service.clone())),
+            book_service: Arc::new(BookServiceImpl::new(repository_service.clone(), job_service.clone())),
             import_job_service,
             library_service: Arc::new(LibraryServiceImpl::new(
                 repository_service.clone(),

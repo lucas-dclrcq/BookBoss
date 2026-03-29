@@ -676,6 +676,58 @@ impl BookRepository for BookRepositoryAdapter {
 
         Ok(rows.into_iter().map(|r| r.book_id as u64).collect())
     }
+
+    async fn available_book_ids_for_genre(&self, transaction: &dyn Transaction, genre_id: GenreId) -> Result<Vec<BookId>, Error> {
+        use sea_orm::{JoinType, QuerySelect};
+
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        let rows = prelude::BookGenres::find()
+            .select_only()
+            .column(book_genres::Column::BookId)
+            .join_as(
+                JoinType::InnerJoin,
+                book_genres::Entity::belongs_to(books::Entity)
+                    .from(book_genres::Column::BookId)
+                    .to(books::Column::Id)
+                    .into(),
+                books::Entity,
+            )
+            .filter(book_genres::Column::GenreId.eq(genre_id as i64))
+            .filter(books::Column::Status.eq("available"))
+            .into_model::<BookIdOnly>()
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(rows.into_iter().map(|r| r.book_id as u64).collect())
+    }
+
+    async fn available_book_ids_for_tag(&self, transaction: &dyn Transaction, tag_id: TagId) -> Result<Vec<BookId>, Error> {
+        use sea_orm::{JoinType, QuerySelect};
+
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        let rows = prelude::BookTags::find()
+            .select_only()
+            .column(book_tags::Column::BookId)
+            .join_as(
+                JoinType::InnerJoin,
+                book_tags::Entity::belongs_to(books::Entity)
+                    .from(book_tags::Column::BookId)
+                    .to(books::Column::Id)
+                    .into(),
+                books::Entity,
+            )
+            .filter(book_tags::Column::TagId.eq(tag_id as i64))
+            .filter(books::Column::Status.eq("available"))
+            .into_model::<BookIdOnly>()
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(rows.into_iter().map(|r| r.book_id as u64).collect())
+    }
 }
 
 #[cfg(test)]

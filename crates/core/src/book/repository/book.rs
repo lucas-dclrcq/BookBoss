@@ -70,4 +70,10 @@ pub trait BookRepository: Send + Sync {
     /// is older than the book's `updated_at` — i.e. metadata changed after
     /// the enriched file was generated, so re-enrichment is needed.
     async fn find_book_ids_with_stale_enrichment(&self, transaction: &dyn Transaction) -> Result<Vec<BookId>, Error>;
+    /// Returns IDs of Available books that have the given genre attached.
+    /// Used to enqueue re-enrichment after a genre is deleted.
+    async fn available_book_ids_for_genre(&self, transaction: &dyn Transaction, genre_id: GenreId) -> Result<Vec<BookId>, Error>;
+    /// Returns IDs of Available books that have the given tag attached.
+    /// Used to enqueue re-enrichment after a tag is deleted.
+    async fn available_book_ids_for_tag(&self, transaction: &dyn Transaction, tag_id: TagId) -> Result<Vec<BookId>, Error>;
 }
