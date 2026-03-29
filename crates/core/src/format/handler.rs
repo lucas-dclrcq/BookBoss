@@ -7,6 +7,7 @@ use crate::{
     book::{AuthorRole, BookId, FileFormat, FileRole, book_slug},
     format::{EBookFile, EnrichmentRequest},
     jobs::{Enqueueable, JobHandler},
+    message::{MessageSeverity, NewSystemMessage},
     repository::{read_only_transaction, transaction},
     storage::{BookSidecar, SidecarAuthor, SidecarIdentifier, SidecarSeries},
 };
@@ -33,13 +34,8 @@ impl EnrichBookFilesHandler {
     }
 }
 
-impl JobHandler for EnrichBookFilesHandler {
-    const JOB_TYPE: &'static str = "enrich_book_files";
-    type Payload = EnrichBookFilesPayload;
-
-    async fn handle(&self, payload: EnrichBookFilesPayload) -> Result<(), Error> {
-        let book_id = payload.book_id;
-
+impl EnrichBookFilesHandler {
+    async fn run(&self, book_id: BookId) -> Result<(), Error> {
         // ── 1. Load all book data in a single read transaction ────────────────
         let repo = self.core.repository_service.clone();
         let (book, files, authors, identifiers, genres, tags, series_opt, publisher_opt) =
@@ -93,6 +89,7 @@ impl JobHandler for EnrichBookFilesHandler {
             .ok_or_else(|| Error::Infrastructure(format!("book {book_id}: no original epub file record")))?;
 
         let source_path = self.core.file_store.resolve(&original_file.path);
+        tracing::debug!(book_id, file_path = %original_file.path, "starting enrichment");
 
         // ── 3. Build sidecar from DB data ───────────────────────────────────
         let sidecar = BookSidecar {
@@ -216,5 +213,77 @@ impl JobHandler for EnrichBookFilesHandler {
 
         tracing::info!(book_id, "book file enrichment complete (EPUB + KEPUB)");
         Ok(())
+    }
+}
+
+impl JobHandler for EnrichBookFilesHandler {
+    const JOB_TYPE: &'static str = "enrich_book_files";
+    type Payload = EnrichBookFilesPayload;
+
+    async fn handle(&self, payload: EnrichBookFilesPayload) -> Result<(), Error> {
+        let book_id = payload.book_id;
+        let result = self.run(book_id).await;
+        if let Err(ref e) = result {
+            tracing::error!(book_id, error = %e, "enrich_book_files failed");
+            let _ = self
+                .core
+                .system_message_service
+                .add_message(NewSystemMessage {
+                    source_task: Self::JOB_TYPE.to_string(),
+                    severity: MessageSeverity::Error,
+                    message: format!("Enrichment failed for book {book_id}: {e}"),
+                })
+                .await;
+        }
+        result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        book::repository::book::MockBookRepository, message::repository::MockSystemMessageRepository, repository::testing::default_repository_service_builder,
+        test_support::*,
+    };
+
+    #[tokio::test]
+    async fn posts_system_message_on_enrichment_failure() {
+        let mut book_repo = MockBookRepository::new();
+        let mut msg_repo = MockSystemMessageRepository::new();
+
+        // Book not found → run() returns an error
+        book_repo.expect_find_by_id().returning(|_, _| Box::pin(std::future::ready(Ok(None))));
+
+        msg_repo.expect_add_message().once().returning(|_, msg| {
+            assert_eq!(msg.severity, MessageSeverity::Error);
+            assert!(msg.message.contains("42"), "message should include book_id");
+            let msg = crate::message::SystemMessage {
+                id: 1,
+                source_task: msg.source_task,
+                severity: msg.severity,
+                message: msg.message,
+                created_at: chrono::Utc::now(),
+            };
+            Box::pin(std::future::ready(Ok(msg)))
+        });
+
+        let repo_service = Arc::new(
+            default_repository_service_builder()
+                .book_repository(Arc::new(book_repo))
+                .system_message_repository(Arc::new(msg_repo))
+                .build()
+                .unwrap(),
+        );
+
+        let core = crate::create_services(
+            default_external_services_builder().repository_service(repo_service).build().unwrap(),
+            "test-secret",
+        )
+        .unwrap();
+
+        let handler = EnrichBookFilesHandler::new(core);
+        let result = handler.handle(EnrichBookFilesPayload { book_id: 42 }).await;
+        assert!(result.is_err(), "handle should propagate the error");
     }
 }

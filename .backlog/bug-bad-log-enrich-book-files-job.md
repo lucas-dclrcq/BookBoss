@@ -56,11 +56,13 @@ async fn run(&self, book_id: BookId) -> Result<(), Error> {
 ```
 
 Once the file path is resolved inside `run()`, add it to the tracing span:
+
 ```rust
 tracing::Span::current().record("file_path", &file_path_str);
 ```
 
 And update the top of `handle()` to open an instrumented span:
+
 ```rust
 let span = tracing::error_span!("enrich_book_files", book_id, file_path = tracing::field::Empty);
 let _enter = span.enter();
