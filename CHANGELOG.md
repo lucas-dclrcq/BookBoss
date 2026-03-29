@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.7](https://github.com/szinn/BookBoss/compare/v0.7.6..v0.7.7) - 2026-03-29
+
+### Bug Fixes
+
+- _(frontend)_ Keep NavBar and ShelfBar sticky during scroll - ([b4d4edc](https://github.com/szinn/BookBoss/commit/b4d4edcef6cc2a09147a201800cec246d6e4d64b))
+- _(frontend)_ Fix missing read status badges on series/books pages - ([e3bf7bc](https://github.com/szinn/BookBoss/commit/e3bf7bcc99ebdf60de9dba111db0c47261f4e3af))
+
 ## [0.7.6](https://github.com/szinn/BookBoss/compare/v0.7.5..v0.7.6) - 2026-03-28
 
 ### Bug Fixes
