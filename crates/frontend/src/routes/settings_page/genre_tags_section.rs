@@ -417,8 +417,6 @@ pub(crate) fn GenreTagsSection() -> Element {
         if let Some(target) = delete_target() {
             div {
                 class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
-                tabindex: -1,
-                onmounted: move |e| async move { let _ = e.set_focus(true).await; },
                 onkeydown: move |e| { if e.key() == Key::Escape { delete_target.set(None); } },
                 div { class: "bg-white rounded-2xl shadow-xl w-full max-w-sm p-6",
                     h3 { class: "text-base font-semibold text-gray-900 mb-2",
@@ -438,6 +436,7 @@ pub(crate) fn GenreTagsSection() -> Element {
                         }
                         button {
                             class: "px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50",
+                            autofocus: true,
                             disabled: deleting(),
                             onclick: move |_| {
                                 let tok = target.token.clone();
