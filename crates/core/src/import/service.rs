@@ -143,7 +143,7 @@ impl ImportJobService for ImportJobServiceImpl {
                 };
                 return Ok(FileQueueStatus::DuplicateLibraryFile { title: book, author });
             }
-            if import_job_repository.find_by_hash(tx, &file_hash).await?.is_some() {
+            if import_job_repository.find_active_by_hash(tx, &file_hash).await?.is_some() {
                 tracing::debug!(hash = %file_hash, "file already in import_jobs — skipping");
                 return Ok(FileQueueStatus::DuplicateIncomingQueue);
             }
@@ -431,7 +431,7 @@ mod tests {
     async fn test_queue_file_if_new_skips_existing_hash() {
         let existing = fake_job(ImportStatus::Pending);
         let mut import_mock = MockImportJobRepository::new();
-        import_mock.expect_find_by_hash().returning(move |_, _| {
+        import_mock.expect_find_active_by_hash().returning(move |_, _| {
             let j = existing.clone();
             Box::pin(async move { Ok(Some(j)) })
         });
@@ -450,7 +450,7 @@ mod tests {
     #[tokio::test]
     async fn test_queue_file_if_new_skips_existing_book_file_hash() {
         let mut import_mock = MockImportJobRepository::new();
-        import_mock.expect_find_by_hash().returning(|_, _| Box::pin(async { Ok(None) }));
+        import_mock.expect_find_active_by_hash().returning(|_, _| Box::pin(async { Ok(None) }));
         let mut book_mock = MockBookRepository::new();
         book_mock
             .expect_find_file_by_hash()
@@ -480,7 +480,7 @@ mod tests {
     async fn test_queue_file_if_new_creates_and_enqueues() {
         let job = fake_job(ImportStatus::Pending);
         let mut import_mock = MockImportJobRepository::new();
-        import_mock.expect_find_by_hash().returning(|_, _| Box::pin(async { Ok(None) }));
+        import_mock.expect_find_active_by_hash().returning(|_, _| Box::pin(async { Ok(None) }));
         let mut book_mock = MockBookRepository::new();
         book_mock.expect_find_file_by_hash().returning(|_, _| Box::pin(async { Ok(None) }));
         import_mock.expect_add_job().returning(move |_, _| {
@@ -520,7 +520,7 @@ mod tests {
     #[tokio::test]
     async fn test_queue_file_if_new_returns_duplicate_library_file_status() {
         let mut import_mock = MockImportJobRepository::new();
-        import_mock.expect_find_by_hash().returning(|_, _| Box::pin(async { Ok(None) }));
+        import_mock.expect_find_active_by_hash().returning(|_, _| Box::pin(async { Ok(None) }));
         let mut book_mock = MockBookRepository::new();
         book_mock
             .expect_find_file_by_hash()
@@ -562,7 +562,7 @@ mod tests {
     async fn test_queue_file_if_new_returns_duplicate_incoming_queue_status() {
         let existing = fake_job(ImportStatus::Pending);
         let mut import_mock = MockImportJobRepository::new();
-        import_mock.expect_find_by_hash().returning(move |_, _| {
+        import_mock.expect_find_active_by_hash().returning(move |_, _| {
             let j = existing.clone();
             Box::pin(async move { Ok(Some(j)) })
         });
@@ -584,7 +584,7 @@ mod tests {
     async fn test_queue_file_if_new_returns_queued_status() {
         let job = fake_job(ImportStatus::Pending);
         let mut import_mock = MockImportJobRepository::new();
-        import_mock.expect_find_by_hash().returning(|_, _| Box::pin(async { Ok(None) }));
+        import_mock.expect_find_active_by_hash().returning(|_, _| Box::pin(async { Ok(None) }));
         let mut book_mock = MockBookRepository::new();
         book_mock.expect_find_file_by_hash().returning(|_, _| Box::pin(async { Ok(None) }));
         import_mock.expect_add_job().returning(move |_, _| {
@@ -617,6 +617,52 @@ mod tests {
 
         let result = svc
             .queue_file_if_new("/watch/new.epub".into(), "newHash".into(), crate::book::FileFormat::Epub, Utc::now())
+            .await
+            .unwrap();
+
+        assert_eq!(result, FileQueueStatus::Queued);
+    }
+
+    #[tokio::test]
+    async fn test_queue_file_if_new_requeues_after_rejection() {
+        // find_active_by_hash returns None (rejected job not matched by active filter)
+        // find_file_by_hash returns None (not in library)
+        // → file should be re-queued
+        let job = fake_job(ImportStatus::Pending);
+        let mut import_mock = MockImportJobRepository::new();
+        import_mock.expect_find_active_by_hash().returning(|_, _| Box::pin(async { Ok(None) }));
+        import_mock.expect_add_job().returning(move |_, _| {
+            let j = job.clone();
+            Box::pin(async move { Ok(j) })
+        });
+        let mut book_mock = MockBookRepository::new();
+        book_mock.expect_find_file_by_hash().returning(|_, _| Box::pin(async { Ok(None) }));
+        let author_mock = MockAuthorRepository::new();
+        let mut job_mock = MockJobRepository::new();
+        job_mock.expect_enqueue_raw().returning(|_, _, _, _| {
+            Box::pin(async {
+                Ok(crate::jobs::model::Job {
+                    id: 1,
+                    job_type: "process_import".into(),
+                    payload: serde_json::Value::Null,
+                    status: crate::jobs::JobStatus::Pending,
+                    priority: 1,
+                    attempt: 0,
+                    max_attempts: 3,
+                    version: 1,
+                    scheduled_at: Utc::now(),
+                    started_at: None,
+                    completed_at: None,
+                    error_message: None,
+                    created_at: Utc::now(),
+                    updated_at: Utc::now(),
+                })
+            })
+        });
+        let svc = create_service_with_author_repos(import_mock, book_mock, author_mock, job_mock);
+
+        let result = svc
+            .queue_file_if_new("/watch/rejected.epub".into(), "rejectedHash".into(), crate::book::FileFormat::Epub, Utc::now())
             .await
             .unwrap();
 

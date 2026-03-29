@@ -1,7 +1,7 @@
 ---
 slug: bug-only-delete-terminal-import-jobs
 type: bug
-status: not-started
+status: complete
 description: Scanner dedup misidentifies incoming-queue files as library duplicates; rejected files block re-import
 priority: P2
 ---

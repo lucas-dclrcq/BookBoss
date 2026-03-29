@@ -274,10 +274,21 @@ impl BookRepository for BookRepositoryAdapter {
     }
 
     async fn find_file_by_hash(&self, transaction: &dyn Transaction, hash: &str) -> Result<Option<BookFile>, Error> {
+        use sea_orm::{JoinType, QuerySelect};
+
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
         let row = prelude::BookFiles::find()
+            .join_as(
+                JoinType::InnerJoin,
+                book_files::Entity::belongs_to(books::Entity)
+                    .from(book_files::Column::BookId)
+                    .to(books::Column::Id)
+                    .into(),
+                books::Entity,
+            )
             .filter(book_files::Column::FileHash.eq(hash))
+            .filter(books::Column::Status.eq("available"))
             .one(transaction)
             .await
             .map_err(handle_dberr)?;

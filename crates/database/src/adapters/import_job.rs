@@ -125,11 +125,19 @@ impl ImportJobRepository for ImportJobRepositoryAdapter {
         self.find_by_id(transaction, token.id()).await
     }
 
-    async fn find_by_hash(&self, transaction: &dyn Transaction, file_hash: &str) -> Result<Option<ImportJob>, Error> {
+    async fn find_active_by_hash(&self, transaction: &dyn Transaction, file_hash: &str) -> Result<Option<ImportJob>, Error> {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        let active_statuses = [
+            ImportStatus::Pending.to_string(),
+            ImportStatus::Extracting.to_string(),
+            ImportStatus::Identifying.to_string(),
+            ImportStatus::NeedsReview.to_string(),
+        ];
 
         Ok(prelude::ImportJobs::find()
             .filter(import_jobs::Column::FileHash.eq(file_hash))
+            .filter(import_jobs::Column::Status.is_in(active_statuses))
             .one(transaction)
             .await
             .map_err(handle_dberr)?
@@ -356,26 +364,55 @@ mod tests {
         assert_eq!(result.unwrap().unwrap().id, inserted.id);
     }
 
-    // ─── find_by_hash ────────────────────────────────────────────────────────
+    // ─── find_active_by_hash
+    // ────────────────────────────────────────────────────────
 
     #[tokio::test]
-    async fn test_find_by_hash_found() {
+    async fn test_find_active_by_hash_found() {
         let svc = setup().await;
         let tx = svc.repository().begin().await.unwrap();
 
         let inserted = svc.import_job_repository().add_job(&*tx, new_job("/watch/dune.epub")).await.unwrap();
-        let result = svc.import_job_repository().find_by_hash(&*tx, &inserted.file_hash).await;
+        let result = svc.import_job_repository().find_active_by_hash(&*tx, &inserted.file_hash).await;
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap().unwrap().id, inserted.id);
     }
 
     #[tokio::test]
-    async fn test_find_by_hash_not_found() {
+    async fn test_find_active_by_hash_not_found() {
         let svc = setup().await;
         let tx = svc.repository().begin().await.unwrap();
 
-        assert!(svc.import_job_repository().find_by_hash(&*tx, "nonexistent_hash").await.unwrap().is_none());
+        assert!(
+            svc.import_job_repository()
+                .find_active_by_hash(&*tx, "nonexistent_hash")
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_find_active_by_hash_ignores_terminal_statuses() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        // Insert a job and move it to Rejected (a terminal status)
+        let inserted = svc.import_job_repository().add_job(&*tx, new_job("/watch/rejected.epub")).await.unwrap();
+        let rejected = ImportJob {
+            status: ImportStatus::Rejected,
+            ..inserted
+        };
+        svc.import_job_repository().update_job(&*tx, rejected).await.unwrap();
+
+        // find_active_by_hash must not return it
+        let result = svc
+            .import_job_repository()
+            .find_active_by_hash(&*tx, "hash_/watch/rejected.epub")
+            .await
+            .unwrap();
+        assert!(result.is_none(), "expected None for a Rejected job, got {result:?}");
     }
 
     // ─── list_by_status ──────────────────────────────────────────────────────
