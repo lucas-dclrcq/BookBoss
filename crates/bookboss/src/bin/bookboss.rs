@@ -197,6 +197,11 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
 
     let api_subsystem = create_api_subsystem(&config.api, core_services.clone());
     let core_subsystem = create_core_subsystem(core_services.clone(), worker_poll_interval);
+    let core_subsystem = bb_core::ResilienceWrapper::new(
+        "Core",
+        core_subsystem,
+        core_services.system_message_service.clone(),
+    );
     let frontend_subsystem = create_frontend_subsystem(&config.frontend, core_services.clone());
 
     span.exit();

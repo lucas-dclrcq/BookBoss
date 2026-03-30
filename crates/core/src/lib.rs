@@ -30,7 +30,10 @@ use std::{
 use derive_builder::Builder;
 pub use error::{Error, ErrorKind, RepositoryError};
 pub use resilience::{CheckResult, CheckedSubsystem, ResilienceWrapper};
-use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, SubsystemHandle};
+use tokio_graceful_shutdown::{
+    ErrorAction, IntoSubsystem, SubsystemBuilder, SubsystemHandle,
+    errors::{SubsystemError, SubsystemJoinError},
+};
 
 use crate::{
     auth::{AuthService, AuthServiceImpl},
@@ -311,39 +314,108 @@ pub fn before_start(core: &Arc<CoreServices>) {
     });
 }
 
+#[derive(Clone)]
 pub struct CoreSubsystem {
     core_services: Arc<CoreServices>,
     poll_interval: Duration,
 }
 
-impl IntoSubsystem<Error> for CoreSubsystem {
+#[async_trait::async_trait]
+impl CheckedSubsystem for CoreSubsystem {
+    async fn check(&self) -> CheckResult {
+        match self.core_services.repository_service.repository().ping().await {
+            Ok(()) => CheckResult::Ok,
+            Err(e) => CheckResult::Transient(e.to_string()),
+        }
+    }
+
     async fn run(self, subsys: &mut SubsystemHandle) -> Result<(), Error> {
-        let worker = JobWorker::new(
-            self.core_services.job_service.clone(),
-            self.core_services.repository_service.repository().clone(),
-            self.core_services.repository_service.job_repository().clone(),
-            self.poll_interval,
-            self.core_services.event_service.clone(),
-        );
-        subsys.start(SubsystemBuilder::new("Worker", worker.into_subsystem()));
-
-        // Start the health check subsystem.
+        // ── Health and bookdrop: start once with CatchAndLocalShutdown ──────
+        // These subsystems handle transient errors internally and rarely exit.
+        // CatchAndLocalShutdown prevents their failure from killing the server.
         if let Some(health_subsystem) = self.core_services.take_health_subsystem() {
-            subsys.start(SubsystemBuilder::new("Health", health_subsystem.into_subsystem()));
+            subsys.start(
+                SubsystemBuilder::new("Health", health_subsystem.into_subsystem())
+                    .on_failure(ErrorAction::CatchAndLocalShutdown)
+                    .on_panic(ErrorAction::CatchAndLocalShutdown),
+            );
         }
-
-        // Start the bookdrop scan subsystem if configured.
         if let Some(scan_subsystem) = self.core_services.take_bookdrop_scan_subsystem() {
-            subsys.start(SubsystemBuilder::new("BookdropScan", scan_subsystem.into_subsystem()));
+            subsys.start(
+                SubsystemBuilder::new("BookdropScan", scan_subsystem.into_subsystem())
+                    .on_failure(ErrorAction::CatchAndLocalShutdown)
+                    .on_panic(ErrorAction::CatchAndLocalShutdown),
+            );
         }
 
-        tracing::info!("CoreSubsystem started");
+        // ── Worker keepalive loop ────────────────────────────────────────────
+        // JobWorker is recreated on each iteration so it can restart cleanly.
+        let core = &self.core_services;
+        loop {
+            let worker = JobWorker::new(
+                core.job_service.clone(),
+                core.repository_service.repository().clone(),
+                core.repository_service.job_repository().clone(),
+                self.poll_interval,
+                core.event_service.clone(),
+            );
+            let handle = subsys.start(
+                SubsystemBuilder::new("Worker", worker.into_subsystem())
+                    .on_failure(ErrorAction::CatchAndLocalShutdown)
+                    .on_panic(ErrorAction::CatchAndLocalShutdown),
+            );
 
-        subsys.on_shutdown_requested().await;
-        tracing::info!("CoreSubsystem shutting down...");
+            tokio::select! {
+                () = subsys.on_shutdown_requested() => {
+                    tracing::info!("CoreSubsystem shutting down...");
+                    break;
+                }
+                result = handle.join() => match result {
+                    Ok(()) => {
+                        tracing::info!("Worker exited cleanly");
+                        break;
+                    }
+                    Err(join_err) => {
+                        let inner = first_subsystem_error(join_err);
+                        if inner.is_transient() {
+                            tracing::warn!("Worker exited with transient error, restarting: {inner}");
+                            // Loop — recreate and restart the worker.
+                        } else {
+                            tracing::error!("Worker exited with permanent error: {inner}");
+                            return Err(inner);
+                        }
+                    }
+                }
+            }
+        }
 
+        tracing::info!("CoreSubsystem stopped");
         Ok(())
     }
+}
+
+/// Extracts the first inner error from a `SubsystemJoinError`.
+///
+/// Subsystem errors are boxed as `Box<dyn Error + Send + Sync + 'static>` by
+/// the tokio-graceful-shutdown infrastructure. We attempt to downcast back to
+/// the concrete `Error` type; if that fails (e.g. a panic message), we wrap it
+/// as `Error::Infrastructure`.
+fn first_subsystem_error(join_err: SubsystemJoinError<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Error {
+    let SubsystemJoinError::SubsystemsFailed(errors) = join_err;
+    errors
+        .iter()
+        .find_map(|e| match e {
+            SubsystemError::Failed(_, failure) => {
+                // Deref chain: SubsystemFailure → Box<dyn Error> → dyn Error + Send + Sync +
+                // 'static
+                (***failure)
+                    .downcast_ref::<Error>()
+                    .cloned()
+                    .or_else(|| Some(Error::Infrastructure(failure.to_string())))
+            }
+            SubsystemError::Panicked(name) => Some(Error::Infrastructure(format!("Worker panicked: {name}"))),
+        })
+        .unwrap_or_else(|| Error::Infrastructure("Worker failed with unknown error".into()))
 }
 
 #[must_use]
