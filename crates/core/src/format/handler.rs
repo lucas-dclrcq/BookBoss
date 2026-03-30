@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     CoreServices, Error, RepositoryError,
-    book::{AuthorRole, BookId, FileFormat, FileRole, book_slug},
+    book::{AuthorRole, BookId, FileFormat, FileRole, book_slug, compute_sidecar_fingerprint},
     format::{EBookFile, EnrichmentRequest},
     jobs::{Enqueueable, JobHandler},
     message::{MessageSeverity, NewSystemMessage},
@@ -82,6 +82,26 @@ impl EnrichBookFilesHandler {
                 })
             })
             .await?;
+
+        // ── 1b. Compute fingerprint from loaded metadata ─────────────────────
+        let fingerprint = {
+            let mut author_names: Vec<&str> = authors.iter().map(|(name, _, _)| name.as_str()).collect();
+            author_names.sort_unstable();
+            let mut genre_names: Vec<&str> = genres.iter().map(|g| g.name.as_str()).collect();
+            genre_names.sort_unstable();
+            let mut tag_names: Vec<&str> = tags.iter().map(|t| t.name.as_str()).collect();
+            tag_names.sort_unstable();
+            compute_sidecar_fingerprint(
+                &book.title,
+                &author_names,
+                series_opt.as_ref().map(|s| s.name.as_str()),
+                book.series_number.as_ref(),
+                publisher_opt.as_ref().map(|p| p.name.as_str()),
+                &genre_names,
+                &tag_names,
+                book.rating,
+            )
+        };
 
         // ── 2. Find the Original EPUB file ──────────────────────────────────
         let original_file = files
@@ -194,6 +214,7 @@ impl EnrichBookFilesHandler {
             let enriched_epub_path = enriched_epub_path.clone();
             let kepub_hash = kepub_hash.clone();
             let enriched_kepub_path = enriched_kepub_path.clone();
+            let fingerprint = fingerprint.clone();
             Box::pin(async move {
                 // Enriched EPUB
                 book_repo.delete_book_file_by_role(tx, book_id, FileFormat::Epub, FileRole::Enriched).await?;
@@ -206,6 +227,9 @@ impl EnrichBookFilesHandler {
                 book_repo
                     .add_book_file(tx, book_id, FileFormat::Kepub, FileRole::Enriched, enriched_kepub_path, kepub_size, kepub_hash)
                     .await?;
+
+                // Record fingerprint — marks sidecar as current
+                book_repo.update_sidecar_fingerprint(tx, book_id, Some(fingerprint)).await?;
 
                 Ok(())
             })
