@@ -43,12 +43,19 @@ pub(crate) async fn serve_book_file(
     let book = match core_services.book_service.find_book_by_token(token).await {
         Ok(Some(b)) => b,
         Ok(None) => return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap(),
+        Err(e) if e.is_transient() => {
+            return Response::builder().status(StatusCode::SERVICE_UNAVAILABLE).body(Body::empty()).unwrap();
+        }
         Err(_) => return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap(),
     };
 
     // Load file records and split by role for the requested format.
-    let Ok(files) = core_services.book_service.files_for_book(book.id).await else {
-        return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap();
+    let files = match core_services.book_service.files_for_book(book.id).await {
+        Ok(f) => f,
+        Err(e) if e.is_transient() => {
+            return Response::builder().status(StatusCode::SERVICE_UNAVAILABLE).body(Body::empty()).unwrap();
+        }
+        Err(_) => return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap(),
     };
     let enriched_file = files.iter().find(|f| f.format == format && f.file_role == FileRole::Enriched);
     let original_file = files.iter().find(|f| f.format == format && f.file_role == FileRole::Original);

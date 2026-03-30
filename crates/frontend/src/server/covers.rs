@@ -38,6 +38,9 @@ pub(crate) async fn serve_cover(
     let book = match core_services.book_service.find_book_by_token(token).await {
         Ok(Some(b)) => b,
         Ok(None) => return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap(),
+        Err(e) if e.is_transient() => {
+            return Response::builder().status(StatusCode::SERVICE_UNAVAILABLE).body(Body::empty()).unwrap();
+        }
         Err(_) => return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap(),
     };
 
