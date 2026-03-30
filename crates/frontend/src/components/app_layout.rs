@@ -5,7 +5,7 @@ use crate::server::AuthSession;
 use crate::{
     Route,
     components::{
-        NavBar,
+        NavBar, SEARCH_TEXT,
         selection::{SELECTION_MODE, exit_selection_mode},
         sort_control::{SORT_ORDER, get_sort_preference},
     },
@@ -80,8 +80,7 @@ pub(crate) fn AppLayout() -> Element {
         }
     });
 
-    // Exit selection mode whenever the route changes (e.g. clicking an author
-    // or series link while selecting books on another page).
+    // Exit selection mode and clear search whenever the route changes.
     let route = use_route::<Route>();
     use_effect(move || {
         // Subscribe to route changes so the effect re-runs on navigation.
@@ -91,6 +90,7 @@ pub(crate) fn AppLayout() -> Element {
         if *SELECTION_MODE.peek() {
             exit_selection_mode();
         }
+        *SEARCH_TEXT.write() = String::new();
     });
 
     rsx! {
