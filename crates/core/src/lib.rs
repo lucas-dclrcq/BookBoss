@@ -195,7 +195,8 @@ pub fn before_start(core: &Arc<CoreServices>) {
         HealthTaskConfig,
         handlers::{
             cleanup_expired_sessions, cleanup_old_import_jobs, cleanup_old_jobs, cleanup_old_system_messages, cleanup_orphan_authors,
-            cleanup_orphan_publishers, cleanup_orphan_series, ensure_enrichments, recover_enrichments, reset_stale_import_jobs, verify_file_integrity,
+            cleanup_orphan_publishers, cleanup_orphan_series, ensure_enrichments, reconcile_fingerprints, recover_enrichments, reset_stale_import_jobs,
+            verify_file_integrity,
         },
     };
     use import::handler::ProcessImportHandler;
@@ -225,6 +226,14 @@ pub fn before_start(core: &Arc<CoreServices>) {
         job_type: "health.ensure_enrichments".into(),
         run_on_startup: true,
         interval_minutes: Some(120),
+    });
+
+    js.register(reconcile_fingerprints::ReconcileFingerprintsHandler::new(core.clone()));
+    hs.register_task(HealthTaskConfig {
+        name: "Reconcile Fingerprints".into(),
+        job_type: "health.reconcile_fingerprints".into(),
+        run_on_startup: false,
+        interval_minutes: None,
     });
 
     js.register(cleanup_orphan_authors::CleanupOrphanAuthorsHandler::new(core.clone()));
