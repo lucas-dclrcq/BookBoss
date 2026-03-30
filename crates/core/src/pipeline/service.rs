@@ -202,6 +202,21 @@ impl PipelineService for PipelineServiceImpl {
 
         // ── 3. Extract metadata from the e-book file ──────────────────────────
         let path: PathBuf = job.file_path.clone().into();
+
+        // Guard: if the file has disappeared since the job was queued, move it
+        // to Error immediately rather than propagating an IO error that would
+        // cause the worker to retry indefinitely.
+        if !path.exists() {
+            let import_job_repo = self.repository_service.import_job_repository().clone();
+            job.status = ImportStatus::Error;
+            job.error_message = Some(format!("file no longer exists at {}", path.display()));
+            let j = job;
+            return transaction(&**self.repository_service.repository(), |tx| {
+                Box::pin(async move { import_job_repo.update_job(tx, j).await })
+            })
+            .await;
+        }
+
         let (detected_format, extracted) = self.format_service.extract_metadata(&path).await?;
 
         // ── 4. Mark Identifying ───────────────────────────────────────────────
