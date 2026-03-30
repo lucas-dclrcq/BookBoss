@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.12](https://github.com/szinn/BookBoss/compare/v0.7.11..v0.7.12) - 2026-03-30
+
+### Features
+
+- _(core)_ Add ReconcileFingerprintsHandler health task - ([8539dd7](https://github.com/szinn/BookBoss/commit/8539dd7fcba8d388edbfcbb3a0bb728443194c3c))
+- _(core)_ Compute and store sidecar fingerprint after enrichment - ([7bbd203](https://github.com/szinn/BookBoss/commit/7bbd203569ea5adae007512fceb67d29fec31434))
+- _(core)_ Null sidecar fingerprint in delete_genre and delete_tag - ([181a196](https://github.com/szinn/BookBoss/commit/181a19695fb324d6e2372a778f477acfdeadb229))
+- _(core)_ Add sidecar fingerprint function and repository method - ([737d6cd](https://github.com/szinn/BookBoss/commit/737d6cd014cf2df154037f50e1bc35bcc000cc43))
+- _(core)_ Add sidecar fingerprint migration and manual-only health task support - ([4598f57](https://github.com/szinn/BookBoss/commit/4598f5706410154422fe17f5cbbbad8b84de94f6))
+
+### Testing
+
+- _(database)_ Add component tests for sidecar fingerprint - ([e34b519](https://github.com/szinn/BookBoss/commit/e34b5197789dbb4d9b87e475d5123bf808528ff4))
+
 ## [0.7.11](https://github.com/szinn/BookBoss/compare/v0.7.10..v0.7.11) - 2026-03-30
 
 ### Bug Fixes
