@@ -27,6 +27,11 @@ pub trait FileStoreService: Send + Sync {
 
     // ── Filesystem I/O (async) ───────────────────────────────────────────────
 
+    /// Returns `true` if the file at `path` exists on the filesystem.
+    /// Used by the pipeline to detect files that disappeared from the watch
+    /// folder between when the job was queued and when it is processed.
+    async fn source_file_exists(&self, path: &Path) -> bool;
+
     /// Moves or copies `source` into `Originals/`, creating the directory if
     /// needed. Tries `original_filename` first; if a file already exists there
     /// with a different hash, falls back to `{stem}_{source_hash_prefix}.{ext}`

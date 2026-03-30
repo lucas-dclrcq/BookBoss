@@ -96,6 +96,10 @@ impl FileStoreService for LocalFileStore {
         self.book_dir(token).join("metadata.opf")
     }
 
+    async fn source_file_exists(&self, path: &Path) -> bool {
+        path.exists()
+    }
+
     async fn store_original_file(&self, source_hash: &str, original_filename: &str, source: &Path) -> Result<String, Error> {
         let originals_dir = self.originals_dir();
         tokio::fs::create_dir_all(&originals_dir).await.map_err(io_err)?;

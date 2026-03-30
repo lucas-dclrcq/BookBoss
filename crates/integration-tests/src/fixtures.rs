@@ -34,6 +34,10 @@ impl FileStoreService for SilentFileStore {
     fn metadata_path(&self, _token: BookToken) -> PathBuf {
         PathBuf::new()
     }
+    async fn source_file_exists(&self, _path: &Path) -> bool {
+        true
+    }
+
     async fn store_original_file(&self, _source_hash: &str, original_filename: &str, _source: &Path) -> Result<String, Error> {
         Ok(format!("Originals/{original_filename}"))
     }
