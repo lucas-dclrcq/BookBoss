@@ -44,6 +44,8 @@ impl IntoSubsystem<Error> for JobWorker {
         let event_service = self.event_service;
 
         // Crash recovery: reset any jobs left running from a previous crash.
+        // Uses ? intentionally — if DB is unreachable at startup, the error
+        // propagates to the keepalive loop, which triggers the wrapper's check.
         let reset = transaction(&*repository, |tx| {
             let job_repo = job_repo.clone();
             Box::pin(async move { job_repo.reset_running_to_pending(tx).await })
@@ -68,10 +70,19 @@ impl IntoSubsystem<Error> for JobWorker {
                         // Claim the next pending job.
                         let job = {
                             let job_repo = job_repo.clone();
-                            transaction(&*repository, |tx| {
+                            match transaction(&*repository, |tx| {
                                 Box::pin(async move { job_repo.claim_next(tx).await })
                             })
-                            .await?
+                            .await
+                            {
+                                Ok(j) => j,
+                                Err(e) if e.is_transient() => {
+                                    tracing::warn!("DB unavailable in worker (claim_next), pausing 10s: {e}");
+                                    tokio::time::sleep(Duration::from_secs(10)).await;
+                                    continue;
+                                }
+                                Err(e) => return Err(e),
+                            }
                         };
 
                         match job {
@@ -84,23 +95,41 @@ impl IntoSubsystem<Error> for JobWorker {
                                 match job_service.dispatch(&job_type, payload).await {
                                     Ok(()) => {
                                         let job_repo = job_repo.clone();
-                                        transaction(&*repository, |tx| {
+                                        match transaction(&*repository, |tx| {
                                             let job = job.clone();
                                             Box::pin(async move { job_repo.complete(tx, job).await })
                                         })
-                                        .await?;
+                                        .await
+                                        {
+                                            Ok(_) => {}
+                                            Err(e) if e.is_transient() => {
+                                                tracing::warn!("DB unavailable in worker (complete), pausing 10s: {e}");
+                                                tokio::time::sleep(Duration::from_secs(10)).await;
+                                                continue;
+                                            }
+                                            Err(e) => return Err(e),
+                                        }
                                         event_service.notify_jobs_changed();
                                     }
                                     Err(e) => {
                                         tracing::error!(job_type, error = %e, "job handler failed");
                                         let job_repo = job_repo.clone();
-                                        transaction(&*repository, |tx| {
+                                        match transaction(&*repository, |tx| {
                                             let job = job.clone();
                                             Box::pin(async move {
                                                 job_repo.fail(tx, job, e.to_string()).await
                                             })
                                         })
-                                        .await?;
+                                        .await
+                                        {
+                                            Ok(_) => {}
+                                            Err(e) if e.is_transient() => {
+                                                tracing::warn!("DB unavailable in worker (fail), pausing 10s: {e}");
+                                                tokio::time::sleep(Duration::from_secs(10)).await;
+                                                continue;
+                                            }
+                                            Err(e) => return Err(e),
+                                        }
                                         event_service.notify_jobs_changed();
                                     }
                                 }
@@ -122,5 +151,22 @@ impl IntoSubsystem<Error> for JobWorker {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{Error, RepositoryError};
+
+    #[test]
+    fn transient_connection_error_is_transient() {
+        let e = Error::RepositoryError(RepositoryError::Connection("gone".into()));
+        assert!(e.is_transient(), "connection error must be transient");
+    }
+
+    #[test]
+    fn infrastructure_error_is_not_transient() {
+        let e = Error::Infrastructure("bad query".into());
+        assert!(!e.is_transient(), "infrastructure error must not be transient");
     }
 }
