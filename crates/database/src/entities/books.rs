@@ -26,6 +26,7 @@ pub struct Model {
     pub version: i64,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
+    pub sidecar_fingerprint: Option<String>,
 }
 
 #[async_trait::async_trait]

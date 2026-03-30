@@ -172,6 +172,8 @@ pub struct Book {
     pub metadata_source: Option<MetadataSource>,
     #[builder(default)]
     pub cover_path: Option<String>,
+    #[builder(default)]
+    pub sidecar_fingerprint: Option<String>,
     #[builder(default = "Utc::now()")]
     pub created_at: DateTime<Utc>,
     #[builder(default = "Utc::now()")]

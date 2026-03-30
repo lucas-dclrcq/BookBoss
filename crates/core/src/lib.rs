@@ -216,7 +216,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         name: "Recover Enrichments".into(),
         job_type: "health.recover_enrichments".into(),
         run_on_startup: true,
-        interval_minutes: 60,
+        interval_minutes: Some(60),
     });
 
     js.register(ensure_enrichments::EnsureEnrichmentsHandler::new(core.clone()));
@@ -224,7 +224,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         name: "Ensure Enrichments".into(),
         job_type: "health.ensure_enrichments".into(),
         run_on_startup: true,
-        interval_minutes: 120,
+        interval_minutes: Some(120),
     });
 
     js.register(cleanup_orphan_authors::CleanupOrphanAuthorsHandler::new(core.clone()));
@@ -232,7 +232,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         name: "Cleanup Orphan Authors".into(),
         job_type: "health.cleanup_orphan_authors".into(),
         run_on_startup: false,
-        interval_minutes: 360,
+        interval_minutes: Some(360),
     });
 
     js.register(cleanup_orphan_series::CleanupOrphanSeriesHandler::new(core.clone()));
@@ -240,7 +240,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         name: "Cleanup Orphan Series".into(),
         job_type: "health.cleanup_orphan_series".into(),
         run_on_startup: false,
-        interval_minutes: 360,
+        interval_minutes: Some(360),
     });
 
     js.register(cleanup_orphan_publishers::CleanupOrphanPublishersHandler::new(core.clone()));
@@ -248,7 +248,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         name: "Cleanup Orphan Publishers".into(),
         job_type: "health.cleanup_orphan_publishers".into(),
         run_on_startup: false,
-        interval_minutes: 360,
+        interval_minutes: Some(360),
     });
 
     js.register(cleanup_old_jobs::CleanupOldJobsHandler::new(core.clone()));
@@ -256,7 +256,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         name: "Cleanup Old Jobs".into(),
         job_type: "health.cleanup_old_jobs".into(),
         run_on_startup: false,
-        interval_minutes: 1440,
+        interval_minutes: Some(1440),
     });
 
     js.register(cleanup_old_import_jobs::CleanupOldImportJobsHandler::new(core.clone()));
@@ -264,7 +264,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         name: "Cleanup Old Import Jobs".into(),
         job_type: "health.cleanup_old_import_jobs".into(),
         run_on_startup: false,
-        interval_minutes: 1440,
+        interval_minutes: Some(1440),
     });
 
     js.register(cleanup_old_system_messages::CleanupOldSystemMessagesHandler::new(core.clone()));
@@ -272,7 +272,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         name: "Cleanup Old System Messages".into(),
         job_type: "health.cleanup_old_system_messages".into(),
         run_on_startup: false,
-        interval_minutes: 1440,
+        interval_minutes: Some(1440),
     });
 
     js.register(cleanup_expired_sessions::CleanupExpiredSessionsHandler::new(core.clone()));
@@ -280,7 +280,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         name: "Cleanup Expired Sessions".into(),
         job_type: "health.cleanup_expired_sessions".into(),
         run_on_startup: false,
-        interval_minutes: 1440,
+        interval_minutes: Some(1440),
     });
 
     js.register(verify_file_integrity::VerifyFileIntegrityHandler::new(core.clone()));
@@ -288,7 +288,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         name: "Verify Library File Integrity".into(),
         job_type: "health.verify_file_integrity".into(),
         run_on_startup: false,
-        interval_minutes: 720,
+        interval_minutes: Some(720),
     });
 
     js.register(reset_stale_import_jobs::ResetStaleImportJobsHandler::new(core.clone()));
@@ -296,7 +296,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         name: "Reset Stale Import Jobs".into(),
         job_type: "health.reset_stale_import_jobs".into(),
         run_on_startup: true,
-        interval_minutes: 360,
+        interval_minutes: Some(360),
     });
 }
 

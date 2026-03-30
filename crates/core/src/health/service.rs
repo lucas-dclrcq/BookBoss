@@ -92,7 +92,7 @@ mod tests {
             name: "Test Task".into(),
             job_type: "health.test".into(),
             run_on_startup: true,
-            interval_minutes: 60,
+            interval_minutes: Some(60),
         }
     }
 

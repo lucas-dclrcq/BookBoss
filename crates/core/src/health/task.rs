@@ -8,7 +8,9 @@ pub struct HealthTaskConfig {
     pub name: String,
     pub job_type: String,
     pub run_on_startup: bool,
-    pub interval_minutes: u64,
+    /// How often to re-run after each execution. `None` means manual-only —
+    /// the task never auto-schedules and must be triggered via `mark_due_now`.
+    pub interval_minutes: Option<u64>,
 }
 
 /// Runtime state for a single task, exposed to the frontend.
@@ -17,9 +19,11 @@ pub struct HealthTaskInfo {
     pub name: String,
     pub job_type: String,
     pub run_on_startup: bool,
-    pub interval_minutes: u64,
+    /// `None` for manual-only tasks.
+    pub interval_minutes: Option<u64>,
     pub last_run_at: Option<DateTime<Utc>>,
-    pub next_run_at: DateTime<Utc>,
+    /// `None` for manual-only tasks that have not been triggered.
+    pub next_run_at: Option<DateTime<Utc>>,
 }
 
 /// Shared scheduling state for all health tasks.
@@ -40,13 +44,13 @@ impl HealthTaskState {
     }
 
     /// Register a health task from its config. Computes the initial
-    /// `next_run_at` based on `run_on_startup`.
+    /// `next_run_at` based on `run_on_startup` and `interval_minutes`.
     pub fn register_task(&self, config: HealthTaskConfig) {
         let now = Utc::now();
         let next = if config.run_on_startup {
-            now
+            Some(now)
         } else {
-            now + Duration::minutes(config.interval_minutes as i64)
+            config.interval_minutes.map(|m| now + Duration::minutes(m as i64))
         };
         let info = HealthTaskInfo {
             name: config.name,
@@ -65,20 +69,26 @@ impl HealthTaskState {
     }
 
     /// Returns the `job_type` values of tasks whose `next_run_at` has passed.
+    /// Tasks with `next_run_at = None` (manual-only) are never returned here.
     pub fn due_tasks(&self) -> Vec<String> {
         let now = Utc::now();
         let tasks = self.tasks.read().expect("task lock poisoned");
-        tasks.iter().filter(|t| now >= t.next_run_at).map(|t| t.job_type.clone()).collect()
+        tasks
+            .iter()
+            .filter(|t| t.next_run_at.is_some_and(|next| now >= next))
+            .map(|t| t.job_type.clone())
+            .collect()
     }
 
     /// Mark a task as having been run: sets `last_run_at` to now and
-    /// computes the next `next_run_at`.
+    /// computes the next `next_run_at`. Manual-only tasks (`interval_minutes =
+    /// None`) return to `next_run_at = None` after running.
     pub fn mark_run(&self, job_type: &str) {
         let now = Utc::now();
         let mut tasks = self.tasks.write().expect("task lock poisoned");
         if let Some(task) = tasks.iter_mut().find(|t| t.job_type == job_type) {
             task.last_run_at = Some(now);
-            task.next_run_at = now + Duration::minutes(task.interval_minutes as i64);
+            task.next_run_at = task.interval_minutes.map(|m| now + Duration::minutes(m as i64));
         }
     }
 
@@ -88,7 +98,7 @@ impl HealthTaskState {
         let now = Utc::now();
         let mut tasks = self.tasks.write().expect("task lock poisoned");
         if let Some(task) = tasks.iter_mut().find(|t| t.job_type == job_type) {
-            task.next_run_at = now;
+            task.next_run_at = Some(now);
         }
     }
 }
@@ -109,15 +119,24 @@ mod tests {
                 name: "Startup Task".into(),
                 job_type: "health.startup".into(),
                 run_on_startup: true,
-                interval_minutes: 60,
+                interval_minutes: Some(60),
             },
             HealthTaskConfig {
                 name: "Periodic Task".into(),
                 job_type: "health.periodic".into(),
                 run_on_startup: false,
-                interval_minutes: 360,
+                interval_minutes: Some(360),
             },
         ]
+    }
+
+    fn manual_config() -> HealthTaskConfig {
+        HealthTaskConfig {
+            name: "Manual Task".into(),
+            job_type: "health.manual".into(),
+            run_on_startup: false,
+            interval_minutes: None,
+        }
     }
 
     fn state_with_samples() -> HealthTaskState {
@@ -135,7 +154,7 @@ mod tests {
 
         let startup = tasks.iter().find(|t| t.job_type == "health.startup").unwrap();
         assert!(startup.last_run_at.is_none());
-        assert!(startup.next_run_at <= Utc::now());
+        assert!(startup.next_run_at.unwrap() <= Utc::now());
     }
 
     #[test]
@@ -145,7 +164,18 @@ mod tests {
 
         let periodic = tasks.iter().find(|t| t.job_type == "health.periodic").unwrap();
         assert!(periodic.last_run_at.is_none());
-        assert!(periodic.next_run_at > Utc::now());
+        assert!(periodic.next_run_at.unwrap() > Utc::now());
+    }
+
+    #[test]
+    fn register_manual_task_has_no_next_run() {
+        let state = HealthTaskState::new();
+        state.register_task(manual_config());
+
+        let tasks = state.list_tasks();
+        let manual = tasks.iter().find(|t| t.job_type == "health.manual").unwrap();
+        assert!(manual.next_run_at.is_none());
+        assert!(manual.interval_minutes.is_none());
     }
 
     #[test]
@@ -167,7 +197,7 @@ mod tests {
         let startup = tasks.iter().find(|t| t.job_type == "health.startup").unwrap();
 
         assert!(startup.last_run_at.is_some());
-        let diff = startup.next_run_at - Utc::now();
+        let diff = startup.next_run_at.unwrap() - Utc::now();
         assert!(diff.num_minutes() >= 59 && diff.num_minutes() <= 60);
     }
 
@@ -200,5 +230,34 @@ mod tests {
 
         let due = state.due_tasks();
         assert!(due.contains(&"health.periodic".to_string()));
+    }
+
+    #[test]
+    fn manual_task_never_due_until_triggered() {
+        let state = HealthTaskState::new();
+        state.register_task(manual_config());
+
+        assert!(!state.due_tasks().contains(&"health.manual".to_string()));
+
+        state.mark_due_now("health.manual");
+
+        assert!(state.due_tasks().contains(&"health.manual".to_string()));
+    }
+
+    #[test]
+    fn manual_task_returns_to_none_after_mark_run() {
+        let state = HealthTaskState::new();
+        state.register_task(manual_config());
+
+        state.mark_due_now("health.manual");
+        assert!(state.due_tasks().contains(&"health.manual".to_string()));
+
+        state.mark_run("health.manual");
+
+        let tasks = state.list_tasks();
+        let manual = tasks.iter().find(|t| t.job_type == "health.manual").unwrap();
+        assert!(manual.next_run_at.is_none());
+        assert!(manual.last_run_at.is_some());
+        assert!(!state.due_tasks().contains(&"health.manual".to_string()));
     }
 }

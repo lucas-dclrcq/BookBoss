@@ -48,6 +48,7 @@ impl From<books::Model> for Book {
             rating: model.rating,
             metadata_source: model.metadata_source.as_deref().map(|s| s.parse().expect("DB has unknown metadata source")),
             cover_path: model.cover_path,
+            sidecar_fingerprint: model.sidecar_fingerprint,
             created_at: model.created_at.with_timezone(&Utc),
             updated_at: model.updated_at.with_timezone(&Utc),
         }
@@ -87,6 +88,7 @@ impl BookRepository for BookRepositoryAdapter {
             rating: Set(book.rating),
             metadata_source: Set(book.metadata_source.as_ref().map(std::string::ToString::to_string)),
             cover_path: Set(book.cover_path),
+            sidecar_fingerprint: Set(None),
             version: Set(0),
             created_at: Set(now.into()),
             updated_at: Set(now.into()),
@@ -126,6 +128,7 @@ impl BookRepository for BookRepositoryAdapter {
         updater.rating = Set(book.rating);
         updater.metadata_source = Set(book.metadata_source.as_ref().map(std::string::ToString::to_string));
         updater.cover_path = Set(book.cover_path);
+        updater.sidecar_fingerprint = Set(None);
 
         let result = updater.update(transaction).await.map_err(handle_dberr)?;
 
@@ -1051,6 +1054,7 @@ mod tests {
             rating: None,
             metadata_source: None,
             cover_path: None,
+            sidecar_fingerprint: None,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
         };
@@ -1097,6 +1101,7 @@ mod tests {
             rating: None,
             metadata_source: None,
             cover_path: None,
+            sidecar_fingerprint: None,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
         };

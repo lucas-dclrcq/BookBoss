@@ -13,11 +13,13 @@ pub(crate) struct TaskRow {
     pub name: String,
     pub job_type: String,
     pub run_on_startup: bool,
-    pub interval_minutes: u64,
+    /// `None` for manual-only tasks.
+    pub interval_minutes: Option<u64>,
     /// ISO 8601 timestamp, converted to relative + local time on the client.
     pub last_run_at: Option<String>,
     /// ISO 8601 timestamp, converted to relative + local time on the client.
-    pub next_run_at: String,
+    /// `None` for manual-only tasks that have not been triggered.
+    pub next_run_at: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -44,7 +46,7 @@ pub(crate) async fn list_health_tasks() -> Result<Vec<TaskRow>, ServerFnError> {
             run_on_startup: t.run_on_startup,
             interval_minutes: t.interval_minutes,
             last_run_at: t.last_run_at.map(|dt| dt.to_rfc3339()),
-            next_run_at: t.next_run_at.to_rfc3339(),
+            next_run_at: t.next_run_at.map(|dt| dt.to_rfc3339()),
         })
         .collect();
     rows.sort_by(|a, b| a.name.cmp(&b.name));
@@ -132,7 +134,12 @@ pub(crate) fn TasksSection() -> Element {
                                                         }
                                                     }
                                                 }
-                                                td { class: "px-4 py-3 text-center text-gray-600", "{format_interval(row.interval_minutes)}" }
+                                                td { class: "px-4 py-3 text-center text-gray-600",
+                                                    match row.interval_minutes {
+                                                        Some(m) => rsx! { "{format_interval(m)}" },
+                                                        None => rsx! { span { class: "text-gray-400", "Manual only" } },
+                                                    }
+                                                }
                                                 td { class: "px-4 py-3 text-center text-gray-600",
                                                     if let Some(ref last) = row.last_run_at {
                                                         RelativeTime { iso: last.clone(), direction: "past" }
@@ -141,7 +148,10 @@ pub(crate) fn TasksSection() -> Element {
                                                     }
                                                 }
                                                 td { class: "px-4 py-3 text-center text-gray-600",
-                                                    RelativeTime { iso: row.next_run_at.clone(), direction: "future" }
+                                                    match row.next_run_at.as_ref() {
+                                                        Some(next) => rsx! { RelativeTime { iso: next.clone(), direction: "future" } },
+                                                        None => rsx! { span { class: "text-gray-400", "Manual only" } },
+                                                    }
                                                 }
                                                 td { class: "px-4 py-3",
                                                     div { class: "flex items-center justify-center",
