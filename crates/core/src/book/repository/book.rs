@@ -82,6 +82,12 @@ pub trait BookRepository: Send + Sync {
     /// bounded batches without loading the full library into memory.
     async fn find_available_books_for_sweep(&self, transaction: &dyn Transaction, after_id: Option<BookId>, batch_size: u64) -> Result<Vec<BookId>, Error>;
 
+    /// Sets (or clears) the `sidecar_fingerprint` for a book.
+    ///
+    /// Called with `Some(hash)` after a successful enriched-EPUB write,
+    /// and with `None` to invalidate whenever metadata mutations occur.
+    async fn update_sidecar_fingerprint(&self, transaction: &dyn Transaction, book_id: BookId, fingerprint: Option<String>) -> Result<(), Error>;
+
     /// Returns up to `batch_size` IDs of Available books that need any
     /// enrichment work, with `id > after_id`, ordered by id ASC.
     ///
@@ -90,6 +96,8 @@ pub trait BookRepository: Send + Sync {
     /// - Has an enriched EPUB but no enriched KEPUB (needs KEPUB conversion)
     /// - Has an enriched EPUB whose `created_at` is older than the book's
     ///   `updated_at` (metadata changed, enrichment is stale)
+    /// - Has a NULL `sidecar_fingerprint` (metadata written but fingerprint
+    ///   never recorded, or invalidated by a metadata mutation)
     ///
     /// Used by the `EnsureEnrichmentsHandler` cursor sweep.
     async fn find_book_ids_needing_any_enrichment(

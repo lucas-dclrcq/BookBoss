@@ -1,7 +1,9 @@
+pub mod fingerprint;
 pub mod model;
 pub mod repository;
 pub mod service;
 
+pub use fingerprint::compute_sidecar_fingerprint;
 pub use model::{
     Author, AuthorId, AuthorRole, AuthorToken, Book, BookAuthor, BookFile, BookId, BookIdentifier, BookQuery, BookSortField, BookSortOrder, BookStatus,
     BookToken, FileFormat, FileRole, Genre, GenreId, GenreToken, IdentifierType, MetadataSource, NewAuthor, NewBook, NewGenre, NewPublisher, NewSeries, NewTag,

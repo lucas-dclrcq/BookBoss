@@ -135,6 +135,19 @@ impl BookRepository for BookRepositoryAdapter {
         Ok(result.into())
     }
 
+    async fn update_sidecar_fingerprint(&self, transaction: &dyn Transaction, book_id: BookId, fingerprint: Option<String>) -> Result<(), Error> {
+        use sea_orm::sea_query::Expr;
+
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+        prelude::Books::update_many()
+            .col_expr(books::Column::SidecarFingerprint, Expr::value(fingerprint))
+            .filter(books::Column::Id.eq(book_id as i64))
+            .exec(transaction)
+            .await
+            .map_err(handle_dberr)?;
+        Ok(())
+    }
+
     async fn find_by_id(&self, transaction: &dyn Transaction, id: BookId) -> Result<Option<Book>, Error> {
         if id == 0 {
             return Err(Error::InvalidId(id));
@@ -845,13 +858,28 @@ impl BookRepository for BookRepositoryAdapter {
             q3.into_model::<BookIdOnly>().all(transaction).await.map_err(handle_dberr)?
         };
 
-        // Union all three result sets: deduplicate, sort ascending, limit to
+        // Query 4: available books with NULL sidecar_fingerprint,
+        // id > after_id, ORDER BY id ASC, LIMIT batch_size.
+        let mut q4 = prelude::Books::find()
+            .select_only()
+            .column_as(books::Column::Id, "book_id")
+            .filter(books::Column::Status.eq("available"))
+            .filter(books::Column::SidecarFingerprint.is_null())
+            .order_by_asc(books::Column::Id)
+            .limit(batch_size);
+        if let Some(id) = after_id {
+            q4 = q4.filter(books::Column::Id.gt(id as i64));
+        }
+        let rows4 = q4.into_model::<BookIdOnly>().all(transaction).await.map_err(handle_dberr)?;
+
+        // Union all four result sets: deduplicate, sort ascending, limit to
         // batch_size. The caller uses the last returned ID as the next cursor.
         let mut seen = HashSet::new();
         let mut combined: Vec<BookId> = rows1
             .into_iter()
             .chain(rows2)
             .chain(rows3)
+            .chain(rows4)
             .filter_map(|r| {
                 let id = r.book_id as u64;
                 seen.insert(id).then_some(id)

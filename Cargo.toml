@@ -102,6 +102,9 @@ features = ["json", "rustls", "gzip"]
 version = "1.41.0"
 features = ["serde-str"]
 
+[workspace.dependencies.rust_decimal_macros]
+version = "1"
+
 [workspace.dependencies.sea-orm]
 version = "2.0.0-rc.37"
 features = [
