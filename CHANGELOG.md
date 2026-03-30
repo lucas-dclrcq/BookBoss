@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.11](https://github.com/szinn/BookBoss/compare/v0.7.10..v0.7.11) - 2026-03-30
+
+### Bug Fixes
+
+- _(database)_ Fix two SQLite integration test failures - ([2ba8c7f](https://github.com/szinn/BookBoss/commit/2ba8c7fc306bb6df96728cb36d7f7769c4680ae7))
+
 ## [0.7.10](https://github.com/szinn/BookBoss/compare/v0.7.9..v0.7.10) - 2026-03-29
 
 ### Features
