@@ -111,6 +111,12 @@ impl ScanWorker {
                     tracing::warn!(path = %path.display(), error = %e, "failed to remove duplicate bookdrop file");
                 }
             }
+            FileQueueStatus::ActivelyProcessing => {
+                // The pipeline worker is currently processing this exact file.
+                // Leave it in place so store_original_file and store_book_file
+                // can still access it.
+                tracing::debug!(path = %path.display(), "file is actively being processed — skipping");
+            }
             FileQueueStatus::DuplicateIncomingQueue => {
                 let message = format!(r#""{file_name}" is already in the Incoming Review list. Removed from bookdrop."#);
                 tracing::info!(%message, "duplicate bookdrop file removed");
@@ -335,6 +341,25 @@ mod tests {
         worker.process_file(&file_path, FileFormat::Epub).await.expect("process_file");
 
         assert!(!file_path.exists(), "duplicate file should have been removed");
+    }
+
+    #[tokio::test]
+    async fn test_process_file_actively_processing_does_not_remove_file() {
+        let dir = tempdir().expect("tempdir");
+        let file_path = dir.path().join("in-flight.epub");
+        tokio::fs::write(&file_path, b"fake epub content").await.expect("write file");
+
+        let mut import_svc = MockImportJobService::new();
+        import_svc
+            .expect_queue_file_if_new()
+            .returning(|_, _, _, _| Box::pin(async { Ok(FileQueueStatus::ActivelyProcessing) }));
+
+        let msg_svc = MockSystemMessageService::new(); // no messages should be posted
+
+        let worker = make_worker(import_svc, msg_svc);
+        worker.process_file(&file_path, FileFormat::Epub).await.expect("process_file");
+
+        assert!(file_path.exists(), "in-flight file must not be deleted");
     }
 
     #[tokio::test]

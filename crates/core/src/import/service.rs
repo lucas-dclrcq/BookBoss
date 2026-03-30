@@ -19,7 +19,10 @@ pub enum FileQueueStatus {
     Queued,
     /// The file hash matches a record already in `book_files`.
     DuplicateLibraryFile { title: String, author: String },
-    /// The file hash matches a record already in `import_jobs`.
+    /// The file at this exact path is already being processed by the pipeline.
+    /// The scanner must NOT delete it — the pipeline worker still needs it.
+    ActivelyProcessing,
+    /// A *different* file with the same content hash is already in the queue.
     DuplicateIncomingQueue,
 }
 
@@ -143,8 +146,11 @@ impl ImportJobService for ImportJobServiceImpl {
                 };
                 return Ok(FileQueueStatus::DuplicateLibraryFile { title: book, author });
             }
-            if import_job_repository.find_active_by_hash(tx, &file_hash).await?.is_some() {
+            if let Some(existing) = import_job_repository.find_active_by_hash(tx, &file_hash).await? {
                 tracing::debug!(hash = %file_hash, "file already in import_jobs — skipping");
+                if existing.file_path == file_path {
+                    return Ok(FileQueueStatus::ActivelyProcessing);
+                }
                 return Ok(FileQueueStatus::DuplicateIncomingQueue);
             }
             let job = import_job_repository
@@ -428,7 +434,8 @@ mod tests {
     // ─── queue_file_if_new ────────────────────────────────────────────────────
 
     #[tokio::test]
-    async fn test_queue_file_if_new_skips_existing_hash() {
+    async fn test_queue_file_if_new_same_path_returns_actively_processing() {
+        // Same path as fake_job — pipeline is currently processing this file.
         let existing = fake_job(ImportStatus::Pending);
         let mut import_mock = MockImportJobRepository::new();
         import_mock.expect_find_active_by_hash().returning(move |_, _| {
@@ -442,9 +449,10 @@ mod tests {
 
         let result = svc
             .queue_file_if_new("/watch/test.epub".into(), "abc123".into(), crate::book::FileFormat::Epub, Utc::now())
-            .await;
+            .await
+            .unwrap();
 
-        result.unwrap();
+        assert_eq!(result, FileQueueStatus::ActivelyProcessing);
     }
 
     #[tokio::test]
