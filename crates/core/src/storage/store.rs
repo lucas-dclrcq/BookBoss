@@ -57,6 +57,11 @@ pub trait FileStoreService: Send + Sync {
     /// name.
     async fn copy_to_trash(&self, token: BookToken, file_name: &str) -> Result<(), Error>;
 
+    /// Copies `source` (an absolute path, typically a bookdrop file) into
+    /// `Trash/Bookdrop/`, creating the directory if needed. Overwrites any
+    /// existing file with the same name.
+    async fn copy_to_bookdrop_trash(&self, source: &Path) -> Result<(), Error>;
+
     /// Removes a file by its library-root-relative path. No-op if the file
     /// does not exist.
     async fn delete_original_file(&self, relative_path: &str) -> Result<(), Error>;

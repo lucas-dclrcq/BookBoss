@@ -103,9 +103,7 @@ impl ScanWorker {
                     {
                         tracing::warn!(error = %e, "failed to post unsupported-format system message");
                     }
-                    if let Err(e) = tokio::fs::remove_file(&path).await {
-                        tracing::warn!(path = %path.display(), error = %e, "failed to remove unsupported-format file");
-                    }
+                    self.move_to_bookdrop_trash(&path).await;
                 } else {
                     tracing::debug!(path = %path.display(), "skipping unrecognised file extension");
                 }
@@ -115,6 +113,17 @@ impl ScanWorker {
             if let Err(e) = self.process_file(&path, file_format).await {
                 tracing::warn!(path = %path.display(), error = %e, "failed to process file — skipping");
             }
+        }
+    }
+
+    /// Copies `path` to `Trash/Bookdrop/` then deletes the original.
+    /// Both steps are best-effort: failures are logged but not propagated.
+    async fn move_to_bookdrop_trash(&self, path: &Path) {
+        if let Err(e) = self.file_store.copy_to_bookdrop_trash(path).await {
+            tracing::warn!(path = %path.display(), error = %e, "failed to copy file to Trash/Bookdrop");
+        }
+        if let Err(e) = tokio::fs::remove_file(path).await {
+            tracing::warn!(path = %path.display(), error = %e, "failed to remove bookdrop file after trash copy");
         }
     }
 
@@ -131,8 +140,8 @@ impl ScanWorker {
 
         match status {
             FileQueueStatus::DuplicateLibraryFile { title, author } => {
-                let message = format!(r#""{file_name}" is already in your library – {author} / {title}. Removed from bookdrop."#);
-                tracing::info!(%message, "duplicate bookdrop file removed");
+                let message = format!(r#""{file_name}" is already in your library – {author} / {title}. Moved to Trash."#);
+                tracing::info!(%message, "duplicate bookdrop file trashed");
                 if let Err(e) = self
                     .system_message_service
                     .add_message(NewSystemMessage {
@@ -144,9 +153,7 @@ impl ScanWorker {
                 {
                     tracing::warn!(error = %e, "failed to post duplicate-library system message");
                 }
-                if let Err(e) = tokio::fs::remove_file(path).await {
-                    tracing::warn!(path = %path.display(), error = %e, "failed to remove duplicate bookdrop file");
-                }
+                self.move_to_bookdrop_trash(path).await;
             }
             FileQueueStatus::ActivelyProcessing => {
                 // The pipeline worker is currently processing this exact file.
@@ -155,8 +162,8 @@ impl ScanWorker {
                 tracing::debug!(path = %path.display(), "file is actively being processed — skipping");
             }
             FileQueueStatus::DuplicateIncomingQueue => {
-                let message = format!(r#""{file_name}" is already in the Incoming Review list. Removed from bookdrop."#);
-                tracing::info!(%message, "duplicate bookdrop file removed");
+                let message = format!(r#""{file_name}" is already in the Incoming Review list. Moved to Trash."#);
+                tracing::info!(%message, "duplicate bookdrop file trashed");
                 if let Err(e) = self
                     .system_message_service
                     .add_message(NewSystemMessage {
@@ -168,9 +175,7 @@ impl ScanWorker {
                 {
                     tracing::warn!(error = %e, "failed to post duplicate-queue system message");
                 }
-                if let Err(e) = tokio::fs::remove_file(path).await {
-                    tracing::warn!(path = %path.display(), error = %e, "failed to remove duplicate bookdrop file");
-                }
+                self.move_to_bookdrop_trash(path).await;
             }
             FileQueueStatus::Queued => {}
         }
@@ -323,20 +328,38 @@ mod tests {
         storage::MockFileStoreService,
     };
 
-    fn make_worker(import_svc: MockImportJobService, msg_svc: MockSystemMessageService) -> ScanWorker {
+    fn make_worker(import_svc: MockImportJobService, file_store: MockFileStoreService, msg_svc: MockSystemMessageService) -> ScanWorker {
         let (_tx, scan_rx) = mpsc::channel::<ScanCommand>(1);
         ScanWorker {
             bookdrop_path: std::path::PathBuf::from("/tmp"),
             scan_rx,
             import_job_service: Arc::new(import_svc),
-            file_store: Arc::new(MockFileStoreService::new()),
+            file_store: Arc::new(file_store),
             format_service: Arc::new(MockFormatService::new()),
             system_message_service: Arc::new(msg_svc),
         }
     }
 
+    /// Returns a `MockFileStoreService` that expects exactly one
+    /// `copy_to_bookdrop_trash` call and returns `Ok(())`.
+    fn expect_one_bookdrop_trash_copy() -> MockFileStoreService {
+        let mut store = MockFileStoreService::new();
+        store.expect_copy_to_bookdrop_trash().once().returning(|_| Box::pin(async { Ok(()) }));
+        store
+    }
+
+    fn ok_system_message(id: u64, source_task: String, severity: MessageSeverity, message: String) -> crate::message::SystemMessage {
+        crate::message::SystemMessage {
+            id,
+            source_task,
+            severity,
+            message,
+            created_at: chrono::Utc::now(),
+        }
+    }
+
     #[tokio::test]
-    async fn test_process_file_duplicate_library_file_posts_message_and_removes_file() {
+    async fn test_process_file_duplicate_library_file_moves_to_trash() {
         let dir = tempdir().expect("tempdir");
         let file_path = dir.path().join("dune.epub");
         tokio::fs::write(&file_path, b"fake epub content").await.expect("write file");
@@ -359,25 +382,15 @@ mod tests {
                     && msg.message.contains("dune.epub")
                     && msg.message.contains("Frank Herbert")
                     && msg.message.contains("Dune")
-                    && msg.message.contains("Removed from bookdrop")
+                    && msg.message.contains("Moved to Trash")
             })
             .once()
-            .returning(|msg| {
-                Box::pin(async move {
-                    Ok(crate::message::SystemMessage {
-                        id: 1,
-                        source_task: msg.source_task,
-                        severity: msg.severity,
-                        message: msg.message,
-                        created_at: chrono::Utc::now(),
-                    })
-                })
-            });
+            .returning(|msg| Box::pin(async move { Ok(ok_system_message(1, msg.source_task, msg.severity, msg.message)) }));
 
-        let worker = make_worker(import_svc, msg_svc);
+        let worker = make_worker(import_svc, expect_one_bookdrop_trash_copy(), msg_svc);
         worker.process_file(&file_path, FileFormat::Epub).await.expect("process_file");
 
-        assert!(!file_path.exists(), "duplicate file should have been removed");
+        assert!(!file_path.exists(), "duplicate file should have been removed from bookdrop");
     }
 
     #[tokio::test]
@@ -391,16 +404,15 @@ mod tests {
             .expect_queue_file_if_new()
             .returning(|_, _, _, _| Box::pin(async { Ok(FileQueueStatus::ActivelyProcessing) }));
 
-        let msg_svc = MockSystemMessageService::new(); // no messages should be posted
-
-        let worker = make_worker(import_svc, msg_svc);
+        // No copy_to_bookdrop_trash calls expected
+        let worker = make_worker(import_svc, MockFileStoreService::new(), MockSystemMessageService::new());
         worker.process_file(&file_path, FileFormat::Epub).await.expect("process_file");
 
         assert!(file_path.exists(), "in-flight file must not be deleted");
     }
 
     #[tokio::test]
-    async fn test_process_file_duplicate_incoming_queue_posts_message_and_removes_file() {
+    async fn test_process_file_duplicate_incoming_queue_moves_to_trash() {
         let dir = tempdir().expect("tempdir");
         let file_path = dir.path().join("already-queued.epub");
         tokio::fs::write(&file_path, b"fake epub content").await.expect("write file");
@@ -417,25 +429,15 @@ mod tests {
                 msg.severity == MessageSeverity::Info
                     && msg.message.contains("already-queued.epub")
                     && msg.message.contains("Incoming Review")
-                    && msg.message.contains("Removed from bookdrop")
+                    && msg.message.contains("Moved to Trash")
             })
             .once()
-            .returning(|msg| {
-                Box::pin(async move {
-                    Ok(crate::message::SystemMessage {
-                        id: 2,
-                        source_task: msg.source_task,
-                        severity: msg.severity,
-                        message: msg.message,
-                        created_at: chrono::Utc::now(),
-                    })
-                })
-            });
+            .returning(|msg| Box::pin(async move { Ok(ok_system_message(2, msg.source_task, msg.severity, msg.message)) }));
 
-        let worker = make_worker(import_svc, msg_svc);
+        let worker = make_worker(import_svc, expect_one_bookdrop_trash_copy(), msg_svc);
         worker.process_file(&file_path, FileFormat::Epub).await.expect("process_file");
 
-        assert!(!file_path.exists(), "duplicate file should have been removed");
+        assert!(!file_path.exists(), "duplicate file should have been removed from bookdrop");
     }
 
     // ── unsupported_ebook_extension ───────────────────────────────────────────

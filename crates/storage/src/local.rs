@@ -27,6 +27,10 @@ impl LocalFileStore {
         self.library_path.join("Trash")
     }
 
+    fn bookdrop_trash_dir(&self) -> PathBuf {
+        self.library_path.join("Trash").join("Bookdrop")
+    }
+
     fn book_dir(&self, token: BookToken) -> PathBuf {
         self.library_path.join(token.to_string())
     }
@@ -180,6 +184,15 @@ impl FileStoreService for LocalFileStore {
         tokio::fs::create_dir_all(&trash_dir).await.map_err(io_err)?;
         let dest = trash_dir.join(file_name);
         tokio::fs::copy(&source, &dest).await.map_err(io_err)?;
+        Ok(())
+    }
+
+    async fn copy_to_bookdrop_trash(&self, source: &Path) -> Result<(), Error> {
+        let trash_dir = self.bookdrop_trash_dir();
+        tokio::fs::create_dir_all(&trash_dir).await.map_err(io_err)?;
+        let file_name = source.file_name().ok_or_else(|| io_err("source path has no filename"))?;
+        let dest = trash_dir.join(file_name);
+        tokio::fs::copy(source, &dest).await.map_err(io_err)?;
         Ok(())
     }
 
@@ -411,5 +424,45 @@ mod tests {
 
         // Second call is a no-op
         store.delete_book(token).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn copy_to_bookdrop_trash_copies_to_trash_bookdrop() {
+        let dir = tempdir().unwrap();
+        let store = test_store(dir.path().to_path_buf());
+
+        // Source file lives outside the library (simulates a bookdrop path)
+        let source_dir = tempdir().unwrap();
+        let source = source_dir.path().join("dead-line.epub");
+        tokio::fs::write(&source, b"epub content").await.unwrap();
+
+        store.copy_to_bookdrop_trash(&source).await.unwrap();
+
+        let dest = dir.path().join("Trash").join("Bookdrop").join("dead-line.epub");
+        assert!(dest.exists(), "file should be at Trash/Bookdrop/dead-line.epub");
+        let contents = tokio::fs::read(&dest).await.unwrap();
+        assert_eq!(contents, b"epub content");
+        // Source is unmodified — caller removes it
+        assert!(source.exists(), "source should still exist after copy");
+    }
+
+    #[tokio::test]
+    async fn copy_to_bookdrop_trash_overwrites_existing() {
+        let dir = tempdir().unwrap();
+        let store = test_store(dir.path().to_path_buf());
+
+        // Pre-populate Trash/Bookdrop with an old version
+        let trash_dir = dir.path().join("Trash").join("Bookdrop");
+        tokio::fs::create_dir_all(&trash_dir).await.unwrap();
+        tokio::fs::write(trash_dir.join("book.epub"), b"old version").await.unwrap();
+
+        let source_dir = tempdir().unwrap();
+        let source = source_dir.path().join("book.epub");
+        tokio::fs::write(&source, b"new version").await.unwrap();
+
+        store.copy_to_bookdrop_trash(&source).await.unwrap();
+
+        let contents = tokio::fs::read(trash_dir.join("book.epub")).await.unwrap();
+        assert_eq!(contents, b"new version");
     }
 }

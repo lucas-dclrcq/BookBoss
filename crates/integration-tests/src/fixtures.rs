@@ -49,6 +49,9 @@ impl FileStoreService for SilentFileStore {
     async fn copy_to_trash(&self, _token: BookToken, _file_name: &str) -> Result<(), Error> {
         Ok(())
     }
+    async fn copy_to_bookdrop_trash(&self, _source: &Path) -> Result<(), Error> {
+        Ok(())
+    }
     async fn delete_book(&self, _token: BookToken) -> Result<(), Error> {
         Ok(())
     }
