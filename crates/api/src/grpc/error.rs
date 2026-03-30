@@ -12,6 +12,7 @@ pub fn map_core_error(error: CoreError) -> Status {
         ErrorKind::Conflict => Status::already_exists(message),
         ErrorKind::InvalidInput | ErrorKind::BadRequest => Status::invalid_argument(message),
         ErrorKind::Internal => Status::internal(message),
+        ErrorKind::ServiceUnavailable => Status::unavailable(message),
     }
 }
 
@@ -86,5 +87,23 @@ mod tests {
         let status = map_core_error(error);
 
         assert_eq!(status.code(), Code::Internal);
+    }
+
+    #[test]
+    fn test_connection_error_maps_to_unavailable() {
+        let error = Error::RepositoryError(RepositoryError::Connection("timeout".into()));
+
+        let status = map_core_error(error);
+
+        assert_eq!(status.code(), Code::Unavailable);
+    }
+
+    #[test]
+    fn test_storage_unavailable_maps_to_unavailable() {
+        let error = Error::StorageUnavailable("NFS gone".into());
+
+        let status = map_core_error(error);
+
+        assert_eq!(status.code(), Code::Unavailable);
     }
 }

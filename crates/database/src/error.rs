@@ -23,6 +23,18 @@ mod pg_error_codes {
 
 #[allow(clippy::needless_pass_by_value, reason = "Required for map_err")]
 pub fn handle_dberr(error: DbErr) -> RepositoryError {
+    // Connectivity errors: network/DNS failure, pool exhaustion, closed pool.
+    // Checked before sql_err() because these need special transient handling.
+    if let DbErr::Conn(RuntimeErr::SqlxError(ref sqlx_err)) = error {
+        if matches!(**sqlx_err, sqlx::Error::Io(_) | sqlx::Error::PoolTimedOut | sqlx::Error::PoolClosed) {
+            return RepositoryError::Connection(error.to_string());
+        }
+    }
+    // Pool acquire failure (e.g. pool exhausted before timeout).
+    if let DbErr::ConnectionAcquire(_) = &error {
+        return RepositoryError::Connection(error.to_string());
+    }
+
     // Check sql_err first — it is database-agnostic and handles common constraint
     // violations uniformly across Postgres, MySQL, and SQLite.
     if let Some(sql_err) = error.sql_err() {

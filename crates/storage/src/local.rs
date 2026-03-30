@@ -51,6 +51,14 @@ fn io_err(e: impl ToString) -> Error {
     Error::Infrastructure(e.to_string())
 }
 
+/// Maps an I/O error on storage-system-level operations (root dir, book dir,
+/// bookdrop dir) to `Error::StorageUnavailable`. Use this when the failure
+/// indicates the storage mount is gone rather than a file being absent.
+#[allow(clippy::needless_pass_by_value, reason = "owned error needed for map_err ergonomics")]
+fn storage_unavailable(e: impl ToString) -> Error {
+    Error::StorageUnavailable(e.to_string())
+}
+
 /// Converts any recognized image format to JPEG, resizing to fit within
 /// 1024×1536 if needed, and re-encodes at quality 85.
 ///
@@ -102,7 +110,7 @@ impl FileStoreService for LocalFileStore {
 
     async fn store_original_file(&self, source_hash: &str, original_filename: &str, source: &Path) -> Result<String, Error> {
         let originals_dir = self.originals_dir();
-        tokio::fs::create_dir_all(&originals_dir).await.map_err(io_err)?;
+        tokio::fs::create_dir_all(&originals_dir).await.map_err(storage_unavailable)?;
 
         let preferred = originals_dir.join(original_filename);
 
@@ -136,7 +144,7 @@ impl FileStoreService for LocalFileStore {
 
     async fn store_book_file(&self, token: BookToken, slug: &str, format: FileFormat, source: &Path) -> Result<String, Error> {
         let book_dir = self.book_dir(token);
-        tokio::fs::create_dir_all(&book_dir).await.map_err(io_err)?;
+        tokio::fs::create_dir_all(&book_dir).await.map_err(storage_unavailable)?;
         let dest = self.book_file_path(token, slug, &format);
         // Try rename first (fast, same filesystem)
         if tokio::fs::rename(source, &dest).await.is_err() {
@@ -149,7 +157,7 @@ impl FileStoreService for LocalFileStore {
 
     async fn store_cover(&self, token: BookToken, filename: &str, data: &[u8]) -> Result<(), Error> {
         let book_dir = self.book_dir(token);
-        tokio::fs::create_dir_all(&book_dir).await.map_err(io_err)?;
+        tokio::fs::create_dir_all(&book_dir).await.map_err(storage_unavailable)?;
         let cover_path = self.cover_path(token, filename);
 
         // Normalize all recognized image formats to JPEG: resize to fit within
@@ -170,7 +178,7 @@ impl FileStoreService for LocalFileStore {
     async fn rename_book_files(&self, token: BookToken, old_slug: &str, new_slug: &str) -> Result<(), Error> {
         let book_dir = self.book_dir(token);
         let prefix = format!("{old_slug}.");
-        let mut entries = tokio::fs::read_dir(&book_dir).await.map_err(io_err)?;
+        let mut entries = tokio::fs::read_dir(&book_dir).await.map_err(storage_unavailable)?;
         while let Some(entry) = entries.next_entry().await.map_err(io_err)? {
             let file_name = entry.file_name();
             let name = file_name.to_string_lossy();
@@ -185,7 +193,7 @@ impl FileStoreService for LocalFileStore {
     async fn copy_to_trash(&self, token: BookToken, file_name: &str) -> Result<(), Error> {
         let source = self.book_dir(token).join(file_name);
         let trash_dir = self.trash_dir();
-        tokio::fs::create_dir_all(&trash_dir).await.map_err(io_err)?;
+        tokio::fs::create_dir_all(&trash_dir).await.map_err(storage_unavailable)?;
         let dest = trash_dir.join(file_name);
         tokio::fs::copy(&source, &dest).await.map_err(io_err)?;
         Ok(())
@@ -193,7 +201,7 @@ impl FileStoreService for LocalFileStore {
 
     async fn copy_to_bookdrop_trash(&self, source: &Path) -> Result<(), Error> {
         let trash_dir = self.bookdrop_trash_dir();
-        tokio::fs::create_dir_all(&trash_dir).await.map_err(io_err)?;
+        tokio::fs::create_dir_all(&trash_dir).await.map_err(storage_unavailable)?;
         let file_name = source.file_name().ok_or_else(|| io_err("source path has no filename"))?;
         let dest = trash_dir.join(file_name);
         tokio::fs::copy(source, &dest).await.map_err(io_err)?;
@@ -219,7 +227,7 @@ impl FileStoreService for LocalFileStore {
     }
 
     async fn list_files(&self, path: &Path) -> Result<Vec<PathBuf>, Error> {
-        let mut entries = tokio::fs::read_dir(path).await.map_err(io_err)?;
+        let mut entries = tokio::fs::read_dir(path).await.map_err(storage_unavailable)?;
         let mut files = Vec::new();
         while let Some(entry) = entries.next_entry().await.map_err(io_err)? {
             if entry.file_type().await.map_err(io_err)?.is_file() {

@@ -11,6 +11,8 @@ pub enum ErrorKind {
     BadRequest,
     /// Internal or infrastructure error.
     Internal,
+    /// Service temporarily unavailable (transient — DB or storage unreachable).
+    ServiceUnavailable,
 }
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -32,6 +34,10 @@ pub enum Error {
 
     #[error("Infrastructure error: {0}")]
     Infrastructure(String),
+
+    /// Storage system unreachable (NFS gone, library path missing). Transient.
+    #[error("Storage unavailable: {0}")]
+    StorageUnavailable(String),
 
     #[error("Frontend error: {0}")]
     FrontendError(String),
@@ -55,11 +61,20 @@ impl Error {
             Self::InvalidId(_) | Self::InvalidPageSize(_) | Self::InvalidToken(_) => ErrorKind::BadRequest,
             Self::Validation(_) => ErrorKind::InvalidInput,
             Self::InvalidTransactionType | Self::Infrastructure(_) | Self::CryptoError(_) => ErrorKind::Internal,
+            Self::StorageUnavailable(_) => ErrorKind::ServiceUnavailable,
             Self::RepositoryError(e) => e.kind(),
             Self::FrontendError(_) => ErrorKind::Internal,
             #[cfg(any(test, feature = "test-support"))]
             Self::MockNotConfigured(_) => ErrorKind::Internal,
         }
+    }
+
+    /// Returns `true` for errors caused by transient infrastructure failures
+    /// (DB connectivity loss, NFS unavailable). The server can recover without
+    /// a restart; subsystems should retry rather than propagating these.
+    #[must_use]
+    pub fn is_transient(&self) -> bool {
+        matches!(self, Self::RepositoryError(RepositoryError::Connection(_)) | Self::StorageUnavailable(_))
     }
 }
 
@@ -82,6 +97,11 @@ pub enum RepositoryError {
 
     #[error("Query canceled")]
     QueryCanceled,
+
+    /// Database connection lost (DNS failure, network partition, pool
+    /// exhausted). Transient — callers should retry.
+    #[error("Connection Error: {0}")]
+    Connection(String),
 }
 
 impl RepositoryError {
@@ -93,6 +113,44 @@ impl RepositoryError {
             Self::Conflict => ErrorKind::Conflict,
             Self::Constraint(_) => ErrorKind::InvalidInput,
             Self::ReadOnly | Self::Database(_) | Self::QueryCanceled => ErrorKind::Internal,
+            Self::Connection(_) => ErrorKind::ServiceUnavailable,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn is_transient_connection_error() {
+        let e = Error::RepositoryError(RepositoryError::Connection("timeout".into()));
+        assert!(e.is_transient());
+    }
+
+    #[test]
+    fn is_transient_storage_unavailable() {
+        let e = Error::StorageUnavailable("NFS gone".into());
+        assert!(e.is_transient());
+    }
+
+    #[test]
+    fn is_transient_returns_false_for_other_errors() {
+        assert!(!Error::Infrastructure("bad".into()).is_transient());
+        assert!(!Error::RepositoryError(RepositoryError::NotFound).is_transient());
+        assert!(!Error::RepositoryError(RepositoryError::Constraint("dup".into())).is_transient());
+        assert!(!Error::RepositoryError(RepositoryError::Database("boom".into())).is_transient());
+    }
+
+    #[test]
+    fn connection_error_kind_is_service_unavailable() {
+        let e = RepositoryError::Connection("x".into());
+        assert_eq!(e.kind(), ErrorKind::ServiceUnavailable);
+    }
+
+    #[test]
+    fn storage_unavailable_kind_is_service_unavailable() {
+        let e = Error::StorageUnavailable("x".into());
+        assert_eq!(e.kind(), ErrorKind::ServiceUnavailable);
     }
 }
