@@ -288,7 +288,6 @@ impl BookRepository for BookRepositoryAdapter {
                 books::Entity,
             )
             .filter(book_files::Column::FileHash.eq(hash))
-            .filter(books::Column::Status.eq("available"))
             .one(transaction)
             .await
             .map_err(handle_dberr)?;

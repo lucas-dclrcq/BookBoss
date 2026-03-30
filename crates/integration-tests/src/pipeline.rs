@@ -226,8 +226,9 @@ async fn approve_job_transitions_book_to_available() {
     let book = fixtures::find_book_by_id(&ctx.repos, book_id).await.expect("book exists");
     let book_token = book.token;
     let edit = minimal_edit("Approved Book", "Test Author");
+    let reviewer = fixtures::insert_user(&ctx.repos, "reviewer_approve").await;
 
-    svc.library_service.approve_book(job.token, 1, edit, &std::env::temp_dir()).await.unwrap();
+    svc.library_service.approve_book(job.token, reviewer.id, edit, &std::env::temp_dir()).await.unwrap();
 
     let book = svc.book_service.find_book_by_token(book_token).await.unwrap().expect("book found");
     assert_eq!(book.status, BookStatus::Available);
