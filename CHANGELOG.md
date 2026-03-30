@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.13](https://github.com/szinn/BookBoss/compare/v0.7.12..v0.7.13) - 2026-03-30
+
+### Features
+
+- _(core)_ Move rejected bookdrop files to Trash/Bookdrop/ instead of deleting - ([95d06a6](https://github.com/szinn/BookBoss/commit/95d06a6ab8233ab53565931ac08b7bdadd6bc04b))
+
+### Bug Fixes
+
+- _(core)_ Reject non-EPUB formats at the bookdrop scanner - ([49745c5](https://github.com/szinn/BookBoss/commit/49745c5793941b8b28f9d3c9fa9dbb8508194d4d))
+- _(core)_ Prevent scanner from deleting in-flight pipeline source file - ([5d9ba2d](https://github.com/szinn/BookBoss/commit/5d9ba2de4c6bd79397004fdf10344262919c87fb))
+- _(frontend)_ Clear search bar on route change - ([8e87d04](https://github.com/szinn/BookBoss/commit/8e87d04cfdc7deae7b15685d6337b74d93e0299d))
+
 ## [0.7.12](https://github.com/szinn/BookBoss/compare/v0.7.11..v0.7.12) - 2026-03-30
 
 ### Features
