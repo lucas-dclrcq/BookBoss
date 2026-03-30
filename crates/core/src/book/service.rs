@@ -130,6 +130,9 @@ impl BookService for BookServiceImpl {
                 return Err(Error::RepositoryError(RepositoryError::NotFound));
             };
             let book_ids = book_repository.available_book_ids_for_genre(tx, genre.id).await?;
+            for &book_id in &book_ids {
+                book_repository.update_sidecar_fingerprint(tx, book_id, None).await?;
+            }
             genre_repository.delete_genre(tx, genre.id).await?;
             Ok(book_ids)
         })?;
@@ -146,6 +149,9 @@ impl BookService for BookServiceImpl {
                 return Err(Error::RepositoryError(RepositoryError::NotFound));
             };
             let book_ids = book_repository.available_book_ids_for_tag(tx, tag.id).await?;
+            for &book_id in &book_ids {
+                book_repository.update_sidecar_fingerprint(tx, book_id, None).await?;
+            }
             tag_repository.delete_tag(tx, tag.id).await?;
             Ok(book_ids)
         })?;
@@ -718,6 +724,10 @@ mod tests {
         book_repo
             .expect_available_book_ids_for_genre()
             .returning(|_, _| Box::pin(async { Ok(vec![1u64, 2u64]) }));
+        book_repo
+            .expect_update_sidecar_fingerprint()
+            .times(2)
+            .returning(|_, _, _| Box::pin(async { Ok(()) }));
 
         let mut job_svc = MockJobService::new();
         job_svc.expect_enqueue_raw().times(2).returning(|_, _, _| Box::pin(async { Ok(()) }));
@@ -753,6 +763,10 @@ mod tests {
         book_repo
             .expect_available_book_ids_for_tag()
             .returning(|_, _| Box::pin(async { Ok(vec![5u64]) }));
+        book_repo
+            .expect_update_sidecar_fingerprint()
+            .times(1)
+            .returning(|_, _, _| Box::pin(async { Ok(()) }));
 
         let mut job_svc = MockJobService::new();
         job_svc.expect_enqueue_raw().times(1).returning(|_, _, _| Box::pin(async { Ok(()) }));
