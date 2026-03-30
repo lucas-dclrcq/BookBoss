@@ -15,6 +15,7 @@ pub mod opds;
 pub mod pipeline;
 pub mod reading;
 pub mod repository;
+pub mod resilience;
 pub mod shelf;
 pub mod storage;
 pub mod types;
@@ -28,6 +29,7 @@ use std::{
 
 use derive_builder::Builder;
 pub use error::{Error, ErrorKind, RepositoryError};
+pub use resilience::{CheckResult, CheckedSubsystem, ResilienceWrapper};
 use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, SubsystemHandle};
 
 use crate::{
