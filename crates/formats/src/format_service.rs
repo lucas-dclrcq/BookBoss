@@ -25,10 +25,6 @@ impl FormatService for FormatServiceImpl {
     fn detect_format(&self, path: &Path) -> Option<FileFormat> {
         match path.extension()?.to_str()? {
             "epub" => Some(FileFormat::Epub),
-            "mobi" => Some(FileFormat::Mobi),
-            "pdf" => Some(FileFormat::Pdf),
-            "cbz" => Some(FileFormat::Cbz),
-            "azw3" => Some(FileFormat::Azw3),
             _ => None,
         }
     }
@@ -179,18 +175,20 @@ mod tests {
     }
 
     #[test]
-    fn detect_known_formats() {
+    fn detect_epub_is_supported() {
         let svc = FormatServiceImpl;
         assert_eq!(svc.detect_format(Path::new("book.epub")), Some(FileFormat::Epub));
-        assert_eq!(svc.detect_format(Path::new("book.mobi")), Some(FileFormat::Mobi));
-        assert_eq!(svc.detect_format(Path::new("book.pdf")), Some(FileFormat::Pdf));
-        assert_eq!(svc.detect_format(Path::new("book.cbz")), Some(FileFormat::Cbz));
-        assert_eq!(svc.detect_format(Path::new("book.azw3")), Some(FileFormat::Azw3));
     }
 
     #[test]
-    fn detect_unknown_returns_none() {
+    fn detect_non_epub_returns_none() {
         let svc = FormatServiceImpl;
+        // Known e-book formats not yet supported for import
+        assert_eq!(svc.detect_format(Path::new("book.mobi")), None);
+        assert_eq!(svc.detect_format(Path::new("book.pdf")), None);
+        assert_eq!(svc.detect_format(Path::new("book.cbz")), None);
+        assert_eq!(svc.detect_format(Path::new("book.azw3")), None);
+        // Truly unrecognised extensions
         assert_eq!(svc.detect_format(Path::new("book.txt")), None);
         assert_eq!(svc.detect_format(Path::new("book.zip")), None);
         assert_eq!(svc.detect_format(Path::new("no_extension")), None);

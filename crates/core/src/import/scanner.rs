@@ -47,6 +47,20 @@ fn create_scan_channel() -> (ScanTrigger, mpsc::Receiver<ScanCommand>) {
     (ScanTrigger { tx }, rx)
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/// Returns the uppercased extension string if `path` has a file extension that
+/// belongs to a known e-book format that BookBoss does not currently support
+/// for import (MOBI, AZW3, PDF, CBZ). Returns `None` for truly unrecognised
+/// extensions so the scanner can distinguish "wrong format" from "not an
+/// e-book".
+fn unsupported_ebook_extension(path: &std::path::Path) -> Option<&str> {
+    match path.extension()?.to_str()? {
+        ext @ ("mobi" | "azw3" | "pdf" | "cbz") => Some(ext),
+        _ => None,
+    }
+}
+
 // ── ScanWorker ───────────────────────────────────────────────────────────────
 
 /// Executes bookdrop scans when commanded via the channel.
@@ -71,7 +85,30 @@ impl ScanWorker {
 
         for path in files {
             let Some(file_format) = self.format_service.detect_format(&path) else {
-                tracing::debug!(path = %path.display(), "skipping unrecognised file extension");
+                if let Some(ext) = unsupported_ebook_extension(&path) {
+                    let file_name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                    let message = format!(
+                        r#""{file_name}" is a {ext} file. Only EPUB files can be imported. Removed from bookdrop."#,
+                        ext = ext.to_uppercase()
+                    );
+                    tracing::info!(%message, "unsupported format removed from bookdrop");
+                    if let Err(e) = self
+                        .system_message_service
+                        .add_message(NewSystemMessage {
+                            source_task: "bookdrop.scanner".into(),
+                            severity: MessageSeverity::Warning,
+                            message,
+                        })
+                        .await
+                    {
+                        tracing::warn!(error = %e, "failed to post unsupported-format system message");
+                    }
+                    if let Err(e) = tokio::fs::remove_file(&path).await {
+                        tracing::warn!(path = %path.display(), error = %e, "failed to remove unsupported-format file");
+                    }
+                } else {
+                    tracing::debug!(path = %path.display(), "skipping unrecognised file extension");
+                }
                 continue;
             };
 
@@ -399,5 +436,30 @@ mod tests {
         worker.process_file(&file_path, FileFormat::Epub).await.expect("process_file");
 
         assert!(!file_path.exists(), "duplicate file should have been removed");
+    }
+
+    // ── unsupported_ebook_extension ───────────────────────────────────────────
+
+    #[test]
+    fn unsupported_extension_recognised() {
+        use std::path::Path;
+
+        use super::unsupported_ebook_extension;
+
+        assert_eq!(unsupported_ebook_extension(Path::new("book.mobi")), Some("mobi"));
+        assert_eq!(unsupported_ebook_extension(Path::new("book.azw3")), Some("azw3"));
+        assert_eq!(unsupported_ebook_extension(Path::new("book.pdf")), Some("pdf"));
+        assert_eq!(unsupported_ebook_extension(Path::new("book.cbz")), Some("cbz"));
+    }
+
+    #[test]
+    fn unsupported_extension_returns_none_for_supported_and_unknown() {
+        use std::path::Path;
+
+        use super::unsupported_ebook_extension;
+
+        assert_eq!(unsupported_ebook_extension(Path::new("book.epub")), None);
+        assert_eq!(unsupported_ebook_extension(Path::new("book.txt")), None);
+        assert_eq!(unsupported_ebook_extension(Path::new("no_extension")), None);
     }
 }
