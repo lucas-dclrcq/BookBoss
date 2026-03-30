@@ -1512,4 +1512,85 @@ mod tests {
 
         assert!(matches!(svc.book_repository().identifiers_for_book(&*tx, 0).await, Err(Error::InvalidId(0))));
     }
+
+    // ─── sidecar_fingerprint ─────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_update_book_nulls_sidecar_fingerprint() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let book = svc.book_repository().add_book(&*tx, new_book("Dune")).await.unwrap();
+
+        // Set a fingerprint directly.
+        svc.book_repository()
+            .update_sidecar_fingerprint(&*tx, book.id, Some("abc123".into()))
+            .await
+            .unwrap();
+
+        let with_fp = svc.book_repository().find_by_id(&*tx, book.id).await.unwrap().unwrap();
+        assert_eq!(with_fp.sidecar_fingerprint.as_deref(), Some("abc123"));
+
+        // update_book must null it.
+        svc.book_repository().update_book(&*tx, with_fp).await.unwrap();
+
+        let after_update = svc.book_repository().find_by_id(&*tx, book.id).await.unwrap().unwrap();
+        assert!(after_update.sidecar_fingerprint.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_find_book_ids_needing_any_enrichment_null_fingerprint() {
+        // A book with an enriched EPUB whose sidecar_fingerprint is NULL should
+        // be returned by query 4 even when the enriched file is fresh
+        // (created_at >= updated_at, so query 3 would miss it).
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let book = svc.book_repository().add_book(&*tx, new_book("Dune")).await.unwrap();
+        // Mark available.
+        let mut b = book.clone();
+        b.status = BookStatus::Available;
+        let book = svc.book_repository().update_book(&*tx, b).await.unwrap();
+
+        let db_tx = TransactionImpl::get_db_transaction(&*tx).unwrap();
+        // Add an enriched EPUB — created_at is now, so query 3 won't fire.
+        book_files::ActiveModel {
+            book_id: Set(book.id as i64),
+            format: Set("epub".to_owned()),
+            file_role: Set("enriched".to_owned()),
+            path: Set("enriched/dune.epub".to_owned()),
+            file_size: Set(1_000),
+            file_hash: Set("hash1".to_owned()),
+            created_at: Set(chrono::Utc::now().into()),
+        }
+        .insert(db_tx)
+        .await
+        .unwrap();
+        // Add an enriched KEPUB so query 2 won't fire either.
+        book_files::ActiveModel {
+            book_id: Set(book.id as i64),
+            format: Set("kepub".to_owned()),
+            file_role: Set("enriched".to_owned()),
+            path: Set("enriched/dune.kepub.epub".to_owned()),
+            file_size: Set(1_000),
+            file_hash: Set("hash2".to_owned()),
+            created_at: Set(chrono::Utc::now().into()),
+        }
+        .insert(db_tx)
+        .await
+        .unwrap();
+
+        // fingerprint is NULL (no enrichment handler has run) — query 4 fires.
+        let ids = svc.book_repository().find_book_ids_needing_any_enrichment(&*tx, None, 100).await.unwrap();
+        assert!(ids.contains(&book.id), "NULL fingerprint should be returned by query 4");
+
+        // Set the fingerprint — book should now be clean.
+        svc.book_repository()
+            .update_sidecar_fingerprint(&*tx, book.id, Some("fp".into()))
+            .await
+            .unwrap();
+
+        let ids = svc.book_repository().find_book_ids_needing_any_enrichment(&*tx, None, 100).await.unwrap();
+        assert!(!ids.contains(&book.id), "book with fingerprint set should not be returned");
+    }
 }
