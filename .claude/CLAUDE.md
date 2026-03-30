@@ -97,17 +97,19 @@ for environment variable setup and SeaORM adapter patterns.
 
 ## Workflows
 
-**Multi-step implementations:** Each logical step should be its own jj changeset. Before
+**Multi-step implementations:** Each logical step **MUST** be its own jj changeset. Before
 starting a step, ensure the working copy is empty (`jj new` if needed). At the end of each
 step, run the end-of-task routine below.
 
-**After completing each task (end-of-task routine — run these as separate commands):**
+**After completing each task (end-of-task routine):**
+
+These **MUST** be run as separate Bash commands. Do **NOT** join them into a single one with `&&`.
 
 1. `just fmt` — format code
 2. `just clippy` — lint (run separately from fmt, not chained)
 3. `just component-tests` — verify tests pass
 4. `jj desc -m "type(scope): description\n\nbody"` — update working copy description
-5. Update `.scratchpad/feature-{slug}.md` — if working from a feature/bug file, mark completed tasks and note partial work; rename prefix to `completed-` when the feature is fully done
+5. Update backlog if working on a task that came from the backlog.
 
 ### Workspaces
 
