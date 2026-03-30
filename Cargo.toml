@@ -250,7 +250,9 @@ cast_possible_truncation = "allow"
 cast_possible_wrap = "allow"
 
 [profile.dev]
+codegen-units = 256
 opt-level = 1
+debug = false
 incremental = true
 
 [profile.dev.package]
