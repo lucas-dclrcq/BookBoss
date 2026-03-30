@@ -37,4 +37,9 @@ impl Repository for RepositoryImpl {
 
         Ok(())
     }
+
+    async fn ping(&self) -> Result<(), Error> {
+        self.database.ping().await.map_err(|e| bb_core::RepositoryError::Connection(e.to_string()))?;
+        Ok(())
+    }
 }

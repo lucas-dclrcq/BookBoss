@@ -209,6 +209,8 @@ pub trait Repository: Send + Sync {
     async fn begin(&self) -> Result<Box<dyn Transaction>, Error>;
     async fn begin_read_only(&self) -> Result<Box<dyn Transaction>, Error>;
     async fn close(&self) -> Result<(), Error>;
+    /// Verify the DB connection is alive. Used by `ResilienceWrapper::check()`.
+    async fn ping(&self) -> Result<(), Error>;
 }
 
 /// Execute a closure within a transaction, automatically committing on success
@@ -309,6 +311,7 @@ pub(crate) mod testing {
             .returning(|| Box::pin(async { Ok(Box::new(MockTransaction) as Box<dyn Transaction>) }));
         r.expect_begin_read_only()
             .returning(|| Box::pin(async { Ok(Box::new(MockTransaction) as Box<dyn Transaction>) }));
+        r.expect_ping().returning(|| Box::pin(async { Ok(()) }));
         r
     }
 
