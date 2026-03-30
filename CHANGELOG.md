@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.14](https://github.com/szinn/BookBoss/compare/v0.7.13..v0.7.14) - 2026-03-30
+
+### Features
+
+- _(core)_ Add transient DB error retry in JobWorker poll loop - ([315bf64](https://github.com/szinn/BookBoss/commit/315bf641ad97ca72aecfb0543c83e0a205eac908))
+- _(core)_ Implement CheckedSubsystem for CoreSubsystem with worker keepalive - ([619aea3](https://github.com/szinn/BookBoss/commit/619aea333aa450f48e8e00c1262694db3e153e6a))
+- _(core)_ Add CheckedSubsystem trait and ResilienceWrapper - ([a52e36c](https://github.com/szinn/BookBoss/commit/a52e36c995acd220d2ea23cf37a521cf764db4e8))
+- _(core)_ Add error classification for transient infrastructure failures - ([1c56a30](https://github.com/szinn/BookBoss/commit/1c56a3082b8fb8aec0629a684c2ff2e48e8e0447))
+- _(core,database)_ Add Repository::ping() for connectivity checks - ([8ecf29b](https://github.com/szinn/BookBoss/commit/8ecf29bf137e2fa9ea1fa8efe5538b2556c59c1c))
+- _(frontend)_ Return HTTP 503 on transient DB errors in cover and download endpoints - ([d714365](https://github.com/szinn/BookBoss/commit/d7143658aef63ab9300fd0f5230d85a49eb4f044))
+
+### Bug Fixes
+
+- _(core)_ Move path.exists() check behind FileStoreService port - ([68c3772](https://github.com/szinn/BookBoss/commit/68c377290861ba5989c47600f2699053859f6736))
+- _(core)_ Move import job to Error immediately when file is missing - ([e537c8e](https://github.com/szinn/BookBoss/commit/e537c8ed39ee2166412e22d26a2786d97f940aaa))
+
 ## [0.7.13](https://github.com/szinn/BookBoss/compare/v0.7.12..v0.7.13) - 2026-03-30
 
 ### Features
