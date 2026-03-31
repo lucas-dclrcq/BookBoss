@@ -110,6 +110,9 @@ fn parse_field_prefix(prefix: &str) -> Option<SearchField> {
 
 const FIELD_NAMES: [&str; 6] = ["title", "author", "series", "genre", "tag", "status"];
 
+/// Valid values for the `status:` field, alphabetically ordered.
+const STATUS_VALUES: [&str; 6] = ["abandoned", "paused", "read", "reading", "rereading", "unread"];
+
 pub(crate) const PLACEHOLDER_TIPS: [&str; 6] = [
     "Try: author:\"Brad Thor\"",
     "Try: status:unread",
@@ -130,11 +133,18 @@ fn is_field_prefix_start(word: &str) -> bool {
 
 /// Returns the ghost-text suffix to display for the last token in `input`.
 ///
-/// The suffix is the remaining characters of the matched field name plus a
-/// colon (e.g., `"aut"` + cycle 0 → `"hor:"`). Returns an empty string when:
+/// For field-name tokens (no colon): the suffix is the remaining characters of
+/// the matched field name plus a colon (e.g., `"aut"` + cycle 0 → `"hor:"`).
+///
+/// For `status:` value tokens: the suffix completes the partial value
+/// (e.g., `"status:u"` + cycle 0 → `"nread"`). Requires at least one character
+/// of the value to be typed.
+///
+/// Returns an empty string when:
 /// - `input` is empty or ends with whitespace (nothing being typed)
-/// - The last token already contains a colon (value entry, not field name)
-/// - No field name starts with the last token
+/// - The last token has a colon but the field is not `status` (open-ended)
+/// - The last token has `status:` with no value prefix typed yet
+/// - No match found for the typed prefix
 ///
 /// `cycle_idx` selects among multiple matches (alphabetical order) and wraps.
 pub(crate) fn compute_completion(input: &str, cycle_idx: usize) -> String {
@@ -143,7 +153,20 @@ pub(crate) fn compute_completion(input: &str, cycle_idx: usize) -> String {
     }
 
     let last_token = input.split_whitespace().last().unwrap_or("");
-    if last_token.contains(':') {
+
+    if let Some(colon_pos) = last_token.find(':') {
+        let field = &last_token[..colon_pos];
+        let partial_value = &last_token[colon_pos + 1..];
+        // Only complete values for fields with a known fixed set; require >= 1 char
+        if field.eq_ignore_ascii_case("status") && !partial_value.is_empty() {
+            let lower = partial_value.to_lowercase();
+            let value_matches: Vec<&str> = STATUS_VALUES.iter().copied().filter(|v| v.starts_with(lower.as_str())).collect();
+            if value_matches.is_empty() {
+                return String::new();
+            }
+            let matched = value_matches[cycle_idx % value_matches.len()];
+            return matched[lower.len()..].to_string();
+        }
         return String::new();
     }
 
@@ -171,23 +194,38 @@ pub(crate) fn apply_completion(input: &str, suffix: &str) -> String {
 /// Produces the next cycled input string when Tab is pressed after a
 /// completion has already been applied (shell-style cycling).
 ///
-/// `current_input` is the full input after the previous Tab (e.g. `"series:"`).
-/// `cycle_prefix` is the original prefix before any Tab (e.g. `"s"`).
+/// `current_input` is the full input after the previous Tab (e.g. `"series:"`
+/// for field cycling, `"status:read"` for value cycling).
+/// `cycle_prefix` is the original token before any Tab (e.g. `"s"` for field
+/// cycling, `"status:r"` for value cycling).
 /// `cycle_idx` is the (already-incremented) cycle counter.
 ///
 /// Returns `None` when there is only one match for `cycle_prefix` (no cycling
 /// possible) or when `cycle_prefix` has no matches.
 pub(crate) fn next_cycle_input(current_input: &str, cycle_prefix: &str, cycle_idx: usize) -> Option<String> {
     let lower = cycle_prefix.to_lowercase();
-    let field_matches: Vec<&str> = FIELD_NAMES.iter().copied().filter(|name| name.starts_with(lower.as_str())).collect();
+    let last_space = current_input.rfind(|c: char| c.is_whitespace()).map_or(0, |i| i + 1);
+    let head = &current_input[..last_space];
 
-    if field_matches.len() < 2 {
+    if let Some(colon_pos) = lower.find(':') {
+        let field = &lower[..colon_pos];
+        let partial_value = &lower[colon_pos + 1..];
+        if field == "status" {
+            let value_matches: Vec<&str> = STATUS_VALUES.iter().copied().filter(|v| v.starts_with(partial_value)).collect();
+            if value_matches.len() < 2 {
+                return None;
+            }
+            let next_value = value_matches[cycle_idx % value_matches.len()];
+            return Some(format!("{head}status:{next_value}"));
+        }
         return None;
     }
 
+    let field_matches: Vec<&str> = FIELD_NAMES.iter().copied().filter(|name| name.starts_with(lower.as_str())).collect();
+    if field_matches.len() < 2 {
+        return None;
+    }
     let next_field = field_matches[cycle_idx % field_matches.len()];
-    let last_space = current_input.rfind(|c: char| c.is_whitespace()).map_or(0, |i| i + 1);
-    let head = &current_input[..last_space];
     Some(format!("{head}{next_field}:"))
 }
 
@@ -608,8 +646,41 @@ mod tests {
 
     #[test]
     fn completion_after_colon_suppressed() {
+        // Non-status fields: open-ended values, no completion
         assert_eq!(compute_completion("author:", 0), "");
         assert_eq!(compute_completion("author:brad", 0), "");
+        // status: with no value typed yet — require >= 1 char
+        assert_eq!(compute_completion("status:", 0), "");
+    }
+
+    #[test]
+    fn completion_status_value_unambiguous() {
+        assert_eq!(compute_completion("status:u", 0), "nread");
+        assert_eq!(compute_completion("status:p", 0), "aused");
+        assert_eq!(compute_completion("status:ab", 0), "andoned");
+    }
+
+    #[test]
+    fn completion_status_value_ambiguous_cycles() {
+        // "r" matches read / reading / rereading (alphabetical)
+        assert_eq!(compute_completion("status:r", 0), "ead");
+        assert_eq!(compute_completion("status:r", 1), "eading");
+        assert_eq!(compute_completion("status:r", 2), "ereading");
+        assert_eq!(compute_completion("status:r", 3), "ead"); // wraps
+    }
+
+    #[test]
+    fn completion_status_exact_value_no_ghost() {
+        // Fully typed value with single match — no ghost
+        assert_eq!(compute_completion("status:unread", 0), "");
+        // "read" matches "read" exactly at idx 0 → empty suffix; "reading" at idx 1
+        assert_eq!(compute_completion("status:read", 0), "");
+        assert_eq!(compute_completion("status:read", 1), "ing");
+    }
+
+    #[test]
+    fn completion_status_unknown_value_no_ghost() {
+        assert_eq!(compute_completion("status:xyz", 0), "");
     }
 
     #[test]
@@ -665,5 +736,34 @@ mod tests {
         // Cycling works correctly when there are tokens before the completed field
         assert_eq!(next_cycle_input("author:thor series:", "s", 1), Some("author:thor status:".to_string()));
         assert_eq!(next_cycle_input("author:thor status:", "s", 2), Some("author:thor series:".to_string()));
+    }
+
+    #[test]
+    fn next_cycle_input_status_values() {
+        // "r" matches read / reading / rereading — cycles through all three
+        assert_eq!(next_cycle_input("status:read", "status:r", 1), Some("status:reading".to_string()));
+        assert_eq!(next_cycle_input("status:reading", "status:r", 2), Some("status:rereading".to_string()));
+        assert_eq!(next_cycle_input("status:rereading", "status:r", 3), Some("status:read".to_string())); // wraps
+    }
+
+    #[test]
+    fn next_cycle_input_status_single_match_returns_none() {
+        // Only one value starts with "u" — no cycling possible
+        assert_eq!(next_cycle_input("status:unread", "status:u", 1), None);
+    }
+
+    #[test]
+    fn next_cycle_input_status_with_prefix_tokens() {
+        // Cycling preserves tokens before the status field
+        assert_eq!(
+            next_cycle_input("author:tolkien status:read", "status:r", 1),
+            Some("author:tolkien status:reading".to_string())
+        );
+    }
+
+    #[test]
+    fn next_cycle_input_non_status_field_value_returns_none() {
+        // Value cycling only applies to status; other fields return None
+        assert_eq!(next_cycle_input("author:brad", "author:b", 1), None);
     }
 }

@@ -520,11 +520,21 @@ pub(crate) fn NavBar() -> Element {
                                         match e.key() {
                                             Key::Tab => {
                                                 let current_completion = completion();
-                                                if !current_completion.is_empty() {
-                                                    // First Tab: apply current completion
+                                                if !cycle_prefix().is_empty() && !current_completion.is_empty() {
+                                                    // Already cycling (e.g. status:r → status:read) and a ghost
+                                                    // suffix is showing — apply it without resetting the cycle
+                                                    // origin, then advance the counter.
+                                                    e.prevent_default();
+                                                    let applied = apply_completion(&SEARCH_TEXT(), &current_completion);
+                                                    (*SEARCH_TEXT.write()).clone_from(&applied);
+                                                    let new_idx = cycle_idx() + 1;
+                                                    cycle_idx.set(new_idx);
+                                                    completion.set(String::new());
+                                                } else if !current_completion.is_empty() {
+                                                    // First Tab: apply completion and enter cycling mode.
                                                     e.prevent_default();
                                                     let current_input = SEARCH_TEXT();
-                                                    // Store prefix for possible cycling (before moving current_input)
+                                                    // Capture the token being completed as the cycle origin.
                                                     let prefix = current_input
                                                         .split_whitespace()
                                                         .last()
@@ -532,20 +542,20 @@ pub(crate) fn NavBar() -> Element {
                                                         .to_string();
                                                     let applied = apply_completion(&current_input, &current_completion);
                                                     (*SEARCH_TEXT.write()).clone_from(&applied);
-                                                    cycle_prefix.set(prefix.clone());
+                                                    cycle_prefix.set(prefix);
                                                     let new_idx = cycle_idx() + 1;
                                                     cycle_idx.set(new_idx);
-                                                    completion.set(String::new()); // applied ends with ':', so no ghost after first Tab
+                                                    completion.set(String::new());
                                                 } else if !cycle_prefix().is_empty() {
-                                                    // Subsequent Tab: cycle to next match
+                                                    // Subsequent Tab with no ghost (current text is an exact
+                                                    // match for one candidate) — cycle to the next match.
                                                     e.prevent_default();
                                                     let prefix = cycle_prefix();
                                                     let current_idx = cycle_idx();
                                                     let new_idx = current_idx + 1;
                                                     cycle_idx.set(new_idx);
-                                                    // Use current_idx (pre-increment): next_cycle_input selects the slot
-                                                    // to transition *into*, so we pass the index of the desired next match,
-                                                    // not the index after it.
+                                                    // Pass current_idx (pre-increment): next_cycle_input
+                                                    // selects the slot to transition *into*.
                                                     if let Some(cycled) = next_cycle_input(&SEARCH_TEXT(), &prefix, current_idx) {
                                                         *SEARCH_TEXT.write() = cycled;
                                                         completion.set(String::new());
