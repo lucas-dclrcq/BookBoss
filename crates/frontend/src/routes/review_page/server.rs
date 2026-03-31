@@ -726,3 +726,208 @@ pub(super) async fn stage_library_cover(book_token: String, data_base64: String)
 
     Ok(())
 }
+
+#[cfg(all(test, feature = "server"))]
+mod tests {
+    use bb_core::{import::ImportSource, pipeline::ExtractedMetadata};
+
+    use super::*;
+
+    // ── image_dimensions helpers ──────────────────────────────────────────────
+
+    /// Builds a minimal 24-byte PNG IHDR buffer with the given dimensions.
+    fn png_bytes(w: u32, h: u32) -> Vec<u8> {
+        let mut v = vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]; // PNG magic (8)
+        v.extend_from_slice(&[0u8; 8]); // 8 padding bytes before width offset
+        v.extend_from_slice(&w.to_be_bytes()); // width at offset 16
+        v.extend_from_slice(&h.to_be_bytes()); // height at offset 20
+        v
+    }
+
+    /// Builds a minimal GIF89a buffer with the given dimensions.
+    fn gif89a_bytes(w: u16, h: u16) -> Vec<u8> {
+        let mut v = b"GIF89a".to_vec();
+        v.extend_from_slice(&w.to_le_bytes());
+        v.extend_from_slice(&h.to_le_bytes());
+        v
+    }
+
+    /// Builds a minimal WebP VP8 (lossy) buffer. Width/height are 14-bit
+    /// values.
+    fn webp_vp8_bytes(w: u16, h: u16) -> Vec<u8> {
+        let mut v = b"RIFF".to_vec();
+        v.extend_from_slice(&[0u8; 4]); // file size (ignored)
+        v.extend_from_slice(b"WEBP");
+        v.extend_from_slice(b"VP8 ");
+        v.extend_from_slice(&[0u8; 10]); // chunk size + VP8 bitstream header bytes 0-9
+        // bytes 26-27: width & 0x3FFF, bytes 28-29: height & 0x3FFF
+        v.extend_from_slice(&(w & 0x3FFF).to_le_bytes());
+        v.extend_from_slice(&(h & 0x3FFF).to_le_bytes());
+        v
+    }
+
+    /// Builds a minimal WebP VP8L (lossless) buffer.
+    fn webp_vp8l_bytes(w: u32, h: u32) -> Vec<u8> {
+        // VP8L stores (width-1) in bits 0-13 and (height-1) in bits 14-27 of a
+        // little-endian u32 starting at byte 21.  The outer RIFF check requires
+        // data.len() >= 30, so pad the buffer to 30 bytes.
+        let bits: u32 = ((w - 1) & 0x3FFF) | (((h - 1) & 0x3FFF) << 14);
+        let mut v = b"RIFF".to_vec();
+        v.extend_from_slice(&[0u8; 4]); // file size (bytes 4-7)
+        v.extend_from_slice(b"WEBP"); // bytes 8-11
+        v.extend_from_slice(b"VP8L"); // bytes 12-15
+        v.extend_from_slice(&[0u8; 4]); // chunk size (bytes 16-19)
+        v.push(0x2F); // VP8L signature byte (byte 20)
+        v.extend_from_slice(&bits.to_le_bytes()); // bits at bytes 21-24
+        v.extend_from_slice(&[0u8; 5]); // padding to reach 30 bytes (bytes 25-29)
+        v
+    }
+
+    /// Builds a minimal WebP VP8X buffer.
+    fn webp_vp8x_bytes(w: u32, h: u32) -> Vec<u8> {
+        // VP8X stores canvas_width_minus_one as 3 LE bytes at offset 24,
+        // canvas_height_minus_one as 3 LE bytes at offset 27.
+        let w_bytes = (w - 1).to_le_bytes();
+        let h_bytes = (h - 1).to_le_bytes();
+        let mut v = b"RIFF".to_vec();
+        v.extend_from_slice(&[0u8; 4]); // file size (bytes 4-7)
+        v.extend_from_slice(b"WEBP"); // bytes 8-11
+        v.extend_from_slice(b"VP8X"); // bytes 12-15
+        v.extend_from_slice(&[0u8; 4]); // chunk size (bytes 16-19)
+        v.extend_from_slice(&[0u8; 4]); // flags (bytes 20-23)
+        v.extend_from_slice(&w_bytes[..3]); // canvas_width_minus_one (bytes 24-26)
+        v.extend_from_slice(&h_bytes[..3]); // canvas_height_minus_one (bytes 27-29)
+        v
+    }
+
+    /// Builds a minimal JPEG with a SOF0 marker for the given dimensions.
+    fn jpeg_sof0_bytes(w: u16, h: u16) -> Vec<u8> {
+        let mut v = vec![0xFF, 0xD8]; // SOI
+        // APP0 marker (skipped by the scanner)
+        v.extend_from_slice(&[0xFF, 0xE0]); // APP0
+        v.extend_from_slice(&[0x00, 0x10]); // length = 16 (including these 2 bytes)
+        v.extend_from_slice(&[0u8; 14]); // 14 bytes of APP0 payload
+        // SOF0 marker
+        v.extend_from_slice(&[0xFF, 0xC0]); // SOF0
+        v.extend_from_slice(&[0x00, 0x11]); // length = 17
+        v.push(0x08); // precision
+        v.extend_from_slice(&h.to_be_bytes()); // height at SOF0+5
+        v.extend_from_slice(&w.to_be_bytes()); // width at SOF0+7
+        v
+    }
+
+    // ── image_dimensions tests ────────────────────────────────────────────────
+
+    #[test]
+    fn image_dimensions_png() {
+        assert_eq!(image_dimensions(&png_bytes(800, 600)), Some((800, 600)));
+    }
+
+    #[test]
+    fn image_dimensions_gif89a() {
+        assert_eq!(image_dimensions(&gif89a_bytes(320, 240)), Some((320, 240)));
+    }
+
+    #[test]
+    fn image_dimensions_webp_vp8_lossy() {
+        assert_eq!(image_dimensions(&webp_vp8_bytes(1024, 768)), Some((1024, 768)));
+    }
+
+    #[test]
+    fn image_dimensions_webp_vp8l_lossless() {
+        assert_eq!(image_dimensions(&webp_vp8l_bytes(640, 480)), Some((640, 480)));
+    }
+
+    #[test]
+    fn image_dimensions_webp_vp8x() {
+        assert_eq!(image_dimensions(&webp_vp8x_bytes(1920, 1080)), Some((1920, 1080)));
+    }
+
+    #[test]
+    fn image_dimensions_jpeg_sof0() {
+        assert_eq!(image_dimensions(&jpeg_sof0_bytes(1280, 720)), Some((1280, 720)));
+    }
+
+    #[test]
+    fn image_dimensions_unrecognized() {
+        assert_eq!(image_dimensions(b"not an image at all"), None);
+    }
+
+    #[test]
+    fn image_dimensions_truncated() {
+        // PNG magic bytes but only 8 bytes total (need >= 24)
+        let truncated = vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        assert_eq!(image_dimensions(&truncated), None);
+    }
+
+    // ── provider_book_to_result helpers ──────────────────────────────────────
+
+    fn make_provider_book(
+        title: Option<&str>,
+        authors: &[&str],
+        language: Option<&str>,
+        provider_cover: Option<Vec<u8>>,
+        metadata_cover: Option<Vec<u8>>,
+    ) -> ProviderBook {
+        ProviderBook {
+            metadata: ExtractedMetadata {
+                title: title.map(String::from),
+                authors: if authors.is_empty() {
+                    None
+                } else {
+                    Some(
+                        authors
+                            .iter()
+                            .enumerate()
+                            .map(|(i, name)| bb_core::pipeline::ExtractedAuthor {
+                                name: name.to_string(),
+                                role: None,
+                                sort_order: i as i32,
+                            })
+                            .collect(),
+                    )
+                },
+                language: language.map(String::from),
+                cover_bytes: metadata_cover,
+                ..Default::default()
+            },
+            cover_bytes: provider_cover,
+            source: ImportSource::Hardcover,
+        }
+    }
+
+    // ── provider_book_to_result tests ─────────────────────────────────────────
+
+    #[test]
+    fn provider_book_to_result_maps_fields() {
+        let pb = make_provider_book(Some("Dune"), &["Frank Herbert"], Some("en"), None, None);
+        let result = provider_book_to_result(&pb);
+        assert_eq!(result.title, "Dune");
+        assert_eq!(result.authors, vec!["Frank Herbert"]);
+        assert_eq!(result.language, "en");
+        assert!(result.cover_thumbnail.is_none());
+        assert!(result.cover_dimensions.is_none());
+    }
+
+    #[test]
+    fn provider_book_to_result_provider_cover_takes_priority() {
+        // Provider cover (PNG 10×20) and metadata cover (PNG 30×40) both present.
+        // Provider cover must win.
+        let provider_cover = png_bytes(10, 20);
+        let metadata_cover = png_bytes(30, 40);
+        let pb = make_provider_book(Some("Foundation"), &[], None, Some(provider_cover), Some(metadata_cover));
+        let result = provider_book_to_result(&pb);
+        // cover_dimensions should reflect the provider cover (10×20), not metadata
+        // (30×40)
+        assert_eq!(result.cover_dimensions, Some((10, 20)));
+        assert!(result.cover_thumbnail.is_some());
+    }
+
+    #[test]
+    fn provider_book_to_result_no_cover() {
+        let pb = make_provider_book(Some("1984"), &[], None, None, None);
+        let result = provider_book_to_result(&pb);
+        assert!(result.cover_thumbnail.is_none());
+        assert!(result.cover_dimensions.is_none());
+    }
+}
