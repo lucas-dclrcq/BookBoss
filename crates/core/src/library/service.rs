@@ -1385,4 +1385,114 @@ mod tests {
 
         svc.replace_cover(BookToken::new(book_id), vec![0u8; 4]).await.unwrap();
     }
+
+    // ─── search_books ─────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn search_books_rejects_user_scoped_filter() {
+        use crate::filter::{BookFilter, FilterReadStatus, FilterRule, SetOp};
+        let svc = create_service(
+            MockBookRepository::new(),
+            MockAuthorRepository::new(),
+            MockImportJobRepository::new(),
+            MockLibraryRepository::new(),
+            MockFileStoreService::new(),
+        );
+        let filter = BookFilter::Rule(FilterRule::ReadStatus {
+            op: SetOp::IncludesAny,
+            values: vec![FilterReadStatus::Active],
+        });
+        let result = svc.search_books(&filter, None, None).await;
+        assert!(matches!(result, Err(Error::Validation(_))));
+    }
+
+    // ─── approve_book ─────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn approve_book_rejects_non_needs_review_status() {
+        use crate::library::BookEdit;
+        let token = ImportJobToken::new(42);
+        let mut import_mock = MockImportJobRepository::new();
+        import_mock.expect_find_by_token().returning(move |_, _| {
+            let job = ImportJob {
+                id: 42,
+                version: 1,
+                token: ImportJobToken::new(42),
+                file_path: "/watch/test.epub".to_owned(),
+                file_hash: "abc".to_owned(),
+                file_format: crate::book::FileFormat::Epub,
+                detected_at: chrono::Utc::now(),
+                status: ImportStatus::Approved,
+                candidate_book_id: None,
+                metadata_source: None,
+                error_message: None,
+                reviewed_by: None,
+                reviewed_at: None,
+                created_at: chrono::Utc::now(),
+                updated_at: chrono::Utc::now(),
+            };
+            Box::pin(async move { Ok(Some(job)) })
+        });
+        let svc = create_service(
+            MockBookRepository::new(),
+            MockAuthorRepository::new(),
+            import_mock,
+            MockLibraryRepository::new(),
+            MockFileStoreService::new(),
+        );
+        let edit = BookEdit {
+            title: "Test".to_owned(),
+            description: None,
+            published_date: None,
+            language: None,
+            series_name: None,
+            series_number: None,
+            publisher_name: None,
+            page_count: None,
+            authors: vec![],
+            identifiers: vec![],
+            use_fetched_cover: false,
+            genres: vec![],
+            tags: vec![],
+        };
+        let result = svc.approve_book(token, 1, edit, std::path::Path::new("/tmp")).await;
+        assert!(matches!(result, Err(Error::Validation(_))));
+    }
+
+    // ─── reject_book ──────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn reject_book_rejects_non_needs_review_status() {
+        let token = ImportJobToken::new(43);
+        let mut import_mock = MockImportJobRepository::new();
+        import_mock.expect_find_by_token().returning(move |_, _| {
+            let job = ImportJob {
+                id: 43,
+                version: 1,
+                token: ImportJobToken::new(43),
+                file_path: "/watch/test.epub".to_owned(),
+                file_hash: "abc".to_owned(),
+                file_format: crate::book::FileFormat::Epub,
+                detected_at: chrono::Utc::now(),
+                status: ImportStatus::Approved,
+                candidate_book_id: None,
+                metadata_source: None,
+                error_message: None,
+                reviewed_by: None,
+                reviewed_at: None,
+                created_at: chrono::Utc::now(),
+                updated_at: chrono::Utc::now(),
+            };
+            Box::pin(async move { Ok(Some(job)) })
+        });
+        let svc = create_service(
+            MockBookRepository::new(),
+            MockAuthorRepository::new(),
+            import_mock,
+            MockLibraryRepository::new(),
+            MockFileStoreService::new(),
+        );
+        let result = svc.reject_book(token).await;
+        assert!(matches!(result, Err(Error::Validation(_))));
+    }
 }
