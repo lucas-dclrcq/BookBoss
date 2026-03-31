@@ -550,4 +550,102 @@ mod tests {
         let output = super::normalize_to_jpeg(&input);
         assert_eq!(output, input, "corrupt PNG should be returned unchanged");
     }
+
+    #[tokio::test]
+    async fn source_file_exists_returns_true_for_existing_file() {
+        let dir = tempdir().unwrap();
+        let store = test_store(dir.path().to_path_buf());
+
+        let file = dir.path().join("book.epub");
+        tokio::fs::write(&file, b"content").await.unwrap();
+
+        assert!(store.source_file_exists(&file).await);
+    }
+
+    #[tokio::test]
+    async fn source_file_exists_returns_false_for_missing_file() {
+        let dir = tempdir().unwrap();
+        let store = test_store(dir.path().to_path_buf());
+
+        assert!(!store.source_file_exists(&dir.path().join("missing.epub")).await);
+    }
+
+    #[tokio::test]
+    async fn delete_original_file_removes_file_and_is_idempotent() {
+        let dir = tempdir().unwrap();
+        let store = test_store(dir.path().to_path_buf());
+
+        // Create a file in the Originals directory
+        let originals = dir.path().join("Originals");
+        tokio::fs::create_dir_all(&originals).await.unwrap();
+        tokio::fs::write(originals.join("book.epub"), b"content").await.unwrap();
+
+        store.delete_original_file("Originals/book.epub").await.unwrap();
+        assert!(!originals.join("book.epub").exists(), "file should have been deleted");
+
+        // Second call on a missing file must be a no-op (NotFound → Ok(()))
+        store.delete_original_file("Originals/book.epub").await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn store_original_file_idempotent_same_content() {
+        let dir = tempdir().unwrap();
+        let store = test_store(dir.path().to_path_buf());
+
+        let source = dir.path().join("book.epub");
+        tokio::fs::write(&source, b"epub content").await.unwrap();
+
+        // Compute the real hash so the idempotency branch is exercised.
+        let real_hash = bb_utils::hash::hash_file(&source).await.unwrap();
+
+        // First store — no collision, copies to Originals/book.epub.
+        let path1 = store.store_original_file(&real_hash, "book.epub", &source).await.unwrap();
+        assert_eq!(path1, "Originals/book.epub");
+
+        // Second store with same hash — should return same path without creating a
+        // duplicate.
+        let path2 = store.store_original_file(&real_hash, "book.epub", &source).await.unwrap();
+        assert_eq!(path2, "Originals/book.epub");
+
+        // Exactly one file should exist in Originals/
+        let originals = dir.path().join("Originals");
+        let mut entries = tokio::fs::read_dir(&originals).await.unwrap();
+        let mut count = 0;
+        while entries.next_entry().await.unwrap().is_some() {
+            count += 1;
+        }
+        assert_eq!(count, 1, "should not have created a duplicate");
+    }
+
+    #[tokio::test]
+    async fn store_original_file_collision_different_content() {
+        let dir = tempdir().unwrap();
+        let store = test_store(dir.path().to_path_buf());
+
+        // Store file A — no collision yet.
+        let source_a = dir.path().join("book-a.epub");
+        tokio::fs::write(&source_a, b"content-A").await.unwrap();
+        let hash_a = bb_utils::hash::hash_file(&source_a).await.unwrap();
+        store.store_original_file(&hash_a, "book.epub", &source_a).await.unwrap();
+
+        // Store file B under the same desired filename "book.epub" — hash differs →
+        // collision path.
+        let source_b = dir.path().join("book-b.epub");
+        tokio::fs::write(&source_b, b"content-B-different").await.unwrap();
+        let hash_b = bb_utils::hash::hash_file(&source_b).await.unwrap();
+        let path_b = store.store_original_file(&hash_b, "book.epub", &source_b).await.unwrap();
+
+        // The returned path should include the first 8 chars of hash_b as a suffix.
+        let hash_prefix = &hash_b[..8];
+        assert!(
+            path_b.contains(hash_prefix),
+            "collision path {path_b:?} should contain hash prefix {hash_prefix:?}"
+        );
+        assert!(path_b.ends_with(".epub"), "should keep the .epub extension");
+        assert_ne!(path_b, "Originals/book.epub", "should not overwrite the original");
+
+        // Both files should now exist in Originals/
+        assert!(store.resolve("Originals/book.epub").exists(), "original file should still exist");
+        assert!(store.resolve(&path_b).exists(), "collision file should exist at {path_b:?}");
+    }
 }
