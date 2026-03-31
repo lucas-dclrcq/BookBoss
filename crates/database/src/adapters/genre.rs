@@ -6,12 +6,7 @@ use bb_core::{
     repository::Transaction,
 };
 use chrono::Utc;
-use sea_orm::{
-    ActiveModelTrait,
-    ActiveValue::Set,
-    ColumnTrait, EntityTrait, ExprTrait, QueryFilter, QueryOrder, QuerySelect,
-    sea_query::{BinOper, Expr, Func},
-};
+use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 
 use crate::{
     entities::{books, genres, prelude},
@@ -111,7 +106,7 @@ impl GenreRepository for GenreRepositoryAdapter {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
         Ok(prelude::Genres::find()
-            .filter(Expr::expr(Func::lower(Expr::col(genres::Column::Name))).binary(BinOper::Equal, Expr::value(name.to_lowercase())))
+            .filter(super::lower_name_eq(genres::Column::Name, name))
             .one(transaction)
             .await
             .map_err(handle_dberr)?
@@ -131,9 +126,6 @@ impl GenreRepository for GenreRepositoryAdapter {
     }
 
     async fn list_genres(&self, transaction: &dyn Transaction, start_id: Option<GenreId>, page_size: Option<u64>) -> Result<Vec<Genre>, Error> {
-        const DEFAULT_PAGE_SIZE: u64 = 50;
-        const MAX_PAGE_SIZE: u64 = 50;
-
         if let Some(page_size) = page_size {
             if page_size < 1 {
                 return Err(Error::InvalidPageSize(page_size));
@@ -148,7 +140,7 @@ impl GenreRepository for GenreRepositoryAdapter {
             query = query.filter(genres::Column::Id.gte(start_id as i64));
         }
 
-        let page_size = Ord::min(page_size.unwrap_or(DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE);
+        let page_size = Ord::min(page_size.unwrap_or(super::DEFAULT_PAGE_SIZE), super::MAX_PAGE_SIZE);
         query = query.limit(page_size);
 
         let rows = query.all(transaction).await.map_err(handle_dberr)?;

@@ -251,9 +251,6 @@ impl ShelfRepository for ShelfRepositoryAdapter {
         offset: Option<u64>,
         page_size: Option<u64>,
     ) -> Result<Vec<BookShelf>, Error> {
-        const DEFAULT_PAGE_SIZE: u64 = 50;
-        const MAX_PAGE_SIZE: u64 = 50;
-
         if let Some(page_size) = page_size {
             if page_size < 1 {
                 return Err(Error::InvalidPageSize(page_size));
@@ -270,7 +267,7 @@ impl ShelfRepository for ShelfRepositoryAdapter {
             query = query.offset(offset);
         }
 
-        let page_size = page_size.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE);
+        let page_size = page_size.unwrap_or(super::DEFAULT_PAGE_SIZE).min(super::MAX_PAGE_SIZE);
         query = query.limit(page_size);
 
         let rows = query.all(transaction).await.map_err(handle_dberr)?;

@@ -4,12 +4,7 @@ use bb_core::{
     repository::Transaction,
 };
 use chrono::Utc;
-use sea_orm::{
-    ActiveModelTrait,
-    ActiveValue::Set,
-    ColumnTrait, EntityTrait, ExprTrait, ModelTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
-    sea_query::{BinOper, Expr, Func},
-};
+use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, ModelTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect};
 
 use crate::{
     entities::{books, prelude, publishers},
@@ -109,7 +104,7 @@ impl PublisherRepository for PublisherRepositoryAdapter {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
         Ok(prelude::Publishers::find()
-            .filter(Expr::expr(Func::lower(Expr::col(publishers::Column::Name))).binary(BinOper::Equal, Expr::value(name.to_lowercase())))
+            .filter(super::lower_name_eq(publishers::Column::Name, name))
             .one(transaction)
             .await
             .map_err(handle_dberr)?
@@ -117,9 +112,6 @@ impl PublisherRepository for PublisherRepositoryAdapter {
     }
 
     async fn list_publishers(&self, transaction: &dyn Transaction, start_id: Option<PublisherId>, page_size: Option<u64>) -> Result<Vec<Publisher>, Error> {
-        const DEFAULT_PAGE_SIZE: u64 = 50;
-        const MAX_PAGE_SIZE: u64 = 50;
-
         if let Some(page_size) = page_size {
             if page_size < 1 {
                 return Err(Error::InvalidPageSize(page_size));
@@ -134,7 +126,7 @@ impl PublisherRepository for PublisherRepositoryAdapter {
             query = query.filter(publishers::Column::Id.gte(start_id as i64));
         }
 
-        let page_size = Ord::min(page_size.unwrap_or(DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE);
+        let page_size = Ord::min(page_size.unwrap_or(super::DEFAULT_PAGE_SIZE), super::MAX_PAGE_SIZE);
         query = query.limit(page_size);
 
         let rows = query.all(transaction).await.map_err(handle_dberr)?;

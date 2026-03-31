@@ -137,9 +137,6 @@ impl UserRepository for UserRepositoryAdapter {
     }
 
     async fn list_users(&self, transaction: &dyn Transaction, start_id: Option<UserId>, page_size: Option<u64>) -> Result<Vec<User>, Error> {
-        const DEFAULT_PAGE_SIZE: u64 = 50;
-        const MAX_PAGE_SIZE: u64 = 50;
-
         if let Some(page_size) = page_size {
             if page_size < 1 {
                 return Err(Error::InvalidPageSize(page_size));
@@ -154,7 +151,7 @@ impl UserRepository for UserRepositoryAdapter {
             query = query.filter(users::Column::Id.gte(start_id as i64));
         }
 
-        let page_size = page_size.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE);
+        let page_size = page_size.unwrap_or(super::DEFAULT_PAGE_SIZE).min(super::MAX_PAGE_SIZE);
         query = query.limit(page_size);
 
         let users = query.all(transaction).await.map_err(handle_dberr)?;
