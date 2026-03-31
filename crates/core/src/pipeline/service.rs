@@ -608,3 +608,126 @@ impl PipelineService for PipelineServiceImpl {
         self.metadata_service.list_provider_names()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{cover_min_side, image_dimensions, provider_priority};
+
+    // ── image_dimensions: PNG ─────────────────────────────────────────────────
+
+    #[test]
+    fn image_dimensions_png() {
+        // PNG signature (8 bytes) + fake IHDR length/type (8 bytes) + width (4 BE) +
+        // height (4 BE)
+        let mut data = vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]; // PNG sig
+        data.extend_from_slice(&[0x00, 0x00, 0x00, 0x0D]); // IHDR length (unused by parser)
+        data.extend_from_slice(b"IHDR"); // chunk type (unused by parser)
+        data.extend_from_slice(&100u32.to_be_bytes()); // width = 100
+        data.extend_from_slice(&200u32.to_be_bytes()); // height = 200
+        assert_eq!(image_dimensions(&data), Some((100, 200)));
+    }
+
+    #[test]
+    fn image_dimensions_truncated_png_returns_none() {
+        // PNG magic but only 10 bytes — not enough to read width/height at offset 16–23
+        let data = vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00];
+        assert_eq!(image_dimensions(&data), None);
+    }
+
+    // ── image_dimensions: GIF ─────────────────────────────────────────────────
+
+    #[test]
+    fn image_dimensions_gif89a() {
+        let mut data = b"GIF89a".to_vec();
+        data.extend_from_slice(&80u16.to_le_bytes()); // width = 80
+        data.extend_from_slice(&60u16.to_le_bytes()); // height = 60
+        assert_eq!(image_dimensions(&data), Some((80, 60)));
+    }
+
+    // ── image_dimensions: WebP ────────────────────────────────────────────────
+
+    #[test]
+    fn image_dimensions_webp_vp8_lossy() {
+        // RIFF....WEBPVP8 <4-byte chunk-size> <bitstream-start: 3 bytes> <w+h 2 bytes
+        // each>
+        let mut data = vec![0u8; 30];
+        data[0..4].copy_from_slice(b"RIFF");
+        data[8..12].copy_from_slice(b"WEBP");
+        data[12..16].copy_from_slice(b"VP8 ");
+        // Width at [26..28] LE, mask 0x3FFF; height at [28..30] LE, mask 0x3FFF
+        let w: u16 = 0x0140; // 320
+        let h: u16 = 0x00F0; // 240
+        data[26..28].copy_from_slice(&w.to_le_bytes());
+        data[28..30].copy_from_slice(&h.to_le_bytes());
+        assert_eq!(image_dimensions(&data), Some((320, 240)));
+    }
+
+    #[test]
+    fn image_dimensions_webp_vp8l_lossless() {
+        // Outer WebP guard requires len >= 30; VP8L parser reads at offset 21..25
+        let mut data = vec![0u8; 30];
+        data[0..4].copy_from_slice(b"RIFF");
+        data[8..12].copy_from_slice(b"WEBP");
+        data[12..16].copy_from_slice(b"VP8L");
+        // Bits at [21..25]: width-1 in low 14 bits, height-1 in next 14 bits
+        let w = 100u32;
+        let h = 50u32;
+        let bits: u32 = (w - 1) | ((h - 1) << 14);
+        data[21..25].copy_from_slice(&bits.to_le_bytes());
+        assert_eq!(image_dimensions(&data), Some((w, h)));
+    }
+
+    // ── image_dimensions: JPEG ────────────────────────────────────────────────
+
+    #[test]
+    fn image_dimensions_jpeg_sof0() {
+        // Minimal JPEG: SOI marker + SOF0 segment
+        let mut data = vec![
+            0xFF, 0xD8, // SOI
+            0xFF, 0xC0, // SOF0 marker
+            0x00, 0x11, // segment length = 17 (unused by parser after marker check)
+            0x08, // precision (unused)
+        ];
+        data.extend_from_slice(&480u16.to_be_bytes()); // height at offset [i+5..i+7]
+        data.extend_from_slice(&640u16.to_be_bytes()); // width  at offset [i+7..i+9]
+        assert_eq!(image_dimensions(&data), Some((640, 480)));
+    }
+
+    // ── image_dimensions: edge cases ─────────────────────────────────────────
+
+    #[test]
+    fn image_dimensions_unrecognized_format_returns_none() {
+        assert_eq!(image_dimensions(b"this is not an image"), None);
+    }
+
+    // ── provider_priority ────────────────────────────────────────────────────
+
+    #[test]
+    fn provider_priority_known_names() {
+        assert_eq!(provider_priority("Hardcover"), 0);
+        assert_eq!(provider_priority("Google Books"), 1);
+        assert_eq!(provider_priority("Open Library"), 2);
+    }
+
+    #[test]
+    fn provider_priority_unknown_name_returns_max() {
+        assert_eq!(provider_priority("Some Unknown Provider"), u8::MAX);
+    }
+
+    // ── cover_min_side ───────────────────────────────────────────────────────
+
+    #[test]
+    fn cover_min_side_returns_smaller_dimension() {
+        // Use a PNG header for a 100×200 image
+        let mut data = vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        data.extend_from_slice(&[0x00; 8]); // padding to reach offset 16
+        data.extend_from_slice(&100u32.to_be_bytes()); // width = 100
+        data.extend_from_slice(&200u32.to_be_bytes()); // height = 200
+        assert_eq!(cover_min_side(&data), 100);
+    }
+
+    #[test]
+    fn cover_min_side_unknown_format_returns_zero() {
+        assert_eq!(cover_min_side(b"garbage"), 0);
+    }
+}
