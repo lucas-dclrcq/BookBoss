@@ -228,7 +228,7 @@ impl DeviceService for DeviceServiceImpl {
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
             if device.owner_id != user_id {
-                return Err(Error::RepositoryError(RepositoryError::NotFound));
+                return Err(Error::Validation("only the owner may update a device".to_string()));
             }
 
             let name_changed = device.name != name;
@@ -259,7 +259,7 @@ impl DeviceService for DeviceServiceImpl {
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
             if device.owner_id != user_id {
-                return Err(Error::RepositoryError(RepositoryError::NotFound));
+                return Err(Error::Validation("only the owner may delete a device".to_string()));
             }
 
             if delete_companion_shelf {
@@ -856,7 +856,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_update_device_wrong_owner_returns_not_found() {
+    async fn test_update_device_wrong_owner_returns_validation_error() {
         let device = fake_device(1);
         let token = device.token;
         let mut device_repo = MockDeviceRepository::new();
@@ -868,7 +868,7 @@ mod tests {
 
         let result = svc.update_device(token, "New Name".to_string(), OnRemovalAction::Nothing, 2).await;
 
-        assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::NotFound))));
+        assert!(matches!(result, Err(Error::Validation(_))));
     }
 
     // ─── delete_device ────────────────────────────────────────────────────────
@@ -916,7 +916,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_delete_device_wrong_owner_returns_not_found() {
+    async fn test_delete_device_wrong_owner_returns_validation_error() {
         let device = fake_device(1);
         let token = device.token;
         let mut device_repo = MockDeviceRepository::new();
@@ -928,7 +928,7 @@ mod tests {
 
         let result = svc.delete_device(token, false, 2).await;
 
-        assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::NotFound))));
+        assert!(matches!(result, Err(Error::Validation(_))));
     }
 
     // ─── default_device_name ──────────────────────────────────────────────────
