@@ -59,6 +59,13 @@ fn storage_unavailable(e: impl ToString) -> Error {
     Error::StorageUnavailable(e.to_string())
 }
 
+/// Creates all directories in `path`. Maps errors to
+/// [`Error::StorageUnavailable`] since a failure here usually indicates a
+/// missing or unmounted storage volume.
+async fn ensure_dir(path: &Path) -> Result<(), Error> {
+    tokio::fs::create_dir_all(path).await.map_err(storage_unavailable)
+}
+
 /// Converts any recognized image format to JPEG, resizing to fit within
 /// 1024×1536 if needed, and re-encodes at quality 85.
 ///
@@ -84,7 +91,8 @@ fn normalize_to_jpeg(data: &[u8]) -> Vec<u8> {
     };
 
     let mut out = Vec::new();
-    if JpegEncoder::new_with_quality(&mut out, QUALITY).encode_image(&img).is_err() {
+    if let Err(e) = JpegEncoder::new_with_quality(&mut out, QUALITY).encode_image(&img) {
+        tracing::warn!(error = %e, "JPEG encoding failed during cover normalization; storing original bytes");
         return data.to_vec();
     }
     out
@@ -110,7 +118,7 @@ impl FileStoreService for LocalFileStore {
 
     async fn store_original_file(&self, source_hash: &str, original_filename: &str, source: &Path) -> Result<String, Error> {
         let originals_dir = self.originals_dir();
-        tokio::fs::create_dir_all(&originals_dir).await.map_err(storage_unavailable)?;
+        ensure_dir(&originals_dir).await?;
 
         let preferred = originals_dir.join(original_filename);
 
@@ -144,7 +152,7 @@ impl FileStoreService for LocalFileStore {
 
     async fn store_book_file(&self, token: BookToken, slug: &str, format: FileFormat, source: &Path) -> Result<String, Error> {
         let book_dir = self.book_dir(token);
-        tokio::fs::create_dir_all(&book_dir).await.map_err(storage_unavailable)?;
+        ensure_dir(&book_dir).await?;
         let dest = self.book_file_path(token, slug, &format);
         // Try rename first (fast, same filesystem)
         if tokio::fs::rename(source, &dest).await.is_err() {
@@ -157,7 +165,7 @@ impl FileStoreService for LocalFileStore {
 
     async fn store_cover(&self, token: BookToken, filename: &str, data: &[u8]) -> Result<(), Error> {
         let book_dir = self.book_dir(token);
-        tokio::fs::create_dir_all(&book_dir).await.map_err(storage_unavailable)?;
+        ensure_dir(&book_dir).await?;
         let cover_path = self.cover_path(token, filename);
 
         // Normalize all recognized image formats to JPEG: resize to fit within
@@ -193,7 +201,7 @@ impl FileStoreService for LocalFileStore {
     async fn copy_to_trash(&self, token: BookToken, file_name: &str) -> Result<(), Error> {
         let source = self.book_dir(token).join(file_name);
         let trash_dir = self.trash_dir();
-        tokio::fs::create_dir_all(&trash_dir).await.map_err(storage_unavailable)?;
+        ensure_dir(&trash_dir).await?;
         let dest = trash_dir.join(file_name);
         tokio::fs::copy(&source, &dest).await.map_err(io_err)?;
         Ok(())
@@ -201,7 +209,7 @@ impl FileStoreService for LocalFileStore {
 
     async fn copy_to_bookdrop_trash(&self, source: &Path) -> Result<(), Error> {
         let trash_dir = self.bookdrop_trash_dir();
-        tokio::fs::create_dir_all(&trash_dir).await.map_err(storage_unavailable)?;
+        ensure_dir(&trash_dir).await?;
         let file_name = source.file_name().ok_or_else(|| io_err("source path has no filename"))?;
         let dest = trash_dir.join(file_name);
         tokio::fs::copy(source, &dest).await.map_err(io_err)?;
