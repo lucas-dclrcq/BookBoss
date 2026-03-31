@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use dioxus::prelude::*;
 #[cfg(feature = "server")]
 use {
-    crate::routes::server_helpers::{authenticated_user, to_server_err},
+    crate::routes::server_helpers::{authenticated_user, require_capability, to_server_err},
     crate::server::{AuthSession, AuthUser, BackendSessionPool},
     axum::http::Method,
     axum_session_auth::{Auth, Rights},
@@ -116,14 +116,7 @@ async fn bulk_set_reading_status(tokens: Vec<String>, status: String) -> Result<
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 async fn bulk_edit_metadata(tokens: Vec<String>, fields: BulkEditFields) -> Result<u32, ServerFnError> {
-    let current_user = auth_session.current_user.clone().unwrap_or_default();
-    if !Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::PUT], true)
-        .requires(Rights::any([Rights::permission(Capability::EditBook.as_str())]))
-        .validate(&current_user, &Method::PUT, None)
-        .await
-    {
-        return Err(ServerFnError::new("Forbidden"));
-    }
+    require_capability(&auth_session, Capability::EditBook, Method::PUT).await?;
 
     let temp_dir = std::env::temp_dir();
 
@@ -259,14 +252,7 @@ async fn bulk_edit_single_book(
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 async fn bulk_delete_books(tokens: Vec<String>) -> Result<u32, ServerFnError> {
-    let current_user = auth_session.current_user.clone().unwrap_or_default();
-    if !Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::POST], true)
-        .requires(Rights::any([Rights::permission(Capability::DeleteBook.as_str())]))
-        .validate(&current_user, &Method::POST, None)
-        .await
-    {
-        return Err(ServerFnError::new("Forbidden"));
-    }
+    require_capability(&auth_session, Capability::DeleteBook, Method::POST).await?;
 
     let mut deleted = 0u32;
     for token_str in &tokens {

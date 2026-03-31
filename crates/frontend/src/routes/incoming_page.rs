@@ -16,44 +16,28 @@ pub(crate) struct IncomingBookSummary {
 
 #[cfg(feature = "server")]
 use {
-    crate::routes::server_helpers::to_server_err,
-    crate::server::{AuthSession, AuthUser, BackendSessionPool},
+    crate::routes::server_helpers::{require_capability, to_server_err},
+    crate::server::AuthSession,
     axum::http::Method,
-    axum_session_auth::{Auth, Rights},
     bb_core::{
         CoreServices,
         book::{AuthorToken, BookToken},
         import::ImportJobToken,
         types::Capability,
-        user::UserId,
     },
     std::sync::Arc,
 };
 
 #[post("/api/v1/incoming/scan_on_enter", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
 async fn scan_on_enter() -> Result<(), ServerFnError> {
-    let current_user = auth_session.current_user.clone().unwrap_or_default();
-    if !Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::POST], true)
-        .requires(Rights::any([Rights::permission(Capability::ApproveImports.as_str())]))
-        .validate(&current_user, &Method::POST, None)
-        .await
-    {
-        return Err(ServerFnError::new("Forbidden"));
-    }
+    require_capability(&auth_session, Capability::ApproveImports, Method::POST).await?;
     core_services.import_job_service.trigger_scan();
     Ok(())
 }
 
 #[get("/api/v1/incoming", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
 async fn list_incoming_books() -> Result<Vec<IncomingBookSummary>, ServerFnError> {
-    let current_user = auth_session.current_user.clone().unwrap_or_default();
-    if !Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::GET], true)
-        .requires(Rights::any([Rights::permission(Capability::ApproveImports.as_str())]))
-        .validate(&current_user, &Method::GET, None)
-        .await
-    {
-        return Err(ServerFnError::new("Forbidden"));
-    }
+    require_capability(&auth_session, Capability::ApproveImports, Method::GET).await?;
 
     let import_service = &core_services.import_job_service;
     let book_service = &core_services.book_service;
@@ -109,14 +93,7 @@ async fn list_incoming_books() -> Result<Vec<IncomingBookSummary>, ServerFnError
 
 #[put("/api/v1/incoming/reject", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
 async fn reject_incoming_book(job_token: String) -> Result<(), ServerFnError> {
-    let current_user = auth_session.current_user.clone().unwrap_or_default();
-    if !Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::PUT], true)
-        .requires(Rights::any([Rights::permission(Capability::ApproveImports.as_str())]))
-        .validate(&current_user, &Method::PUT, None)
-        .await
-    {
-        return Err(ServerFnError::new("Forbidden"));
-    }
+    require_capability(&auth_session, Capability::ApproveImports, Method::PUT).await?;
 
     let token: ImportJobToken = job_token.parse().map_err(|_| ServerFnError::new("Invalid token"))?;
 

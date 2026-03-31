@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 // ───────────────────────────────────────────────────────
 #[cfg(feature = "server")]
 use {
-    crate::routes::server_helpers::to_server_err,
+    crate::routes::server_helpers::{require_capability, to_server_err},
     crate::server::{AuthSession, AuthUser, BackendSessionPool},
     axum::http::Method,
     axum_session_auth::{Auth, Rights},
@@ -140,14 +140,7 @@ fn provider_book_to_result(pb: &ProviderBook) -> ProviderResult {
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 pub(super) async fn get_review_data(job_token: String) -> Result<BookReviewData, ServerFnError> {
-    let current_user = auth_session.current_user.clone().unwrap_or_default();
-    if !Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::POST], true)
-        .requires(Rights::any([Rights::permission(Capability::ApproveImports.as_str())]))
-        .validate(&current_user, &Method::POST, None)
-        .await
-    {
-        return Err(ServerFnError::new("Forbidden"));
-    }
+    require_capability(&auth_session, Capability::ApproveImports, Method::POST).await?;
 
     let token: ImportJobToken = job_token.parse().map_err(|_| ServerFnError::new("Invalid token"))?;
     let import_service = &core_services.import_job_service;
@@ -284,14 +277,7 @@ pub(super) async fn fetch_provider_metadata(
     authors: Vec<String>,
     identifiers: IdentifierMap,
 ) -> Result<Option<ProviderResult>, ServerFnError> {
-    let current_user = auth_session.current_user.clone().unwrap_or_default();
-    if !Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::POST], true)
-        .requires(Rights::any([Rights::permission(Capability::ApproveImports.as_str())]))
-        .validate(&current_user, &Method::POST, None)
-        .await
-    {
-        return Err(ServerFnError::new("Forbidden"));
-    }
+    require_capability(&auth_session, Capability::ApproveImports, Method::POST).await?;
 
     let token: ImportJobToken = job_token.parse().map_err(|_| ServerFnError::new("Invalid token"))?;
     let temp_dir = std::env::temp_dir();
@@ -326,14 +312,7 @@ pub(super) async fn fetch_provider_metadata(
     auth_session: axum::Extension<AuthSession>
 )]
 pub(super) async fn accept_incoming_provider_cover(job_token: String) -> Result<(), ServerFnError> {
-    let current_user = auth_session.current_user.clone().unwrap_or_default();
-    if !Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::PUT], true)
-        .requires(Rights::any([Rights::permission(Capability::ApproveImports.as_str())]))
-        .validate(&current_user, &Method::PUT, None)
-        .await
-    {
-        return Err(ServerFnError::new("Forbidden"));
-    }
+    require_capability(&auth_session, Capability::ApproveImports, Method::PUT).await?;
 
     let cover_dir = std::env::temp_dir().join("bookboss-covers");
     tokio::fs::create_dir_all(&cover_dir).await.map_err(to_server_err)?;
@@ -350,14 +329,8 @@ pub(super) async fn accept_incoming_provider_cover(job_token: String) -> Result<
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 pub(super) async fn approve_book(fields: BookEditFields) -> Result<(), ServerFnError> {
+    require_capability(&auth_session, Capability::ApproveImports, Method::PUT).await?;
     let current_user = auth_session.current_user.clone().unwrap_or_default();
-    if !Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::PUT], true)
-        .requires(Rights::any([Rights::permission(Capability::ApproveImports.as_str())]))
-        .validate(&current_user, &Method::PUT, None)
-        .await
-    {
-        return Err(ServerFnError::new("Forbidden"));
-    }
 
     let token: ImportJobToken = fields.job_token.parse().map_err(|_| ServerFnError::new("Invalid token"))?;
 
@@ -409,14 +382,7 @@ pub(super) async fn approve_book(fields: BookEditFields) -> Result<(), ServerFnE
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 pub(super) async fn reject_review_book(job_token: String) -> Result<(), ServerFnError> {
-    let current_user = auth_session.current_user.clone().unwrap_or_default();
-    if !Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::PUT], true)
-        .requires(Rights::any([Rights::permission(Capability::ApproveImports.as_str())]))
-        .validate(&current_user, &Method::PUT, None)
-        .await
-    {
-        return Err(ServerFnError::new("Forbidden"));
-    }
+    require_capability(&auth_session, Capability::ApproveImports, Method::PUT).await?;
 
     let token: ImportJobToken = job_token.parse().map_err(|_| ServerFnError::new("Invalid token"))?;
     let temp_dir = std::env::temp_dir();
@@ -440,14 +406,7 @@ pub(super) async fn reject_review_book(job_token: String) -> Result<(), ServerFn
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 pub(crate) async fn get_book_for_edit(book_token: String) -> Result<BookReviewData, ServerFnError> {
-    let current_user = auth_session.current_user.clone().unwrap_or_default();
-    if !Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::POST], true)
-        .requires(Rights::any([Rights::permission(Capability::EditBook.as_str())]))
-        .validate(&current_user, &Method::POST, None)
-        .await
-    {
-        return Err(ServerFnError::new("Forbidden"));
-    }
+    require_capability(&auth_session, Capability::EditBook, Method::POST).await?;
 
     let book_service = &core_services.book_service;
     let pipeline_service = &core_services.pipeline_service;
@@ -566,14 +525,7 @@ pub(super) async fn fetch_provider_for_edit(
     authors: Vec<String>,
     identifiers: IdentifierMap,
 ) -> Result<Option<ProviderResult>, ServerFnError> {
-    let current_user = auth_session.current_user.clone().unwrap_or_default();
-    if !Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::POST], true)
-        .requires(Rights::any([Rights::permission(Capability::EditBook.as_str())]))
-        .validate(&current_user, &Method::POST, None)
-        .await
-    {
-        return Err(ServerFnError::new("Forbidden"));
-    }
+    require_capability(&auth_session, Capability::EditBook, Method::POST).await?;
 
     let temp_dir = std::env::temp_dir();
 
@@ -607,14 +559,7 @@ pub(super) async fn fetch_provider_for_edit(
     auth_session: axum::Extension<AuthSession>
 )]
 pub(super) async fn accept_library_provider_cover(book_token: String) -> Result<(), ServerFnError> {
-    let current_user = auth_session.current_user.clone().unwrap_or_default();
-    if !Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::PUT], true)
-        .requires(Rights::any([Rights::permission(Capability::EditBook.as_str())]))
-        .validate(&current_user, &Method::PUT, None)
-        .await
-    {
-        return Err(ServerFnError::new("Forbidden"));
-    }
+    require_capability(&auth_session, Capability::EditBook, Method::PUT).await?;
 
     let cover_dir = std::env::temp_dir().join("bookboss-covers");
     tokio::fs::create_dir_all(&cover_dir).await.map_err(to_server_err)?;
@@ -631,14 +576,7 @@ pub(super) async fn accept_library_provider_cover(book_token: String) -> Result<
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 pub(super) async fn save_library_book(book_token: String, fields: BookEditFields) -> Result<(), ServerFnError> {
-    let current_user = auth_session.current_user.clone().unwrap_or_default();
-    if !Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::PUT], true)
-        .requires(Rights::any([Rights::permission(Capability::EditBook.as_str())]))
-        .validate(&current_user, &Method::PUT, None)
-        .await
-    {
-        return Err(ServerFnError::new("Forbidden"));
-    }
+    require_capability(&auth_session, Capability::EditBook, Method::PUT).await?;
 
     let token = BookToken::from_str(&book_token).map_err(|_| ServerFnError::new("Invalid book token"))?;
 
@@ -764,14 +702,7 @@ pub(crate) async fn get_picklist_data((): ()) -> Result<PicklistData, ServerFnEr
     auth_session: axum::Extension<AuthSession>
 )]
 pub(super) async fn stage_incoming_cover(job_token: String, data_base64: String) -> Result<(), ServerFnError> {
-    let current_user = auth_session.current_user.clone().unwrap_or_default();
-    if !Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::PUT], true)
-        .requires(Rights::any([Rights::permission(Capability::ApproveImports.as_str())]))
-        .validate(&current_user, &Method::PUT, None)
-        .await
-    {
-        return Err(ServerFnError::new("Forbidden"));
-    }
+    require_capability(&auth_session, Capability::ApproveImports, Method::PUT).await?;
 
     let cover_bytes = B64.decode(&data_base64).map_err(|_| ServerFnError::new("Invalid base64"))?;
     let cover_dir = std::env::temp_dir().join("bookboss-covers");
@@ -786,14 +717,7 @@ pub(super) async fn stage_incoming_cover(job_token: String, data_base64: String)
     auth_session: axum::Extension<AuthSession>
 )]
 pub(super) async fn stage_library_cover(book_token: String, data_base64: String) -> Result<(), ServerFnError> {
-    let current_user = auth_session.current_user.clone().unwrap_or_default();
-    if !Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::PUT], true)
-        .requires(Rights::any([Rights::permission(Capability::EditBook.as_str())]))
-        .validate(&current_user, &Method::PUT, None)
-        .await
-    {
-        return Err(ServerFnError::new("Forbidden"));
-    }
+    require_capability(&auth_session, Capability::EditBook, Method::PUT).await?;
 
     let cover_bytes = B64.decode(&data_base64).map_err(|_| ServerFnError::new("Invalid base64"))?;
     let cover_dir = std::env::temp_dir().join("bookboss-covers");

@@ -55,7 +55,7 @@ pub(crate) struct BookDetail {
 
 #[cfg(feature = "server")]
 use {
-    crate::routes::server_helpers::{authenticated_user, to_server_err},
+    crate::routes::server_helpers::{authenticated_user, require_capability, to_server_err},
     crate::server::{AuthSession, AuthUser, BackendSessionPool},
     axum::http::Method,
     axum_session_auth::{Auth, Rights},
@@ -227,15 +227,7 @@ async fn get_book(token: String) -> Result<BookDetail, ServerFnError> {
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 pub(crate) async fn delete_library_book(token: String) -> Result<(), ServerFnError> {
-    let current_user = auth_session.current_user.clone().unwrap_or_default();
-
-    if !Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::POST], true)
-        .requires(Rights::any([Rights::permission(Capability::DeleteBook.as_str())]))
-        .validate(&current_user, &Method::POST, None)
-        .await
-    {
-        return Err(ServerFnError::new("Not authorized"));
-    }
+    require_capability(&auth_session, Capability::DeleteBook, Method::POST).await?;
 
     let book_token = BookToken::from_str(&token).map_err(|_| ServerFnError::new("Invalid book token"))?;
 

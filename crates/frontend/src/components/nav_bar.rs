@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 #[cfg(feature = "server")]
 use {
-    crate::routes::server_helpers::to_server_err,
+    crate::routes::server_helpers::{require_capability, to_server_err},
     crate::server::{AuthSession, AuthUser, BackendSessionPool},
     axum::http::Method,
     axum_session_auth::{Auth, Rights},
@@ -13,14 +13,7 @@ use crate::components::{IncomingRefresh, JobsRefresh};
 
 #[post("/api/v1/incoming/trigger_scan", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
 async fn trigger_bookdrop_scan() -> Result<(), ServerFnError> {
-    let current_user = auth_session.current_user.clone().unwrap_or_default();
-    let has_permission = Auth::<AuthUser, UserId, BackendSessionPool>::build([Method::POST], true)
-        .requires(Rights::any([Rights::permission(Capability::ApproveImports.as_str())]))
-        .validate(&current_user, &Method::POST, None)
-        .await;
-    if !has_permission {
-        return Err(ServerFnError::new("Forbidden"));
-    }
+    require_capability(&auth_session, Capability::ApproveImports, Method::POST).await?;
     core_services.import_job_service.trigger_scan();
     Ok(())
 }
