@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 
 mod components;
+pub(crate) mod password;
 pub(crate) mod routes;
 
 #[derive(Debug, Clone, Deserialize)]

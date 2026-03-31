@@ -2,24 +2,9 @@ use dioxus::prelude::*;
 
 use crate::{
     Route,
-    routes::landing_page::{MIN_PASSWORD_LEN, register_admin},
+    password::{password_is_valid, password_requirements},
+    routes::landing_page::register_admin,
 };
-
-const SPECIAL_CHARS: &str = "!@#$%^&*()_+-=[]{}|;:,.<>?";
-
-fn password_requirements(pw: &str) -> Vec<(String, bool)> {
-    vec![
-        (format!("At least {MIN_PASSWORD_LEN} characters"), pw.len() >= MIN_PASSWORD_LEN),
-        ("One uppercase letter (A–Z)".to_string(), pw.chars().any(char::is_uppercase)),
-        ("One lowercase letter (a–z)".to_string(), pw.chars().any(char::is_lowercase)),
-        ("One digit (0–9)".to_string(), pw.chars().any(|c| c.is_ascii_digit())),
-        ("One special character (!@#$%^&*…)".to_string(), pw.chars().any(|c| SPECIAL_CHARS.contains(c))),
-    ]
-}
-
-fn password_is_valid(pw: &str) -> bool {
-    password_requirements(pw).iter().all(|(_, ok)| *ok)
-}
 
 #[component]
 pub(crate) fn RegisterAdminForm() -> Element {
