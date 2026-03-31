@@ -8,6 +8,7 @@ use crate::Error;
 /// corresponding `Enqueueable::JOB_TYPE` on the payload.
 pub trait JobHandler: Send + Sync + 'static {
     const JOB_TYPE: &'static str;
+    const DISPLAY_NAME: &'static str;
     type Payload: DeserializeOwned + Send;
 
     fn handle(&self, payload: Self::Payload) -> impl Future<Output = Result<(), Error>> + Send;
@@ -20,12 +21,18 @@ pub trait JobHandler: Send + Sync + 'static {
 pub trait ErasedJobHandler: Send + Sync {
     /// The job type string this handler is registered for.
     fn job_type(&self) -> &str;
+    /// Human-readable display name for this handler.
+    fn display_name(&self) -> &str;
     fn handle<'a>(&'a self, payload: serde_json::Value) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'a>>;
 }
 
 impl<H: JobHandler> ErasedJobHandler for H {
     fn job_type(&self) -> &str {
         H::JOB_TYPE
+    }
+
+    fn display_name(&self) -> &str {
+        H::DISPLAY_NAME
     }
 
     fn handle<'a>(&'a self, payload: serde_json::Value) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'a>> {

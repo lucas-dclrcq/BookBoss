@@ -243,6 +243,7 @@ impl EnrichBookFilesHandler {
 
 impl JobHandler for EnrichBookFilesHandler {
     const JOB_TYPE: &'static str = "enrich_book_files";
+    const DISPLAY_NAME: &'static str = "Enrich Book Files";
     type Payload = EnrichBookFilesPayload;
 
     async fn handle(&self, payload: EnrichBookFilesPayload) -> Result<(), Error> {

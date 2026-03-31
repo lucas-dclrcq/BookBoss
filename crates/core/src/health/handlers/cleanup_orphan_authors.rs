@@ -20,6 +20,7 @@ impl CleanupOrphanAuthorsHandler {
 
 impl JobHandler for CleanupOrphanAuthorsHandler {
     const JOB_TYPE: &'static str = "health.cleanup_orphan_authors";
+    const DISPLAY_NAME: &'static str = "Cleanup Orphan Authors";
     type Payload = serde_json::Value;
 
     async fn handle(&self, _payload: serde_json::Value) -> Result<(), Error> {

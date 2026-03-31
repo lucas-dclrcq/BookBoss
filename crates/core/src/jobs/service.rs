@@ -234,6 +234,7 @@ mod tests {
         struct TestHandler;
         impl JobHandler for TestHandler {
             const JOB_TYPE: &'static str = "test.job";
+            const DISPLAY_NAME: &'static str = "Test Job";
             type Payload = serde_json::Value;
             async fn handle(&self, _payload: serde_json::Value) -> Result<(), Error> {
                 Ok(())

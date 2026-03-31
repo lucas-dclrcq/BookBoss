@@ -23,6 +23,7 @@ impl ResetStaleImportJobsHandler {
 
 impl JobHandler for ResetStaleImportJobsHandler {
     const JOB_TYPE: &'static str = "health.reset_stale_import_jobs";
+    const DISPLAY_NAME: &'static str = "Reset Stale Import Jobs";
     type Payload = serde_json::Value;
 
     async fn handle(&self, _payload: serde_json::Value) -> Result<(), Error> {

@@ -21,6 +21,7 @@ impl RecoverEnrichmentsHandler {
 
 impl JobHandler for RecoverEnrichmentsHandler {
     const JOB_TYPE: &'static str = "health.recover_enrichments";
+    const DISPLAY_NAME: &'static str = "Recover Enrichments";
     type Payload = serde_json::Value;
 
     async fn handle(&self, _payload: serde_json::Value) -> Result<(), Error> {

@@ -15,6 +15,7 @@ impl CleanupExpiredSessionsHandler {
 
 impl JobHandler for CleanupExpiredSessionsHandler {
     const JOB_TYPE: &'static str = "health.cleanup_expired_sessions";
+    const DISPLAY_NAME: &'static str = "Cleanup Expired Sessions";
     type Payload = serde_json::Value;
 
     async fn handle(&self, _payload: serde_json::Value) -> Result<(), Error> {

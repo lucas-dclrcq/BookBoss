@@ -17,6 +17,7 @@ impl CleanupOldSystemMessagesHandler {
 
 impl JobHandler for CleanupOldSystemMessagesHandler {
     const JOB_TYPE: &'static str = "health.cleanup_old_system_messages";
+    const DISPLAY_NAME: &'static str = "Cleanup Old System Messages";
     type Payload = serde_json::Value;
 
     async fn handle(&self, _payload: serde_json::Value) -> Result<(), Error> {

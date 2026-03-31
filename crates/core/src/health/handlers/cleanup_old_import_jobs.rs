@@ -22,6 +22,7 @@ impl CleanupOldImportJobsHandler {
 
 impl JobHandler for CleanupOldImportJobsHandler {
     const JOB_TYPE: &'static str = "health.cleanup_old_import_jobs";
+    const DISPLAY_NAME: &'static str = "Cleanup Old Import Jobs";
     type Payload = serde_json::Value;
 
     async fn handle(&self, _payload: serde_json::Value) -> Result<(), Error> {

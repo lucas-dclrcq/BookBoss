@@ -106,6 +106,7 @@ impl BookIdSweep for ReconcileFingerprintsHandler {
 
 impl JobHandler for ReconcileFingerprintsHandler {
     const JOB_TYPE: &'static str = "health.reconcile_fingerprints";
+    const DISPLAY_NAME: &'static str = "Reconcile Fingerprints";
     type Payload = BookSweepPayload;
 
     async fn handle(&self, payload: BookSweepPayload) -> Result<(), Error> {

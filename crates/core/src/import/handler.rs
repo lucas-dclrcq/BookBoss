@@ -20,6 +20,7 @@ impl ProcessImportHandler {
 
 impl JobHandler for ProcessImportHandler {
     const JOB_TYPE: &'static str = "process_import";
+    const DISPLAY_NAME: &'static str = "Process Import";
     type Payload = ProcessImportPayload;
 
     async fn handle(&self, payload: ProcessImportPayload) -> Result<(), Error> {

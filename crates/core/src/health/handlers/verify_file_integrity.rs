@@ -20,6 +20,7 @@ impl VerifyFileIntegrityHandler {
 
 impl JobHandler for VerifyFileIntegrityHandler {
     const JOB_TYPE: &'static str = "health.verify_file_integrity";
+    const DISPLAY_NAME: &'static str = "Verify Library File Integrity";
     type Payload = serde_json::Value;
 
     async fn handle(&self, _payload: serde_json::Value) -> Result<(), Error> {

@@ -201,7 +201,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         },
     };
     use import::handler::ProcessImportHandler;
-    use jobs::JobServiceExt;
+    use jobs::{ErasedJobHandler, JobServiceExt};
 
     let js = &core.job_service;
     let hs = &core.health_service;
@@ -213,101 +213,113 @@ pub fn before_start(core: &Arc<CoreServices>) {
     js.register(EnrichBookFilesHandler::new(core.clone()));
 
     // Health check handlers + their scheduled tasks
-    js.register(recover_enrichments::RecoverEnrichmentsHandler::new(core.clone()));
+    let handler = recover_enrichments::RecoverEnrichmentsHandler::new(core.clone());
     hs.register_task(HealthTaskConfig {
-        name: "Recover Enrichments".into(),
-        job_type: "health.recover_enrichments".into(),
+        name: handler.display_name().into(),
+        job_type: handler.job_type().into(),
         run_on_startup: true,
         interval_minutes: Some(60),
     });
+    js.register(handler);
 
-    js.register(ensure_enrichments::EnsureEnrichmentsHandler::new(core.clone()));
+    let handler = ensure_enrichments::EnsureEnrichmentsHandler::new(core.clone());
     hs.register_task(HealthTaskConfig {
-        name: "Ensure Enrichments".into(),
-        job_type: "health.ensure_enrichments".into(),
+        name: handler.display_name().into(),
+        job_type: handler.job_type().into(),
         run_on_startup: true,
         interval_minutes: Some(120),
     });
+    js.register(handler);
 
-    js.register(reconcile_fingerprints::ReconcileFingerprintsHandler::new(core.clone()));
+    let handler = reconcile_fingerprints::ReconcileFingerprintsHandler::new(core.clone());
     hs.register_task(HealthTaskConfig {
-        name: "Reconcile Fingerprints".into(),
-        job_type: "health.reconcile_fingerprints".into(),
+        name: handler.display_name().into(),
+        job_type: handler.job_type().into(),
         run_on_startup: false,
         interval_minutes: None,
     });
+    js.register(handler);
 
-    js.register(cleanup_orphan_authors::CleanupOrphanAuthorsHandler::new(core.clone()));
+    let handler = cleanup_orphan_authors::CleanupOrphanAuthorsHandler::new(core.clone());
     hs.register_task(HealthTaskConfig {
-        name: "Cleanup Orphan Authors".into(),
-        job_type: "health.cleanup_orphan_authors".into(),
+        name: handler.display_name().into(),
+        job_type: handler.job_type().into(),
         run_on_startup: false,
         interval_minutes: Some(360),
     });
+    js.register(handler);
 
-    js.register(cleanup_orphan_series::CleanupOrphanSeriesHandler::new(core.clone()));
+    let handler = cleanup_orphan_series::CleanupOrphanSeriesHandler::new(core.clone());
     hs.register_task(HealthTaskConfig {
-        name: "Cleanup Orphan Series".into(),
-        job_type: "health.cleanup_orphan_series".into(),
+        name: handler.display_name().into(),
+        job_type: handler.job_type().into(),
         run_on_startup: false,
         interval_minutes: Some(360),
     });
+    js.register(handler);
 
-    js.register(cleanup_orphan_publishers::CleanupOrphanPublishersHandler::new(core.clone()));
+    let handler = cleanup_orphan_publishers::CleanupOrphanPublishersHandler::new(core.clone());
     hs.register_task(HealthTaskConfig {
-        name: "Cleanup Orphan Publishers".into(),
-        job_type: "health.cleanup_orphan_publishers".into(),
+        name: handler.display_name().into(),
+        job_type: handler.job_type().into(),
         run_on_startup: false,
         interval_minutes: Some(360),
     });
+    js.register(handler);
 
-    js.register(cleanup_old_jobs::CleanupOldJobsHandler::new(core.clone()));
+    let handler = cleanup_old_jobs::CleanupOldJobsHandler::new(core.clone());
     hs.register_task(HealthTaskConfig {
-        name: "Cleanup Old Jobs".into(),
-        job_type: "health.cleanup_old_jobs".into(),
+        name: handler.display_name().into(),
+        job_type: handler.job_type().into(),
         run_on_startup: false,
         interval_minutes: Some(1440),
     });
+    js.register(handler);
 
-    js.register(cleanup_old_import_jobs::CleanupOldImportJobsHandler::new(core.clone()));
+    let handler = cleanup_old_import_jobs::CleanupOldImportJobsHandler::new(core.clone());
     hs.register_task(HealthTaskConfig {
-        name: "Cleanup Old Import Jobs".into(),
-        job_type: "health.cleanup_old_import_jobs".into(),
+        name: handler.display_name().into(),
+        job_type: handler.job_type().into(),
         run_on_startup: false,
         interval_minutes: Some(1440),
     });
+    js.register(handler);
 
-    js.register(cleanup_old_system_messages::CleanupOldSystemMessagesHandler::new(core.clone()));
+    let handler = cleanup_old_system_messages::CleanupOldSystemMessagesHandler::new(core.clone());
     hs.register_task(HealthTaskConfig {
-        name: "Cleanup Old System Messages".into(),
-        job_type: "health.cleanup_old_system_messages".into(),
+        name: handler.display_name().into(),
+        job_type: handler.job_type().into(),
         run_on_startup: false,
         interval_minutes: Some(1440),
     });
+    js.register(handler);
 
-    js.register(cleanup_expired_sessions::CleanupExpiredSessionsHandler::new(core.clone()));
+    let handler = cleanup_expired_sessions::CleanupExpiredSessionsHandler::new(core.clone());
     hs.register_task(HealthTaskConfig {
-        name: "Cleanup Expired Sessions".into(),
-        job_type: "health.cleanup_expired_sessions".into(),
+        name: handler.display_name().into(),
+        job_type: handler.job_type().into(),
         run_on_startup: false,
         interval_minutes: Some(1440),
     });
+    js.register(handler);
 
-    js.register(verify_file_integrity::VerifyFileIntegrityHandler::new(core.clone()));
+    let handler = verify_file_integrity::VerifyFileIntegrityHandler::new(core.clone());
     hs.register_task(HealthTaskConfig {
-        name: "Verify Library File Integrity".into(),
-        job_type: "health.verify_file_integrity".into(),
+        name: handler.display_name().into(),
+        job_type: handler.job_type().into(),
         run_on_startup: false,
         interval_minutes: Some(720),
     });
+    js.register(handler);
 
-    js.register(reset_stale_import_jobs::ResetStaleImportJobsHandler::new(core.clone()));
+    let handler = reset_stale_import_jobs::ResetStaleImportJobsHandler::new(core.clone());
     hs.register_task(HealthTaskConfig {
-        name: "Reset Stale Import Jobs".into(),
-        job_type: "health.reset_stale_import_jobs".into(),
+        name: handler.display_name().into(),
+        job_type: handler.job_type().into(),
         run_on_startup: true,
         interval_minutes: Some(360),
     });
+    js.register(handler);
 }
 
 #[derive(Clone)]

@@ -55,6 +55,7 @@ impl BookIdSweep for EnsureEnrichmentsHandler {
 
 impl JobHandler for EnsureEnrichmentsHandler {
     const JOB_TYPE: &'static str = "health.ensure_enrichments";
+    const DISPLAY_NAME: &'static str = "Ensure Enrichments";
     type Payload = BookSweepPayload;
 
     async fn handle(&self, payload: BookSweepPayload) -> Result<(), Error> {

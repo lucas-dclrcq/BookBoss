@@ -70,7 +70,6 @@ impl ImportJobServiceImpl {
     }
 }
 
-
 #[async_trait::async_trait]
 impl ImportJobService for ImportJobServiceImpl {
     async fn list_pending(&self, start_id: Option<ImportJobId>, page_size: Option<u64>) -> Result<Vec<ImportJob>, Error> {
