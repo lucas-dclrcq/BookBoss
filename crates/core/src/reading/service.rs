@@ -500,6 +500,21 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn set_rating_overwrites_existing_rating() {
+        let mut existing = state(1, 1, ReadStatus::Reading);
+        existing.personal_rating = Some(3);
+        let mut mock = MockUserBookMetadataRepository::new();
+        mock.expect_find_by_user_and_book().returning(move |_, _, _| {
+            let existing = existing.clone();
+            Box::pin(async move { Ok(Some(existing)) })
+        });
+        mock.expect_upsert().returning(|_, s| Box::pin(async { Ok(s) }));
+        let svc = create_service(mock);
+        let result = svc.set_rating(1, 1, 5).await.unwrap();
+        assert_eq!(result.personal_rating, Some(5));
+    }
+
+    #[tokio::test]
     async fn test_set_rating_zero_returns_validation_error() {
         let svc = create_service(MockUserBookMetadataRepository::new());
         assert!(matches!(svc.set_rating(1, 1, 0).await, Err(Error::Validation(_))));
@@ -509,6 +524,33 @@ mod tests {
     async fn test_set_rating_six_returns_validation_error() {
         let svc = create_service(MockUserBookMetadataRepository::new());
         assert!(matches!(svc.set_rating(1, 1, 6).await, Err(Error::Validation(_))));
+    }
+
+    // ─── clear_rating ────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn clear_rating_on_new_record_returns_ok() {
+        let mut mock = MockUserBookMetadataRepository::new();
+        mock.expect_find_by_user_and_book().returning(|_, _, _| Box::pin(async { Ok(None) }));
+        mock.expect_upsert().returning(|_, s| Box::pin(async { Ok(s) }));
+        let svc = create_service(mock);
+        let result = svc.clear_rating(1, 1).await.unwrap();
+        assert_eq!(result.personal_rating, None);
+    }
+
+    #[tokio::test]
+    async fn clear_rating_clears_existing() {
+        let mut existing = state(1, 1, ReadStatus::Reading);
+        existing.personal_rating = Some(5);
+        let mut mock = MockUserBookMetadataRepository::new();
+        mock.expect_find_by_user_and_book().returning(move |_, _, _| {
+            let existing = existing.clone();
+            Box::pin(async move { Ok(Some(existing)) })
+        });
+        mock.expect_upsert().returning(|_, s| Box::pin(async { Ok(s) }));
+        let svc = create_service(mock);
+        let result = svc.clear_rating(1, 1).await.unwrap();
+        assert_eq!(result.personal_rating, None);
     }
 
     // ─── set_notes ───────────────────────────────────────────────────────────
@@ -521,6 +563,21 @@ mod tests {
         let svc = create_service(mock);
         let result = svc.set_notes(1, 1, "A great book".to_owned()).await.unwrap();
         assert_eq!(result.notes.as_deref(), Some("A great book"));
+    }
+
+    #[tokio::test]
+    async fn set_notes_overwrites_existing_notes() {
+        let mut existing = state(1, 1, ReadStatus::Reading);
+        existing.notes = Some("old notes".to_string());
+        let mut mock = MockUserBookMetadataRepository::new();
+        mock.expect_find_by_user_and_book().returning(move |_, _, _| {
+            let existing = existing.clone();
+            Box::pin(async move { Ok(Some(existing)) })
+        });
+        mock.expect_upsert().returning(|_, s| Box::pin(async { Ok(s) }));
+        let svc = create_service(mock);
+        let result = svc.set_notes(1, 1, "new notes".to_string()).await.unwrap();
+        assert_eq!(result.notes, Some("new notes".to_string()));
     }
 
     // ─── list_for_user ───────────────────────────────────────────────────────
