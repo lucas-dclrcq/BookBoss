@@ -105,3 +105,157 @@ impl SystemMessageRepository for SystemMessageRepositoryAdapter {
         Ok(result.rows_affected)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use bb_core::{
+        message::{MessageSeverity, NewSystemMessage},
+        repository::RepositoryService,
+    };
+    use sea_orm::Database;
+
+    use crate::create_repository_service;
+
+    async fn setup() -> Arc<RepositoryService> {
+        let db = Database::connect("sqlite::memory:").await.unwrap();
+        create_repository_service(db).await.unwrap()
+    }
+
+    fn new_msg(source: &str, severity: MessageSeverity, text: &str) -> NewSystemMessage {
+        NewSystemMessage {
+            source_task: source.to_owned(),
+            severity,
+            message: text.to_owned(),
+        }
+    }
+
+    // ─── add_message ─────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_add_message_all_severities() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        for severity in [MessageSeverity::Info, MessageSeverity::Warning, MessageSeverity::Error] {
+            let result = svc.system_message_repository().add_message(&*tx, new_msg("task", severity, "msg")).await;
+            assert!(result.is_ok());
+            let msg = result.unwrap();
+            assert_ne!(msg.id, 0);
+            assert_eq!(msg.severity, severity);
+        }
+    }
+
+    // ─── list_messages ───────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_list_messages_empty() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+        assert!(svc.system_message_repository().list_messages(&*tx).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_list_messages_ordered_desc() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let first = svc
+            .system_message_repository()
+            .add_message(&*tx, new_msg("task", MessageSeverity::Info, "first"))
+            .await
+            .unwrap();
+        let second = svc
+            .system_message_repository()
+            .add_message(&*tx, new_msg("task", MessageSeverity::Info, "second"))
+            .await
+            .unwrap();
+
+        let list = svc.system_message_repository().list_messages(&*tx).await.unwrap();
+        assert_eq!(list.len(), 2);
+        // Most-recent first
+        assert!(list[0].created_at >= list[1].created_at);
+        // IDs: second was inserted after first
+        assert_eq!(list[0].id, second.id);
+        assert_eq!(list[1].id, first.id);
+    }
+
+    // ─── delete_message ──────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_delete_message() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let msg = svc
+            .system_message_repository()
+            .add_message(&*tx, new_msg("task", MessageSeverity::Info, "to delete"))
+            .await
+            .unwrap();
+        svc.system_message_repository().delete_message(&*tx, msg.id).await.unwrap();
+
+        assert!(svc.system_message_repository().list_messages(&*tx).await.unwrap().is_empty());
+    }
+
+    // ─── delete_all_messages ─────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_delete_all_messages() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        svc.system_message_repository()
+            .add_message(&*tx, new_msg("a", MessageSeverity::Info, "one"))
+            .await
+            .unwrap();
+        svc.system_message_repository()
+            .add_message(&*tx, new_msg("b", MessageSeverity::Warning, "two"))
+            .await
+            .unwrap();
+
+        svc.system_message_repository().delete_all_messages(&*tx).await.unwrap();
+
+        assert!(svc.system_message_repository().list_messages(&*tx).await.unwrap().is_empty());
+    }
+
+    // ─── delete_older_than ───────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_delete_older_than() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let msg = svc
+            .system_message_repository()
+            .add_message(&*tx, new_msg("task", MessageSeverity::Info, "old"))
+            .await
+            .unwrap();
+
+        // Cutoff after the message was created — should delete it
+        let cutoff = msg.created_at + chrono::Duration::seconds(1);
+        let deleted = svc.system_message_repository().delete_older_than(&*tx, cutoff).await.unwrap();
+
+        assert_eq!(deleted, 1);
+        assert!(svc.system_message_repository().list_messages(&*tx).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_delete_older_than_keeps_newer() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let msg = svc
+            .system_message_repository()
+            .add_message(&*tx, new_msg("task", MessageSeverity::Info, "recent"))
+            .await
+            .unwrap();
+
+        // Cutoff before the message — nothing deleted
+        let cutoff = msg.created_at - chrono::Duration::seconds(1);
+        let deleted = svc.system_message_repository().delete_older_than(&*tx, cutoff).await.unwrap();
+
+        assert_eq!(deleted, 0);
+        assert_eq!(svc.system_message_repository().list_messages(&*tx).await.unwrap().len(), 1);
+    }
+}
