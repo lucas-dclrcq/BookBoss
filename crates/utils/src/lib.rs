@@ -1,3 +1,4 @@
+pub mod date;
 pub mod hash;
 pub mod language;
 pub mod similarity;

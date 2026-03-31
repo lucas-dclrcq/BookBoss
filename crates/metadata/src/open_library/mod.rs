@@ -10,7 +10,10 @@ use bb_core::{
     metadata::MetadataProvider,
     pipeline::{ExtractedAuthor, ExtractedIdentifier, ExtractedMetadata, ProviderBook},
 };
-use bb_utils::similarity::{author_similarity, combined_score, title_similarity};
+use bb_utils::{
+    date::parse_year,
+    similarity::{author_similarity, combined_score, title_similarity},
+};
 use model::{OlBookData, OlSearchDoc, OlSearchResponse};
 use tracing::warn;
 
@@ -74,24 +77,6 @@ impl OpenLibraryAdapter {
             .map(|id| (id.identifier_type.clone(), id.value.clone()))
     }
 
-    /// Scans a freeform date string for the first plausible 4-digit year.
-    ///
-    /// Open Library `publish_date` values vary widely: "August 31, 2010",
-    /// "2010", "1996-08-15".
-    fn parse_year(date_str: &str) -> Option<i32> {
-        let bytes = date_str.as_bytes();
-        for i in 0..bytes.len().saturating_sub(3) {
-            if bytes[i..i + 4].iter().all(u8::is_ascii_digit) {
-                if let Ok(year) = date_str[i..i + 4].parse::<i32>() {
-                    if (1000..=2100).contains(&year) {
-                        return Some(year);
-                    }
-                }
-            }
-        }
-        None
-    }
-
     fn map_to_extracted(data: &OlBookData, isbn_type: IdentifierType, isbn: &str) -> ExtractedMetadata {
         let authors = data.authors.as_ref().map(|authors| {
             authors
@@ -130,7 +115,7 @@ impl OpenLibraryAdapter {
             authors,
             description: None,
             publisher: data.publishers.as_ref().and_then(|p| p.first()).map(|p| p.name.clone()),
-            published_date: data.publish_date.as_deref().and_then(Self::parse_year),
+            published_date: data.publish_date.as_deref().and_then(parse_year),
             language: None,
             identifiers: Some(identifiers),
             series_name: None,
@@ -683,11 +668,9 @@ mod tests {
     }
 
     #[test]
-    fn parse_year_handles_freeform_dates() {
-        assert_eq!(OpenLibraryAdapter::parse_year("August 31, 2010"), Some(2010));
-        assert_eq!(OpenLibraryAdapter::parse_year("2010"), Some(2010));
-        assert_eq!(OpenLibraryAdapter::parse_year("1996-08-15"), Some(1996));
-        assert_eq!(OpenLibraryAdapter::parse_year("no year here"), None);
-        assert_eq!(OpenLibraryAdapter::parse_year(""), None);
+    fn parse_year_delegates_to_bb_utils() {
+        // Full coverage lives in bb_utils::date::tests.
+        assert_eq!(parse_year("August 31, 2010"), Some(2010));
+        assert_eq!(parse_year("no year"), None);
     }
 }

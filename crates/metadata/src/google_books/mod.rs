@@ -9,6 +9,7 @@ use bb_core::{
     pipeline::{ExtractedAuthor, ExtractedIdentifier, ExtractedMetadata, ProviderBook},
 };
 use bb_utils::{
+    date::parse_year,
     language::normalize_language,
     similarity::{author_similarity, combined_score, title_similarity},
 };
@@ -67,24 +68,6 @@ impl GoogleBooksAdapter {
             .map(|id| id.value.clone())
     }
 
-    /// Scans a freeform date string for the first plausible 4-digit year.
-    ///
-    /// Google Books `publishedDate` values vary: "2010-11-17", "2010", "Nov
-    /// 2010".
-    fn parse_year(date_str: &str) -> Option<i32> {
-        let bytes = date_str.as_bytes();
-        for i in 0..bytes.len().saturating_sub(3) {
-            if bytes[i..i + 4].iter().all(u8::is_ascii_digit) {
-                if let Ok(year) = date_str[i..i + 4].parse::<i32>() {
-                    if (1000..=2100).contains(&year) {
-                        return Some(year);
-                    }
-                }
-            }
-        }
-        None
-    }
-
     fn map_to_extracted(volume_id: &str, info: &VolumeInfo) -> ExtractedMetadata {
         let authors = info.authors.as_ref().map(|names| {
             names
@@ -134,7 +117,7 @@ impl GoogleBooksAdapter {
             authors,
             description: info.description.clone(),
             publisher: info.publisher.clone(),
-            published_date: info.published_date.as_deref().and_then(Self::parse_year),
+            published_date: info.published_date.as_deref().and_then(parse_year),
             language: info.language.as_deref().and_then(normalize_language),
             identifiers: Some(identifiers),
             series_name: None,
@@ -572,10 +555,8 @@ mod tests {
     }
 
     #[test]
-    fn parse_year_handles_freeform_dates() {
-        assert_eq!(GoogleBooksAdapter::parse_year("2010-08-31"), Some(2010));
-        assert_eq!(GoogleBooksAdapter::parse_year("2010"), Some(2010));
-        assert_eq!(GoogleBooksAdapter::parse_year("no year"), None);
-        assert_eq!(GoogleBooksAdapter::parse_year(""), None);
+    fn parse_year_delegates_to_bb_utils() {
+        assert_eq!(parse_year("2010-08-31"), Some(2010));
+        assert_eq!(parse_year("no year"), None);
     }
 }
