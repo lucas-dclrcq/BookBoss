@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use bb_utils::string::normalize_name;
 use tracing::warn;
 
 use crate::{
@@ -889,12 +890,6 @@ impl LibraryService for LibraryServiceImpl {
 
         Ok(())
     }
-}
-
-/// Normalize a name string: trim edges and collapse interior whitespace runs
-/// to a single space. Ensures "A  B" and "A B" resolve to the same author.
-fn normalize_name(s: &str) -> String {
-    s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// All covers are stored as normalized JPEG regardless of source format.

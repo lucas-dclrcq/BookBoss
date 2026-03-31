@@ -1,6 +1,9 @@
 use std::{path::PathBuf, sync::Arc};
 
-use bb_utils::similarity::{author_similarity, combined_score, title_similarity};
+use bb_utils::{
+    similarity::{author_similarity, combined_score, title_similarity},
+    string::normalize_name,
+};
 
 use crate::{
     Error,
@@ -149,12 +152,6 @@ fn provider_priority(name: &str) -> u8 {
         "Open Library" => 2,
         _ => u8::MAX,
     }
-}
-
-/// Normalize a name string: trim edges and collapse interior whitespace runs
-/// to a single space. Ensures "A  B" and "A B" resolve to the same author.
-fn normalize_name(s: &str) -> String {
-    s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 #[async_trait::async_trait]
