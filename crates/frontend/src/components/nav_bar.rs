@@ -621,7 +621,7 @@ pub(crate) fn NavBar() -> Element {
                         button {
                             class: "shrink-0 text-xs px-2 py-0.5 rounded-full bg-indigo-500 hover:bg-indigo-400 text-white font-medium cursor-pointer leading-tight",
                             title: "Search help",
-                            onclick: move |_| help_open.set(true),
+                            onclick: move |_| help_open.set(!help_open()),
                             "?"
                         }
                     }
