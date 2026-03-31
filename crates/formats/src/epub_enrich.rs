@@ -4,6 +4,10 @@ use std::{
 };
 
 use bb_core::storage::BookSidecar;
+use quick_xml::{
+    Reader, Writer,
+    events::{BytesEnd, BytesStart, Event},
+};
 use zip::{ZipArchive, ZipWriter, write::SimpleFileOptions};
 
 use crate::{
@@ -164,21 +168,30 @@ where
 /// elements are left untouched.
 fn replace_opf_metadata(opf_xml: &str, sidecar: &BookSidecar) -> Result<String, Error> {
     let new_meta = write_metadata_xml(sidecar)?;
-    let new_meta_str = std::str::from_utf8(&new_meta)?;
-
-    let start = opf_xml
-        .find("<metadata")
-        .ok_or_else(|| Error::InvalidValue("OPF: no <metadata> element".into()))?;
-    let end_tag = "</metadata>";
-    let end = opf_xml
-        .find(end_tag)
-        .ok_or_else(|| Error::InvalidValue("OPF: no </metadata> closing tag".into()))?;
-
-    let mut result = String::with_capacity(opf_xml.len() + new_meta_str.len());
-    result.push_str(&opf_xml[..start]);
-    result.push_str(new_meta_str);
-    result.push_str(&opf_xml[end + end_tag.len()..]);
-    Ok(result)
+    let mut reader = Reader::from_str(opf_xml);
+    reader.config_mut().trim_text(false);
+    let mut writer = Writer::new(Vec::new());
+    let mut buf = Vec::new();
+    let mut skipping = false;
+    loop {
+        buf.clear();
+        match reader.read_event_into(&mut buf)? {
+            Event::Start(ref e) if e.local_name().as_ref() == b"metadata" => {
+                writer.get_mut().extend_from_slice(&new_meta);
+                skipping = true;
+            }
+            Event::End(ref e) if skipping && e.local_name().as_ref() == b"metadata" => {
+                skipping = false;
+            }
+            Event::Eof => break,
+            event => {
+                if !skipping {
+                    writer.write_event(event)?;
+                }
+            }
+        }
+    }
+    String::from_utf8(writer.into_inner()).map_err(|e| Error::InvalidValue(e.to_string()))
 }
 
 /// Inject a cover image manifest entry into an OPF's `<manifest>` block.
@@ -186,22 +199,37 @@ fn replace_opf_metadata(opf_xml: &str, sidecar: &BookSidecar) -> Result<String, 
 /// Handles both `<manifest>…</manifest>` (inserts before the closing tag) and
 /// `<manifest/>` (self-closing empty manifest — expands it).
 fn inject_cover_manifest_entry(opf_xml: &str, cover_href: &str) -> Result<String, Error> {
-    let cover_item = format!(r#"<item id="cover-image" href="{cover_href}" media-type="image/jpeg" properties="cover-image"/>"#);
-
-    if let Some(close_pos) = opf_xml.find("</manifest>") {
-        let mut result = String::with_capacity(opf_xml.len() + cover_item.len());
-        result.push_str(&opf_xml[..close_pos]);
-        result.push_str(&cover_item);
-        result.push_str(&opf_xml[close_pos..]);
-        return Ok(result);
+    let mut reader = Reader::from_str(opf_xml);
+    reader.config_mut().trim_text(false);
+    let mut writer = Writer::new(Vec::new());
+    let mut buf = Vec::new();
+    let cover_href = cover_href.to_string();
+    loop {
+        buf.clear();
+        match reader.read_event_into(&mut buf)? {
+            Event::End(ref e) if e.local_name().as_ref() == b"manifest" => {
+                writer.write_event(Event::Empty(build_cover_item(&cover_href)))?;
+                writer.write_event(Event::End(BytesEnd::new("manifest")))?;
+            }
+            Event::Empty(ref e) if e.local_name().as_ref() == b"manifest" => {
+                writer.write_event(Event::Start(BytesStart::new("manifest")))?;
+                writer.write_event(Event::Empty(build_cover_item(&cover_href)))?;
+                writer.write_event(Event::End(BytesEnd::new("manifest")))?;
+            }
+            Event::Eof => break,
+            event => writer.write_event(event)?,
+        }
     }
+    String::from_utf8(writer.into_inner()).map_err(|e| Error::InvalidValue(e.to_string()))
+}
 
-    if opf_xml.contains("<manifest/>") {
-        let replacement = format!("<manifest>{cover_item}</manifest>");
-        return Ok(opf_xml.replacen("<manifest/>", &replacement, 1));
-    }
-
-    Err(Error::InvalidValue("OPF: no <manifest> element found".into()))
+fn build_cover_item(cover_href: &str) -> BytesStart<'static> {
+    let mut item = BytesStart::new("item");
+    item.push_attribute(("id", "cover-image"));
+    item.push_attribute(("href", cover_href));
+    item.push_attribute(("media-type", "image/jpeg"));
+    item.push_attribute(("properties", "cover-image"));
+    item
 }
 
 /// Ensure a manifest `<item>` with the given `id` has
@@ -209,54 +237,55 @@ fn inject_cover_manifest_entry(opf_xml: &str, cover_href: &str) -> Result<String
 /// `cover-image` to an existing `properties` value, or no-ops if already
 /// present.
 fn ensure_cover_image_property(opf_xml: &str, item_id: &str) -> Result<String, Error> {
-    // Find the <item …> element that contains id="<item_id>"
-    let id_needle = format!(r#"id="{item_id}""#);
-    let id_pos = opf_xml
-        .find(&id_needle)
-        .ok_or_else(|| Error::InvalidValue(format!("OPF: manifest item id=\"{item_id}\" not found")))?;
-
-    // Walk backward to find `<item` (or `< item` with whitespace)
-    let tag_start = opf_xml[..id_pos]
-        .rfind("<item")
-        .ok_or_else(|| Error::InvalidValue("OPF: <item opening not found before id".into()))?;
-
-    // Walk forward from id_pos to find the closing `/>` or `>`
-    let tag_end_rel = opf_xml[tag_start..]
-        .find("/>")
-        .or_else(|| opf_xml[tag_start..].find('>'))
-        .ok_or_else(|| Error::InvalidValue("OPF: <item closing not found".into()))?;
-    let tag_end = tag_start + tag_end_rel;
-
-    let tag = &opf_xml[tag_start..tag_end];
-
-    // Check if properties="…" already exists within this tag
-    if let Some(props_start_rel) = tag.find("properties=\"") {
-        let props_val_start = tag_start + props_start_rel + "properties=\"".len();
-        let props_val_end = opf_xml[props_val_start..]
-            .find('"')
-            .map(|p| props_val_start + p)
-            .ok_or_else(|| Error::InvalidValue("OPF: unclosed properties attribute".into()))?;
-        let props_val = &opf_xml[props_val_start..props_val_end];
-
-        if props_val.split_whitespace().any(|p| p == "cover-image") {
-            // Already present — no-op
-            return Ok(opf_xml.to_string());
+    let mut reader = Reader::from_str(opf_xml);
+    reader.config_mut().trim_text(false);
+    let mut writer = Writer::new(Vec::new());
+    let mut buf = Vec::new();
+    loop {
+        buf.clear();
+        match reader.read_event_into(&mut buf)? {
+            Event::Empty(ref e) if e.local_name().as_ref() == b"item" => {
+                let is_target = e
+                    .attributes()
+                    .flatten()
+                    .any(|a| a.key.as_ref() == b"id" && a.decode_and_unescape_value(reader.decoder()).ok().as_deref() == Some(item_id));
+                if is_target {
+                    let patched = patch_cover_image_property(e, reader.decoder())?;
+                    writer.write_event(Event::Empty(patched))?;
+                } else {
+                    writer.write_event(Event::Empty(e.borrow()))?;
+                }
+            }
+            Event::Eof => break,
+            event => writer.write_event(event)?,
         }
-
-        // Append cover-image to existing properties value
-        let mut result = String::with_capacity(opf_xml.len() + " cover-image".len());
-        result.push_str(&opf_xml[..props_val_end]);
-        result.push_str(" cover-image");
-        result.push_str(&opf_xml[props_val_end..]);
-        return Ok(result);
     }
+    String::from_utf8(writer.into_inner()).map_err(|e| Error::InvalidValue(e.to_string()))
+}
 
-    // No properties attribute — insert one before the closing />  or >
-    let mut result = String::with_capacity(opf_xml.len() + r#" properties="cover-image""#.len());
-    result.push_str(&opf_xml[..tag_end]);
-    result.push_str(r#" properties="cover-image""#);
-    result.push_str(&opf_xml[tag_end..]);
-    Ok(result)
+fn patch_cover_image_property(elem: &quick_xml::events::BytesStart<'_>, decoder: quick_xml::Decoder) -> Result<BytesStart<'static>, Error> {
+    let mut new_elem = BytesStart::new("item");
+    let mut found_properties = false;
+    for attr in elem.attributes().flatten() {
+        if attr.key.as_ref() == b"properties" {
+            let val = attr.decode_and_unescape_value(decoder)?;
+            if val.split_whitespace().any(|p| p == "cover-image") {
+                new_elem.push_attribute(("properties", val.as_ref()));
+            } else {
+                let patched = format!("{val} cover-image");
+                new_elem.push_attribute(("properties", patched.as_str()));
+            }
+            found_properties = true;
+        } else {
+            let key = std::str::from_utf8(attr.key.as_ref())?;
+            let val = attr.decode_and_unescape_value(decoder)?;
+            new_elem.push_attribute((key, val.as_ref()));
+        }
+    }
+    if !found_properties {
+        new_elem.push_attribute(("properties", "cover-image"));
+    }
+    Ok(new_elem)
 }
 
 #[cfg(test)]
@@ -631,6 +660,62 @@ mod tests {
     fn ensure_is_idempotent() {
         let opf = r#"<manifest><item id="ci" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/></manifest>"#;
         let result = super::ensure_cover_image_property(opf, "ci").unwrap();
-        assert_eq!(result, opf);
+        assert!(result.contains(r#"properties="cover-image""#));
+        // Must not duplicate the property
+        assert_eq!(result.matches("cover-image").count(), 1);
+    }
+
+    #[test]
+    fn replace_metadata_with_indented_closing_tags() {
+        let dir = tempdir().unwrap();
+        let src = dir.path().join("src.epub");
+        let dst = dir.path().join("dst.epub");
+        let opf = r#"<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+    <dc:title>Old Title</dc:title>
+  </metadata>
+  <manifest>
+    <item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="ch1"/>
+  </spine>
+</package>"#;
+        let epub = build_epub_zip(opf, None);
+        std::fs::write(&src, epub).unwrap();
+        enrich_epub(&src, &dst, &make_sidecar("New Title"), None).unwrap();
+        let opf_bytes = read_opf_from_epub(&dst);
+        let parsed = crate::opf::parse_sidecar(&opf_bytes).unwrap();
+        assert_eq!(parsed.title, "New Title");
+        let opf_str = std::str::from_utf8(&opf_bytes).unwrap();
+        assert!(opf_str.contains("<spine>"), "spine must be preserved");
+        assert!(opf_str.contains("ch1"), "spine itemref must be preserved");
+    }
+
+    #[test]
+    fn inject_cover_preserves_xml_comment_in_manifest() {
+        let dir = tempdir().unwrap();
+        let src = dir.path().join("src.epub");
+        let dst = dir.path().join("dst.epub");
+        let opf = r#"<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+    <dc:title>Test</dc:title>
+  </metadata>
+  <manifest>
+    <!-- primary content -->
+    <item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine><itemref idref="ch1"/></spine>
+</package>"#;
+        let epub = build_epub_zip(opf, None);
+        std::fs::write(&src, epub).unwrap();
+        const NEW_COVER: &[u8] = &[0xFF, 0xD8, 0xFF, 0xE0];
+        enrich_epub(&src, &dst, &make_sidecar("Test"), Some(NEW_COVER)).unwrap();
+        let opf_bytes = read_opf_from_epub(&dst);
+        let opf_str = std::str::from_utf8(&opf_bytes).unwrap();
+        assert!(opf_str.contains("cover-image"), "cover item should be in manifest");
+        assert!(opf_str.contains("primary content"), "xml comment should survive");
     }
 }
