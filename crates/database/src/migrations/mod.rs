@@ -27,6 +27,10 @@ mod m20260322_000024_create_system_messages_table;
 mod m20260322_000025_add_created_at_to_book_files;
 mod m20260323_000026_drop_devices_preferred_format;
 mod m20260330_000027_add_sidecar_fingerprint_to_books;
+mod m20260330_000028_add_index_book_files_format_role;
+mod m20260330_000029_add_index_jobs_indexes;
+mod m20260330_000030_add_index_import_jobs_updated_at;
+mod m20260330_000031_add_index_shelves_visibility;
 
 pub struct Migrator;
 
@@ -61,6 +65,10 @@ impl MigratorTrait for Migrator {
             Box::new(m20260322_000025_add_created_at_to_book_files::Migration),
             Box::new(m20260323_000026_drop_devices_preferred_format::Migration),
             Box::new(m20260330_000027_add_sidecar_fingerprint_to_books::Migration),
+            Box::new(m20260330_000028_add_index_book_files_format_role::Migration),
+            Box::new(m20260330_000029_add_index_jobs_indexes::Migration),
+            Box::new(m20260330_000030_add_index_import_jobs_updated_at::Migration),
+            Box::new(m20260330_000031_add_index_shelves_visibility::Migration),
         ]
     }
 }
