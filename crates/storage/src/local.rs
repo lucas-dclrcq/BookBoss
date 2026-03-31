@@ -485,4 +485,69 @@ mod tests {
         let contents = tokio::fs::read(trash_dir.join("book.epub")).await.unwrap();
         assert_eq!(contents, b"new version");
     }
+
+    // ── normalize_to_jpeg helpers ──────────────────────────────────────────────
+
+    fn tiny_jpeg(width: u32, height: u32) -> Vec<u8> {
+        use image::{ImageBuffer, Rgb, codecs::jpeg::JpegEncoder};
+        let img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(width, height);
+        let mut out = Vec::new();
+        JpegEncoder::new_with_quality(&mut out, 85).encode_image(&img).unwrap();
+        out
+    }
+
+    fn tiny_png(width: u32, height: u32) -> Vec<u8> {
+        use image::{ImageBuffer, ImageFormat, Rgb};
+        let img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(width, height);
+        let mut out = Vec::new();
+        img.write_to(&mut std::io::Cursor::new(&mut out), ImageFormat::Png).unwrap();
+        out
+    }
+
+    // ── normalize_to_jpeg tests ────────────────────────────────────────────────
+
+    #[test]
+    fn normalize_to_jpeg_jpeg_passthrough() {
+        let input = tiny_jpeg(10, 10);
+        let output = super::normalize_to_jpeg(&input);
+        // Output should start with JPEG magic bytes
+        assert_eq!(&output[..2], &[0xFF, 0xD8], "output should be JPEG");
+    }
+
+    #[test]
+    fn normalize_to_jpeg_png_converts_to_jpeg() {
+        let input = tiny_png(10, 10);
+        // Confirm input is PNG, not already JPEG
+        assert_eq!(&input[..4], &[0x89, 0x50, 0x4E, 0x47]);
+        let output = super::normalize_to_jpeg(&input);
+        assert_eq!(&output[..2], &[0xFF, 0xD8], "PNG should be converted to JPEG");
+    }
+
+    #[test]
+    fn normalize_to_jpeg_oversized_image_is_resized() {
+        use image::ImageReader;
+        // 2048×3072 is double the 1024×1536 limit
+        let input = tiny_png(2048, 3072);
+        let output = super::normalize_to_jpeg(&input);
+        // Decode the output to check its dimensions
+        let decoded = ImageReader::new(std::io::Cursor::new(&output)).with_guessed_format().unwrap().decode().unwrap();
+        assert!(decoded.width() <= 1024, "width {} exceeds 1024", decoded.width());
+        assert!(decoded.height() <= 1536, "height {} exceeds 1536", decoded.height());
+    }
+
+    #[test]
+    fn normalize_to_jpeg_unrecognized_bytes_returned_unchanged() {
+        let input = b"this is not an image at all";
+        let output = super::normalize_to_jpeg(input);
+        assert_eq!(output.as_slice(), input, "unrecognized bytes should pass through unchanged");
+    }
+
+    #[test]
+    fn normalize_to_jpeg_corrupt_png_returned_unchanged() {
+        // PNG magic header followed by garbage — decode will fail
+        let mut input = vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        input.extend_from_slice(b"this is garbage data that will fail to decode");
+        let output = super::normalize_to_jpeg(&input);
+        assert_eq!(output, input, "corrupt PNG should be returned unchanged");
+    }
 }
