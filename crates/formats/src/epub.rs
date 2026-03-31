@@ -97,39 +97,7 @@ mod tests {
     use std::io::Write;
 
     use super::extract_epub_metadata;
-
-    const CONTAINER_XML: &[u8] = br#"<?xml version="1.0"?>
-<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-  <rootfiles>
-    <rootfile full-path="content.opf" media-type="application/oebps-package+xml"/>
-  </rootfiles>
-</container>"#;
-
-    const CONTENT_OPF: &[u8] = br#"<?xml version="1.0" encoding="utf-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" version="2.0">
-  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"
-            xmlns:opf="http://www.idpf.org/2007/opf">
-    <dc:title>Dune</dc:title>
-    <dc:creator opf:role="aut" opf:file-as="Herbert, Frank">Frank Herbert</dc:creator>
-  </metadata>
-  <manifest/>
-  <spine/>
-</package>"#;
-
-    fn build_test_epub() -> Vec<u8> {
-        let buf = Vec::new();
-        let cursor = std::io::Cursor::new(buf);
-        let mut zip = zip::ZipWriter::new(cursor);
-        let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
-
-        zip.start_file("META-INF/container.xml", options).unwrap();
-        zip.write_all(CONTAINER_XML).unwrap();
-
-        zip.start_file("content.opf", options).unwrap();
-        zip.write_all(CONTENT_OPF).unwrap();
-
-        zip.finish().unwrap().into_inner()
-    }
+    use crate::test_support::{CONTAINER_XML, build_test_epub};
 
     #[test]
     fn extracts_title_and_author() {

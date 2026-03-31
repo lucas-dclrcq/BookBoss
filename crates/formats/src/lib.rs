@@ -7,3 +7,6 @@ pub(crate) mod opf;
 
 pub use error::Error;
 pub use format_service::create_format_service;
+
+#[cfg(test)]
+pub(crate) mod test_support;

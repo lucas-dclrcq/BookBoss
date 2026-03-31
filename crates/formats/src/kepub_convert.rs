@@ -197,13 +197,7 @@ mod tests {
     use zip::write::SimpleFileOptions;
 
     use super::convert_to_kepub;
-
-    const CONTAINER_XML: &[u8] = br#"<?xml version="1.0"?>
-<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-  <rootfiles>
-    <rootfile full-path="content.opf" media-type="application/oebps-package+xml"/>
-  </rootfiles>
-</container>"#;
+    use crate::test_support::CONTAINER_XML;
 
     const MINIMAL_OPF: &[u8] = br#"<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0">

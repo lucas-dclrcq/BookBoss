@@ -263,45 +263,15 @@ fn ensure_cover_image_property(opf_xml: &str, item_id: &str) -> Result<String, E
 mod tests {
     use std::io::{Read, Write};
 
-    use bb_core::{
-        book::{BookStatus, FileFormat},
-        storage::{BookSidecar, SidecarFile},
-    };
     use tempfile::tempdir;
 
     use super::enrich_epub;
-    use crate::opf::parse_sidecar;
-
-    const CONTAINER_XML: &[u8] = br#"<?xml version="1.0"?>
-<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-  <rootfiles>
-    <rootfile full-path="content.opf" media-type="application/oebps-package+xml"/>
-  </rootfiles>
-</container>"#;
+    use crate::{
+        opf::parse_sidecar,
+        test_support::{CONTAINER_XML, make_sidecar},
+    };
 
     const FAKE_JPEG: &[u8] = &[0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, b'J', b'F', b'I', b'F'];
-
-    fn make_sidecar(title: &str) -> BookSidecar {
-        BookSidecar {
-            title: title.to_string(),
-            authors: vec![],
-            description: None,
-            publisher: None,
-            published_date: None,
-            language: None,
-            identifiers: vec![],
-            series: None,
-            genres: vec![],
-            tags: vec![],
-            page_count: None,
-            status: BookStatus::Available,
-            metadata_source: None,
-            files: vec![SidecarFile {
-                format: FileFormat::Epub,
-                hash: "abc".to_string(),
-            }],
-        }
-    }
 
     fn build_epub_no_cover(title: &str) -> Vec<u8> {
         let opf = format!(

@@ -134,45 +134,10 @@ async fn read_cover_bytes(cover_path: Option<&std::path::PathBuf>) -> Result<Opt
 
 #[cfg(test)]
 mod tests {
-    use std::io::Write;
-
     use bb_core::format::EBookFile;
 
     use super::*;
-
-    const CONTAINER_XML: &[u8] = br#"<?xml version="1.0"?>
-<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-  <rootfiles>
-    <rootfile full-path="content.opf" media-type="application/oebps-package+xml"/>
-  </rootfiles>
-</container>"#;
-
-    const CONTENT_OPF: &[u8] = br#"<?xml version="1.0" encoding="utf-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" version="2.0">
-  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"
-            xmlns:opf="http://www.idpf.org/2007/opf">
-    <dc:title>Dune</dc:title>
-    <dc:creator opf:role="aut" opf:file-as="Herbert, Frank">Frank Herbert</dc:creator>
-  </metadata>
-  <manifest/>
-  <spine/>
-</package>"#;
-
-    fn build_test_epub() -> Vec<u8> {
-        let buf = Vec::new();
-        let cursor = std::io::Cursor::new(buf);
-        let mut zip = zip::ZipWriter::new(cursor);
-        let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
-
-        zip.start_file("mimetype", options).unwrap();
-        zip.write_all(b"application/epub+zip").unwrap();
-        zip.start_file("META-INF/container.xml", options).unwrap();
-        zip.write_all(CONTAINER_XML).unwrap();
-        zip.start_file("content.opf", options).unwrap();
-        zip.write_all(CONTENT_OPF).unwrap();
-
-        zip.finish().unwrap().into_inner()
-    }
+    use crate::test_support::{build_test_epub, make_sidecar};
 
     #[test]
     fn detect_epub_is_supported() {
@@ -229,7 +194,7 @@ mod tests {
                 format: FileFormat::Epub,
                 path: source_path.clone(),
             },
-            sidecar: test_sidecar(),
+            sidecar: make_sidecar("Test Book"),
             cover_path: None,
             outputs: vec![EBookFile {
                 format: FileFormat::Epub,
@@ -259,7 +224,7 @@ mod tests {
                 format: FileFormat::Epub,
                 path: source_path.clone(),
             },
-            sidecar: test_sidecar(),
+            sidecar: make_sidecar("Test Book"),
             cover_path: None,
             outputs: vec![
                 EBookFile {
@@ -296,7 +261,7 @@ mod tests {
                 format: FileFormat::Epub,
                 path: source_path.clone(),
             },
-            sidecar: test_sidecar(),
+            sidecar: make_sidecar("Test Book"),
             cover_path: None,
             outputs: vec![EBookFile {
                 format: FileFormat::Kepub,
@@ -319,7 +284,7 @@ mod tests {
                 format: FileFormat::Pdf,
                 path: "/tmp/book.pdf".into(),
             },
-            sidecar: test_sidecar(),
+            sidecar: make_sidecar("Test Book"),
             cover_path: None,
             outputs: vec![EBookFile {
                 format: FileFormat::Kepub,
@@ -334,7 +299,7 @@ mod tests {
     #[tokio::test]
     async fn sidecar_roundtrip() {
         let svc = FormatServiceImpl;
-        let sidecar = test_sidecar();
+        let sidecar = make_sidecar("Test Book");
 
         let path = std::env::temp_dir().join("format_svc_sidecar_test.opf");
         svc.write_sidecar(&path, &sidecar).await.unwrap();
@@ -344,24 +309,5 @@ mod tests {
         assert_eq!(parsed.title, sidecar.title);
 
         let _ = std::fs::remove_file(&path);
-    }
-
-    fn test_sidecar() -> BookSidecar {
-        BookSidecar {
-            title: "Test Book".to_string(),
-            authors: vec![],
-            description: None,
-            publisher: None,
-            published_date: None,
-            language: None,
-            identifiers: vec![],
-            series: None,
-            genres: vec![],
-            tags: vec![],
-            page_count: None,
-            status: bb_core::book::BookStatus::Available,
-            metadata_source: None,
-            files: vec![],
-        }
     }
 }
