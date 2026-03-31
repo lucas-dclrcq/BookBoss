@@ -588,6 +588,36 @@ mod tests {
         assert!(identifiers.iter().any(|id| id.identifier_type == IdentifierType::Hardcover && id.value == "2"));
     }
 
+    #[tokio::test]
+    async fn enrich_returns_err_on_http_5xx() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(500))
+            .mount(&server)
+            .await;
+
+        let adapter = HardcoverAdapter::with_base_url("token", server.uri());
+        let result = adapter.enrich(&extracted_with_isbn13("9780765326355")).await;
+        assert!(result.is_err(), "expected Err on 5xx response, got {result:?}");
+    }
+
+    #[tokio::test]
+    async fn enrich_returns_err_on_malformed_json() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("not json"))
+            .mount(&server)
+            .await;
+
+        let adapter = HardcoverAdapter::with_base_url("token", server.uri());
+        let result = adapter.enrich(&extracted_with_isbn13("9780765326355")).await;
+        assert!(result.is_err(), "expected Err on malformed JSON, got {result:?}");
+    }
+
     #[test]
     fn contribution_type_mapping() {
         assert_eq!(HardcoverAdapter::map_contribution_type("Author"), AuthorRole::Author);

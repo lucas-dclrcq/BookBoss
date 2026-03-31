@@ -652,6 +652,36 @@ mod tests {
         assert_eq!(authors[0].name, "J.R.R. Tolkien");
     }
 
+    #[tokio::test]
+    async fn enrich_returns_err_on_http_5xx() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/books"))
+            .respond_with(ResponseTemplate::new(500))
+            .mount(&server)
+            .await;
+
+        let adapter = OpenLibraryAdapter::with_base_urls(server.uri(), server.uri());
+        let result = adapter.enrich(&extracted_with_isbn13("9780765326355")).await;
+        assert!(result.is_err(), "expected Err on 5xx response, got {result:?}");
+    }
+
+    #[tokio::test]
+    async fn enrich_returns_err_on_malformed_json() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/books"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("not json"))
+            .mount(&server)
+            .await;
+
+        let adapter = OpenLibraryAdapter::with_base_urls(server.uri(), server.uri());
+        let result = adapter.enrich(&extracted_with_isbn13("9780765326355")).await;
+        assert!(result.is_err(), "expected Err on malformed JSON, got {result:?}");
+    }
+
     #[test]
     fn parse_year_delegates_to_bb_utils() {
         // Full coverage lives in bb_utils::date::tests.

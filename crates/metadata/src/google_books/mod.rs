@@ -554,6 +554,36 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn enrich_returns_err_on_http_5xx() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/volumes"))
+            .respond_with(ResponseTemplate::new(500))
+            .mount(&server)
+            .await;
+
+        let adapter = GoogleBooksAdapter::with_base_url("token", server.uri());
+        let result = adapter.enrich(&extracted_with_isbn13("9780765326355")).await;
+        assert!(result.is_err(), "expected Err on 5xx response, got {result:?}");
+    }
+
+    #[tokio::test]
+    async fn enrich_returns_err_on_malformed_json() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/volumes"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("not json"))
+            .mount(&server)
+            .await;
+
+        let adapter = GoogleBooksAdapter::with_base_url("token", server.uri());
+        let result = adapter.enrich(&extracted_with_isbn13("9780765326355")).await;
+        assert!(result.is_err(), "expected Err on malformed JSON, got {result:?}");
+    }
+
     #[test]
     fn parse_year_delegates_to_bb_utils() {
         assert_eq!(parse_year("2010-08-31"), Some(2010));
