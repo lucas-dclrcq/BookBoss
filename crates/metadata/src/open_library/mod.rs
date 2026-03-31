@@ -77,26 +77,29 @@ impl OpenLibraryAdapter {
             .map(|id| (id.identifier_type.clone(), id.value.clone()))
     }
 
+    /// Builds a `Vec<ExtractedAuthor>` from an iterator of name strings.
+    /// All authors are assigned role `Author` with sequential `sort_order`.
+    fn authors_from_names<'a>(names: impl Iterator<Item = &'a str>) -> Vec<ExtractedAuthor> {
+        names
+            .enumerate()
+            .map(|(i, name)| {
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    clippy::cast_possible_wrap,
+                    reason = "author list index; books have far fewer authors than i32::MAX"
+                )]
+                let sort_order = i as i32;
+                ExtractedAuthor {
+                    name: name.to_string(),
+                    role: Some(AuthorRole::Author),
+                    sort_order,
+                }
+            })
+            .collect()
+    }
+
     fn map_to_extracted(data: &OlBookData, isbn_type: IdentifierType, isbn: &str) -> ExtractedMetadata {
-        let authors = data.authors.as_ref().map(|authors| {
-            authors
-                .iter()
-                .enumerate()
-                .map(|(i, a)| {
-                    #[expect(
-                        clippy::cast_possible_truncation,
-                        clippy::cast_possible_wrap,
-                        reason = "author list index; books have far fewer authors than i32::MAX"
-                    )]
-                    let sort_order = i as i32;
-                    ExtractedAuthor {
-                        name: a.name.clone(),
-                        role: Some(AuthorRole::Author),
-                        sort_order,
-                    }
-                })
-                .collect()
-        });
+        let authors = data.authors.as_ref().map(|a| Self::authors_from_names(a.iter().map(|a| a.name.as_str())));
 
         let mut identifiers = vec![ExtractedIdentifier {
             identifier_type: isbn_type,
@@ -130,25 +133,7 @@ impl OpenLibraryAdapter {
 
     /// Maps an `OlSearchDoc` (from `/search.json`) to `ExtractedMetadata`.
     fn map_search_doc_to_extracted(doc: &OlSearchDoc) -> ExtractedMetadata {
-        let authors = doc.author_name.as_ref().map(|names| {
-            names
-                .iter()
-                .enumerate()
-                .map(|(i, name)| {
-                    #[expect(
-                        clippy::cast_possible_truncation,
-                        clippy::cast_possible_wrap,
-                        reason = "author list index; books have far fewer authors than i32::MAX"
-                    )]
-                    let sort_order = i as i32;
-                    ExtractedAuthor {
-                        name: name.clone(),
-                        role: Some(AuthorRole::Author),
-                        sort_order,
-                    }
-                })
-                .collect()
-        });
+        let authors = doc.author_name.as_ref().map(|names| Self::authors_from_names(names.iter().map(String::as_str)));
 
         // Classify ISBNs by length (search results mix ISBN-10 and ISBN-13).
         let identifiers = doc.isbn.as_ref().map(|isbns| {
