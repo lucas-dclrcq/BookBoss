@@ -372,4 +372,66 @@ pub(crate) mod tests {
         assert_eq!(third.sort_order, 2);
         assert_eq!(second.role, AuthorRole::Translator);
     }
+
+    #[test]
+    fn write_empty_authors_list() {
+        use bb_core::{book::BookStatus, storage::BookSidecar};
+        let sidecar = BookSidecar {
+            title: "Untitled".to_string(),
+            authors: vec![],
+            description: None,
+            publisher: None,
+            published_date: None,
+            language: None,
+            identifiers: vec![],
+            series: None,
+            genres: vec![],
+            tags: vec![],
+            page_count: None,
+            status: BookStatus::Available,
+            metadata_source: None,
+            files: vec![],
+        };
+        let bytes = write_sidecar(&sidecar).expect("write failed");
+        let xml = std::str::from_utf8(&bytes).expect("utf8");
+        assert!(!xml.contains("dc:creator"));
+        assert!(xml.contains("<dc:title>Untitled</dc:title>"));
+    }
+
+    #[test]
+    fn write_multiple_identifiers_same_type() {
+        use bb_core::{
+            book::{BookStatus, IdentifierType},
+            storage::{BookSidecar, SidecarIdentifier},
+        };
+        let sidecar = BookSidecar {
+            title: "Test".to_string(),
+            authors: vec![],
+            description: None,
+            publisher: None,
+            published_date: None,
+            language: None,
+            identifiers: vec![
+                SidecarIdentifier {
+                    identifier_type: IdentifierType::Isbn13,
+                    value: "9780765326355".to_string(),
+                },
+                SidecarIdentifier {
+                    identifier_type: IdentifierType::Isbn13,
+                    value: "9780765326362".to_string(),
+                },
+            ],
+            series: None,
+            genres: vec![],
+            tags: vec![],
+            page_count: None,
+            status: BookStatus::Available,
+            metadata_source: None,
+            files: vec![],
+        };
+        let bytes = write_sidecar(&sidecar).expect("write failed");
+        let xml = std::str::from_utf8(&bytes).expect("utf8");
+        assert!(xml.contains("9780765326355"));
+        assert!(xml.contains("9780765326362"));
+    }
 }

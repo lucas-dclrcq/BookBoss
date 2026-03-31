@@ -781,3 +781,58 @@ mod cover_info_tests {
         assert_eq!(extract_cover_href(opf), Some("cover.jpg".to_string()));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_year_unparseable_returns_none() {
+        assert_eq!(parse_year("circa 1850"), None);
+        assert_eq!(parse_year("unknown"), None);
+        assert_eq!(parse_year(""), None);
+    }
+
+    #[test]
+    fn classify_identifier_calibre_isbn_prefix() {
+        use bb_core::book::IdentifierType;
+        let result = classify_identifier(None, "isbn:9780140449136", None);
+        assert_eq!(result, Some((IdentifierType::Isbn13, "9780140449136".to_string())));
+    }
+
+    #[test]
+    fn extract_metadata_no_authors() {
+        let opf = br#"<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>Untitled</dc:title>
+  </metadata>
+  <manifest/>
+  <spine/>
+</package>"#;
+        let meta = extract_metadata(opf).expect("parse failed");
+        assert_eq!(meta.title.as_deref(), Some("Untitled"));
+        assert!(meta.authors.is_none());
+    }
+
+    #[test]
+    fn duplicate_identifiers_same_scheme() {
+        use bb_core::book::IdentifierType;
+        let opf = br#"<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"
+            xmlns:opf="http://www.idpf.org/2007/opf">
+    <dc:title>Test</dc:title>
+    <dc:identifier opf:scheme="ISBN">9780140449136</dc:identifier>
+    <dc:identifier opf:scheme="ISBN">014044913X</dc:identifier>
+  </metadata>
+  <manifest/>
+  <spine/>
+</package>"#;
+        let meta = extract_metadata(opf).expect("parse failed");
+        let ids = meta.identifiers.as_ref().expect("expected identifiers");
+        assert_eq!(ids.len(), 2);
+        assert!(ids.iter().any(|i| i.identifier_type == IdentifierType::Isbn13));
+        assert!(ids.iter().any(|i| i.identifier_type == IdentifierType::Isbn10));
+    }
+}
