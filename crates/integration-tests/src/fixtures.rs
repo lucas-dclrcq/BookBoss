@@ -112,6 +112,9 @@ impl FormatService for StubFormatService {
             files: vec![],
         })
     }
+    async fn read_raw_opf(&self, _path: &Path) -> Result<Option<String>, Error> {
+        Ok(None)
+    }
 }
 
 // ── Pipeline service factory

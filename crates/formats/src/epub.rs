@@ -3,7 +3,7 @@ use std::{io::Read, path::Path};
 use bb_core::{Error as CoreError, pipeline::ExtractedMetadata};
 
 /// Read the raw OPF XML bytes from an EPUB file.
-pub fn read_epub_opf_xml(path: &Path) -> Result<String, crate::Error> {
+pub(crate) fn read_epub_opf_xml(path: &Path) -> Result<String, crate::Error> {
     let (bytes, _dir) = read_opf_bytes_and_dir(path)?;
     String::from_utf8(bytes).map_err(|e| crate::Error::InvalidValue(e.to_string()))
 }

@@ -37,4 +37,8 @@ pub trait FormatService: Send + Sync {
 
     /// Read a `BookSidecar` from an OPF file.
     async fn read_sidecar(&self, path: &Path) -> Result<BookSidecar, Error>;
+
+    /// Read the raw OPF XML from a book file.
+    /// Returns `Some(xml)` for EPUB, `None` for unrecognised formats.
+    async fn read_raw_opf(&self, path: &Path) -> Result<Option<String>, Error>;
 }

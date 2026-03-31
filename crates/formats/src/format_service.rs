@@ -114,6 +114,18 @@ impl FormatService for FormatServiceImpl {
 
         crate::opf::parse_sidecar(&bytes).map_err(|e| Error::Infrastructure(e.to_string()))
     }
+
+    async fn read_raw_opf(&self, path: &Path) -> Result<Option<String>, Error> {
+        if self.detect_format(path) != Some(FileFormat::Epub) {
+            return Ok(None);
+        }
+        let path = path.to_path_buf();
+        let xml = tokio::task::spawn_blocking(move || crate::epub::read_epub_opf_xml(&path))
+            .await
+            .map_err(|e| Error::Infrastructure(format!("read_raw_opf task panicked: {e}")))?
+            .map_err(|e| Error::Infrastructure(e.to_string()))?;
+        Ok(Some(xml))
+    }
 }
 
 /// Read cover bytes from an optional path. Returns `None` if no path given or
@@ -309,5 +321,33 @@ mod tests {
         assert_eq!(parsed.title, sidecar.title);
 
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[tokio::test]
+    async fn read_raw_opf_epub_returns_some() {
+        let epub_bytes = build_test_epub();
+        let path = std::env::temp_dir().join("fmt_svc_read_raw_opf.epub");
+        std::fs::write(&path, &epub_bytes).unwrap();
+        let svc = FormatServiceImpl;
+        let result = svc.read_raw_opf(&path).await.unwrap();
+        assert!(result.is_some());
+        let xml = result.unwrap();
+        assert!(xml.contains("<metadata"));
+        assert!(xml.contains("Dune"));
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[tokio::test]
+    async fn read_raw_opf_nonepub_returns_none() {
+        let svc = FormatServiceImpl;
+        let result = svc.read_raw_opf(std::path::Path::new("/tmp/book.pdf")).await.unwrap();
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn extract_metadata_missing_file() {
+        let svc = FormatServiceImpl;
+        let result = svc.extract_metadata(std::path::Path::new("/tmp/nonexistent_bookboss_test.epub")).await;
+        result.unwrap_err();
     }
 }
