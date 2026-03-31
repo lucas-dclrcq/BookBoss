@@ -110,6 +110,15 @@ fn parse_field_prefix(prefix: &str) -> Option<SearchField> {
 
 const FIELD_NAMES: [&str; 6] = ["title", "author", "series", "genre", "tag", "status"];
 
+pub(crate) const PLACEHOLDER_TIPS: [&str; 6] = [
+    "Try: author:\"Brad Thor\"",
+    "Try: status:unread",
+    "Try: genre:fantasy",
+    "Try: series:dune",
+    "Try: tag:upnext",
+    "Try: author:tolkien fantasy",
+];
+
 /// Returns `true` if `word` is a known field name or a prefix of one. Used to
 /// suppress intermediate bare-word filtering while the user is typing a field
 /// prefix. The word is only committed as a bare search token once the user

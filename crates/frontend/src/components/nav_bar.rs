@@ -351,12 +351,25 @@ pub(crate) fn NavBar() -> Element {
     let mut focused = use_signal(|| false);
     let mut help_open = use_signal(|| false);
     let mut hint_seen = use_signal(|| false);
+    let mut tip_index = use_signal(|| 0usize);
 
     use_hook(move || {
         spawn(async move {
             if let Ok(val) = document::eval("return window.localStorage.getItem('search_hint_seen')").await {
                 if !val.is_null() {
                     hint_seen.set(true);
+                }
+            }
+        });
+    });
+
+    use_hook(move || {
+        spawn(async move {
+            loop {
+                let mut timer = document::eval("setTimeout(() => dioxus.send(true), 3000)");
+                let _ = timer.recv::<bool>().await;
+                if *focused.peek() && SEARCH_TEXT.peek().is_empty() {
+                    tip_index.with_mut(|i| *i = (*i + 1) % crate::components::search::PLACEHOLDER_TIPS.len());
                 }
             }
         });
@@ -372,10 +385,14 @@ pub(crate) fn NavBar() -> Element {
         Route::BooksPage | Route::ShelfPage { .. } | Route::AuthorDetailPage { .. } | Route::SeriesDetailPage { .. } | Route::AuthorsPage | Route::SeriesPage
     );
 
-    let search_placeholder = match route {
-        Route::AuthorsPage => "Search authors…",
-        Route::SeriesPage => "Search series…",
-        _ => "Search books…",
+    let search_placeholder: &str = if focused() && SEARCH_TEXT().is_empty() {
+        crate::components::search::PLACEHOLDER_TIPS[tip_index() % crate::components::search::PLACEHOLDER_TIPS.len()]
+    } else {
+        match route {
+            Route::AuthorsPage => "Search authors…",
+            Route::SeriesPage => "Search series…",
+            _ => "Search books…",
+        }
     };
 
     let on_logout = move |_| {
