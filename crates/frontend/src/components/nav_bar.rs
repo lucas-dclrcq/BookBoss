@@ -348,6 +348,25 @@ pub(crate) fn NavBar() -> Element {
     let mut show_about = use_signal(|| false);
     let route = use_route::<Route>();
 
+    let mut focused = use_signal(|| false);
+    let mut help_open = use_signal(|| false);
+    let mut hint_seen = use_signal(|| false);
+
+    use_hook(move || {
+        spawn(async move {
+            if let Ok(val) = document::eval("return window.localStorage.getItem('search_hint_seen')").await {
+                if !val.is_null() {
+                    hint_seen.set(true);
+                }
+            }
+        });
+    });
+
+    let show_hint = use_memo(move || {
+        let empty = SEARCH_TEXT().is_empty();
+        (focused() && empty && !hint_seen()) || (help_open() && empty)
+    });
+
     let search_active = matches!(
         route,
         Route::BooksPage | Route::ShelfPage { .. } | Route::AuthorDetailPage { .. } | Route::SeriesDetailPage { .. } | Route::AuthorsPage | Route::SeriesPage
@@ -400,40 +419,14 @@ pub(crate) fn NavBar() -> Element {
             }
             div { class: "absolute left-1/2 -translate-x-1/2 w-full max-w-md px-4",
                 if search_active {
-                    div { class: "relative w-full",
-                        // Search icon
-                        svg {
-                            class: "absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none",
-                            xmlns: "http://www.w3.org/2000/svg",
-                            fill: "none",
-                            view_box: "0 0 24 24",
-                            stroke_width: "2",
-                            stroke: "currentColor",
-                            path {
-                                stroke_linecap: "round",
-                                stroke_linejoin: "round",
-                                d: "m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z",
-                            }
-                        }
-                        input {
-                            class: "w-full pl-9 pr-8 py-1.5 rounded text-sm text-gray-900 bg-white/90 placeholder-gray-400 outline-none focus:bg-white focus:ring-2 focus:ring-indigo-300",
-                            r#type: "text",
-                            placeholder: "{search_placeholder}",
-                            value: SEARCH_TEXT(),
-                            oninput: move |e| *SEARCH_TEXT.write() = e.value(),
-                            onkeydown: move |e: KeyboardEvent| {
-                                if e.key() == Key::Escape {
-                                    *SEARCH_TEXT.write() = String::new();
-                                }
-                            },
-                        }
-                        // Clear button
-                        if !SEARCH_TEXT().is_empty() {
-                            button {
-                                class: "absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer",
-                                onclick: move |_| *SEARCH_TEXT.write() = String::new(),
+                    div { class: "flex items-center gap-2",
+                        // Input column — flex-1 takes all space; relative for hint strip positioning
+                        div { class: "relative flex-1",
+                            // ── Input container ──────────────────────────────────────────
+                            div { class: "relative w-full",
+                                // Search icon
                                 svg {
-                                    class: "w-4 h-4",
+                                    class: "absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none",
                                     xmlns: "http://www.w3.org/2000/svg",
                                     fill: "none",
                                     view_box: "0 0 24 24",
@@ -442,10 +435,90 @@ pub(crate) fn NavBar() -> Element {
                                     path {
                                         stroke_linecap: "round",
                                         stroke_linejoin: "round",
-                                        d: "M6 18 18 6M6 6l12 12",
+                                        d: "m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z",
+                                    }
+                                }
+                                input {
+                                    class: "w-full pl-9 pr-8 py-1.5 rounded text-sm text-gray-900 bg-white/90 placeholder-gray-400 outline-none focus:bg-white focus:ring-2 focus:ring-indigo-300",
+                                    r#type: "text",
+                                    placeholder: "{search_placeholder}",
+                                    value: SEARCH_TEXT(),
+                                    onfocus: move |_| {
+                                        focused.set(true);
+                                    },
+                                    onblur: move |_| {
+                                        focused.set(false);
+                                        help_open.set(false);
+                                        if !hint_seen() {
+                                            hint_seen.set(true);
+                                            spawn(async move {
+                                                let _ = document::eval(
+                                                    "window.localStorage.setItem('search_hint_seen','1')",
+                                                )
+                                                .await;
+                                            });
+                                        }
+                                    },
+                                    oninput: move |e| {
+                                        *SEARCH_TEXT.write() = e.value();
+                                        help_open.set(false);
+                                        if !hint_seen() {
+                                            hint_seen.set(true);
+                                            spawn(async move {
+                                                let _ = document::eval(
+                                                    "window.localStorage.setItem('search_hint_seen','1')",
+                                                )
+                                                .await;
+                                            });
+                                        }
+                                    },
+                                    onkeydown: move |e: KeyboardEvent| {
+                                        if e.key() == Key::Escape {
+                                            *SEARCH_TEXT.write() = String::new();
+                                        }
+                                    },
+                                }
+                                // Clear button
+                                if !SEARCH_TEXT().is_empty() {
+                                    button {
+                                        class: "absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer",
+                                        onclick: move |_| *SEARCH_TEXT.write() = String::new(),
+                                        svg {
+                                            class: "w-4 h-4",
+                                            xmlns: "http://www.w3.org/2000/svg",
+                                            fill: "none",
+                                            view_box: "0 0 24 24",
+                                            stroke_width: "2",
+                                            stroke: "currentColor",
+                                            path {
+                                                stroke_linecap: "round",
+                                                stroke_linejoin: "round",
+                                                d: "M6 18 18 6M6 6l12 12",
+                                            }
+                                        }
                                     }
                                 }
                             }
+                            // ── Hint strip (absolute dropdown below the input) ────────────
+                            if show_hint() {
+                                div {
+                                    class: "absolute top-full left-0 right-0 mt-1 bg-blue-50 border border-blue-200 rounded-md px-3 py-2 text-xs text-blue-700 z-50 shadow-sm leading-relaxed",
+                                    span { class: "font-semibold", "field:value" }
+                                    " to narrow results — "
+                                    for field in ["author:", "series:", "genre:", "tag:", "status:", "title:"] {
+                                        code { class: "inline-block bg-blue-100 rounded px-1 mr-1 font-mono", "{field}" }
+                                    }
+                                    " · Quote multi-word values: "
+                                    code { class: "bg-blue-100 rounded px-1 font-mono", "author:\"Brad Thor\"" }
+                                }
+                            }
+                        }
+                        // ── ? button ──────────────────────────────────────────────────────
+                        button {
+                            class: "shrink-0 text-xs px-2 py-0.5 rounded-full bg-indigo-500 hover:bg-indigo-400 text-white font-medium cursor-pointer leading-tight",
+                            title: "Search help",
+                            onclick: move |_| help_open.set(true),
+                            "?"
                         }
                     }
                 }
