@@ -42,7 +42,7 @@ use crate::{
     event::{EventService, create_event_service},
     format::FormatService,
     health::{HealthCheckSubsystem, HealthService, create_health_subsystem},
-    import::{BookdropScanSubsystem, ImportJobService, create_bookdrop_scan_subsystem, create_import_job_service},
+    import::{BookdropScanSubsystem, ImportJobService, create_bookdrop_scan_subsystem},
     jobs::{JobService, JobWorker, create_job_service},
     library::{LibraryService, LibraryServiceImpl},
     message::{SystemMessageService, SystemMessageServiceImpl},
@@ -70,11 +70,10 @@ pub struct ExternalServices {
     pub(crate) file_store: Arc<dyn FileStoreService>,
     pub(crate) format_service: Arc<dyn FormatService>,
     /// Path to the bookdrop directory for automatic import scanning.
-    #[builder(default)]
-    pub(crate) bookdrop_path: Option<PathBuf>,
-    /// Polling interval for the bookdrop scanner.
-    #[builder(default)]
-    pub(crate) scan_interval: Option<Duration>,
+    pub(crate) bookdrop_path: PathBuf,
+    /// Polling interval for the bookdrop scanner. Defaults to 60 seconds.
+    #[builder(default = "Duration::from_secs(60)")]
+    pub(crate) scan_interval: Duration,
 }
 
 pub struct CoreServices {
@@ -127,19 +126,16 @@ impl CoreServices {
         let (health_service, health_subsystem) = create_health_subsystem(job_service.clone(), event_service.clone());
         let system_message_service: Arc<dyn SystemMessageService> = Arc::new(SystemMessageServiceImpl::new(repository_service.clone(), event_service.clone()));
 
-        // Create the bookdrop scan subsystem if configured.
-        let (import_job_service, bookdrop_scan_subsystem) = if let (Some(path), Some(interval)) = (bookdrop_path, scan_interval) {
+        let (import_job_service, bookdrop_scan_subsystem) = {
             let (svc, subsystem) = create_bookdrop_scan_subsystem(
                 repository_service.clone(),
                 file_store.clone(),
                 format_service.clone(),
                 system_message_service.clone(),
-                path,
-                interval,
+                bookdrop_path,
+                scan_interval,
             );
             (svc, Some(subsystem))
-        } else {
-            (create_import_job_service(repository_service.clone()), None)
         };
 
         Self {

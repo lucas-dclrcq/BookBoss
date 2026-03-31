@@ -184,8 +184,8 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
         .repository_service(repository_service.clone())
         .file_store(file_store)
         .format_service(format_service)
-        .bookdrop_path(Some(config.import.bookdrop_path.clone()))
-        .scan_interval(Some(Duration::from_secs(config.import.scan_interval_secs)))
+        .bookdrop_path(config.import.bookdrop_path.clone())
+        .scan_interval(Duration::from_secs(config.import.scan_interval_secs))
         .build()
         .context("ExternalServices missing required field")?;
     let core_services = create_services(external, &config.encryption_secret).context("Couldn't create core services")?;

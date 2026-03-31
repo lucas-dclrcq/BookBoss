@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use crate::{
     ExternalServicesBuilder,
@@ -78,4 +78,5 @@ pub fn default_external_services_builder() -> ExternalServicesBuilder {
     ExternalServicesBuilder::default()
         .file_store(nop_file_store())
         .format_service(nop_format_service())
+        .bookdrop_path(PathBuf::from("/tmp/bookboss-test-bookdrop"))
 }
