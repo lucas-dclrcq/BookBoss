@@ -24,7 +24,10 @@ async fn trigger_bookdrop_scan() -> Result<(), ServerFnError> {
     Ok(())
 }
 
-use super::SEARCH_TEXT;
+use super::{
+    SEARCH_TEXT,
+    search::{PLACEHOLDER_TIPS, apply_completion, compute_completion, next_cycle_input},
+};
 use crate::Route;
 
 #[get("/api/v1/incoming/pending_count", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
@@ -352,6 +355,9 @@ pub(crate) fn NavBar() -> Element {
     let mut help_open = use_signal(|| false);
     let mut hint_seen = use_signal(|| false);
     let mut tip_index = use_signal(|| 0usize);
+    let mut completion = use_signal(String::new); // ghost-text suffix (e.g., "hor:")
+    let mut cycle_prefix = use_signal(String::new); // prefix being cycled (e.g., "s")
+    let mut cycle_idx = use_signal(|| 0usize); // position in cycle
 
     use_hook(move || {
         spawn(async move {
@@ -369,7 +375,7 @@ pub(crate) fn NavBar() -> Element {
                 let mut timer = document::eval("setTimeout(() => dioxus.send(true), 3000)");
                 let _ = timer.recv::<bool>().await;
                 if *focused.peek() && SEARCH_TEXT.peek().is_empty() {
-                    tip_index.with_mut(|i| *i = (*i + 1) % crate::components::search::PLACEHOLDER_TIPS.len());
+                    tip_index.with_mut(|i| *i = (*i + 1) % PLACEHOLDER_TIPS.len());
                 }
             }
         });
@@ -386,7 +392,7 @@ pub(crate) fn NavBar() -> Element {
     );
 
     let search_placeholder: &str = if focused() && SEARCH_TEXT().is_empty() {
-        crate::components::search::PLACEHOLDER_TIPS[tip_index() % crate::components::search::PLACEHOLDER_TIPS.len()]
+        PLACEHOLDER_TIPS[tip_index() % PLACEHOLDER_TIPS.len()]
     } else {
         match route {
             Route::AuthorsPage => "Search authors…",
@@ -440,7 +446,7 @@ pub(crate) fn NavBar() -> Element {
                         // Input column — flex-1 takes all space; relative for hint strip positioning
                         div { class: "relative flex-1",
                             // ── Input container ──────────────────────────────────────────
-                            div { class: "relative w-full",
+                            div { class: "relative w-full bg-white/90 focus-within:bg-white rounded focus-within:ring-2 focus-within:ring-indigo-300",
                                 // Search icon
                                 svg {
                                     class: "absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none",
@@ -455,8 +461,23 @@ pub(crate) fn NavBar() -> Element {
                                         d: "m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z",
                                     }
                                 }
+                                if !completion().is_empty() {
+                                    span {
+                                        class: "absolute inset-0 flex items-center pl-9 pr-8 text-sm pointer-events-none overflow-hidden select-none",
+                                        "aria-hidden": "true",
+                                        span {
+                                            style: "color: transparent; white-space: pre;",
+                                            "{SEARCH_TEXT()}"
+                                        }
+                                        span {
+                                            class: "text-gray-400",
+                                            style: "white-space: pre;",
+                                            "{completion()}"
+                                        }
+                                    }
+                                }
                                 input {
-                                    class: "w-full pl-9 pr-8 py-1.5 rounded text-sm text-gray-900 bg-white/90 placeholder-gray-400 outline-none focus:bg-white focus:ring-2 focus:ring-indigo-300",
+                                    class: "relative w-full pl-9 pr-8 py-1.5 text-sm text-gray-900 bg-transparent placeholder-gray-400 outline-none",
                                     r#type: "text",
                                     placeholder: "{search_placeholder}",
                                     value: SEARCH_TEXT(),
@@ -477,7 +498,9 @@ pub(crate) fn NavBar() -> Element {
                                         }
                                     },
                                     oninput: move |e| {
-                                        *SEARCH_TEXT.write() = e.value();
+                                        let val = e.value();
+                                        let new_completion = compute_completion(&val, 0);
+                                        *SEARCH_TEXT.write() = val;
                                         help_open.set(false);
                                         if !hint_seen() {
                                             hint_seen.set(true);
@@ -488,10 +511,64 @@ pub(crate) fn NavBar() -> Element {
                                                 .await;
                                             });
                                         }
+                                        // Recompute completion from scratch on every input change
+                                        cycle_prefix.set(String::new());
+                                        cycle_idx.set(0);
+                                        completion.set(new_completion);
                                     },
                                     onkeydown: move |e: KeyboardEvent| {
-                                        if e.key() == Key::Escape {
-                                            *SEARCH_TEXT.write() = String::new();
+                                        match e.key() {
+                                            Key::Tab => {
+                                                let current_completion = completion();
+                                                if !current_completion.is_empty() {
+                                                    // First Tab: apply current completion
+                                                    e.prevent_default();
+                                                    let current_input = SEARCH_TEXT();
+                                                    // Store prefix for possible cycling (before moving current_input)
+                                                    let prefix = current_input
+                                                        .split_whitespace()
+                                                        .last()
+                                                        .unwrap_or("")
+                                                        .to_string();
+                                                    let applied = apply_completion(&current_input, &current_completion);
+                                                    (*SEARCH_TEXT.write()).clone_from(&applied);
+                                                    cycle_prefix.set(prefix.clone());
+                                                    let new_idx = cycle_idx() + 1;
+                                                    cycle_idx.set(new_idx);
+                                                    completion.set(String::new()); // applied ends with ':', so no ghost after first Tab
+                                                } else if !cycle_prefix().is_empty() {
+                                                    // Subsequent Tab: cycle to next match
+                                                    e.prevent_default();
+                                                    let prefix = cycle_prefix();
+                                                    let current_idx = cycle_idx();
+                                                    let new_idx = current_idx + 1;
+                                                    cycle_idx.set(new_idx);
+                                                    // Use current_idx (pre-increment): next_cycle_input selects the slot
+                                                    // to transition *into*, so we pass the index of the desired next match,
+                                                    // not the index after it.
+                                                    if let Some(cycled) = next_cycle_input(&SEARCH_TEXT(), &prefix, current_idx) {
+                                                        *SEARCH_TEXT.write() = cycled;
+                                                        completion.set(String::new());
+                                                    }
+                                                }
+                                            }
+                                            Key::Escape => {
+                                                if !completion().is_empty() || !cycle_prefix().is_empty() {
+                                                    completion.set(String::new());
+                                                    cycle_prefix.set(String::new());
+                                                    cycle_idx.set(0);
+                                                } else {
+                                                    *SEARCH_TEXT.write() = String::new();
+                                                }
+                                            }
+                                            _ => {
+                                                // Any key other than Tab resets completion cycling
+                                                if !completion().is_empty() || !cycle_prefix().is_empty() {
+                                                    completion.set(String::new());
+                                                    cycle_prefix.set(String::new());
+                                                    cycle_idx.set(0);
+                                                }
+                                            }
                                         }
                                     },
                                 }

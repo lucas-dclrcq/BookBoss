@@ -128,6 +128,69 @@ fn is_field_prefix_start(word: &str) -> bool {
     FIELD_NAMES.iter().any(|name| name.starts_with(&lower))
 }
 
+/// Returns the ghost-text suffix to display for the last token in `input`.
+///
+/// The suffix is the remaining characters of the matched field name plus a
+/// colon (e.g., `"aut"` + cycle 0 → `"hor:"`). Returns an empty string when:
+/// - `input` is empty or ends with whitespace (nothing being typed)
+/// - The last token already contains a colon (value entry, not field name)
+/// - No field name starts with the last token
+///
+/// `cycle_idx` selects among multiple matches (alphabetical order) and wraps.
+pub(crate) fn compute_completion(input: &str, cycle_idx: usize) -> String {
+    if input.is_empty() || input.ends_with(|c: char| c.is_whitespace()) {
+        return String::new();
+    }
+
+    let last_token = input.split_whitespace().last().unwrap_or("");
+    if last_token.contains(':') {
+        return String::new();
+    }
+
+    let lower = last_token.to_lowercase();
+    let field_matches: Vec<&str> = FIELD_NAMES.iter().copied().filter(|name| name.starts_with(lower.as_str())).collect();
+
+    if field_matches.is_empty() {
+        return String::new();
+    }
+
+    let matched = field_matches[cycle_idx % field_matches.len()];
+    format!("{}:", &matched[lower.len()..])
+}
+
+/// Applies a completion suffix to the last token of `input`.
+///
+/// `suffix` is the return value of `compute_completion` (e.g., `"hor:"`).
+/// The result is the original input with the suffix appended to the last token,
+/// so `apply_completion("aut", "hor:")` → `"author:"`.
+pub(crate) fn apply_completion(input: &str, suffix: &str) -> String {
+    let last_space = input.rfind(|c: char| c.is_whitespace()).map_or(0, |i| i + 1);
+    format!("{}{}{}", &input[..last_space], &input[last_space..], suffix)
+}
+
+/// Produces the next cycled input string when Tab is pressed after a
+/// completion has already been applied (shell-style cycling).
+///
+/// `current_input` is the full input after the previous Tab (e.g. `"series:"`).
+/// `cycle_prefix` is the original prefix before any Tab (e.g. `"s"`).
+/// `cycle_idx` is the (already-incremented) cycle counter.
+///
+/// Returns `None` when there is only one match for `cycle_prefix` (no cycling
+/// possible) or when `cycle_prefix` has no matches.
+pub(crate) fn next_cycle_input(current_input: &str, cycle_prefix: &str, cycle_idx: usize) -> Option<String> {
+    let lower = cycle_prefix.to_lowercase();
+    let field_matches: Vec<&str> = FIELD_NAMES.iter().copied().filter(|name| name.starts_with(lower.as_str())).collect();
+
+    if field_matches.len() < 2 {
+        return None;
+    }
+
+    let next_field = field_matches[cycle_idx % field_matches.len()];
+    let last_space = current_input.rfind(|c: char| c.is_whitespace()).map_or(0, |i| i + 1);
+    let head = &current_input[..last_space];
+    Some(format!("{head}{next_field}:"))
+}
+
 /// Collects the value after a field prefix colon.
 /// Handles quoted values (`"Brad Thor"`) and unquoted single words.
 fn collect_value(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> String {
@@ -513,5 +576,94 @@ mod tests {
         let books = vec![make_book_with_status("Dune", Some("Reading"))];
         let result = filter_books_by_search(books, "status:READING");
         assert_eq!(result.len(), 1);
+    }
+
+    // ── Tab-completion helpers ──
+
+    #[test]
+    fn completion_empty_input() {
+        assert_eq!(compute_completion("", 0), "");
+    }
+
+    #[test]
+    fn completion_no_match() {
+        assert_eq!(compute_completion("xyz", 0), "");
+        assert_eq!(compute_completion("foo:bar", 0), ""); // last token has colon
+    }
+
+    #[test]
+    fn completion_partial_prefix() {
+        assert_eq!(compute_completion("aut", 0), "hor:");
+        assert_eq!(compute_completion("autho", 0), "r:");
+        assert_eq!(compute_completion("ge", 0), "nre:");
+        assert_eq!(compute_completion("ta", 0), "g:");
+        assert_eq!(compute_completion("ti", 0), "tle:");
+    }
+
+    #[test]
+    fn completion_exact_field_name() {
+        assert_eq!(compute_completion("author", 0), ":");
+        assert_eq!(compute_completion("tag", 0), ":");
+    }
+
+    #[test]
+    fn completion_after_colon_suppressed() {
+        assert_eq!(compute_completion("author:", 0), "");
+        assert_eq!(compute_completion("author:brad", 0), "");
+    }
+
+    #[test]
+    fn completion_after_space_uses_last_word() {
+        assert_eq!(compute_completion("author:thor s", 0), "eries:");
+        assert_eq!(compute_completion("author:thor s", 1), "tatus:");
+    }
+
+    #[test]
+    fn completion_trailing_space_no_match() {
+        assert_eq!(compute_completion("author ", 0), "");
+    }
+
+    #[test]
+    fn completion_ambiguous_prefix_cycles() {
+        assert_eq!(compute_completion("s", 0), "eries:");
+        assert_eq!(compute_completion("s", 1), "tatus:");
+        assert_eq!(compute_completion("s", 2), "eries:"); // wraps
+    }
+
+    #[test]
+    fn apply_completion_simple() {
+        assert_eq!(apply_completion("aut", "hor:"), "author:");
+        assert_eq!(apply_completion("ge", "nre:"), "genre:");
+        assert_eq!(apply_completion("author", ":"), "author:");
+    }
+
+    #[test]
+    fn apply_completion_preserves_prefix() {
+        assert_eq!(apply_completion("author:thor s", "eries:"), "author:thor series:");
+    }
+
+    #[test]
+    fn next_cycle_input_replaces_completed_field() {
+        assert_eq!(next_cycle_input("series:", "s", 1), Some("status:".to_string()));
+        assert_eq!(next_cycle_input("status:", "s", 2), Some("series:".to_string()));
+    }
+
+    #[test]
+    fn next_cycle_input_single_match_returns_none() {
+        assert_eq!(next_cycle_input("genre:", "ge", 1), None);
+    }
+
+    #[test]
+    fn apply_completion_empty_suffix() {
+        // Empty suffix returns input unchanged
+        assert_eq!(apply_completion("author:thor", ""), "author:thor");
+        assert_eq!(apply_completion("", ""), "");
+    }
+
+    #[test]
+    fn next_cycle_input_multi_token_input() {
+        // Cycling works correctly when there are tokens before the completed field
+        assert_eq!(next_cycle_input("author:thor series:", "s", 1), Some("author:thor status:".to_string()));
+        assert_eq!(next_cycle_input("author:thor status:", "s", 2), Some("author:thor series:".to_string()));
     }
 }
