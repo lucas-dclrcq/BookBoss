@@ -61,7 +61,11 @@ pub(crate) async fn serve_book_file(
     let original_file = files.iter().find(|f| f.format == format && f.file_role == FileRole::Original);
 
     if enriched_file.is_none() && original_file.is_none() {
-        return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap();
+        return Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .header(header::CONTENT_TYPE, HeaderValue::from_static("text/plain"))
+            .body(Body::from("This file is not available and may be queued for regeneration."))
+            .unwrap();
     }
 
     let ext = format.extension();
@@ -74,7 +78,11 @@ pub(crate) async fn serve_book_file(
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 // Enriched record exists but file not on disk yet — fall back to original.
                 let Some(original) = original_file else {
-                    return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap();
+                    return Response::builder()
+                        .status(StatusCode::NOT_FOUND)
+                        .header(header::CONTENT_TYPE, HeaderValue::from_static("text/plain"))
+                        .body(Body::from("This file is not available and may be queued for regeneration."))
+                        .unwrap();
                 };
                 let orig_path = core_services.file_store.resolve(&original.path);
                 match tokio::fs::read(&orig_path).await {

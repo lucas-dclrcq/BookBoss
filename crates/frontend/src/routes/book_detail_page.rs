@@ -623,6 +623,8 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                                         rsx! {
                                             a {
                                                 href,
+                                                target: "_blank",
+                                                rel: "noopener noreferrer",
                                                 class: "inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-gray-100 text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors",
                                                 span { class: "font-medium", "{file.format}" }
                                                 span { class: "text-gray-400", "↓ {size_str}" }
