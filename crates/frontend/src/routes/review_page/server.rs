@@ -249,6 +249,7 @@ pub(super) async fn get_review_data(job_token: String) -> Result<BookReviewData,
     Ok(BookReviewData {
         job_token: job.token.to_string(),
         book_token: book.token.to_string(),
+        updated_at: book.updated_at.timestamp().to_string(),
         title: book.title,
         description: book.description.unwrap_or_default(),
         published_date: book.published_date.map(|y| y.to_string()).unwrap_or_default(),
@@ -542,6 +543,7 @@ pub(crate) async fn get_book_for_edit(book_token: String) -> Result<BookReviewDa
     Ok(BookReviewData {
         job_token: String::new(),
         book_token: book.token.to_string(),
+        updated_at: book.updated_at.timestamp().to_string(),
         title: book.title,
         description: book.description.unwrap_or_default(),
         published_date: book.published_date.map(|y| y.to_string()).unwrap_or_default(),

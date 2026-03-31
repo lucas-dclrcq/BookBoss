@@ -50,6 +50,7 @@ pub(crate) struct BookDetail {
     pub can_edit: bool,
     pub can_delete: bool,
     pub reading_state: Option<ReadingStateDto>,
+    pub updated_at: String,
 }
 
 #[cfg(feature = "server")]
@@ -226,6 +227,7 @@ async fn get_book(token: String) -> Result<BookDetail, ServerFnError> {
         can_edit,
         can_delete,
         reading_state,
+        updated_at: book.updated_at.timestamp().to_string(),
     })
 }
 
@@ -479,6 +481,7 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                         // Cover
                         BookCover {
                             token: book.token.clone(),
+                            updated_at: book.updated_at.clone(),
                             progress_pct: book.reading_state.as_ref()
                                 .filter(|rs| matches!(rs.status.as_str(), "Reading" | "Rereading" | "Paused"))
                                 .and_then(|rs| rs.progress_pct),
@@ -667,12 +670,12 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
 // ---------------------------------------------------------------------------
 
 #[component]
-fn BookCover(token: String, progress_pct: Option<u8>) -> Element {
+fn BookCover(token: String, updated_at: String, progress_pct: Option<u8>) -> Element {
     let pct = progress_pct.unwrap_or(0);
     rsx! {
         div { class: "shrink-0 relative w-36 self-start",
             img {
-                src: "/api/v1/covers/{token}",
+                src: "/api/v1/covers/{token}?v={updated_at}",
                 class: "w-full block rounded shadow-md",
                 style: "aspect-ratio: 2/3; object-fit: cover",
             }

@@ -29,6 +29,7 @@ pub(crate) struct BookSummary {
     pub tags: Vec<String>,
     pub reading_state: Option<ReadingStateDto>,
     pub created_at: String,
+    pub updated_at: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -151,6 +152,7 @@ pub(crate) async fn hydrate_books(
                 tags: book_tags[idx].clone(),
                 reading_state: reading_map.and_then(|m| m.get(&book.id).cloned()),
                 created_at: book.created_at.to_rfc3339(),
+                updated_at: book.updated_at.timestamp().to_string(),
             }
         })
         .collect();
@@ -309,7 +311,7 @@ fn CurrentlyReadingSection(books: Vec<BookSummary>) -> Element {
                                     navigator.push(Route::BookDetailPage { token: tok.clone() });
                                 },
                                 img {
-                                    src: "/api/v1/covers/{book.token}",
+                                    src: "/api/v1/covers/{book.token}?v={book.updated_at}",
                                     alt: "{book.title}",
                                     class: "w-full object-cover rounded shadow-sm",
                                     style: "aspect-ratio: 2/3",

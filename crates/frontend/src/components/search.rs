@@ -334,6 +334,7 @@ mod tests {
             tags: tags.iter().map(std::string::ToString::to_string).collect(),
             reading_state: None,
             created_at: String::new(),
+            updated_at: String::new(),
         }
     }
 

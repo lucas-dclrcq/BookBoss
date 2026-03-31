@@ -11,6 +11,7 @@ pub(crate) type IdentifierMap = HashMap<String, String>;
 pub(crate) struct BookReviewData {
     pub job_token: String,
     pub book_token: String,
+    pub updated_at: String,
     pub title: String,
     pub description: String,
     pub published_date: String,
