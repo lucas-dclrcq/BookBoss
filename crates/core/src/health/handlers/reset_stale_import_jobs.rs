@@ -4,7 +4,7 @@ use chrono::{Duration, Utc};
 
 use crate::{
     CoreServices, Error,
-    import::{ImportJobToken, ImportStatus},
+    import::ImportStatus,
     jobs::JobHandler,
     message::{MessageSeverity, NewSystemMessage},
     repository::{read_only_transaction, transaction},
@@ -43,7 +43,7 @@ impl JobHandler for ResetStaleImportJobsHandler {
 
         // Pre-check file existence for stuck in-progress jobs so we can move
         // missing-file jobs to Error rather than endlessly resetting them.
-        let mut missing_file_jobs: Vec<(ImportJobToken, String)> = Vec::new();
+        let mut missing_file_jobs: Vec<(String, String)> = Vec::new();
         let mut jobs_to_update = stale_jobs.clone();
         for job in &mut jobs_to_update {
             if matches!(job.status, ImportStatus::Extracting | ImportStatus::Identifying) {
@@ -51,7 +51,10 @@ impl JobHandler for ResetStaleImportJobsHandler {
                     job.status = ImportStatus::Pending;
                     job.error_message = Some("Reset by health check: stuck in processing state".to_string());
                 } else {
-                    missing_file_jobs.push((job.token, job.file_path.clone()));
+                    let file_name = std::path::Path::new(&job.file_path)
+                        .file_name()
+                        .map_or_else(|| job.file_path.clone(), |n| n.to_string_lossy().into_owned());
+                    missing_file_jobs.push((file_name, job.file_path.clone()));
                     job.status = ImportStatus::Error;
                     job.error_message = Some(format!("file no longer exists at {}", job.file_path));
                 }
@@ -77,14 +80,14 @@ impl JobHandler for ResetStaleImportJobsHandler {
         .await?;
 
         // Post individual error messages for jobs whose file has gone missing.
-        for (token, file_path) in &missing_file_jobs {
-            tracing::error!(%token, %file_path, "import job moved to Error: file no longer exists");
+        for (file_name, file_path) in &missing_file_jobs {
+            tracing::error!(%file_name, %file_path, "import job moved to Error: file no longer exists");
             self.core
                 .system_message_service
                 .add_message(NewSystemMessage {
                     source_task: Self::JOB_TYPE.to_string(),
                     severity: MessageSeverity::Error,
-                    message: format!("Import job {token} moved to Error: file no longer exists at {file_path}"),
+                    message: format!("Import job for \"{file_name}\" moved to Error: original file no longer exists"),
                 })
                 .await?;
         }
@@ -111,7 +114,7 @@ mod tests {
     use super::*;
     use crate::{
         book::FileFormat,
-        import::{ImportJob, repository::import_job::MockImportJobRepository},
+        import::{ImportJob, ImportJobToken, repository::import_job::MockImportJobRepository},
         message::repository::MockSystemMessageRepository,
         repository::testing::default_repository_service_builder,
         test_support::*,
@@ -206,7 +209,7 @@ mod tests {
 
         msg_repo.expect_add_message().once().returning(|_, msg| {
             assert_eq!(msg.severity, MessageSeverity::Error);
-            assert!(msg.message.contains("missing.epub"), "message should include file path");
+            assert!(msg.message.contains("missing.epub"), "message should include file name");
             let msg = crate::message::SystemMessage {
                 id: 1,
                 source_task: msg.source_task,

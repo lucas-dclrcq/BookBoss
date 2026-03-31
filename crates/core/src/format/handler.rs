@@ -251,13 +251,22 @@ impl JobHandler for EnrichBookFilesHandler {
         let result = self.run(book_id).await;
         if let Err(ref e) = result {
             tracing::error!(book_id, error = %e, "enrich_book_files failed");
+            let repo = self.core.repository_service.clone();
+            let title = read_only_transaction(&**self.core.repository_service.repository(), |tx| {
+                let repo = repo.clone();
+                Box::pin(async move { Ok(repo.book_repository().find_by_id(tx, book_id).await?.map(|b| b.title)) })
+            })
+            .await
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| format!("#{book_id}"));
             let _ = self
                 .core
                 .system_message_service
                 .add_message(NewSystemMessage {
                     source_task: Self::JOB_TYPE.to_string(),
                     severity: MessageSeverity::Error,
-                    message: format!("Enrichment failed for book {book_id}: {e}"),
+                    message: format!("Enrichment failed for \"{title}\": {e}"),
                 })
                 .await;
         }
