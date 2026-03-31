@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.15](https://github.com/szinn/BookBoss/compare/v0.7.14..v0.7.15) - 2026-03-31
+
+### Features
+
+- _(database)_ Add missing database indices - ([a29d973](https://github.com/szinn/BookBoss/commit/a29d9737a638c4b9111a656cf2c9068998d9d3d2))
+- _(frontend)_ Extend tab-completion to cycle status: field values - ([ac1c693](https://github.com/szinn/BookBoss/commit/ac1c6939dc3821f4ccb7afeb21bb4e95ae009219))
+- _(frontend)_ Add tab-completion ghost text for search field keywords - ([d75ff35](https://github.com/szinn/BookBoss/commit/d75ff356747363be3434a75cdfc9332e2f29f6db))
+- _(frontend)_ Add rotating placeholder tips for search field - ([a6c5f07](https://github.com/szinn/BookBoss/commit/a6c5f07567a2c576b7dcdbea76207600be2775ab))
+- _(frontend)_ Add search ? button and first-visit hint strip - ([9f1a91f](https://github.com/szinn/BookBoss/commit/9f1a91f9972995b49663071347b9ae2aee34c2cd))
+
+### Bug Fixes
+
+- _(frontend)_ Bust cover image cache after replacement using updated_at - ([64cf538](https://github.com/szinn/BookBoss/commit/64cf538265f40925a2c4e579e1ea2df507e6d0aa))
+- _(frontend)_ Make ? button toggle hint strip instead of only opening it - ([0c16c30](https://github.com/szinn/BookBoss/commit/0c16c3006279fb53866606a9c55e8fbf125c24a8))
+
+### Refactor
+
+- _(core)_ Eliminate handler type repetition in before_start - ([7827d41](https://github.com/szinn/BookBoss/commit/7827d4165ee3c77fda127459e314cd1b0391e7e9))
+- _(core)_ Make bookdrop_path required and scan_interval non-optional in ExternalServices - ([8a012e8](https://github.com/szinn/BookBoss/commit/8a012e85382f48446f36e317d923e57268b6ecfb))
+- _(database)_ Extract pagination constants and lower_name_eq helper - ([aa00629](https://github.com/szinn/BookBoss/commit/aa0062903c5e912f6e3c3c886593236e224c178c))
+
+### Testing
+
+- _(database)_ Add missing tests for library and system_message adapters - ([58dfb0d](https://github.com/szinn/BookBoss/commit/58dfb0d07e55850d25198c3bdb828249f51bcd06))
+
 ## [0.7.14](https://github.com/szinn/BookBoss/compare/v0.7.13..v0.7.14) - 2026-03-30
 
 ### Features
