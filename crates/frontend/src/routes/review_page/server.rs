@@ -9,7 +9,7 @@ use {
     base64::{Engine, engine::general_purpose::STANDARD as B64},
     bb_core::{
         CoreServices,
-        book::{AuthorToken, BookToken, IdentifierType, PublisherToken, SeriesToken},
+        book::{AuthorToken, BookToken, FileRole, IdentifierType, PublisherToken, SeriesToken},
         import::ImportJobToken,
         library::BookEdit,
         pipeline::ProviderBook,
@@ -223,6 +223,16 @@ pub(super) async fn get_review_data(job_token: String) -> Result<BookReviewData,
         .map(std::string::ToString::to_string)
         .collect();
 
+    // Check whether the original source file is still on disk.
+    let book_files = book_service.files_for_book(book.id).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let original_missing = {
+        let original = book_files.iter().find(|f| f.file_role == FileRole::Original);
+        match original {
+            Some(f) => !core_services.file_store.resolve(&f.path).exists(),
+            None => true,
+        }
+    };
+
     // Read cover file to determine dimensions.
     let cover_dimensions = if let Some(filename) = &book.cover_path {
         let path = core_services.file_store.cover_path(book.token, filename);
@@ -264,6 +274,7 @@ pub(super) async fn get_review_data(job_token: String) -> Result<BookReviewData,
         identifiers,
         provider_names,
         cover_dimensions,
+        original_missing,
     })
 }
 
@@ -558,6 +569,7 @@ pub(crate) async fn get_book_for_edit(book_token: String) -> Result<BookReviewDa
         identifiers,
         provider_names,
         cover_dimensions,
+        original_missing: false,
     })
 }
 

@@ -63,6 +63,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
     // cover_key identifies the temp cover file: job token for review, book token
     // for edit.
     let cover_key = if edit_mode { data.book_token.clone() } else { data.job_token.clone() };
+    let original_missing = data.original_missing;
 
     rsx! {
         div { class: "flex-1 flex flex-col overflow-hidden",
@@ -130,7 +131,8 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                     }
                     {
                         let is_busy = *action_busy.read();
-                        let primary_class = if is_busy {
+                        let approve_disabled = is_busy || (original_missing && !edit_mode);
+                        let primary_class = if approve_disabled {
                             "px-4 py-2 rounded bg-indigo-400 text-sm font-medium text-white cursor-not-allowed"
                         } else {
                             "px-4 py-2 rounded bg-indigo-600 text-sm font-medium text-white hover:bg-indigo-700 cursor-pointer"
@@ -140,7 +142,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                         rsx! {
                             button {
                                 class: "{primary_class}",
-                                disabled: is_busy,
+                                disabled: approve_disabled,
                                 onclick: move |_| {
                                     let fields = BookEditFields {
                                         job_token: jt.clone(),
@@ -184,6 +186,13 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                             }
                         }
                     }
+                }
+            }
+
+            // ── Missing original banner ───────────────────────────────────────
+            if original_missing && !edit_mode {
+                div { class: "mx-6 mt-3 px-4 py-3 bg-red-50 border border-red-300 rounded text-sm text-red-800 font-medium",
+                    "The original file for this book is missing from disk. This book cannot be approved — only rejection is available."
                 }
             }
 

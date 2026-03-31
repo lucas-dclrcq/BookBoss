@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     CoreServices, Error,
-    book::{BookId, FileRole},
+    book::{BookId, BookStatus, FileRole},
     format::handler::EnrichBookFilesPayload,
     jobs::{JobHandler, JobRepositoryExt},
     message::{MessageSeverity, NewSystemMessage},
@@ -86,23 +86,37 @@ impl JobHandler for VerifyFileIntegrityHandler {
                 .collect();
 
             if original_missing {
-                // Unrecoverable — delete the book.
                 let title = book.title.clone();
-                let token = book.token;
-                if let Err(e) = self.core.library_service.delete_book(token).await {
-                    tracing::error!(book_id, title, error = %e, "failed to delete unrecoverable book");
+                if book.status == BookStatus::Incoming {
+                    // Candidate book awaiting admin review — do not auto-delete.
+                    // The review screen will show an error and only allow rejection.
+                    tracing::warn!(book_id, title, "import job has missing original file — admin review required");
+                    self.core
+                        .system_message_service
+                        .add_message(NewSystemMessage {
+                            source_task: Self::JOB_TYPE.to_string(),
+                            severity: MessageSeverity::Warning,
+                            message: format!("Import job for \"{title}\" has a missing original file — admin review required."),
+                        })
+                        .await?;
                 } else {
-                    tracing::warn!(book_id, title, "deleted unrecoverable book (original file missing)");
+                    // Library book with missing original — unrecoverable, delete it.
+                    let token = book.token;
+                    if let Err(e) = self.core.library_service.delete_book(token).await {
+                        tracing::error!(book_id, title, error = %e, "failed to delete unrecoverable book");
+                    } else {
+                        tracing::warn!(book_id, title, "deleted unrecoverable book (original file missing)");
+                    }
+                    self.core
+                        .system_message_service
+                        .add_message(NewSystemMessage {
+                            source_task: Self::JOB_TYPE.to_string(),
+                            severity: MessageSeverity::Warning,
+                            message: format!("Book \"{title}\" had a missing original file and could not be recovered. It has been deleted."),
+                        })
+                        .await?;
+                    deleted_count += 1;
                 }
-                self.core
-                    .system_message_service
-                    .add_message(NewSystemMessage {
-                        source_task: Self::JOB_TYPE.to_string(),
-                        severity: MessageSeverity::Warning,
-                        message: format!("Book \"{title}\" had a missing original file and could not be recovered. It has been deleted."),
-                    })
-                    .await?;
-                deleted_count += 1;
             } else if !missing_enriched.is_empty() {
                 // Recoverable: remove stale enriched records and re-enqueue.
                 let title = book.title.clone();
@@ -165,7 +179,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        book::{Book, BookFile, BookStatus, FileFormat, repository::book::MockBookRepository},
+        book::{Book, BookFile, FileFormat, repository::book::MockBookRepository},
         import::repository::import_job::MockImportJobRepository,
         jobs::repository::MockJobRepository,
         message::repository::MockSystemMessageRepository,

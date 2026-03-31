@@ -29,6 +29,9 @@ pub(crate) struct BookReviewData {
     pub provider_names: Vec<String>,
     /// Pixel dimensions (width, height) of the stored cover, if any.
     pub cover_dimensions: Option<(u32, u32)>,
+    /// True when the original source file is missing from disk.
+    /// When set, the book cannot be approved — only rejection is available.
+    pub original_missing: bool,
 }
 
 /// Metadata returned by a single provider fetch.
