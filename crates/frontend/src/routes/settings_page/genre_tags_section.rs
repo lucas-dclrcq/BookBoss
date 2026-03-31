@@ -5,7 +5,11 @@ use bb_core::{
 };
 use dioxus::prelude::*;
 #[cfg(feature = "server")]
-use {crate::routes::server_helpers::authenticated_user, crate::server::AuthSession, std::sync::Arc};
+use {
+    crate::routes::server_helpers::{authenticated_user, to_server_err},
+    crate::server::AuthSession,
+    std::sync::Arc,
+};
 
 // ---------------------------------------------------------------------------
 // DTOs
@@ -42,7 +46,7 @@ pub(crate) async fn get_genre_tags() -> Result<GenreTagsData, ServerFnError> {
     let genres = book_service
         .list_genres_with_counts()
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .into_iter()
         .map(|(g, count, has_incoming)| GenreTagEntry {
             token: g.token.to_string(),
@@ -55,7 +59,7 @@ pub(crate) async fn get_genre_tags() -> Result<GenreTagsData, ServerFnError> {
     let tags = book_service
         .list_tags_with_counts()
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .into_iter()
         .map(|(t, count, has_incoming)| GenreTagEntry {
             token: t.token.to_string(),
@@ -111,11 +115,7 @@ pub(crate) async fn admin_delete_genre(token: String) -> Result<(), ServerFnErro
 
     let genre_token: GenreToken = token.parse().map_err(|_| ServerFnError::new("Invalid genre token"))?;
 
-    core_services
-        .book_service
-        .delete_genre(genre_token)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    core_services.book_service.delete_genre(genre_token).await.map_err(to_server_err)?;
 
     Ok(())
 }
@@ -163,11 +163,7 @@ pub(crate) async fn admin_delete_tag(token: String) -> Result<(), ServerFnError>
 
     let tag_token: TagToken = token.parse().map_err(|_| ServerFnError::new("Invalid tag token"))?;
 
-    core_services
-        .book_service
-        .delete_tag(tag_token)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    core_services.book_service.delete_tag(tag_token).await.map_err(to_server_err)?;
 
     Ok(())
 }

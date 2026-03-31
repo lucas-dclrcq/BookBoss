@@ -31,7 +31,7 @@ pub(crate) struct LandingState {
 pub(crate) const MIN_PASSWORD_LEN: usize = 12;
 
 #[cfg(feature = "server")]
-use {crate::server::AuthSession, bb_core::CoreServices};
+use {crate::routes::server_helpers::to_server_err, crate::server::AuthSession, bb_core::CoreServices};
 
 /// Server-side password strength validation. Returns `Err` with a user-facing
 /// message if the password does not satisfy all requirements.
@@ -59,11 +59,7 @@ fn validate_password_strength(password: &str) -> Result<(), ServerFnError> {
 async fn get_landing_state() -> Result<LandingState, ServerFnError> {
     let is_authenticated = auth_session.current_user.as_ref().is_some_and(|u| !u.username.is_empty());
 
-    let users = core_services
-        .user_service
-        .list_users(None, Some(1))
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let users = core_services.user_service.list_users(None, Some(1)).await.map_err(to_server_err)?;
 
     Ok(LandingState {
         is_authenticated,
@@ -76,12 +72,7 @@ async fn get_landing_state() -> Result<LandingState, ServerFnError> {
 /// `change_password_on_login` is set — the session is **not** started yet.
 #[put("/api/v1/login", core_services: axum::Extension<std::sync::Arc<CoreServices>>, auth_session: axum::Extension<AuthSession>)]
 pub(crate) async fn perform_login(username: String, password: String) -> Result<Option<String>, ServerFnError> {
-    match core_services
-        .auth_service
-        .is_valid_login(&username, &password)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
-    {
+    match core_services.auth_service.is_valid_login(&username, &password).await.map_err(to_server_err)? {
         Some(user) if user.change_password_on_login => Ok(Some(user.token.to_string())),
         Some(user) => {
             auth_session.login_user(user.id);
@@ -111,7 +102,7 @@ pub(crate) async fn change_password_and_login(user_token: String, new_password: 
         .user_service
         .find_by_token(token)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .ok_or_else(|| ServerFnError::new("User not found"))?;
 
     // Guard: only usable when the flag is set
@@ -119,14 +110,10 @@ pub(crate) async fn change_password_and_login(user_token: String, new_password: 
         return Err(ServerFnError::new("Password change not required"));
     }
 
-    user.password_hash = bb_core::user::User::encrypt_password(new_password).map_err(|e| ServerFnError::new(e.to_string()))?;
+    user.password_hash = bb_core::user::User::encrypt_password(new_password).map_err(to_server_err)?;
     user.change_password_on_login = false;
 
-    core_services
-        .user_service
-        .update_user(user.clone())
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    core_services.user_service.update_user(user.clone()).await.map_err(to_server_err)?;
 
     auth_session.login_user(user.id);
 
@@ -147,24 +134,15 @@ pub(crate) async fn register_admin(username: String, full_name: String, password
     validate_password_strength(&password)?;
 
     // Safety check: ensure no users exist yet
-    let existing = core_services
-        .user_service
-        .list_users(None, Some(1))
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let existing = core_services.user_service.list_users(None, Some(1)).await.map_err(to_server_err)?;
 
     if !existing.is_empty() {
         return Err(ServerFnError::new("An admin user already exists"));
     }
 
-    let new_user =
-        NewUser::new(username, password, email, HashSet::from([Capability::SuperAdmin]), full_name, false).map_err(|e| ServerFnError::new(e.to_string()))?;
+    let new_user = NewUser::new(username, password, email, HashSet::from([Capability::SuperAdmin]), full_name, false).map_err(to_server_err)?;
 
-    let user = core_services
-        .user_service
-        .add_user(new_user)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = core_services.user_service.add_user(new_user).await.map_err(to_server_err)?;
 
     auth_session.login_user(user.id);
 

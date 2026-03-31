@@ -16,6 +16,7 @@ pub(crate) struct IncomingBookSummary {
 
 #[cfg(feature = "server")]
 use {
+    crate::routes::server_helpers::to_server_err,
     crate::server::{AuthSession, AuthUser, BackendSessionPool},
     axum::http::Method,
     axum_session_auth::{Auth, Rights},
@@ -57,28 +58,17 @@ async fn list_incoming_books() -> Result<Vec<IncomingBookSummary>, ServerFnError
     let import_service = &core_services.import_job_service;
     let book_service = &core_services.book_service;
 
-    let jobs = import_service
-        .list_needs_review(None, None)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let jobs = import_service.list_needs_review(None, None).await.map_err(to_server_err)?;
 
     let mut summaries = Vec::with_capacity(jobs.len());
     for job in jobs {
         let (title, author_names, cover_path) = if let Some(book_id) = job.candidate_book_id {
-            match book_service
-                .find_book_by_token(BookToken::new(book_id))
-                .await
-                .map_err(|e| ServerFnError::new(e.to_string()))?
-            {
+            match book_service.find_book_by_token(BookToken::new(book_id)).await.map_err(to_server_err)? {
                 Some(book) => {
-                    let book_authors = book_service.authors_for_book(book.id).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+                    let book_authors = book_service.authors_for_book(book.id).await.map_err(to_server_err)?;
                     let mut names = Vec::new();
                     for ba in &book_authors {
-                        if let Some(author) = book_service
-                            .find_author_by_token(AuthorToken::new(ba.author_id))
-                            .await
-                            .map_err(|e| ServerFnError::new(e.to_string()))?
-                        {
+                        if let Some(author) = book_service.find_author_by_token(AuthorToken::new(ba.author_id)).await.map_err(to_server_err)? {
                             names.push(author.name);
                         }
                     }
@@ -130,11 +120,7 @@ async fn reject_incoming_book(job_token: String) -> Result<(), ServerFnError> {
 
     let token: ImportJobToken = job_token.parse().map_err(|_| ServerFnError::new("Invalid token"))?;
 
-    core_services
-        .library_service
-        .reject_book(token)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    core_services.library_service.reject_book(token).await.map_err(to_server_err)?;
 
     Ok(())
 }

@@ -2,7 +2,11 @@
 use bb_core::{CoreServices, types::Capability, user::NewUser};
 use dioxus::prelude::*;
 #[cfg(feature = "server")]
-use {crate::routes::server_helpers::authenticated_user, crate::server::AuthSession, std::sync::Arc};
+use {
+    crate::routes::server_helpers::{authenticated_user, to_server_err},
+    crate::server::AuthSession,
+    std::sync::Arc,
+};
 
 // ---------------------------------------------------------------------------
 // DTOs
@@ -55,11 +59,7 @@ pub(crate) async fn list_users_admin() -> Result<Vec<UserAdminRow>, ServerFnErro
         return Err(ServerFnError::new("Insufficient permissions"));
     }
 
-    let mut users = core_services
-        .user_service
-        .list_users(None, None)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let mut users = core_services.user_service.list_users(None, None).await.map_err(to_server_err)?;
 
     users.sort_by(|a, b| {
         let a_key = role_sort_key_caps(&a.capabilities);
@@ -171,7 +171,7 @@ pub(crate) async fn admin_update_user(
         .user_service
         .find_by_token(user_token)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .ok_or_else(|| ServerFnError::new("User not found"))?;
 
     if user.capabilities.contains(&Capability::SuperAdmin) && !actor.permissions.contains("SuperAdmin") {
@@ -196,22 +196,18 @@ pub(crate) async fn admin_update_user(
     }
 
     user.full_name = full_name;
-    user.email_address = bb_core::types::EmailAddress::new(email).map_err(|e| ServerFnError::new(e.to_string()))?;
+    user.email_address = bb_core::types::EmailAddress::new(email).map_err(to_server_err)?;
     user.capabilities = new_caps;
 
     if let Some(pw) = password.filter(|p| !p.is_empty()) {
-        user.password_hash = bb_core::user::User::encrypt_password(pw).map_err(|e| ServerFnError::new(e.to_string()))?;
+        user.password_hash = bb_core::user::User::encrypt_password(pw).map_err(to_server_err)?;
         let is_self = bb_core::user::UserToken::new(actor.id()).to_string() == token;
         if !is_self {
             user.change_password_on_login = true;
         }
     }
 
-    core_services
-        .user_service
-        .update_user(user)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    core_services.user_service.update_user(user).await.map_err(to_server_err)?;
 
     Ok(())
 }
@@ -240,18 +236,14 @@ pub(crate) async fn admin_delete_user(token: String) -> Result<(), ServerFnError
         .user_service
         .find_by_token(user_token)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .ok_or_else(|| ServerFnError::new("User not found"))?;
 
     if user.capabilities.contains(&Capability::SuperAdmin) {
         return Err(ServerFnError::new("Cannot delete the Super Admin user"));
     }
 
-    core_services
-        .user_service
-        .delete_user(user.id)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    core_services.user_service.delete_user(user.id).await.map_err(to_server_err)?;
 
     Ok(())
 }

@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 #[cfg(feature = "server")]
 use {
+    crate::routes::server_helpers::to_server_err,
     crate::server::{AuthSession, AuthUser, BackendSessionPool},
     axum::http::Method,
     axum_session_auth::{Auth, Rights},
@@ -40,11 +41,7 @@ async fn get_pending_count() -> Result<Option<u32>, ServerFnError> {
     if !has_permission {
         return Ok(None);
     }
-    let jobs = core_services
-        .import_job_service
-        .list_needs_review(None, None)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let jobs = core_services.import_job_service.list_needs_review(None, None).await.map_err(to_server_err)?;
     #[expect(clippy::cast_possible_truncation, reason = "pending review count; will never approach u32::MAX")]
     let count = jobs.len() as u32;
     Ok(Some(count))
@@ -52,11 +49,7 @@ async fn get_pending_count() -> Result<Option<u32>, ServerFnError> {
 
 #[get("/api/v1/jobs/queue_count", core_services: axum::Extension<Arc<CoreServices>>)]
 async fn get_job_queue_count() -> Result<u64, ServerFnError> {
-    core_services
-        .job_service
-        .count_all_pending()
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
+    core_services.job_service.count_all_pending().await.map_err(to_server_err)
 }
 
 #[get("/api/v1/user/is_admin", auth_session: axum::Extension<AuthSession>)]
@@ -86,11 +79,7 @@ async fn get_library_stats() -> Result<LibraryStats, ServerFnError> {
         .filter(|u| !u.username.is_empty())
         .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
 
-    let stats = core_services
-        .library_service
-        .library_stats()
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let stats = core_services.library_service.library_stats().await.map_err(to_server_err)?;
 
     Ok(LibraryStats {
         books: stats.books,

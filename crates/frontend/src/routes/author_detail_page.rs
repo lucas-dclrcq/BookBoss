@@ -17,7 +17,11 @@ pub(crate) struct AuthorPageData {
 
 #[cfg(feature = "server")]
 use {
-    crate::routes::{book_detail_page::to_reading_state_dto, books_page::hydrate_books, server_helpers::authenticated_user},
+    crate::routes::{
+        book_detail_page::to_reading_state_dto,
+        books_page::hydrate_books,
+        server_helpers::{authenticated_user, to_server_err},
+    },
     crate::server::AuthSession,
     bb_core::CoreServices,
     bb_core::book::{AuthorToken, BookQuery, BookSortField, BookSortOrder, SortDirection},
@@ -38,7 +42,7 @@ async fn get_author(token: String) -> Result<AuthorPageData, ServerFnError> {
     let author = book_service
         .find_author_by_token(author_token)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .ok_or_else(|| ServerFnError::new("Author not found"))?;
 
     let filter = BookQuery {
@@ -49,16 +53,13 @@ async fn get_author(token: String) -> Result<AuthorPageData, ServerFnError> {
         }),
         ..Default::default()
     };
-    let books = book_service
-        .list_books(&filter, None, None)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let books = book_service.list_books(&filter, None, None).await.map_err(to_server_err)?;
 
     let reading_metas = core_services
         .reading_service
         .list_for_user(current_user.id(), None)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .map_err(to_server_err)?;
     let reading_map: HashMap<u64, _> = reading_metas
         .iter()
         .filter(|m| m.read_status != ReadStatus::Unread)

@@ -53,7 +53,7 @@ use {
     crate::routes::{
         book_detail_page::{ReadingStateDto, to_reading_state_dto},
         books_page::hydrate_books,
-        server_helpers::authenticated_user,
+        server_helpers::{authenticated_user, to_server_err},
     },
     crate::server::AuthSession,
     bb_core::{
@@ -100,11 +100,7 @@ fn visibility_str(v: &ShelfVisibility) -> &'static str {
 pub(crate) async fn list_my_shelves() -> Result<Vec<ShelfSummary>, ServerFnError> {
     let user_id = authenticated_user(&auth_session)?.id();
 
-    let shelves = core_services
-        .shelf_service
-        .list_shelves_for_user(user_id)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let shelves = core_services.shelf_service.list_shelves_for_user(user_id).await.map_err(to_server_err)?;
 
     Ok(shelves
         .iter()
@@ -145,7 +141,7 @@ pub(crate) async fn create_shelf(name: String, visibility: String) -> Result<Str
         .shelf_service
         .create_manual_shelf(user_id, name, vis)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .map_err(to_server_err)?;
 
     Ok(token.to_string())
 }
@@ -169,7 +165,7 @@ pub(crate) async fn create_smart_shelf(name: String, visibility: String, filter_
         .shelf_service
         .create_smart_shelf(user_id, name, vis, filter)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .map_err(to_server_err)?;
 
     Ok(token.to_string())
 }
@@ -190,7 +186,7 @@ pub(crate) async fn update_smart_shelf_filter(token: String, filter_json: String
         .shelf_service
         .update_shelf_filter(shelf_token, filter, user_id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
+        .map_err(to_server_err)
 }
 
 /// Deletes a shelf. Only the owner may delete.
@@ -204,11 +200,7 @@ pub(crate) async fn delete_shelf(token: String) -> Result<(), ServerFnError> {
 
     let shelf_token: ShelfToken = token.parse().map_err(|_| ServerFnError::new("Invalid shelf token"))?;
 
-    core_services
-        .shelf_service
-        .delete_shelf(shelf_token, user_id)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
+    core_services.shelf_service.delete_shelf(shelf_token, user_id).await.map_err(to_server_err)
 }
 
 /// Adds a book to a shelf. Only the owner may add books.
@@ -223,11 +215,7 @@ pub(crate) async fn add_book_to_shelf(shelf_token: String, book_token: String) -
     let shelf: ShelfToken = shelf_token.parse().map_err(|_| ServerFnError::new("Invalid shelf token"))?;
     let book: BookToken = book_token.parse().map_err(|_| ServerFnError::new("Invalid book token"))?;
 
-    core_services
-        .shelf_service
-        .add_book_to_shelf(shelf, book, user_id)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
+    core_services.shelf_service.add_book_to_shelf(shelf, book, user_id).await.map_err(to_server_err)
 }
 
 /// Removes a book from a shelf. Only the owner may remove books.
@@ -246,7 +234,7 @@ pub(crate) async fn remove_book_from_shelf(shelf_token: String, book_token: Stri
         .shelf_service
         .remove_book_from_shelf(shelf, book, user_id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
+        .map_err(to_server_err)
 }
 
 /// Updates the name and visibility of a shelf in one call. Only the owner may
@@ -266,7 +254,7 @@ pub(crate) async fn update_shelf(token: String, name: String, visibility: String
         .shelf_service
         .update_shelf(shelf_token, name, vis, user_id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
+        .map_err(to_server_err)
 }
 
 /// Returns all entity options needed by the filter builder (authors, series,
@@ -285,7 +273,7 @@ pub(crate) async fn get_filter_entity_options() -> Result<FilterEntityOptions, S
     let authors = book_service
         .list_all_authors()
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .into_iter()
         .map(|a| (a.id as i64, a.name))
         .collect();
@@ -293,7 +281,7 @@ pub(crate) async fn get_filter_entity_options() -> Result<FilterEntityOptions, S
     let series = book_service
         .list_all_series()
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .into_iter()
         .map(|s| (s.id as i64, s.name))
         .collect();
@@ -301,7 +289,7 @@ pub(crate) async fn get_filter_entity_options() -> Result<FilterEntityOptions, S
     let genres = book_service
         .list_all_genres()
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .into_iter()
         .map(|g| (g.id as i64, g.name))
         .collect();
@@ -309,7 +297,7 @@ pub(crate) async fn get_filter_entity_options() -> Result<FilterEntityOptions, S
     let tags = book_service
         .list_all_tags()
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .into_iter()
         .map(|t| (t.id as i64, t.name))
         .collect();
@@ -317,7 +305,7 @@ pub(crate) async fn get_filter_entity_options() -> Result<FilterEntityOptions, S
     let publishers = book_service
         .list_all_publishers()
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .into_iter()
         .map(|p| (p.id as i64, p.name))
         .collect();
@@ -326,7 +314,7 @@ pub(crate) async fn get_filter_entity_options() -> Result<FilterEntityOptions, S
         .shelf_service
         .list_shelves_for_user(user_id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .into_iter()
         .filter(|s| s.shelf_type == ShelfType::Manual)
         .map(|s| (s.id as i64, s.name))
@@ -358,10 +346,7 @@ pub(crate) async fn list_all_accessible_shelves() -> Result<Vec<ShelfSummary>, S
 
     let shelf_service = &core_services.shelf_service;
 
-    let own_shelves = shelf_service
-        .list_shelves_for_user(user_id)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let own_shelves = shelf_service.list_shelves_for_user(user_id).await.map_err(to_server_err)?;
 
     let mut own = Vec::with_capacity(own_shelves.len());
     for s in own_shelves {
@@ -392,7 +377,7 @@ pub(crate) async fn list_all_accessible_shelves() -> Result<Vec<ShelfSummary>, S
     let others = shelf_service
         .list_public_shelves(user_id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .into_iter()
         .map(|s| ShelfSummary {
             id: s.id as i64,
@@ -441,10 +426,7 @@ pub(crate) async fn books_for_shelf(
     let effective_page_size = page_size.unwrap_or(PAGE_SIZE);
 
     // Load the shelf to determine if it's smart or manual.
-    let shelf = shelf_service
-        .get_shelf(shelf_token, user_id)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let shelf = shelf_service.get_shelf(shelf_token, user_id).await.map_err(to_server_err)?;
 
     // Fetch books: smart → filter query with server-side sort;
     // manual → all books (no pagination, client sorts).
@@ -453,7 +435,7 @@ pub(crate) async fn books_for_shelf(
         let rows: Vec<Book> = shelf_service
             .books_for_filter(shelf_token, user_id, offset, Some(effective_page_size), core_sort)
             .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+            .map_err(to_server_err)?;
 
         let next = if rows.len() as u64 >= effective_page_size {
             Some(offset.unwrap_or(0) + rows.len() as u64)
@@ -463,17 +445,14 @@ pub(crate) async fn books_for_shelf(
         (rows, next)
     } else {
         // Manual shelves: load all entries — they're small/curated.
-        let shelf_entries = shelf_service
-            .books_for_shelf(shelf_token, user_id, None, None)
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let shelf_entries = shelf_service.books_for_shelf(shelf_token, user_id, None, None).await.map_err(to_server_err)?;
 
         let mut books = Vec::with_capacity(shelf_entries.len());
         for entry in &shelf_entries {
             let book = book_service
                 .find_book_by_token(BookToken::new(entry.book_id))
                 .await
-                .map_err(|e| ServerFnError::new(e.to_string()))?
+                .map_err(to_server_err)?
                 .ok_or_else(|| ServerFnError::new("Book not found"))?;
             books.push(book);
         }
@@ -488,11 +467,7 @@ pub(crate) async fn books_for_shelf(
     }
 
     // Load per-user reading state so book cards show progress and status.
-    let reading_metas = core_services
-        .reading_service
-        .list_for_user(user_id, None)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let reading_metas = core_services.reading_service.list_for_user(user_id, None).await.map_err(to_server_err)?;
     let reading_map: std::collections::HashMap<u64, ReadingStateDto> = reading_metas
         .iter()
         .filter(|m| m.read_status != ReadStatus::Unread)

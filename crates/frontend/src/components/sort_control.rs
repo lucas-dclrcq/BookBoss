@@ -71,7 +71,12 @@ pub(crate) fn to_core_sort(sort: SortOrder) -> bb_core::book::BookSortOrder {
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "server")]
-use {crate::routes::server_helpers::authenticated_user, crate::server::AuthSession, bb_core::CoreServices, std::sync::Arc};
+use {
+    crate::routes::server_helpers::{authenticated_user, to_server_err},
+    crate::server::AuthSession,
+    bb_core::CoreServices,
+    std::sync::Arc,
+};
 
 const SORT_SETTING_KEY: &str = "book_sort_order";
 
@@ -83,11 +88,7 @@ const SORT_SETTING_KEY: &str = "book_sort_order";
 pub(crate) async fn get_sort_preference() -> Result<Option<SortOrder>, ServerFnError> {
     let user_id = authenticated_user(&auth_session)?.id();
 
-    let setting = core_services
-        .user_setting_service
-        .get(user_id, SORT_SETTING_KEY)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let setting = core_services.user_setting_service.get(user_id, SORT_SETTING_KEY).await.map_err(to_server_err)?;
 
     Ok(setting.and_then(|s| serde_json::from_str(&s.value).ok()))
 }
@@ -100,13 +101,13 @@ pub(crate) async fn get_sort_preference() -> Result<Option<SortOrder>, ServerFnE
 pub(crate) async fn set_sort_preference(sort: SortOrder) -> Result<(), ServerFnError> {
     let user_id = authenticated_user(&auth_session)?.id();
 
-    let value = serde_json::to_string(&sort).map_err(|e| ServerFnError::new(e.to_string()))?;
+    let value = serde_json::to_string(&sort).map_err(to_server_err)?;
 
     core_services
         .user_setting_service
         .set(user_id, SORT_SETTING_KEY, &value)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .map_err(to_server_err)?;
 
     Ok(())
 }

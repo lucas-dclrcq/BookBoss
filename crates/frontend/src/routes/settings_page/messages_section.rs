@@ -2,7 +2,11 @@
 use bb_core::CoreServices;
 use dioxus::prelude::*;
 #[cfg(feature = "server")]
-use {crate::routes::server_helpers::authenticated_user, crate::server::AuthSession, std::sync::Arc};
+use {
+    crate::routes::server_helpers::{authenticated_user, to_server_err},
+    crate::server::AuthSession,
+    std::sync::Arc,
+};
 
 use crate::components::SystemMessagesRefresh;
 
@@ -34,11 +38,7 @@ pub(crate) async fn list_system_messages() -> Result<Vec<MessageRow>, ServerFnEr
         return Err(ServerFnError::new("Insufficient permissions"));
     }
 
-    let messages = core_services
-        .system_message_service
-        .list_messages()
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let messages = core_services.system_message_service.list_messages().await.map_err(to_server_err)?;
 
     Ok(messages
         .into_iter()
@@ -63,11 +63,7 @@ pub(crate) async fn dismiss_system_message(id: u64) -> Result<(), ServerFnError>
         return Err(ServerFnError::new("Insufficient permissions"));
     }
 
-    core_services
-        .system_message_service
-        .delete_message(id)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    core_services.system_message_service.delete_message(id).await.map_err(to_server_err)?;
 
     Ok(())
 }
@@ -83,11 +79,7 @@ pub(crate) async fn clear_all_system_messages() -> Result<(), ServerFnError> {
         return Err(ServerFnError::new("Insufficient permissions"));
     }
 
-    core_services
-        .system_message_service
-        .delete_all_messages()
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    core_services.system_message_service.delete_all_messages().await.map_err(to_server_err)?;
 
     Ok(())
 }

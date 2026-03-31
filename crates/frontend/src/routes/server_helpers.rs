@@ -16,3 +16,11 @@ pub(crate) fn authenticated_user(auth_session: &AuthSession) -> Result<AuthUser,
         .cloned()
         .ok_or_else(|| ServerFnError::new("Not authenticated"))
 }
+
+/// Converts any `Display` error into a `ServerFnError`.
+///
+/// Replaces the `.map_err(|e| ServerFnError::new(e.to_string()))` boilerplate
+/// with a point-free `.map_err(to_server_err)`.
+pub(crate) fn to_server_err<E: std::fmt::Display>(e: E) -> ServerFnError {
+    ServerFnError::new(e.to_string())
+}

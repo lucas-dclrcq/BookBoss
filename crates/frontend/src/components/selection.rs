@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use dioxus::prelude::*;
 #[cfg(feature = "server")]
 use {
-    crate::routes::server_helpers::authenticated_user,
+    crate::routes::server_helpers::{authenticated_user, to_server_err},
     crate::server::{AuthSession, AuthUser, BackendSessionPool},
     axum::http::Method,
     axum_session_auth::{Auth, Rights},
@@ -92,14 +92,14 @@ async fn bulk_set_reading_status(tokens: Vec<String>, status: String) -> Result<
             .book_service
             .find_book_by_token(book_token)
             .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?
+            .map_err(to_server_err)?
             .ok_or_else(|| ServerFnError::new(format!("Book not found: {token}")))?;
 
         core_services
             .reading_service
             .set_status(user_id, book.id, new_status)
             .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+            .map_err(to_server_err)?;
         updated += 1;
     }
 
@@ -152,20 +152,16 @@ async fn bulk_edit_single_book(
     let book = book_service
         .find_book_by_token(token)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .ok_or_else(|| ServerFnError::new("Book not found"))?;
 
     // Load existing authors
     let existing_authors = {
-        let mut links = book_service.authors_for_book(book.id).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        let mut links = book_service.authors_for_book(book.id).await.map_err(to_server_err)?;
         links.sort_by_key(|a| a.sort_order);
         let mut names = Vec::with_capacity(links.len());
         for ba in &links {
-            if let Some(author) = book_service
-                .find_author_by_token(AuthorToken::new(ba.author_id))
-                .await
-                .map_err(|e| ServerFnError::new(e.to_string()))?
-            {
+            if let Some(author) = book_service.find_author_by_token(AuthorToken::new(ba.author_id)).await.map_err(to_server_err)? {
                 names.push(author.name);
             }
         }
@@ -177,7 +173,7 @@ async fn bulk_edit_single_book(
         book_service
             .find_series_by_token(SeriesToken::new(sid))
             .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?
+            .map_err(to_server_err)?
             .map(|s| s.name)
     } else {
         None
@@ -188,7 +184,7 @@ async fn bulk_edit_single_book(
         book_service
             .find_publisher_by_token(PublisherToken::new(pid))
             .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?
+            .map_err(to_server_err)?
             .map(|p| p.name)
     } else {
         None
@@ -198,7 +194,7 @@ async fn bulk_edit_single_book(
     let existing_identifiers: Vec<(IdentifierType, String)> = book_service
         .identifiers_for_book(book.id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .into_iter()
         .map(|i| (i.identifier_type, i.value))
         .collect();
@@ -207,14 +203,14 @@ async fn bulk_edit_single_book(
     let existing_genres: Vec<String> = book_service
         .genres_for_book(book.id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .into_iter()
         .map(|g| g.name)
         .collect();
     let existing_tags: Vec<String> = book_service
         .tags_for_book(book.id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .into_iter()
         .map(|t| t.name)
         .collect();
@@ -248,7 +244,7 @@ async fn bulk_edit_single_book(
         .library_service
         .edit_book(token, edit, token_str, temp_dir)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .map_err(to_server_err)?;
 
     Ok(())
 }

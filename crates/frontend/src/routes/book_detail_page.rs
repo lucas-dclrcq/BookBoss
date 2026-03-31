@@ -55,7 +55,7 @@ pub(crate) struct BookDetail {
 
 #[cfg(feature = "server")]
 use {
-    crate::routes::server_helpers::authenticated_user,
+    crate::routes::server_helpers::{authenticated_user, to_server_err},
     crate::server::{AuthSession, AuthUser, BackendSessionPool},
     axum::http::Method,
     axum_session_auth::{Auth, Rights},
@@ -100,27 +100,20 @@ async fn get_book(token: String) -> Result<BookDetail, ServerFnError> {
     let book = book_service
         .find_book_by_token(book_token)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .ok_or_else(|| ServerFnError::new("Book not found"))?;
 
-    let book_author_links = book_service.authors_for_book(book.id).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let book_author_links = book_service.authors_for_book(book.id).await.map_err(to_server_err)?;
 
-    let book_files = book_service.files_for_book(book.id).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let book_files = book_service.files_for_book(book.id).await.map_err(to_server_err)?;
 
-    let book_identifiers = book_service
-        .identifiers_for_book(book.id)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let book_identifiers = book_service.identifiers_for_book(book.id).await.map_err(to_server_err)?;
 
     // Fetch unique authors (token + name)
     let mut author_map: std::collections::HashMap<u64, (String, String)> = std::collections::HashMap::new();
     for ba in &book_author_links {
         if let std::collections::hash_map::Entry::Vacant(e) = author_map.entry(ba.author_id) {
-            if let Some(author) = book_service
-                .find_author_by_token(AuthorToken::new(ba.author_id))
-                .await
-                .map_err(|e| ServerFnError::new(e.to_string()))?
-            {
+            if let Some(author) = book_service.find_author_by_token(AuthorToken::new(ba.author_id)).await.map_err(to_server_err)? {
                 e.insert((author.token.to_string(), author.name));
             }
         }
@@ -142,10 +135,7 @@ async fn get_book(token: String) -> Result<BookDetail, ServerFnError> {
 
     // Fetch series name and token if needed
     let (series_token, series_name) = if let Some(series_id) = book.series_id {
-        let series = book_service
-            .find_series_by_token(SeriesToken::new(series_id))
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let series = book_service.find_series_by_token(SeriesToken::new(series_id)).await.map_err(to_server_err)?;
         match series {
             Some(s) => (Some(s.token.to_string()), Some(s.name)),
             None => (None, None),
@@ -178,7 +168,7 @@ async fn get_book(token: String) -> Result<BookDetail, ServerFnError> {
     let genres: Vec<String> = book_service
         .genres_for_book(book.id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .into_iter()
         .map(|g| g.name)
         .collect();
@@ -186,7 +176,7 @@ async fn get_book(token: String) -> Result<BookDetail, ServerFnError> {
     let tags: Vec<String> = book_service
         .tags_for_book(book.id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .into_iter()
         .map(|t| t.name)
         .collect();
@@ -205,7 +195,7 @@ async fn get_book(token: String) -> Result<BookDetail, ServerFnError> {
         .reading_service
         .get_reading_state(user_id, book.id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .as_ref()
         .map(to_reading_state_dto);
 
@@ -249,11 +239,7 @@ pub(crate) async fn delete_library_book(token: String) -> Result<(), ServerFnErr
 
     let book_token = BookToken::from_str(&token).map_err(|_| ServerFnError::new("Invalid book token"))?;
 
-    core_services
-        .library_service
-        .delete_book(book_token)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
+    core_services.library_service.delete_book(book_token).await.map_err(to_server_err)
 }
 
 #[post(
@@ -268,7 +254,7 @@ async fn set_reading_status(token: String, status: String) -> Result<ReadingStat
         .book_service
         .find_book_by_token(book_token)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .ok_or_else(|| ServerFnError::new("Book not found"))?;
 
     let new_status: ReadStatus = status.parse().map_err(|e: String| ServerFnError::new(e))?;
@@ -277,7 +263,7 @@ async fn set_reading_status(token: String, status: String) -> Result<ReadingStat
         .reading_service
         .set_status(user_id, book.id, new_status)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .map_err(to_server_err)?;
 
     Ok(to_reading_state_dto(&meta))
 }
@@ -298,7 +284,7 @@ async fn update_reading_progress(token: String, progress_pct: u8) -> Result<Read
         .book_service
         .find_book_by_token(book_token)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .ok_or_else(|| ServerFnError::new("Book not found"))?;
 
     let progress_bps = u16::from(progress_pct) * 100;
@@ -306,7 +292,7 @@ async fn update_reading_progress(token: String, progress_pct: u8) -> Result<Read
         .reading_service
         .update_progress(user_id, book.id, progress_bps, None)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .map_err(to_server_err)?;
 
     Ok(to_reading_state_dto(&meta))
 }
@@ -323,14 +309,14 @@ async fn set_personal_rating(token: String, rating: u8) -> Result<ReadingStateDt
         .book_service
         .find_book_by_token(book_token)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .ok_or_else(|| ServerFnError::new("Book not found"))?;
 
     let meta = core_services
         .reading_service
         .set_rating(user_id, book.id, rating)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .map_err(to_server_err)?;
 
     Ok(to_reading_state_dto(&meta))
 }
@@ -347,14 +333,10 @@ async fn clear_personal_rating(token: String) -> Result<ReadingStateDto, ServerF
         .book_service
         .find_book_by_token(book_token)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .ok_or_else(|| ServerFnError::new("Book not found"))?;
 
-    let meta = core_services
-        .reading_service
-        .clear_rating(user_id, book.id)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let meta = core_services.reading_service.clear_rating(user_id, book.id).await.map_err(to_server_err)?;
 
     Ok(to_reading_state_dto(&meta))
 }
@@ -371,14 +353,10 @@ async fn save_reading_notes(token: String, notes: String) -> Result<ReadingState
         .book_service
         .find_book_by_token(book_token)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .ok_or_else(|| ServerFnError::new("Book not found"))?;
 
-    let meta = core_services
-        .reading_service
-        .set_notes(user_id, book.id, notes)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let meta = core_services.reading_service.set_notes(user_id, book.id, notes).await.map_err(to_server_err)?;
 
     Ok(to_reading_state_dto(&meta))
 }

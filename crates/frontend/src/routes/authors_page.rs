@@ -12,7 +12,7 @@ pub(crate) struct AuthorRow {
 
 #[cfg(feature = "server")]
 use {
-    crate::routes::server_helpers::authenticated_user,
+    crate::routes::server_helpers::{authenticated_user, to_server_err},
     crate::server::AuthSession,
     bb_core::{CoreServices, book::BookQuery},
     std::sync::Arc,
@@ -24,7 +24,7 @@ async fn get_authors() -> Result<Vec<AuthorRow>, ServerFnError> {
 
     let book_service = &core_services.book_service;
 
-    let authors = book_service.list_all_authors().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let authors = book_service.list_all_authors().await.map_err(to_server_err)?;
 
     let mut rows = Vec::with_capacity(authors.len());
     for author in &authors {
@@ -39,7 +39,7 @@ async fn get_authors() -> Result<Vec<AuthorRow>, ServerFnError> {
                 None,
             )
             .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+            .map_err(to_server_err)?;
 
         // Skip authors with no available books (e.g. all still incoming).
         if books.is_empty() {

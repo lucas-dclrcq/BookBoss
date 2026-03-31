@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 #[cfg(feature = "server")]
 use {
-    crate::routes::server_helpers::authenticated_user,
+    crate::routes::server_helpers::{authenticated_user, to_server_err},
     crate::server::AuthSession,
     bb_core::{
         CoreServices,
@@ -21,7 +21,7 @@ async fn get_all_series() -> Result<Vec<SeriesTileData>, ServerFnError> {
 
     let book_service = &core_services.book_service;
 
-    let all_series = book_service.list_all_series().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let all_series = book_service.list_all_series().await.map_err(to_server_err)?;
 
     let mut tiles = Vec::with_capacity(all_series.len());
     for series in &all_series {
@@ -30,10 +30,7 @@ async fn get_all_series() -> Result<Vec<SeriesTileData>, ServerFnError> {
             series_id: Some(series.id),
             ..Default::default()
         };
-        let mut books = book_service
-            .list_books(&filter, None, None)
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let mut books = book_service.list_books(&filter, None, None).await.map_err(to_server_err)?;
 
         // Skip series with no available books (e.g. all still incoming).
         if books.is_empty() {
@@ -54,15 +51,9 @@ async fn get_all_series() -> Result<Vec<SeriesTileData>, ServerFnError> {
 
         // Get first author from first book
         let (first_author_token, first_author_name) = if let Some(first_book) = books.first() {
-            let book_authors = book_service
-                .authors_for_book(first_book.id)
-                .await
-                .map_err(|e| ServerFnError::new(e.to_string()))?;
+            let book_authors = book_service.authors_for_book(first_book.id).await.map_err(to_server_err)?;
             if let Some(ba) = book_authors.iter().min_by_key(|a| a.sort_order) {
-                let author = book_service
-                    .find_author_by_token(AuthorToken::new(ba.author_id))
-                    .await
-                    .map_err(|e| ServerFnError::new(e.to_string()))?;
+                let author = book_service.find_author_by_token(AuthorToken::new(ba.author_id)).await.map_err(to_server_err)?;
                 match author {
                     Some(a) => (Some(a.token.to_string()), Some(a.name)),
                     None => (None, None),

@@ -17,7 +17,11 @@ pub(crate) struct SeriesPageData {
 
 #[cfg(feature = "server")]
 use {
-    crate::routes::{book_detail_page::to_reading_state_dto, books_page::hydrate_books, server_helpers::authenticated_user},
+    crate::routes::{
+        book_detail_page::to_reading_state_dto,
+        books_page::hydrate_books,
+        server_helpers::{authenticated_user, to_server_err},
+    },
     crate::server::AuthSession,
     bb_core::CoreServices,
     bb_core::book::{BookQuery, SeriesToken},
@@ -38,17 +42,14 @@ async fn get_series(token: String) -> Result<SeriesPageData, ServerFnError> {
     let series = book_service
         .find_series_by_token(series_token)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .ok_or_else(|| ServerFnError::new("Series not found"))?;
 
     let filter = BookQuery {
         series_id: Some(series.id),
         ..Default::default()
     };
-    let mut books = book_service
-        .list_books(&filter, None, None)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let mut books = book_service.list_books(&filter, None, None).await.map_err(to_server_err)?;
 
     // Sort books by series_number ascending (None sorts last)
     books.sort_by(|a, b| match (&a.series_number, &b.series_number) {
@@ -63,7 +64,7 @@ async fn get_series(token: String) -> Result<SeriesPageData, ServerFnError> {
         .reading_service
         .list_for_user_and_books(current_user.id(), &book_ids)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .map_err(to_server_err)?;
     let reading_map: HashMap<u64, _> = reading_metas
         .iter()
         .filter(|m| m.read_status != ReadStatus::Unread)

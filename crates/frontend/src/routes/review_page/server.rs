@@ -3,6 +3,7 @@ use dioxus::prelude::*;
 // ───────────────────────────────────────────────────────
 #[cfg(feature = "server")]
 use {
+    crate::routes::server_helpers::to_server_err,
     crate::server::{AuthSession, AuthUser, BackendSessionPool},
     axum::http::Method,
     axum_session_auth::{Auth, Rights},
@@ -156,29 +157,25 @@ pub(super) async fn get_review_data(job_token: String) -> Result<BookReviewData,
     let job = import_service
         .find_by_token(token)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .ok_or_else(|| ServerFnError::new("Job not found"))?;
 
     let book_id = job.candidate_book_id.ok_or_else(|| ServerFnError::new("No candidate book"))?;
     let book = book_service
         .find_book_by_token(BookToken::new(book_id))
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .ok_or_else(|| ServerFnError::new("Book not found"))?;
 
     // Authors sorted by sort_order
     let book_author_links = {
-        let mut links = book_service.authors_for_book(book.id).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        let mut links = book_service.authors_for_book(book.id).await.map_err(to_server_err)?;
         links.sort_by_key(|a| a.sort_order);
         links
     };
     let mut author_names = Vec::with_capacity(book_author_links.len());
     for ba in &book_author_links {
-        if let Some(author) = book_service
-            .find_author_by_token(AuthorToken::new(ba.author_id))
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?
-        {
+        if let Some(author) = book_service.find_author_by_token(AuthorToken::new(ba.author_id)).await.map_err(to_server_err)? {
             author_names.push(author.name);
         }
     }
@@ -188,7 +185,7 @@ pub(super) async fn get_review_data(job_token: String) -> Result<BookReviewData,
         book_service
             .find_series_by_token(SeriesToken::new(sid))
             .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?
+            .map_err(to_server_err)?
             .map(|s| s.name)
             .unwrap_or_default()
     } else {
@@ -200,7 +197,7 @@ pub(super) async fn get_review_data(job_token: String) -> Result<BookReviewData,
         book_service
             .find_publisher_by_token(PublisherToken::new(pid))
             .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?
+            .map_err(to_server_err)?
             .map(|p| p.name)
             .unwrap_or_default()
     } else {
@@ -208,10 +205,7 @@ pub(super) async fn get_review_data(job_token: String) -> Result<BookReviewData,
     };
 
     // Identifiers
-    let raw_identifiers = book_service
-        .identifiers_for_book(book.id)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let raw_identifiers = book_service.identifiers_for_book(book.id).await.map_err(to_server_err)?;
     let identifiers: IdentifierMap = raw_identifiers
         .iter()
         .map(|i| (i.identifier_type.form_key().to_string(), i.value.clone()))
@@ -224,7 +218,7 @@ pub(super) async fn get_review_data(job_token: String) -> Result<BookReviewData,
         .collect();
 
     // Check whether the original source file is still on disk.
-    let book_files = book_service.files_for_book(book.id).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let book_files = book_service.files_for_book(book.id).await.map_err(to_server_err)?;
     let original_missing = {
         let original = book_files.iter().find(|f| f.file_role == FileRole::Original);
         match original {
@@ -244,14 +238,14 @@ pub(super) async fn get_review_data(job_token: String) -> Result<BookReviewData,
     let genres = book_service
         .genres_for_book(book.id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .into_iter()
         .map(|g| g.name)
         .collect();
     let tags = book_service
         .tags_for_book(book.id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .into_iter()
         .map(|t| t.name)
         .collect();
@@ -313,16 +307,14 @@ pub(super) async fn fetch_provider_metadata(
         .metadata_service
         .fetch_from_provider(&provider_name, title, authors, parsed_identifiers)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .map_err(to_server_err)?;
 
     if let Some(pb) = &result {
         if let Some(cover) = &pb.cover_bytes {
             let cover_dir = temp_dir.join("bookboss-covers");
-            tokio::fs::create_dir_all(&cover_dir).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+            tokio::fs::create_dir_all(&cover_dir).await.map_err(to_server_err)?;
             let pending_name = format!("{token}-provider");
-            tokio::fs::write(cover_dir.join(pending_name), cover)
-                .await
-                .map_err(|e| ServerFnError::new(e.to_string()))?;
+            tokio::fs::write(cover_dir.join(pending_name), cover).await.map_err(to_server_err)?;
         }
     }
 
@@ -344,10 +336,10 @@ pub(super) async fn accept_incoming_provider_cover(job_token: String) -> Result<
     }
 
     let cover_dir = std::env::temp_dir().join("bookboss-covers");
-    tokio::fs::create_dir_all(&cover_dir).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    tokio::fs::create_dir_all(&cover_dir).await.map_err(to_server_err)?;
     let pending = cover_dir.join(format!("{job_token}-provider"));
     let committed = cover_dir.join(&job_token);
-    tokio::fs::rename(&pending, &committed).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    tokio::fs::rename(&pending, &committed).await.map_err(to_server_err)?;
 
     Ok(())
 }
@@ -403,7 +395,7 @@ pub(super) async fn approve_book(fields: BookEditFields) -> Result<(), ServerFnE
         .library_service
         .approve_book(token, current_user.id(), edit, &temp_dir)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .map_err(to_server_err)?;
 
     // Clean up any unaccepted provider cover
     let _ = tokio::fs::remove_file(temp_dir.join("bookboss-covers").join(format!("{token}-provider"))).await;
@@ -434,11 +426,7 @@ pub(super) async fn reject_review_book(job_token: String) -> Result<(), ServerFn
     let _ = tokio::fs::remove_file(cover_dir.join(&job_token)).await;
     let _ = tokio::fs::remove_file(cover_dir.join(format!("{job_token}-provider"))).await;
 
-    core_services
-        .library_service
-        .reject_book(token)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    core_services.library_service.reject_book(token).await.map_err(to_server_err)?;
 
     Ok(())
 }
@@ -468,22 +456,18 @@ pub(crate) async fn get_book_for_edit(book_token: String) -> Result<BookReviewDa
     let book = book_service
         .find_book_by_token(token)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .ok_or_else(|| ServerFnError::new("Book not found"))?;
 
     // Authors sorted by sort_order
     let book_author_links = {
-        let mut links = book_service.authors_for_book(book.id).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        let mut links = book_service.authors_for_book(book.id).await.map_err(to_server_err)?;
         links.sort_by_key(|a| a.sort_order);
         links
     };
     let mut author_names = Vec::with_capacity(book_author_links.len());
     for ba in &book_author_links {
-        if let Some(author) = book_service
-            .find_author_by_token(AuthorToken::new(ba.author_id))
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?
-        {
+        if let Some(author) = book_service.find_author_by_token(AuthorToken::new(ba.author_id)).await.map_err(to_server_err)? {
             author_names.push(author.name);
         }
     }
@@ -493,7 +477,7 @@ pub(crate) async fn get_book_for_edit(book_token: String) -> Result<BookReviewDa
         book_service
             .find_series_by_token(SeriesToken::new(sid))
             .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?
+            .map_err(to_server_err)?
             .map(|s| s.name)
             .unwrap_or_default()
     } else {
@@ -505,7 +489,7 @@ pub(crate) async fn get_book_for_edit(book_token: String) -> Result<BookReviewDa
         book_service
             .find_publisher_by_token(PublisherToken::new(pid))
             .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?
+            .map_err(to_server_err)?
             .map(|p| p.name)
             .unwrap_or_default()
     } else {
@@ -513,10 +497,7 @@ pub(crate) async fn get_book_for_edit(book_token: String) -> Result<BookReviewDa
     };
 
     // Identifiers
-    let raw_identifiers = book_service
-        .identifiers_for_book(book.id)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let raw_identifiers = book_service.identifiers_for_book(book.id).await.map_err(to_server_err)?;
     let identifiers: IdentifierMap = raw_identifiers
         .iter()
         .map(|i| (i.identifier_type.form_key().to_string(), i.value.clone()))
@@ -539,14 +520,14 @@ pub(crate) async fn get_book_for_edit(book_token: String) -> Result<BookReviewDa
     let genres = book_service
         .genres_for_book(book.id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .into_iter()
         .map(|g| g.name)
         .collect();
     let tags = book_service
         .tags_for_book(book.id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .into_iter()
         .map(|t| t.name)
         .collect();
@@ -607,16 +588,14 @@ pub(super) async fn fetch_provider_for_edit(
         .metadata_service
         .fetch_from_provider(&provider_name, title, authors, parsed_identifiers)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .map_err(to_server_err)?;
 
     if let Some(pb) = &result {
         if let Some(cover) = &pb.cover_bytes {
             let cover_dir = temp_dir.join("bookboss-covers");
-            tokio::fs::create_dir_all(&cover_dir).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+            tokio::fs::create_dir_all(&cover_dir).await.map_err(to_server_err)?;
             let pending_name = format!("{book_token}-provider");
-            tokio::fs::write(cover_dir.join(pending_name), cover)
-                .await
-                .map_err(|e| ServerFnError::new(e.to_string()))?;
+            tokio::fs::write(cover_dir.join(pending_name), cover).await.map_err(to_server_err)?;
         }
     }
 
@@ -638,10 +617,10 @@ pub(super) async fn accept_library_provider_cover(book_token: String) -> Result<
     }
 
     let cover_dir = std::env::temp_dir().join("bookboss-covers");
-    tokio::fs::create_dir_all(&cover_dir).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    tokio::fs::create_dir_all(&cover_dir).await.map_err(to_server_err)?;
     let pending = cover_dir.join(format!("{book_token}-provider"));
     let committed = cover_dir.join(&book_token);
-    tokio::fs::rename(&pending, &committed).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    tokio::fs::rename(&pending, &committed).await.map_err(to_server_err)?;
 
     Ok(())
 }
@@ -697,7 +676,7 @@ pub(super) async fn save_library_book(book_token: String, fields: BookEditFields
         .library_service
         .edit_book(token, edit, &book_token, &temp_dir)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .map_err(to_server_err)?;
 
     // Clean up any unaccepted provider cover
     let _ = tokio::fs::remove_file(temp_dir.join("bookboss-covers").join(format!("{book_token}-provider"))).await;
@@ -730,7 +709,7 @@ pub(crate) async fn get_picklist_data((): ()) -> Result<PicklistData, ServerFnEr
     let authors = book_service
         .list_all_authors()
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .into_iter()
         .map(|a| a.name)
         .collect();
@@ -738,24 +717,18 @@ pub(crate) async fn get_picklist_data((): ()) -> Result<PicklistData, ServerFnEr
     let genres = book_service
         .list_all_genres()
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .into_iter()
         .map(|g| g.name)
         .collect();
 
-    let tags = book_service
-        .list_all_tags()
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
-        .into_iter()
-        .map(|t| t.name)
-        .collect();
+    let tags = book_service.list_all_tags().await.map_err(to_server_err)?.into_iter().map(|t| t.name).collect();
 
-    let all_series = book_service.list_all_series().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let all_series = book_service.list_all_series().await.map_err(to_server_err)?;
 
     let mut series_options = Vec::with_capacity(all_series.len());
     for s in all_series {
-        let next = book_service.series_next_number(&s.name).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        let next = book_service.series_next_number(&s.name).await.map_err(to_server_err)?;
         series_options.push(SeriesOption {
             name: s.name,
             next_number: next,
@@ -765,7 +738,7 @@ pub(crate) async fn get_picklist_data((): ()) -> Result<PicklistData, ServerFnEr
     let publishers = book_service
         .list_all_publishers()
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .into_iter()
         .map(|p| p.name)
         .collect();
@@ -802,10 +775,8 @@ pub(super) async fn stage_incoming_cover(job_token: String, data_base64: String)
 
     let cover_bytes = B64.decode(&data_base64).map_err(|_| ServerFnError::new("Invalid base64"))?;
     let cover_dir = std::env::temp_dir().join("bookboss-covers");
-    tokio::fs::create_dir_all(&cover_dir).await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    tokio::fs::write(cover_dir.join(&job_token), &cover_bytes)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    tokio::fs::create_dir_all(&cover_dir).await.map_err(to_server_err)?;
+    tokio::fs::write(cover_dir.join(&job_token), &cover_bytes).await.map_err(to_server_err)?;
 
     Ok(())
 }
@@ -826,10 +797,8 @@ pub(super) async fn stage_library_cover(book_token: String, data_base64: String)
 
     let cover_bytes = B64.decode(&data_base64).map_err(|_| ServerFnError::new("Invalid base64"))?;
     let cover_dir = std::env::temp_dir().join("bookboss-covers");
-    tokio::fs::create_dir_all(&cover_dir).await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    tokio::fs::write(cover_dir.join(&book_token), &cover_bytes)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    tokio::fs::create_dir_all(&cover_dir).await.map_err(to_server_err)?;
+    tokio::fs::write(cover_dir.join(&book_token), &cover_bytes).await.map_err(to_server_err)?;
 
     Ok(())
 }

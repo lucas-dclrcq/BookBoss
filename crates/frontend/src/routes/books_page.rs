@@ -43,7 +43,10 @@ pub(crate) struct ListBooksResponse {
 #[cfg(feature = "server")]
 use {
     crate::components::to_core_sort,
-    crate::routes::{book_detail_page::to_reading_state_dto, server_helpers::authenticated_user},
+    crate::routes::{
+        book_detail_page::to_reading_state_dto,
+        server_helpers::{authenticated_user, to_server_err},
+    },
     crate::server::{AuthSession, AuthUser, BackendSessionPool},
     axum::http::Method,
     axum_session_auth::{Auth, Rights},
@@ -76,7 +79,7 @@ pub(crate) async fn hydrate_books(
     let mut book_author_pairs: Vec<Vec<(i32, u64)>> = Vec::with_capacity(books.len());
     let mut all_author_ids: HashSet<u64> = HashSet::new();
     for book in books {
-        let authors = book_service.authors_for_book(book.id).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        let authors = book_service.authors_for_book(book.id).await.map_err(to_server_err)?;
         let pairs: Vec<(i32, u64)> = authors.iter().map(|ba| (ba.sort_order, ba.author_id)).collect();
         for &(_, aid) in &pairs {
             all_author_ids.insert(aid);
@@ -87,11 +90,7 @@ pub(crate) async fn hydrate_books(
     // Batch-load unique authors (token + name).
     let mut author_map: HashMap<u64, (String, String)> = HashMap::new();
     for author_id in all_author_ids {
-        if let Some(a) = book_service
-            .find_author_by_token(AuthorToken::new(author_id))
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?
-        {
+        if let Some(a) = book_service.find_author_by_token(AuthorToken::new(author_id)).await.map_err(to_server_err)? {
             author_map.insert(author_id, (a.token.to_string(), a.name));
         }
     }
@@ -100,11 +99,7 @@ pub(crate) async fn hydrate_books(
     let unique_series: HashSet<u64> = books.iter().filter_map(|b| b.series_id).collect();
     let mut series_map: HashMap<u64, (String, String)> = HashMap::new();
     for series_id in unique_series {
-        if let Some(s) = book_service
-            .find_series_by_token(SeriesToken::new(series_id))
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?
-        {
+        if let Some(s) = book_service.find_series_by_token(SeriesToken::new(series_id)).await.map_err(to_server_err)? {
             series_map.insert(series_id, (s.token.to_string(), s.name));
         }
     }
@@ -113,10 +108,10 @@ pub(crate) async fn hydrate_books(
     let mut book_genres: Vec<Vec<String>> = Vec::with_capacity(books.len());
     let mut book_tags: Vec<Vec<String>> = Vec::with_capacity(books.len());
     for book in books {
-        let genres = book_service.genres_for_book(book.id).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        let genres = book_service.genres_for_book(book.id).await.map_err(to_server_err)?;
         book_genres.push(genres.into_iter().map(|g| g.name).collect());
 
-        let tags = book_service.tags_for_book(book.id).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        let tags = book_service.tags_for_book(book.id).await.map_err(to_server_err)?;
         book_tags.push(tags.into_iter().map(|t| t.name).collect());
     }
 
@@ -176,11 +171,7 @@ async fn list_books(sort: crate::components::SortOrder) -> Result<ListBooksRespo
         sort: Some(to_core_sort(sort)),
         ..Default::default()
     };
-    let books = core_services
-        .book_service
-        .list_books(&filter, None, None)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let books = core_services.book_service.list_books(&filter, None, None).await.map_err(to_server_err)?;
 
     // Load per-user reading state scoped to the fetched books (avoids page limits).
     let book_ids: Vec<bb_core::book::BookId> = books.iter().map(|b| b.id).collect();
@@ -188,7 +179,7 @@ async fn list_books(sort: crate::components::SortOrder) -> Result<ListBooksRespo
         .reading_service
         .list_for_user_and_books(user_id, &book_ids)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .map_err(to_server_err)?;
     let reading_map: HashMap<u64, ReadingStateDto> = reading_metas
         .iter()
         .filter(|m| m.read_status != ReadStatus::Unread)

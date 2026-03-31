@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 #[cfg(feature = "server")]
 use {
     crate::FrontendConfig,
-    crate::routes::server_helpers::authenticated_user,
+    crate::routes::server_helpers::{authenticated_user, to_server_err},
     crate::server::AuthSession,
     bb_core::{
         CoreServices,
@@ -78,7 +78,7 @@ async fn get_opds_info() -> Result<OpdsInfo, ServerFnError> {
         .user_service
         .find_by_id(user_id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .ok_or_else(|| ServerFnError::new("User not found"))?;
 
     if !user.has_capability(Capability::OpdsAccess) {
@@ -90,11 +90,7 @@ async fn get_opds_info() -> Result<OpdsInfo, ServerFnError> {
         });
     }
 
-    let password = core_services
-        .opds_service
-        .get_or_create_password(&user)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let password = core_services.opds_service.get_or_create_password(&user).await.map_err(to_server_err)?;
 
     let base = frontend_config.base_url.trim_end_matches('/');
     let opds_url = format!("{base}/opds/");
@@ -120,18 +116,14 @@ async fn regenerate_opds_password() -> Result<String, ServerFnError> {
         .user_service
         .find_by_id(user_id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .ok_or_else(|| ServerFnError::new("User not found"))?;
 
     if !user.has_capability(Capability::OpdsAccess) {
         return Err(ServerFnError::new("OPDS access not enabled"));
     }
 
-    let pw = core_services
-        .opds_service
-        .regenerate_password(&user)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let pw = core_services.opds_service.regenerate_password(&user).await.map_err(to_server_err)?;
 
     Ok(pw)
 }
@@ -148,7 +140,7 @@ async fn get_profile_info() -> Result<ProfileInfo, ServerFnError> {
         .user_service
         .find_by_id(user_id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .ok_or_else(|| ServerFnError::new("User not found"))?;
 
     Ok(ProfileInfo {
@@ -167,7 +159,7 @@ async fn update_profile(full_name: String, email: String) -> Result<(), ServerFn
     if full_name.is_empty() {
         return Err(ServerFnError::new("Full name must not be empty"));
     }
-    let email_address = EmailAddress::new(&email).map_err(|e| ServerFnError::new(e.to_string()))?;
+    let email_address = EmailAddress::new(&email).map_err(to_server_err)?;
 
     let user_id = authenticated_user(&auth_session)?.id();
 
@@ -175,7 +167,7 @@ async fn update_profile(full_name: String, email: String) -> Result<(), ServerFn
         .user_service
         .find_by_id(user_id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .ok_or_else(|| ServerFnError::new("User not found"))?;
 
     core_services
@@ -186,7 +178,7 @@ async fn update_profile(full_name: String, email: String) -> Result<(), ServerFn
             ..existing
         })
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .map_err(to_server_err)?;
 
     Ok(())
 }
@@ -207,14 +199,14 @@ async fn change_password(current: String, new_password: String) -> Result<(), Se
         .user_service
         .find_by_id(user_id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(to_server_err)?
         .ok_or_else(|| ServerFnError::new("User not found"))?;
 
     if !existing.check_password(&current) {
         return Err(ServerFnError::new("Current password is incorrect"));
     }
 
-    let new_hash = User::encrypt_password(&new_password).map_err(|e| ServerFnError::new(e.to_string()))?;
+    let new_hash = User::encrypt_password(&new_password).map_err(to_server_err)?;
 
     core_services
         .user_service
@@ -223,7 +215,7 @@ async fn change_password(current: String, new_password: String) -> Result<(), Se
             ..existing
         })
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .map_err(to_server_err)?;
 
     Ok(())
 }
@@ -265,19 +257,11 @@ pub(crate) fn kobo_sync_url(base_url: &str, sync_token: &str) -> String {
 async fn get_devices_for_profile() -> Result<Vec<DeviceRow>, ServerFnError> {
     let user_id = authenticated_user(&auth_session)?.id();
 
-    let devices = core_services
-        .device_service
-        .list_devices_for_user(user_id)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let devices = core_services.device_service.list_devices_for_user(user_id).await.map_err(to_server_err)?;
 
     let mut rows = Vec::with_capacity(devices.len());
     for device in devices {
-        let companion = core_services
-            .device_service
-            .get_companion_shelf(device.id)
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let companion = core_services.device_service.get_companion_shelf(device.id).await.map_err(to_server_err)?;
 
         let sync_token_display = device.token.to_string().trim_start_matches("DV_").to_string();
         let sync_url = kobo_sync_url(frontend_config.base_url.trim_end_matches('/'), &sync_token_display);
@@ -319,11 +303,7 @@ fn humanize_synced_at(ts: Option<DateTime<Utc>>) -> String {
 async fn get_default_device_name() -> Result<String, ServerFnError> {
     let user_id = authenticated_user(&auth_session)?.id();
 
-    core_services
-        .device_service
-        .default_device_name(user_id)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
+    core_services.device_service.default_device_name(user_id).await.map_err(to_server_err)
 }
 
 #[post(
@@ -345,7 +325,7 @@ async fn create_device_for_profile(name: String, device_type: String, on_removal
         .device_service
         .create_device(user_id, name, device_type, action)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .map_err(to_server_err)?;
 
     Ok(())
 }
@@ -363,14 +343,14 @@ async fn update_device_for_profile(token: String, name: String, on_removal_actio
 
     let user_id = authenticated_user(&auth_session)?.id();
 
-    let device_token = DeviceToken::from_str(&token).map_err(|e| ServerFnError::new(e.to_string()))?;
+    let device_token = DeviceToken::from_str(&token).map_err(to_server_err)?;
     let action = parse_removal_action(&on_removal_action)?;
 
     core_services
         .device_service
         .update_device(device_token, name, action, user_id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .map_err(to_server_err)?;
 
     Ok(())
 }
@@ -383,13 +363,13 @@ async fn update_device_for_profile(token: String, name: String, on_removal_actio
 async fn delete_device_for_profile(token: String, delete_shelf: bool) -> Result<(), ServerFnError> {
     let user_id = authenticated_user(&auth_session)?.id();
 
-    let device_token = DeviceToken::from_str(&token).map_err(|e| ServerFnError::new(e.to_string()))?;
+    let device_token = DeviceToken::from_str(&token).map_err(to_server_err)?;
 
     core_services
         .device_service
         .delete_device(device_token, delete_shelf, user_id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .map_err(to_server_err)?;
 
     Ok(())
 }
@@ -402,13 +382,13 @@ async fn delete_device_for_profile(token: String, delete_shelf: bool) -> Result<
 async fn reset_device_sync_for_profile(token: String) -> Result<(), ServerFnError> {
     let user_id = authenticated_user(&auth_session)?.id();
 
-    let device_token = DeviceToken::from_str(&token).map_err(|e| ServerFnError::new(e.to_string()))?;
+    let device_token = DeviceToken::from_str(&token).map_err(to_server_err)?;
 
     core_services
         .device_service
         .reset_device_sync(device_token, user_id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .map_err(to_server_err)?;
 
     Ok(())
 }
