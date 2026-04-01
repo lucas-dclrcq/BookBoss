@@ -1,5 +1,4 @@
-//! Password validation helpers shared between the landing page and
-//! the admin registration form.
+//! Password validation helpers shared across registration and login flows.
 
 pub(crate) const SPECIAL_CHARS: &str = "!@#$%^&*()_+-=[]{}|;:,.<>?";
 pub(crate) const MIN_PASSWORD_LEN: usize = 12;
