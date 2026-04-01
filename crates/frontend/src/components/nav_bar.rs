@@ -405,12 +405,15 @@ pub(crate) fn NavBar() -> Element {
                     }
                 }
                 Link { to: Route::BooksPage {}, class: "text-sm hover:text-indigo-200",
+                    onclick: move |_| *SEARCH_TEXT.write() = String::new(),
                     "Library"
                 }
                 Link { to: Route::AuthorsPage {}, class: "text-sm hover:text-indigo-200",
+                    onclick: move |_| *SEARCH_TEXT.write() = String::new(),
                     "Authors"
                 }
                 Link { to: Route::SeriesPage {}, class: "text-sm hover:text-indigo-200",
+                    onclick: move |_| *SEARCH_TEXT.write() = String::new(),
                     "Series"
                 }
                 SuspenseBoundary {
