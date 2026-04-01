@@ -30,7 +30,7 @@ pub(crate) struct CoverQuery {
 /// built-in blank cover PNG.
 ///
 /// Query parameters:
-/// - `full=1` — serve the full-size cover instead of the thumbnail
+/// - `full=true` — serve the full-size cover instead of the thumbnail
 pub(crate) async fn serve_cover(
     Path(book_token_str): Path<String>,
     Query(query): Query<CoverQuery>,
