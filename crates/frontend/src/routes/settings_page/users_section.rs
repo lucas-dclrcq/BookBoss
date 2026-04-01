@@ -298,6 +298,7 @@ fn parse_capabilities(capabilities: &[String]) -> Result<bb_core::types::Capabil
             "ConvertBook" => Capability::ConvertBook,
             "DeleteBook" => Capability::DeleteBook,
             "EditBook" => Capability::EditBook,
+            "OpdsAccess" => Capability::OpdsAccess,
             other => return Err(ServerFnError::new(format!("Unknown capability: {other}"))),
         };
         caps.insert(cap);
@@ -541,16 +542,17 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
     let mut email = use_signal(|| editing.as_ref().map(|r| r.email.clone()).unwrap_or_default());
     let mut password = use_signal(String::new);
     let mut role = use_signal(|| initial_role);
-    let mut user_caps: Signal<Vec<String>> = use_signal(|| initial_user_caps);
+    let mut user_caps: Signal<Vec<String>> = use_signal(|| if is_edit { initial_user_caps } else { vec!["OpdsAccess".to_string()] });
     let mut error_msg: Signal<Option<String>> = use_signal(|| None);
     let mut saving = use_signal(|| false);
     let mut generating = use_signal(|| false);
 
-    const GRANTABLE: [(&str, &str); 4] = [
+    const GRANTABLE: [(&str, &str); 5] = [
         ("ApproveImports", "Approve Imports"),
         ("ConvertBook", "Convert Books"),
         ("DeleteBook", "Delete Books"),
         ("EditBook", "Edit Books"),
+        ("OpdsAccess", "OPDS Access"),
     ];
 
     rsx! {
