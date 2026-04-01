@@ -66,7 +66,7 @@ pub(crate) async fn serve_cover(
 
     let (data, content_type) = if query.full == Some(true) {
         // Full-size cover requested — skip thumbnail.
-        let cover_path = core_services.file_store.cover_path(token, "cover.jpg");
+        let cover_path = core_services.file_store.cover_path(token);
         match tokio::fs::read(&cover_path).await {
             Ok(d) => (d, "image/jpeg"),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -81,11 +81,11 @@ pub(crate) async fn serve_cover(
         }
     } else {
         // Default: serve thumbnail if available, fall back to full-size cover.
-        let thumb_path = core_services.file_store.cover_path(token, "thumb.jpg");
+        let thumb_path = core_services.file_store.thumbnail_path(token);
         match tokio::fs::read(&thumb_path).await {
             Ok(d) => (d, "image/jpeg"),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                let cover_path = core_services.file_store.cover_path(token, "cover.jpg");
+                let cover_path = core_services.file_store.cover_path(token);
                 match tokio::fs::read(&cover_path).await {
                     Ok(d) => (d, "image/jpeg"),
                     Err(e) if e.kind() == std::io::ErrorKind::NotFound => {

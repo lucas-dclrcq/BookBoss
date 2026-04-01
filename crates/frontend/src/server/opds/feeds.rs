@@ -582,7 +582,7 @@ pub async fn serve_cover(Path(book_token_str): Path<String>, _opds_user: OpdsUse
             .unwrap();
     }
 
-    let path = core_services.file_store.cover_path(token, "cover.jpg");
+    let path = core_services.file_store.cover_path(token);
 
     match tokio::fs::read(&path).await {
         Ok(data) => {
