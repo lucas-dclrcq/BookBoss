@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.17](https://github.com/szinn/BookBoss/compare/v0.7.16..v0.7.17) - 2026-04-01
+
+### Features
+
+- _(core)_ Replace cover_path Option<String> with has_cover bool - ([975b1d6](https://github.com/szinn/BookBoss/commit/975b1d63c4e6a904031a61020625b02b0720309a))
+- _(core)_ Add BackfillThumbnailsHandler health task - ([dd4f9bd](https://github.com/szinn/BookBoss/commit/dd4f9bdafff4671ccaa385684804f8972a791f10))
+- _(core)_ Add find_book_ids_with_cover_for_sweep to BookRepository - ([288281a](https://github.com/szinn/BookBoss/commit/288281a754770c75964339f391a37864e41f8832))
+- _(database)_ Add migration to replace cover_path with has_cover bool - ([8e96faf](https://github.com/szinn/BookBoss/commit/8e96fafb63c857c0a22155da64fd2b798e4d485a))
+- _(frontend)_ Add ?full=1 to cover endpoint for single-book views - ([ac6d18c](https://github.com/szinn/BookBoss/commit/ac6d18ca013bf20d44e5f75affc94c5c694b383a))
+- _(frontend)_ Cap book grid covers at 256px width - ([6b97f1b](https://github.com/szinn/BookBoss/commit/6b97f1bd848f234aa6fef0dd8dae864f274a80b1))
+- _(frontend)_ Serve thumb.jpg first with fallback to cover.jpg - ([e720fda](https://github.com/szinn/BookBoss/commit/e720fda6aa84c1b45943b5c6e715069b0abc088a))
+- _(storage)_ Add backfill_thumbnail to FileStoreService port - ([114e458](https://github.com/szinn/BookBoss/commit/114e45873637dbff857e0c547ce7dc3ae8084e41))
+- _(storage)_ Generate 256x384 thumb.jpg alongside cover at ingest - ([6eccce6](https://github.com/szinn/BookBoss/commit/6eccce696a4b7923c6c2ed83026c6dbd348719f4))
+
+### Bug Fixes
+
+- _(frontend)_ Use full=true instead of full=1 for cover endpoint - ([883b62f](https://github.com/szinn/BookBoss/commit/883b62f1870180ec320791020e1717af9c695f42))
+- _(frontend)_ Add missing OpdsAccess capability to user modal - ([d0d2570](https://github.com/szinn/BookBoss/commit/d0d25701f0b5ec3eac164a8b63397a4eeee0ae1a))
+
+### Refactor
+
+- _(core)_ Encapsulate cover/thumbnail filenames in storage crate - ([c630066](https://github.com/szinn/BookBoss/commit/c6300668d03e5b3c6493913395019b8840631cbf))
+- _(frontend)_ Update callers to new FileStoreService API - ([30f7a94](https://github.com/szinn/BookBoss/commit/30f7a94b38298e1ab4ad9a82cc11b034cdc606da))
+
 ## [0.7.16](https://github.com/szinn/BookBoss/compare/v0.7.15..v0.7.16) - 2026-04-01
 
 ### Bug Fixes
