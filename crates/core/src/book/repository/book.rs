@@ -106,4 +106,11 @@ pub trait BookRepository: Send + Sync {
         after_id: Option<BookId>,
         batch_size: u64,
     ) -> Result<Vec<BookId>, Error>;
+
+    /// Returns up to `batch_size` IDs of Available books that have a non-null
+    /// `cover_path`, with `id > after_id`, ordered by id ASC.
+    ///
+    /// Used by the `BackfillThumbnailsHandler` cursor sweep to identify books
+    /// that need a `thumb.jpg` generated.
+    async fn find_book_ids_with_cover_for_sweep(&self, transaction: &dyn Transaction, after_id: Option<BookId>, batch_size: u64) -> Result<Vec<BookId>, Error>;
 }
