@@ -15,4 +15,8 @@ pub trait AuthorRepository: Send + Sync {
     async fn find_by_name(&self, transaction: &dyn Transaction, name: &str) -> Result<Option<Author>, Error>;
     async fn delete_author(&self, transaction: &dyn Transaction, author_id: AuthorId) -> Result<(), Error>;
     async fn list_all_authors(&self, transaction: &dyn Transaction) -> Result<Vec<Author>, Error>;
+
+    /// Returns all authors whose `id` is in `ids`. Order is unspecified.
+    /// Returns an empty vec immediately if `ids` is empty.
+    async fn find_by_ids(&self, transaction: &dyn Transaction, ids: &[AuthorId]) -> Result<Vec<Author>, Error>;
 }

@@ -17,4 +17,8 @@ pub trait SeriesRepository: Send + Sync {
     async fn max_series_number_for_series(&self, transaction: &dyn Transaction, series_id: SeriesId) -> Result<Option<rust_decimal::Decimal>, Error>;
     async fn count_books_for_series(&self, transaction: &dyn Transaction, series_id: SeriesId) -> Result<u64, Error>;
     async fn delete_series(&self, transaction: &dyn Transaction, series_id: SeriesId) -> Result<(), Error>;
+
+    /// Returns all series whose `id` is in `ids`. Order is unspecified.
+    /// Returns an empty vec immediately if `ids` is empty.
+    async fn find_by_ids(&self, transaction: &dyn Transaction, ids: &[SeriesId]) -> Result<Vec<Series>, Error>;
 }

@@ -48,6 +48,19 @@ pub trait BookRepository: Send + Sync {
     async fn count_books_for_author(&self, transaction: &dyn Transaction, author_id: AuthorId) -> Result<u64, Error>;
     async fn genres_for_book(&self, transaction: &dyn Transaction, book_id: BookId) -> Result<Vec<Genre>, Error>;
     async fn tags_for_book(&self, transaction: &dyn Transaction, book_id: BookId) -> Result<Vec<Tag>, Error>;
+
+    /// Returns all `book_authors` join-table rows for the given book IDs in one
+    /// query. Returns an empty vec immediately if `book_ids` is empty.
+    async fn book_authors_for_books(&self, transaction: &dyn Transaction, book_ids: &[BookId]) -> Result<Vec<BookAuthor>, Error>;
+
+    /// Returns all `(book_id, Genre)` pairs for the given book IDs.
+    /// Returns an empty vec immediately if `book_ids` is empty.
+    async fn book_genres_for_books(&self, transaction: &dyn Transaction, book_ids: &[BookId]) -> Result<Vec<(BookId, Genre)>, Error>;
+
+    /// Returns all `(book_id, Tag)` pairs for the given book IDs.
+    /// Returns an empty vec immediately if `book_ids` is empty.
+    async fn book_tags_for_books(&self, transaction: &dyn Transaction, book_ids: &[BookId]) -> Result<Vec<(BookId, Tag)>, Error>;
+
     async fn add_book_genre(&self, transaction: &dyn Transaction, book_id: BookId, genre_id: GenreId) -> Result<(), Error>;
     async fn add_book_tag(&self, transaction: &dyn Transaction, book_id: BookId, tag_id: TagId) -> Result<(), Error>;
     async fn delete_book_genres(&self, transaction: &dyn Transaction, book_id: BookId) -> Result<(), Error>;

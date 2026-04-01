@@ -3,6 +3,7 @@ pub mod book;
 pub mod book_file;
 pub mod book_identifier;
 pub mod genre;
+pub mod hydration;
 pub mod metadata_source;
 pub mod publisher;
 pub mod series;
@@ -13,6 +14,7 @@ pub use book::{Book, BookId, BookQuery, BookSortField, BookSortOrder, BookStatus
 pub use book_file::{BookFile, FileFormat, FileRole};
 pub use book_identifier::{BookIdentifier, IdentifierType};
 pub use genre::{Genre, GenreId, GenreToken, NewGenre};
+pub use hydration::BookHydrationData;
 pub use metadata_source::MetadataSource;
 pub use publisher::{NewPublisher, Publisher, PublisherId, PublisherToken};
 pub use series::{NewSeries, Series, SeriesId, SeriesToken};

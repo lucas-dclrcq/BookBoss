@@ -910,6 +910,18 @@ impl BookRepository for BookRepositoryAdapter {
 
         Ok(rows.into_iter().map(|r| r.book_id as u64).collect())
     }
+
+    async fn book_authors_for_books(&self, _transaction: &dyn Transaction, _book_ids: &[BookId]) -> Result<Vec<BookAuthor>, Error> {
+        todo!("implemented in Task 2")
+    }
+
+    async fn book_genres_for_books(&self, _transaction: &dyn Transaction, _book_ids: &[BookId]) -> Result<Vec<(BookId, Genre)>, Error> {
+        todo!("implemented in Task 2")
+    }
+
+    async fn book_tags_for_books(&self, _transaction: &dyn Transaction, _book_ids: &[BookId]) -> Result<Vec<(BookId, Tag)>, Error> {
+        todo!("implemented in Task 2")
+    }
 }
 
 #[cfg(test)]

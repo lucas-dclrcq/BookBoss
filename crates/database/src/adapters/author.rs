@@ -138,6 +138,10 @@ impl AuthorRepository for AuthorRepositoryAdapter {
         Ok(rows.into_iter().map(Into::into).collect())
     }
 
+    async fn find_by_ids(&self, _transaction: &dyn Transaction, _ids: &[AuthorId]) -> Result<Vec<Author>, Error> {
+        todo!("implemented in Task 2")
+    }
+
     async fn list_authors(&self, transaction: &dyn Transaction, start_id: Option<AuthorId>, page_size: Option<u64>) -> Result<Vec<Author>, Error> {
         if let Some(page_size) = page_size {
             if page_size < 1 {

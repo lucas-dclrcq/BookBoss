@@ -188,6 +188,10 @@ impl SeriesRepository for SeriesRepositoryAdapter {
 
         Ok(())
     }
+
+    async fn find_by_ids(&self, _transaction: &dyn Transaction, _ids: &[SeriesId]) -> Result<Vec<Series>, Error> {
+        todo!("implemented in Task 2")
+    }
 }
 
 #[cfg(test)]
