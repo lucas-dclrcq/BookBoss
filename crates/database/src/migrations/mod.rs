@@ -31,6 +31,7 @@ mod m20260330_000028_add_index_book_files_format_role;
 mod m20260330_000029_add_index_jobs_indexes;
 mod m20260330_000030_add_index_import_jobs_updated_at;
 mod m20260330_000031_add_index_shelves_visibility;
+mod m20260401_000032_replace_cover_path_with_has_cover;
 
 pub struct Migrator;
 
@@ -69,6 +70,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260330_000029_add_index_jobs_indexes::Migration),
             Box::new(m20260330_000030_add_index_import_jobs_updated_at::Migration),
             Box::new(m20260330_000031_add_index_shelves_visibility::Migration),
+            Box::new(m20260401_000032_replace_cover_path_with_has_cover::Migration),
         ]
     }
 }
