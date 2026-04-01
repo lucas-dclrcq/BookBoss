@@ -647,7 +647,7 @@ fn BookCover(token: String, updated_at: String, progress_pct: Option<u8>) -> Ele
     rsx! {
         div { class: "shrink-0 relative w-36 self-start",
             img {
-                src: "/api/v1/covers/{token}?v={updated_at}",
+                src: "/api/v1/covers/{token}?v={updated_at}&full=1",
                 class: "w-full block rounded shadow-md",
                 style: "aspect-ratio: 2/3; object-fit: cover",
             }

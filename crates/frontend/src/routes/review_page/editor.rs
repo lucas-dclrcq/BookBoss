@@ -47,7 +47,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
     let picklist = use_resource(move || get_picklist_data(()));
     let mut identifiers: Signal<IdentifierMap> = use_signal(|| data.identifiers.clone());
     let mut use_fetched_cover = use_signal(|| false);
-    let cover_url = format!("/api/v1/covers/{}?v={}", data.book_token, data.updated_at);
+    let cover_url = format!("/api/v1/covers/{}?v={}&full=1", data.book_token, data.updated_at);
     let mut current_cover = use_signal(|| cover_url.clone());
     let mut current_cover_dimensions: Signal<Option<(u32, u32)>> = use_signal(|| data.cover_dimensions);
     let mut cover_drag_over = use_signal(|| false);
@@ -818,7 +818,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                             if let Err(e) = result {
                                                 error_msg.set(Some(format!("Failed to replace cover: {e}")));
                                                 current_cover
-                                                    .set(format!("/api/v1/covers/{bt_revert}"));
+                                                    .set(format!("/api/v1/covers/{bt_revert}?full=1"));
                                             }
                                         }
                                     },

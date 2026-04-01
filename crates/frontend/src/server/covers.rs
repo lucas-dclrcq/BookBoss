@@ -3,7 +3,7 @@ use std::sync::Arc;
 use axum::{
     Extension,
     body::Body,
-    extract::Path,
+    extract::{Path, Query},
     http::{HeaderValue, StatusCode, header},
     response::Response,
 };
@@ -13,6 +13,13 @@ use super::AuthSession;
 
 static BLANK_COVER: &[u8] = include_bytes!("../../assets/BlankCover.png");
 
+#[derive(serde::Deserialize)]
+pub(crate) struct CoverQuery {
+    /// When true, skip thumbnail and serve the full-size cover directly.
+    #[serde(default)]
+    pub full: Option<bool>,
+}
+
 /// Serves a cover image for a given book token.
 ///
 /// Route: `GET /api/v1/covers/:book_token`
@@ -21,8 +28,12 @@ static BLANK_COVER: &[u8] = include_bytes!("../../assets/BlankCover.png");
 /// database, reads the file from the library store, and returns it with the
 /// appropriate `Content-Type` header. If the book has no cover, serves the
 /// built-in blank cover PNG.
+///
+/// Query parameters:
+/// - `full=1` — serve the full-size cover instead of the thumbnail
 pub(crate) async fn serve_cover(
     Path(book_token_str): Path<String>,
+    Query(query): Query<CoverQuery>,
     auth_session: AuthSession,
     Extension(core_services): Extension<Arc<CoreServices>>,
 ) -> Response {
@@ -53,30 +64,46 @@ pub(crate) async fn serve_cover(
             .unwrap();
     };
 
-    // Serve thumbnail if available, fall back to full-size cover.
-    let thumb_path = core_services.file_store.cover_path(token, "thumb.jpg");
-    let (data, content_type) = match tokio::fs::read(&thumb_path).await {
-        Ok(d) => (d, "image/jpeg"),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            // Thumbnail not yet generated — serve full-size cover.
-            let cover_path = core_services.file_store.cover_path(token, &filename);
-            match tokio::fs::read(&cover_path).await {
-                Ok(d) => (d, content_type_for_filename(&filename)),
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                    return Response::builder()
-                        .status(StatusCode::OK)
-                        .header(header::CONTENT_TYPE, HeaderValue::from_static("image/png"))
-                        .header(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"))
-                        .body(Body::from(BLANK_COVER))
-                        .unwrap();
-                }
-                Err(_) => {
-                    return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap();
+    let (data, content_type) = if query.full == Some(true) {
+        // Full-size cover requested — skip thumbnail.
+        let cover_path = core_services.file_store.cover_path(token, &filename);
+        match tokio::fs::read(&cover_path).await {
+            Ok(d) => (d, content_type_for_filename(&filename)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return Response::builder()
+                    .status(StatusCode::OK)
+                    .header(header::CONTENT_TYPE, HeaderValue::from_static("image/png"))
+                    .header(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"))
+                    .body(Body::from(BLANK_COVER))
+                    .unwrap();
+            }
+            Err(_) => return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap(),
+        }
+    } else {
+        // Default: serve thumbnail if available, fall back to full-size cover.
+        let thumb_path = core_services.file_store.cover_path(token, "thumb.jpg");
+        match tokio::fs::read(&thumb_path).await {
+            Ok(d) => (d, "image/jpeg"),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                let cover_path = core_services.file_store.cover_path(token, &filename);
+                match tokio::fs::read(&cover_path).await {
+                    Ok(d) => (d, content_type_for_filename(&filename)),
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                        return Response::builder()
+                            .status(StatusCode::OK)
+                            .header(header::CONTENT_TYPE, HeaderValue::from_static("image/png"))
+                            .header(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"))
+                            .body(Body::from(BLANK_COVER))
+                            .unwrap();
+                    }
+                    Err(_) => {
+                        return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap();
+                    }
                 }
             }
-        }
-        Err(_) => {
-            return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap();
+            Err(_) => {
+                return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap();
+            }
         }
     };
 
