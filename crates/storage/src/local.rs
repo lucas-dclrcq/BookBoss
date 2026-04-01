@@ -98,6 +98,30 @@ fn normalize_to_jpeg(data: &[u8]) -> Vec<u8> {
     out
 }
 
+/// Generates a 256×384 thumbnail from cover image bytes.
+///
+/// Decodes `data` as any supported image format, resizes to fit within
+/// 256×384 (preserving aspect ratio), and re-encodes as JPEG at quality 80.
+/// Returns `None` if the input cannot be decoded or encoding fails.
+fn generate_thumbnail_bytes(data: &[u8]) -> Option<Vec<u8>> {
+    const THUMB_W: u32 = 256;
+    const THUMB_H: u32 = 384;
+    const QUALITY: u8 = 80;
+
+    let reader = ImageReader::new(std::io::Cursor::new(data)).with_guessed_format().ok()?;
+    let img = reader.decode().ok()?;
+
+    let img = if img.width() > THUMB_W || img.height() > THUMB_H {
+        img.resize(THUMB_W, THUMB_H, FilterType::Lanczos3)
+    } else {
+        img
+    };
+
+    let mut out = Vec::new();
+    JpegEncoder::new_with_quality(&mut out, QUALITY).encode_image(&img).ok()?;
+    Some(out)
+}
+
 #[async_trait]
 impl FileStoreService for LocalFileStore {
     fn resolve(&self, relative_path: &str) -> PathBuf {
@@ -179,7 +203,16 @@ impl FileStoreService for LocalFileStore {
 
         let bytes = if is_recognized_image { normalize_to_jpeg(data) } else { data.to_vec() };
 
-        tokio::fs::write(cover_path, bytes).await.map_err(io_err)?;
+        tokio::fs::write(cover_path, &bytes).await.map_err(io_err)?;
+
+        // Generate and write thumbnail alongside the full-size cover.
+        if let Some(thumb_bytes) = generate_thumbnail_bytes(&bytes) {
+            let thumb_path = self.cover_path(token, "thumb.jpg");
+            if let Err(e) = tokio::fs::write(&thumb_path, thumb_bytes).await {
+                tracing::warn!(error = %e, "failed to write thumbnail for book {token}");
+            }
+        }
+
         Ok(())
     }
 
@@ -549,6 +582,51 @@ mod tests {
         input.extend_from_slice(b"this is garbage data that will fail to decode");
         let output = super::normalize_to_jpeg(&input);
         assert_eq!(output, input, "corrupt PNG should be returned unchanged");
+    }
+
+    // ── generate_thumbnail_bytes tests ────────────────────────────────────────
+
+    #[test]
+    fn generate_thumbnail_bytes_returns_jpeg_from_jpeg() {
+        let input = tiny_jpeg(500, 750);
+        let output = super::generate_thumbnail_bytes(&input).expect("should produce output");
+        assert_eq!(&output[..2], &[0xFF, 0xD8], "output should be JPEG");
+    }
+
+    #[test]
+    fn generate_thumbnail_bytes_resizes_oversized_image() {
+        use image::ImageReader;
+        let input = tiny_png(1024, 1536); // exactly at the full-cover limit
+        let output = super::generate_thumbnail_bytes(&input).expect("should produce thumbnail");
+        let decoded = ImageReader::new(std::io::Cursor::new(&output)).with_guessed_format().unwrap().decode().unwrap();
+        assert!(decoded.width() <= 256, "width {} exceeds 256", decoded.width());
+        assert!(decoded.height() <= 384, "height {} exceeds 384", decoded.height());
+    }
+
+    #[test]
+    fn generate_thumbnail_bytes_returns_none_for_invalid_bytes() {
+        let output = super::generate_thumbnail_bytes(b"not an image at all");
+        assert!(output.is_none());
+    }
+
+    #[tokio::test]
+    async fn store_cover_generates_thumb_jpg_alongside_cover() {
+        use image::{ImageBuffer, Rgb, codecs::jpeg::JpegEncoder};
+        let dir = tempdir().unwrap();
+        let store = test_store(dir.path().to_path_buf());
+        let token = test_token();
+
+        // Build a minimal valid JPEG so normalize_to_jpeg succeeds.
+        let img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(10, 10);
+        let mut jpeg = Vec::new();
+        JpegEncoder::new_with_quality(&mut jpeg, 85).encode_image(&img).unwrap();
+
+        store.store_cover(token, "cover.jpg", &jpeg).await.unwrap();
+
+        let thumb = store.cover_path(token, "thumb.jpg");
+        assert!(thumb.exists(), "thumb.jpg should have been written alongside cover.jpg");
+        let bytes = tokio::fs::read(&thumb).await.unwrap();
+        assert_eq!(&bytes[..2], &[0xFF, 0xD8], "thumb should be JPEG");
     }
 
     #[tokio::test]
