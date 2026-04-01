@@ -147,7 +147,7 @@ impl JobHandler for VerifyFileIntegrityHandler {
 
                 // Also warn if the cover file is missing.
                 if book.has_cover {
-                    let cover_abs = self.core.file_store.resolve(&format!("{}/cover.jpg", book.token));
+                    let cover_abs = self.core.file_store.cover_path(book.token);
                     if !cover_abs.exists() {
                         self.core
                             .system_message_service
@@ -405,6 +405,7 @@ mod tests {
                 PathBuf::from("/nonexistent/path")
             }
         });
+        store.expect_cover_path().returning(|_| PathBuf::from("/nonexistent/cover.jpg"));
 
         let repo_service = Arc::new(
             default_repository_service_builder()

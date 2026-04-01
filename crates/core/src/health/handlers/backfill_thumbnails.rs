@@ -54,7 +54,7 @@ impl BookIdSweep for BackfillThumbnailsHandler {
             if !book.has_cover {
                 continue;
             }
-            core.file_store.backfill_thumbnail(book.token, "cover.jpg").await?;
+            core.file_store.backfill_thumbnail(book.token).await?;
             backfilled += 1;
         }
 
@@ -113,7 +113,7 @@ mod tests {
             Box::pin(async move { Ok(Some(b)) })
         });
 
-        store.expect_backfill_thumbnail().once().returning(|_, _| Box::pin(async { Ok(()) }));
+        store.expect_backfill_thumbnail().once().returning(|_| Box::pin(async { Ok(()) }));
 
         let core = make_core(book_repo, store);
         let handler = BackfillThumbnailsHandler::new(core);

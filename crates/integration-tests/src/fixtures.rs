@@ -28,7 +28,10 @@ impl FileStoreService for SilentFileStore {
     fn resolve(&self, _relative_path: &str) -> PathBuf {
         PathBuf::new()
     }
-    fn cover_path(&self, _token: BookToken, _filename: &str) -> PathBuf {
+    fn cover_path(&self, _token: BookToken) -> PathBuf {
+        PathBuf::new()
+    }
+    fn thumbnail_path(&self, _token: BookToken) -> PathBuf {
         PathBuf::new()
     }
     fn metadata_path(&self, _token: BookToken) -> PathBuf {
@@ -44,10 +47,10 @@ impl FileStoreService for SilentFileStore {
     async fn store_book_file(&self, token: BookToken, slug: &str, _format: FileFormat, _source: &Path) -> Result<String, Error> {
         Ok(format!("{token}/{slug}.epub"))
     }
-    async fn store_cover(&self, _token: BookToken, _filename: &str, _data: &[u8]) -> Result<(), Error> {
+    async fn store_cover(&self, _token: BookToken, _data: &[u8]) -> Result<(), Error> {
         Ok(())
     }
-    async fn backfill_thumbnail(&self, _token: BookToken, _cover_filename: &str) -> Result<(), Error> {
+    async fn backfill_thumbnail(&self, _token: BookToken) -> Result<(), Error> {
         Ok(())
     }
     async fn rename_book_files(&self, _token: BookToken, _old_slug: &str, _new_slug: &str) -> Result<(), Error> {

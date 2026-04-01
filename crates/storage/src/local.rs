@@ -128,8 +128,12 @@ impl FileStoreService for LocalFileStore {
         self.library_path.join(relative_path)
     }
 
-    fn cover_path(&self, token: BookToken, filename: &str) -> PathBuf {
-        self.book_dir(token).join(filename)
+    fn cover_path(&self, token: BookToken) -> PathBuf {
+        self.book_dir(token).join("cover.jpg")
+    }
+
+    fn thumbnail_path(&self, token: BookToken) -> PathBuf {
+        self.book_dir(token).join("thumb.jpg")
     }
 
     fn metadata_path(&self, token: BookToken) -> PathBuf {
@@ -187,10 +191,10 @@ impl FileStoreService for LocalFileStore {
         Ok(Self::book_file_rel_path(token, slug, &format))
     }
 
-    async fn store_cover(&self, token: BookToken, filename: &str, data: &[u8]) -> Result<(), Error> {
+    async fn store_cover(&self, token: BookToken, data: &[u8]) -> Result<(), Error> {
         let book_dir = self.book_dir(token);
         ensure_dir(&book_dir).await?;
-        let cover_path = self.cover_path(token, filename);
+        let cover_path = self.cover_path(token);
 
         // Normalize all recognized image formats to JPEG: resize to fit within
         // 1024×1536 if needed, re-encode at quality 85, strip all metadata
@@ -207,7 +211,7 @@ impl FileStoreService for LocalFileStore {
 
         // Generate and write thumbnail alongside the full-size cover.
         if let Some(thumb_bytes) = generate_thumbnail_bytes(&bytes) {
-            let thumb_path = self.cover_path(token, "thumb.jpg");
+            let thumb_path = self.thumbnail_path(token);
             if let Err(e) = tokio::fs::write(&thumb_path, thumb_bytes).await {
                 tracing::warn!(error = %e, "failed to write thumbnail for book {token}");
             }
@@ -216,26 +220,26 @@ impl FileStoreService for LocalFileStore {
         Ok(())
     }
 
-    async fn backfill_thumbnail(&self, token: BookToken, cover_filename: &str) -> Result<(), Error> {
-        let thumb_path = self.cover_path(token, "thumb.jpg");
+    async fn backfill_thumbnail(&self, token: BookToken) -> Result<(), Error> {
+        let thumb_path = self.thumbnail_path(token);
 
         // Idempotent: skip if thumbnail already exists.
         if tokio::fs::try_exists(&thumb_path).await.unwrap_or(false) {
             return Ok(());
         }
 
-        let cover_path = self.cover_path(token, cover_filename);
+        let cover_path = self.cover_path(token);
         let cover_bytes = match tokio::fs::read(&cover_path).await {
             Ok(b) => b,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                tracing::warn!(cover_filename, "cover file missing during thumbnail backfill, skipping");
+                tracing::warn!("cover.jpg missing during thumbnail backfill, skipping");
                 return Ok(());
             }
             Err(e) => return Err(io_err(e)),
         };
 
         let Some(thumb_bytes) = generate_thumbnail_bytes(&cover_bytes) else {
-            tracing::warn!(cover_filename, "could not decode cover for thumbnail backfill");
+            tracing::warn!("could not decode cover.jpg for thumbnail backfill");
             return Ok(());
         };
 
@@ -380,9 +384,9 @@ mod tests {
         let token = test_token();
 
         let data = b"fake jpeg bytes";
-        store.store_cover(token, "cover.jpg", data).await.unwrap();
+        store.store_cover(token, data).await.unwrap();
 
-        let cover = store.cover_path(token, "cover.jpg");
+        let cover = store.cover_path(token);
         assert!(cover.exists(), "cover.jpg should exist");
         let contents = tokio::fs::read(&cover).await.unwrap();
         assert_eq!(contents, data);
@@ -651,9 +655,9 @@ mod tests {
         let mut jpeg = Vec::new();
         JpegEncoder::new_with_quality(&mut jpeg, 85).encode_image(&img).unwrap();
 
-        store.store_cover(token, "cover.jpg", &jpeg).await.unwrap();
+        store.store_cover(token, &jpeg).await.unwrap();
 
-        let thumb = store.cover_path(token, "thumb.jpg");
+        let thumb = store.thumbnail_path(token);
         assert!(thumb.exists(), "thumb.jpg should have been written alongside cover.jpg");
         let bytes = tokio::fs::read(&thumb).await.unwrap();
         assert_eq!(&bytes[..2], &[0xFF, 0xD8], "thumb should be JPEG");
@@ -675,9 +679,9 @@ mod tests {
         JpegEncoder::new_with_quality(&mut jpeg, 85).encode_image(&img).unwrap();
         tokio::fs::write(book_dir.join("cover.jpg"), &jpeg).await.unwrap();
 
-        store.backfill_thumbnail(token, "cover.jpg").await.unwrap();
+        store.backfill_thumbnail(token).await.unwrap();
 
-        let thumb = store.cover_path(token, "thumb.jpg");
+        let thumb = store.thumbnail_path(token);
         assert!(thumb.exists(), "thumb.jpg should have been created");
         let bytes = tokio::fs::read(&thumb).await.unwrap();
         assert_eq!(&bytes[..2], &[0xFF, 0xD8], "thumb should be JPEG");
@@ -694,7 +698,7 @@ mod tests {
         // Pre-populate thumb.jpg with sentinel bytes
         tokio::fs::write(book_dir.join("thumb.jpg"), b"sentinel").await.unwrap();
 
-        store.backfill_thumbnail(token, "cover.jpg").await.unwrap();
+        store.backfill_thumbnail(token).await.unwrap();
 
         // Sentinel bytes should be unchanged
         let bytes = tokio::fs::read(book_dir.join("thumb.jpg")).await.unwrap();
@@ -708,10 +712,10 @@ mod tests {
         let token = test_token();
 
         // No cover.jpg exists — should return Ok without creating thumb.jpg
-        let result = store.backfill_thumbnail(token, "cover.jpg").await;
+        let result = store.backfill_thumbnail(token).await;
         assert!(result.is_ok(), "should succeed even when cover is missing");
 
-        let thumb = store.cover_path(token, "thumb.jpg");
+        let thumb = store.thumbnail_path(token);
         assert!(!thumb.exists(), "thumb.jpg should not be created when cover is missing");
     }
 

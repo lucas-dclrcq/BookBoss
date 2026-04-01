@@ -138,11 +138,6 @@ fn cover_min_side(data: &[u8]) -> u32 {
     image_dimensions(data).map_or(0, |(w, h)| w.min(h))
 }
 
-/// All covers are stored as normalized JPEG regardless of source format.
-fn detect_cover_filename(_data: &[u8]) -> &'static str {
-    "cover.jpg"
-}
-
 /// Priority order for breaking ties between providers with equal scores.
 /// Lower value = preferred. Unknown providers fall back to `u8::MAX`.
 fn provider_priority(name: &str) -> u8 {
@@ -374,9 +369,6 @@ impl PipelineService for PipelineServiceImpl {
         };
         let job_source = Some(job_source);
 
-        // ── 6. Resolve cover filename from magic bytes ─────────────────────────
-        let cover_filename: Option<String> = cover_bytes.as_deref().map(|b| detect_cover_filename(b).to_string());
-
         // ── 7. Capture file size before the file is moved ─────────────────────
         #[expect(
             clippy::cast_possible_wrap,
@@ -443,7 +435,7 @@ impl PipelineService for PipelineServiceImpl {
 
         let fm = final_meta.clone();
         let bms = book_metadata_source.clone();
-        let has_cover = cover_filename.is_some();
+        let has_cover = cover_bytes.is_some();
         let js = job_source.clone();
         let file_hash = job.file_hash.clone();
         let file_format = detected_format.clone();
@@ -569,8 +561,8 @@ impl PipelineService for PipelineServiceImpl {
         self.file_store.store_book_file(book.token, &slug, detected_format.clone(), &path).await?;
 
         // ── 13. Store cover image ──────────────────────────────────────────────
-        if let (Some(filename), Some(data)) = (&cover_filename, &cover_bytes) {
-            self.file_store.store_cover(book.token, filename, data).await?;
+        if let Some(data) = &cover_bytes {
+            self.file_store.store_cover(book.token, data).await?;
         }
 
         // ── 14. Write metadata sidecar ────────────────────────────────────────

@@ -18,8 +18,12 @@ pub trait FileStoreService: Send + Sync {
     fn resolve(&self, relative_path: &str) -> PathBuf;
 
     /// Returns the path to a book's cover image:
-    /// `{library}/BK_{token}/{filename}`.
-    fn cover_path(&self, token: BookToken, filename: &str) -> PathBuf;
+    /// `{library}/BK_{token}/cover.jpg`.
+    fn cover_path(&self, token: BookToken) -> PathBuf;
+
+    /// Returns the path to a book's thumbnail:
+    /// `{library}/BK_{token}/thumb.jpg`.
+    fn thumbnail_path(&self, token: BookToken) -> PathBuf;
 
     /// Returns the path to a book's sidecar:
     /// `{library}/BK_{token}/metadata.opf`.
@@ -46,18 +50,14 @@ pub trait FileStoreService: Send + Sync {
     /// (e.g. `"BK_XXXXX/black-ice-brad-thor.epub"`).
     async fn store_book_file(&self, token: BookToken, slug: &str, format: FileFormat, source: &Path) -> Result<String, Error>;
 
-    /// Writes raw bytes as the book's cover image. `filename` determines the
-    /// file name within the book's directory (e.g. `"cover.jpg"`).
-    async fn store_cover(&self, token: BookToken, filename: &str, data: &[u8]) -> Result<(), Error>;
+    /// Writes raw bytes as the book's cover image (`cover.jpg`). Normalizes
+    /// all recognized image formats to JPEG internally.
+    async fn store_cover(&self, token: BookToken, data: &[u8]) -> Result<(), Error>;
 
-    /// Generates and writes `thumb.jpg` alongside the book's cover if it does
-    /// not already exist.
-    ///
-    /// Reads `cover_filename` from the book's directory, generates a 256×384
-    /// thumbnail, and writes it as `thumb.jpg`. Idempotent: no-op if
-    /// `thumb.jpg` already exists. Returns `Ok(())` even if the cover file
-    /// is missing on disk or cannot be decoded (logs a warning instead).
-    async fn backfill_thumbnail(&self, token: BookToken, cover_filename: &str) -> Result<(), Error>;
+    /// Generates and writes `thumb.jpg` from `cover.jpg` if `thumb.jpg` does
+    /// not already exist. Idempotent: no-op if `thumb.jpg` already exists.
+    /// Returns `Ok(())` even if `cover.jpg` is missing or cannot be decoded.
+    async fn backfill_thumbnail(&self, token: BookToken) -> Result<(), Error>;
 
     /// Renames all `{old_slug}.*` files in the book's directory to
     /// `{new_slug}.*`.

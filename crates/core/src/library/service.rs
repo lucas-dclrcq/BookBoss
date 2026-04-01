@@ -231,13 +231,10 @@ impl LibraryService for LibraryServiceImpl {
         let old_slug = book_slug(&book.title, old_first_author_name.as_deref());
 
         // ── 3. Read temp cover if requested ───────────────────────────────────
-        let cover_data: Option<(Vec<u8>, String)> = if edit.use_fetched_cover {
+        let cover_data: Option<Vec<u8>> = if edit.use_fetched_cover {
             let cover_path = temp_dir.join("bookboss-covers").join(job_token.to_string());
             match tokio::fs::read(&cover_path).await {
-                Ok(data) => {
-                    let filename = detect_cover_filename(&data).to_string();
-                    Some((data, filename))
-                }
+                Ok(data) => Some(data),
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                     tracing::warn!(
                         job_token = %job_token,
@@ -260,7 +257,7 @@ impl LibraryService for LibraryServiceImpl {
         let tag_repo = self.repository_service.tag_repository().clone();
         let import_job_repo2 = self.repository_service.import_job_repository().clone();
         let job_id = job.id;
-        let cover_filename = cover_data.as_ref().map(|(_, f)| f.clone());
+        let has_new_cover = cover_data.is_some();
         let edit_c = edit.clone();
         let book_version = book.version;
 
@@ -308,7 +305,7 @@ impl LibraryService for LibraryServiceImpl {
                 updated_book.publisher_id = publisher_id;
                 updated_book.page_count = edit_c.page_count;
                 updated_book.status = BookStatus::Available;
-                if cover_filename.is_some() {
+                if has_new_cover {
                     updated_book.has_cover = true;
                 }
                 book_repo2.update_book(tx, updated_book).await?;
@@ -382,8 +379,8 @@ impl LibraryService for LibraryServiceImpl {
         .await?;
 
         // ── 5. Store fetched cover ────────────────────────────────────────────
-        if let Some((cover_bytes, cover_filename)) = cover_data {
-            self.file_store.store_cover(book.token, &cover_filename, &cover_bytes).await?;
+        if let Some(cover_bytes) = cover_data {
+            self.file_store.store_cover(book.token, &cover_bytes).await?;
             // Clean up temp file
             let cover_path = temp_dir.join("bookboss-covers").join(job_token.to_string());
             let _ = tokio::fs::remove_file(&cover_path).await;
@@ -602,13 +599,10 @@ impl LibraryService for LibraryServiceImpl {
         let old_slug = book_slug(&book.title, old_first_author_name.as_deref());
 
         // ── 2. Read temp cover if requested ───────────────────────────────────
-        let cover_data: Option<(Vec<u8>, String)> = if edit.use_fetched_cover {
+        let cover_data: Option<Vec<u8>> = if edit.use_fetched_cover {
             let cover_path = temp_dir.join("bookboss-covers").join(cover_key);
             match tokio::fs::read(&cover_path).await {
-                Ok(data) => {
-                    let filename = detect_cover_filename(&data).to_string();
-                    Some((data, filename))
-                }
+                Ok(data) => Some(data),
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                     tracing::warn!(cover_key, "use_fetched_cover requested but no temp cover file found; skipping");
                     None
@@ -626,7 +620,7 @@ impl LibraryService for LibraryServiceImpl {
         let publisher_repo = self.repository_service.publisher_repository().clone();
         let genre_repo = self.repository_service.genre_repository().clone();
         let tag_repo = self.repository_service.tag_repository().clone();
-        let cover_filename = cover_data.as_ref().map(|(_, f)| f.clone());
+        let has_new_cover = cover_data.is_some();
         let edit_c = edit.clone();
         let book_version = book.version;
 
@@ -673,7 +667,7 @@ impl LibraryService for LibraryServiceImpl {
                 updated_book.series_number = series_number;
                 updated_book.publisher_id = publisher_id;
                 updated_book.page_count = edit_c.page_count;
-                if cover_filename.is_some() {
+                if has_new_cover {
                     updated_book.has_cover = true;
                 }
                 book_repo2.update_book(tx, updated_book).await?;
@@ -744,8 +738,8 @@ impl LibraryService for LibraryServiceImpl {
         .await?;
 
         // ── 4. Store fetched cover ─────────────────────────────────────────────
-        if let Some((cover_bytes, cover_filename)) = cover_data {
-            self.file_store.store_cover(book.token, &cover_filename, &cover_bytes).await?;
+        if let Some(cover_bytes) = cover_data {
+            self.file_store.store_cover(book.token, &cover_bytes).await?;
             let cover_path = temp_dir.join("bookboss-covers").join(cover_key);
             let _ = tokio::fs::remove_file(&cover_path).await;
         }
@@ -864,7 +858,7 @@ impl LibraryService for LibraryServiceImpl {
         let book_version = book.version;
 
         // ── 2. Store cover (normalization happens in the storage layer) ───────
-        self.file_store.store_cover(book_token, "cover.jpg", &cover_bytes).await?;
+        self.file_store.store_cover(book_token, &cover_bytes).await?;
 
         // ── 3. Set has_cover = true in DB ────────────────────────────────────
         let book_repo2 = self.repository_service.book_repository().clone();
@@ -890,11 +884,6 @@ impl LibraryService for LibraryServiceImpl {
 
         Ok(())
     }
-}
-
-/// All covers are stored as normalized JPEG regardless of source format.
-fn detect_cover_filename(_data: &[u8]) -> &'static str {
-    "cover.jpg"
 }
 
 #[cfg(test)]
@@ -1362,7 +1351,7 @@ mod tests {
         book_repo.expect_update_book().returning(|_, b| Box::pin(async move { Ok(b) }));
 
         let mut store = MockFileStoreService::new();
-        store.expect_store_cover().returning(|_, _, _| Box::pin(async { Ok(()) }));
+        store.expect_store_cover().returning(|_, _| Box::pin(async { Ok(()) }));
 
         let mut job_svc = MockJobService::new();
         job_svc.expect_enqueue_raw().once().returning(|_, _, _| Box::pin(async { Ok(()) }));
