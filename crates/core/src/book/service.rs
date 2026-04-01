@@ -3,8 +3,8 @@ use std::sync::Arc;
 use crate::{
     Error, RepositoryError,
     book::{
-        Author, AuthorId, AuthorToken, Book, BookAuthor, BookFile, BookId, BookIdentifier, BookQuery, BookToken, Genre, GenreToken, NewGenre, NewTag,
-        Publisher, Series, SeriesId, SeriesToken, Tag, TagToken,
+        Author, AuthorId, AuthorToken, Book, BookAuthor, BookFile, BookHydrationData, BookId, BookIdentifier, BookQuery, BookToken, Genre, GenreToken,
+        NewGenre, NewTag, Publisher, Series, SeriesId, SeriesToken, Tag, TagToken,
     },
     format::handler::EnrichBookFilesPayload,
     jobs::{JobService, JobServiceExt},
@@ -40,6 +40,14 @@ pub trait BookService: Send + Sync {
     async fn series_next_number(&self, series_name: &str) -> Result<u32, Error>;
     async fn count_books_for_author(&self, author_id: AuthorId) -> Result<u64, Error>;
     async fn count_books_for_series(&self, series_id: SeriesId) -> Result<u64, Error>;
+    /// Fetches all data needed to hydrate a slice of books into view-models.
+    ///
+    /// Issues five batch repository queries within a single read-only
+    /// transaction. Pass `series_ids` as the deduplicated set of
+    /// `book.series_id` values from the caller's already-loaded `Book`
+    /// slice. Returns `BookHydrationData::default()` immediately if
+    /// `book_ids` is empty.
+    async fn fetch_hydration_data(&self, book_ids: &[BookId], series_ids: &[SeriesId]) -> Result<BookHydrationData, Error>;
 }
 
 pub(crate) struct BookServiceImpl {
@@ -208,6 +216,38 @@ impl BookService for BookServiceImpl {
 
     async fn count_books_for_series(&self, series_id: SeriesId) -> Result<u64, Error> {
         with_read_only_transaction!(self, series_repository, |tx| series_repository.count_books_for_series(tx, series_id).await)
+    }
+
+    async fn fetch_hydration_data(&self, book_ids: &[BookId], series_ids: &[SeriesId]) -> Result<BookHydrationData, Error> {
+        if book_ids.is_empty() {
+            return Ok(BookHydrationData::default());
+        }
+        let book_ids = book_ids.to_vec();
+        let series_ids = series_ids.to_vec();
+
+        with_read_only_transaction!(self, book_repository, author_repository, series_repository, |tx| {
+            let book_authors = book_repository.book_authors_for_books(tx, &book_ids).await?;
+
+            let author_ids: Vec<AuthorId> = {
+                let mut ids: Vec<AuthorId> = book_authors.iter().map(|ba| ba.author_id).collect();
+                ids.sort_unstable();
+                ids.dedup();
+                ids
+            };
+
+            let authors = author_repository.find_by_ids(tx, &author_ids).await?;
+            let series = series_repository.find_by_ids(tx, &series_ids).await?;
+            let genres = book_repository.book_genres_for_books(tx, &book_ids).await?;
+            let tags = book_repository.book_tags_for_books(tx, &book_ids).await?;
+
+            Ok(BookHydrationData {
+                book_authors,
+                authors,
+                series,
+                genres,
+                tags,
+            })
+        })
     }
 }
 
@@ -781,5 +821,133 @@ mod tests {
         let svc = BookServiceImpl::new(repository_service, Arc::new(job_svc));
 
         svc.delete_tag(token).await.unwrap();
+    }
+
+    // ─── fetch_hydration_data ────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_fetch_hydration_data_empty_book_ids_returns_default() {
+        let svc = create_service(MockBookRepository::new(), MockAuthorRepository::new(), MockSeriesRepository::new());
+        let result = svc.fetch_hydration_data(&[], &[]).await;
+        assert!(result.is_ok());
+        let data = result.unwrap();
+        assert!(data.book_authors.is_empty());
+        assert!(data.authors.is_empty());
+        assert!(data.series.is_empty());
+        assert!(data.genres.is_empty());
+        assert!(data.tags.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_fetch_hydration_data_returns_populated_data() {
+        let book_author = BookAuthor::fake(1, 10, "author", 0);
+        let author = fake_author(10, "Frank Herbert");
+        let series = fake_series(5, "Dune Chronicles");
+        let genre = fake_genre("SciFi");
+        let tag = fake_tag("epic");
+
+        let ba = book_author.clone();
+        let mut book_repo = MockBookRepository::new();
+        book_repo.expect_book_authors_for_books().returning(move |_, _| {
+            let ba = ba.clone();
+            Box::pin(async move { Ok(vec![ba]) })
+        });
+
+        let expected_genres = vec![(1u64, genre.clone())];
+        let eg = expected_genres.clone();
+        book_repo.expect_book_genres_for_books().returning(move |_, _| {
+            let eg = eg.clone();
+            Box::pin(async move { Ok(eg) })
+        });
+
+        let expected_tags = vec![(1u64, tag.clone())];
+        let et = expected_tags.clone();
+        book_repo.expect_book_tags_for_books().returning(move |_, _| {
+            let et = et.clone();
+            Box::pin(async move { Ok(et) })
+        });
+
+        let a = author.clone();
+        let mut author_repo = MockAuthorRepository::new();
+        author_repo.expect_find_by_ids().returning(move |_, _| {
+            let a = a.clone();
+            Box::pin(async move { Ok(vec![a]) })
+        });
+
+        let s = series.clone();
+        let mut series_repo = MockSeriesRepository::new();
+        series_repo.expect_find_by_ids().returning(move |_, _| {
+            let s = s.clone();
+            Box::pin(async move { Ok(vec![s]) })
+        });
+
+        let svc = create_service(book_repo, author_repo, series_repo);
+        let result = svc.fetch_hydration_data(&[1], &[5]).await;
+
+        assert!(result.is_ok());
+        let data = result.unwrap();
+        assert_eq!(data.book_authors.len(), 1);
+        assert_eq!(data.authors.len(), 1);
+        assert_eq!(data.series.len(), 1);
+        assert_eq!(data.genres.len(), 1);
+        assert_eq!(data.tags.len(), 1);
+        assert_eq!(data.book_authors[0].book_id, 1);
+        assert_eq!(data.book_authors[0].author_id, 10);
+        assert_eq!(data.authors[0].name, "Frank Herbert");
+        assert_eq!(data.series[0].name, "Dune Chronicles");
+        assert_eq!(data.genres[0].0, 1u64);
+        assert_eq!(data.genres[0].1.name, "SciFi");
+        assert_eq!(data.tags[0].0, 1u64);
+        assert_eq!(data.tags[0].1.name, "epic");
+    }
+
+    #[tokio::test]
+    async fn test_fetch_hydration_data_deduplicates_author_ids() {
+        // Two BookAuthor rows for the same author_id (10) — find_by_ids should be
+        // called with a deduplicated slice of length 1, not 2.
+        let ba1 = BookAuthor::fake(1, 10, "author", 0);
+        let ba2 = BookAuthor::fake(2, 10, "author", 0);
+        let author = fake_author(10, "Frank Herbert");
+
+        let mut book_repo = MockBookRepository::new();
+        book_repo.expect_book_authors_for_books().returning(move |_, _| {
+            let (ba1, ba2) = (ba1.clone(), ba2.clone());
+            Box::pin(async move { Ok(vec![ba1, ba2]) })
+        });
+        book_repo.expect_book_genres_for_books().returning(|_, _| Box::pin(async { Ok(vec![]) }));
+        book_repo.expect_book_tags_for_books().returning(|_, _| Box::pin(async { Ok(vec![]) }));
+
+        let a = author.clone();
+        let mut author_repo = MockAuthorRepository::new();
+        author_repo.expect_find_by_ids().returning(move |_, ids| {
+            assert_eq!(ids.len(), 1, "find_by_ids should receive deduplicated author IDs");
+            let a = a.clone();
+            Box::pin(async move { Ok(vec![a]) })
+        });
+
+        let mut series_repo = MockSeriesRepository::new();
+        series_repo.expect_find_by_ids().returning(|_, _| Box::pin(async { Ok(vec![]) }));
+
+        let svc = create_service(book_repo, author_repo, series_repo);
+        let result = svc.fetch_hydration_data(&[1, 2], &[]).await;
+
+        assert!(result.is_ok());
+        let data = result.unwrap();
+        assert_eq!(data.book_authors.len(), 2);
+        assert_eq!(data.authors.len(), 1);
+        assert_eq!(data.authors[0].name, "Frank Herbert");
+    }
+
+    #[tokio::test]
+    async fn test_fetch_hydration_data_propagates_repo_error() {
+        let mut book_repo = MockBookRepository::new();
+        book_repo
+            .expect_book_authors_for_books()
+            .returning(|_, _| Box::pin(async { Err(Error::RepositoryError(RepositoryError::Database("db error".into()))) }));
+
+        let svc = create_service(book_repo, MockAuthorRepository::new(), MockSeriesRepository::new());
+        let result = svc.fetch_hydration_data(&[1], &[]).await;
+
+        assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::Database(_)))));
     }
 }
