@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.18](https://github.com/szinn/BookBoss/compare/v0.7.17..v0.7.18) - 2026-04-01
+
+### Features
+
+- _(core)_ Add BookService::fetch_hydration_data - ([167a7b7](https://github.com/szinn/BookBoss/commit/167a7b7434069d5d71150f0bf04c41f959b7a3bd))
+- _(core)_ Add BookHydrationData + batch repository trait methods - ([b48f7ba](https://github.com/szinn/BookBoss/commit/b48f7ba89aa03233e65402e3818c723f5818dd1d))
+- _(database)_ Implement batch repository methods for hydration - ([0e97b8e](https://github.com/szinn/BookBoss/commit/0e97b8eaaca15e2b47e681638033442ebd7bbe95))
+
+### Refactor
+
+- _(frontend)_ Consolidate validate_password_strength into password module - ([4ec5e31](https://github.com/szinn/BookBoss/commit/4ec5e31f8d86d28bec03868650b788dc9d22abba))
+
+### Performance
+
+- _(frontend)_ Replace hydrate_books N+1 loops with batch queries - ([934a0ff](https://github.com/szinn/BookBoss/commit/934a0ff18b3cd35207469ed2ef77559b993fa484))
+
 ## [0.7.17](https://github.com/szinn/BookBoss/compare/v0.7.16..v0.7.17) - 2026-04-01
 
 ### Features
