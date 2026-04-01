@@ -138,8 +138,21 @@ impl AuthorRepository for AuthorRepositoryAdapter {
         Ok(rows.into_iter().map(Into::into).collect())
     }
 
-    async fn find_by_ids(&self, _transaction: &dyn Transaction, _ids: &[AuthorId]) -> Result<Vec<Author>, Error> {
-        todo!("implemented in Task 2")
+    async fn find_by_ids(&self, transaction: &dyn Transaction, ids: &[AuthorId]) -> Result<Vec<Author>, Error> {
+        if ids.is_empty() {
+            return Ok(vec![]);
+        }
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+        let ids: Vec<i64> = ids.iter().map(|&id| id as i64).collect();
+
+        let rows = prelude::Authors::find()
+            .filter(authors::Column::Id.is_in(ids))
+            .order_by_asc(authors::Column::Name)
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
     }
 
     async fn list_authors(&self, transaction: &dyn Transaction, start_id: Option<AuthorId>, page_size: Option<u64>) -> Result<Vec<Author>, Error> {
@@ -518,5 +531,71 @@ mod tests {
         let result = svc.author_repository().update_author(&*tx, author).await;
 
         assert!(matches!(result, Err(Error::InvalidId(0))));
+    }
+
+    // ─── find_by_ids ─────────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_find_by_ids_empty_input() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+        let result = svc.author_repository().find_by_ids(&*tx, &[]).await.unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_find_by_ids_returns_matching_authors() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let a1 = svc
+            .author_repository()
+            .add_author(
+                &*tx,
+                NewAuthor {
+                    name: "Frank Herbert".into(),
+                    bio: None,
+                },
+            )
+            .await
+            .unwrap();
+        let a2 = svc
+            .author_repository()
+            .add_author(
+                &*tx,
+                NewAuthor {
+                    name: "Isaac Asimov".into(),
+                    bio: None,
+                },
+            )
+            .await
+            .unwrap();
+        let _a3 = svc
+            .author_repository()
+            .add_author(
+                &*tx,
+                NewAuthor {
+                    name: "Arthur C Clarke".into(),
+                    bio: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        let result = svc.author_repository().find_by_ids(&*tx, &[a1.id, a2.id]).await.unwrap();
+
+        assert_eq!(result.len(), 2);
+        let names: Vec<&str> = result.iter().map(|a| a.name.as_str()).collect();
+        assert!(names.contains(&"Frank Herbert"));
+        assert!(names.contains(&"Isaac Asimov"));
+    }
+
+    #[tokio::test]
+    async fn test_find_by_ids_unknown_ids_ignored() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let result = svc.author_repository().find_by_ids(&*tx, &[999, 1000]).await.unwrap();
+        assert!(result.is_empty());
     }
 }

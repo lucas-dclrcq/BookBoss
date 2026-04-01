@@ -189,8 +189,21 @@ impl SeriesRepository for SeriesRepositoryAdapter {
         Ok(())
     }
 
-    async fn find_by_ids(&self, _transaction: &dyn Transaction, _ids: &[SeriesId]) -> Result<Vec<Series>, Error> {
-        todo!("implemented in Task 2")
+    async fn find_by_ids(&self, transaction: &dyn Transaction, ids: &[SeriesId]) -> Result<Vec<Series>, Error> {
+        if ids.is_empty() {
+            return Ok(vec![]);
+        }
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+        let ids: Vec<i64> = ids.iter().map(|&id| id as i64).collect();
+
+        let rows = prelude::Series::find()
+            .filter(series::Column::Id.is_in(ids))
+            .order_by_asc(series::Column::Name)
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
     }
 }
 
@@ -628,5 +641,70 @@ mod tests {
 
         // Should not error even if the series doesn't exist.
         svc.series_repository().delete_series(&*tx, 999).await.unwrap();
+    }
+
+    // ─── find_by_ids ─────────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_series_find_by_ids_empty_input() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+        let result = svc.series_repository().find_by_ids(&*tx, &[]).await.unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_series_find_by_ids_returns_matching() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let s1 = svc
+            .series_repository()
+            .add_series(
+                &*tx,
+                NewSeries {
+                    name: "Dune".into(),
+                    description: None,
+                },
+            )
+            .await
+            .unwrap();
+        let s2 = svc
+            .series_repository()
+            .add_series(
+                &*tx,
+                NewSeries {
+                    name: "Foundation".into(),
+                    description: None,
+                },
+            )
+            .await
+            .unwrap();
+        let _s3 = svc
+            .series_repository()
+            .add_series(
+                &*tx,
+                NewSeries {
+                    name: "Culture".into(),
+                    description: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        let result = svc.series_repository().find_by_ids(&*tx, &[s1.id, s2.id]).await.unwrap();
+
+        assert_eq!(result.len(), 2);
+        let names: Vec<&str> = result.iter().map(|s| s.name.as_str()).collect();
+        assert!(names.contains(&"Dune"));
+        assert!(names.contains(&"Foundation"));
+    }
+
+    #[tokio::test]
+    async fn test_series_find_by_ids_unknown_ids_ignored() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+        let result = svc.series_repository().find_by_ids(&*tx, &[999, 1000]).await.unwrap();
+        assert!(result.is_empty());
     }
 }

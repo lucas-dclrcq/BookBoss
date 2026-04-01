@@ -911,16 +911,121 @@ impl BookRepository for BookRepositoryAdapter {
         Ok(rows.into_iter().map(|r| r.book_id as u64).collect())
     }
 
-    async fn book_authors_for_books(&self, _transaction: &dyn Transaction, _book_ids: &[BookId]) -> Result<Vec<BookAuthor>, Error> {
-        todo!("implemented in Task 2")
+    async fn book_authors_for_books(&self, transaction: &dyn Transaction, book_ids: &[BookId]) -> Result<Vec<BookAuthor>, Error> {
+        if book_ids.is_empty() {
+            return Ok(vec![]);
+        }
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+        let ids: Vec<i64> = book_ids.iter().map(|&id| id as i64).collect();
+
+        let rows = prelude::BookAuthors::find()
+            .filter(book_authors::Column::BookId.is_in(ids))
+            .order_by_asc(book_authors::Column::BookId)
+            .order_by_asc(book_authors::Column::SortOrder)
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        rows.into_iter()
+            .map(|m| {
+                Ok(BookAuthor {
+                    book_id: m.book_id as u64,
+                    author_id: m.author_id as u64,
+                    role: parse_or_db_err(&m.role)?,
+                    sort_order: m.sort_order,
+                })
+            })
+            .collect()
     }
 
-    async fn book_genres_for_books(&self, _transaction: &dyn Transaction, _book_ids: &[BookId]) -> Result<Vec<(BookId, Genre)>, Error> {
-        todo!("implemented in Task 2")
+    async fn book_genres_for_books(&self, transaction: &dyn Transaction, book_ids: &[BookId]) -> Result<Vec<(BookId, Genre)>, Error> {
+        if book_ids.is_empty() {
+            return Ok(vec![]);
+        }
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+        let ids: Vec<i64> = book_ids.iter().map(|&id| id as i64).collect();
+
+        let junction_rows = prelude::BookGenres::find()
+            .filter(book_genres::Column::BookId.is_in(ids))
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        if junction_rows.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let genre_ids: Vec<i64> = {
+            let mut g: Vec<i64> = junction_rows.iter().map(|r| r.genre_id).collect();
+            g.sort_unstable();
+            g.dedup();
+            g
+        };
+
+        use std::collections::HashMap;
+        let genre_map: HashMap<i64, Genre> = prelude::Genres::find()
+            .filter(genres::Column::Id.is_in(genre_ids))
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?
+            .into_iter()
+            .map(|g| {
+                let id = g.id;
+                (id, g.into())
+            })
+            .collect();
+
+        let mut result: Vec<(BookId, Genre)> = junction_rows
+            .into_iter()
+            .filter_map(|jr| genre_map.get(&jr.genre_id).map(|g| (jr.book_id as u64, g.clone())))
+            .collect();
+        result.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.name.cmp(&b.1.name)));
+        Ok(result)
     }
 
-    async fn book_tags_for_books(&self, _transaction: &dyn Transaction, _book_ids: &[BookId]) -> Result<Vec<(BookId, Tag)>, Error> {
-        todo!("implemented in Task 2")
+    async fn book_tags_for_books(&self, transaction: &dyn Transaction, book_ids: &[BookId]) -> Result<Vec<(BookId, Tag)>, Error> {
+        if book_ids.is_empty() {
+            return Ok(vec![]);
+        }
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+        let ids: Vec<i64> = book_ids.iter().map(|&id| id as i64).collect();
+
+        let junction_rows = prelude::BookTags::find()
+            .filter(book_tags::Column::BookId.is_in(ids))
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        if junction_rows.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let tag_ids: Vec<i64> = {
+            let mut t: Vec<i64> = junction_rows.iter().map(|r| r.tag_id).collect();
+            t.sort_unstable();
+            t.dedup();
+            t
+        };
+
+        use std::collections::HashMap;
+        let tag_map: HashMap<i64, Tag> = prelude::Tags::find()
+            .filter(tags::Column::Id.is_in(tag_ids))
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?
+            .into_iter()
+            .map(|t| {
+                let id = t.id;
+                (id, t.into())
+            })
+            .collect();
+
+        let mut result: Vec<(BookId, Tag)> = junction_rows
+            .into_iter()
+            .filter_map(|jr| tag_map.get(&jr.tag_id).map(|t| (jr.book_id as u64, t.clone())))
+            .collect();
+        result.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.name.cmp(&b.1.name)));
+        Ok(result)
     }
 }
 
@@ -1624,5 +1729,153 @@ mod tests {
 
         let ids = svc.book_repository().find_book_ids_needing_any_enrichment(&*tx, None, 100).await.unwrap();
         assert!(!ids.contains(&book.id), "book with fingerprint set should not be returned");
+    }
+
+    // ─── book_authors_for_books ──────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_book_authors_for_books_empty_input() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+        let result = svc.book_repository().book_authors_for_books(&*tx, &[]).await.unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_book_authors_for_books_returns_all_books() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let book1 = svc.book_repository().add_book(&*tx, new_book("Dune")).await.unwrap();
+        let book2 = svc.book_repository().add_book(&*tx, new_book("Foundation")).await.unwrap();
+        let a1 = svc
+            .author_repository()
+            .add_author(
+                &*tx,
+                NewAuthor {
+                    name: "Herbert".into(),
+                    bio: None,
+                },
+            )
+            .await
+            .unwrap();
+        let a2 = svc
+            .author_repository()
+            .add_author(
+                &*tx,
+                NewAuthor {
+                    name: "Asimov".into(),
+                    bio: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        svc.book_repository()
+            .add_book_author(&*tx, book1.id, a1.id, bb_core::book::AuthorRole::Author, 0)
+            .await
+            .unwrap();
+        svc.book_repository()
+            .add_book_author(&*tx, book2.id, a2.id, bb_core::book::AuthorRole::Author, 0)
+            .await
+            .unwrap();
+
+        let result = svc.book_repository().book_authors_for_books(&*tx, &[book1.id, book2.id]).await.unwrap();
+
+        assert_eq!(result.len(), 2);
+        let book1_authors: Vec<_> = result.iter().filter(|ba| ba.book_id == book1.id).collect();
+        let book2_authors: Vec<_> = result.iter().filter(|ba| ba.book_id == book2.id).collect();
+        assert_eq!(book1_authors.len(), 1);
+        assert_eq!(book2_authors.len(), 1);
+        assert_eq!(book1_authors[0].author_id, a1.id);
+        assert_eq!(book2_authors[0].author_id, a2.id);
+    }
+
+    #[tokio::test]
+    async fn test_book_authors_for_books_no_matches() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let result = svc.book_repository().book_authors_for_books(&*tx, &[999]).await.unwrap();
+        assert!(result.is_empty());
+    }
+
+    // ─── book_genres_for_books ───────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_book_genres_for_books_empty_input() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+        let result = svc.book_repository().book_genres_for_books(&*tx, &[]).await.unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_book_genres_for_books_returns_all_associations() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let book1 = svc.book_repository().add_book(&*tx, new_book("Dune")).await.unwrap();
+        let book2 = svc.book_repository().add_book(&*tx, new_book("Foundation")).await.unwrap();
+        let genre1 = svc
+            .genre_repository()
+            .add_genre(&*tx, bb_core::book::NewGenre { name: "SciFi".into() })
+            .await
+            .unwrap();
+        let genre2 = svc
+            .genre_repository()
+            .add_genre(&*tx, bb_core::book::NewGenre { name: "Classic".into() })
+            .await
+            .unwrap();
+
+        svc.book_repository().add_book_genre(&*tx, book1.id, genre1.id).await.unwrap();
+        svc.book_repository().add_book_genre(&*tx, book2.id, genre1.id).await.unwrap();
+        svc.book_repository().add_book_genre(&*tx, book2.id, genre2.id).await.unwrap();
+
+        let result = svc.book_repository().book_genres_for_books(&*tx, &[book1.id, book2.id]).await.unwrap();
+
+        assert_eq!(result.len(), 3);
+        let book1_genres: Vec<_> = result.iter().filter(|(bid, _)| *bid == book1.id).collect();
+        let book2_genres: Vec<_> = result.iter().filter(|(bid, _)| *bid == book2.id).collect();
+        assert_eq!(book1_genres.len(), 1);
+        assert_eq!(book2_genres.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_book_genres_for_books_no_genres() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+        let book = svc.book_repository().add_book(&*tx, new_book("Dune")).await.unwrap();
+        let result = svc.book_repository().book_genres_for_books(&*tx, &[book.id]).await.unwrap();
+        assert!(result.is_empty());
+    }
+
+    // ─── book_tags_for_books ─────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_book_tags_for_books_empty_input() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+        let result = svc.book_repository().book_tags_for_books(&*tx, &[]).await.unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_book_tags_for_books_returns_all_associations() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let book1 = svc.book_repository().add_book(&*tx, new_book("Dune")).await.unwrap();
+        let book2 = svc.book_repository().add_book(&*tx, new_book("Foundation")).await.unwrap();
+        let tag1 = svc.tag_repository().add_tag(&*tx, bb_core::book::NewTag { name: "epic".into() }).await.unwrap();
+
+        svc.book_repository().add_book_tag(&*tx, book1.id, tag1.id).await.unwrap();
+        svc.book_repository().add_book_tag(&*tx, book2.id, tag1.id).await.unwrap();
+
+        let result = svc.book_repository().book_tags_for_books(&*tx, &[book1.id, book2.id]).await.unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert!(result.iter().any(|(bid, _)| *bid == book1.id));
+        assert!(result.iter().any(|(bid, _)| *bid == book2.id));
     }
 }
