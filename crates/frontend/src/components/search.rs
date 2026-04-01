@@ -319,7 +319,7 @@ mod tests {
         BookSummary {
             token: "tok".into(),
             title: title.into(),
-            cover_path: None,
+            has_cover: false,
             authors: authors
                 .iter()
                 .map(|name| AuthorLink {

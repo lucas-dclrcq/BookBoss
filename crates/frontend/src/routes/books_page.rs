@@ -20,7 +20,7 @@ pub(crate) struct AuthorLink {
 pub(crate) struct BookSummary {
     pub token: String,
     pub title: String,
-    pub cover_path: Option<String>,
+    pub has_cover: bool,
     pub authors: Vec<AuthorLink>,
     pub series_token: Option<String>,
     pub series_name: Option<String>,
@@ -138,7 +138,7 @@ pub(crate) async fn hydrate_books(
             BookSummary {
                 token: book.token.to_string(),
                 title: book.title.clone(),
-                cover_path: book.cover_path.clone(),
+                has_cover: book.has_cover,
                 authors,
                 series_token,
                 series_name,

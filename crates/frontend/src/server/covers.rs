@@ -55,20 +55,20 @@ pub(crate) async fn serve_cover(
         Err(_) => return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap(),
     };
 
-    let Some(filename) = book.cover_path else {
+    if !book.has_cover {
         return Response::builder()
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, HeaderValue::from_static("image/png"))
             .header(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"))
             .body(Body::from(BLANK_COVER))
             .unwrap();
-    };
+    }
 
     let (data, content_type) = if query.full == Some(true) {
         // Full-size cover requested — skip thumbnail.
-        let cover_path = core_services.file_store.cover_path(token, &filename);
+        let cover_path = core_services.file_store.cover_path(token, "cover.jpg");
         match tokio::fs::read(&cover_path).await {
-            Ok(d) => (d, content_type_for_filename(&filename)),
+            Ok(d) => (d, "image/jpeg"),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 return Response::builder()
                     .status(StatusCode::OK)
@@ -85,9 +85,9 @@ pub(crate) async fn serve_cover(
         match tokio::fs::read(&thumb_path).await {
             Ok(d) => (d, "image/jpeg"),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                let cover_path = core_services.file_store.cover_path(token, &filename);
+                let cover_path = core_services.file_store.cover_path(token, "cover.jpg");
                 match tokio::fs::read(&cover_path).await {
-                    Ok(d) => (d, content_type_for_filename(&filename)),
+                    Ok(d) => (d, "image/jpeg"),
                     Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                         return Response::builder()
                             .status(StatusCode::OK)
@@ -113,14 +113,4 @@ pub(crate) async fn serve_cover(
         .header(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"))
         .body(Body::from(data))
         .unwrap()
-}
-
-fn content_type_for_filename(filename: &str) -> &'static str {
-    let ext = filename.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
-    match ext.as_str() {
-        "png" => "image/png",
-        "gif" => "image/gif",
-        "webp" => "image/webp",
-        _ => "image/jpeg",
-    }
 }

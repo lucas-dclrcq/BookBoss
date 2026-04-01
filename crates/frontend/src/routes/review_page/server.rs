@@ -221,8 +221,8 @@ pub(super) async fn get_review_data(job_token: String) -> Result<BookReviewData,
     };
 
     // Read cover file to determine dimensions.
-    let cover_dimensions = if let Some(filename) = &book.cover_path {
-        let path = core_services.file_store.cover_path(book.token, filename);
+    let cover_dimensions = if book.has_cover {
+        let path = core_services.file_store.cover_path(book.token, "cover.jpg");
         tokio::fs::read(&path).await.ok().and_then(|b| image_dimensions(&b))
     } else {
         None
@@ -469,8 +469,8 @@ pub(crate) async fn get_book_for_edit(book_token: String) -> Result<BookReviewDa
         .collect();
 
     // Cover dimensions
-    let cover_dimensions = if let Some(filename) = &book.cover_path {
-        let path = core_services.file_store.cover_path(book.token, filename);
+    let cover_dimensions = if book.has_cover {
+        let path = core_services.file_store.cover_path(book.token, "cover.jpg");
         tokio::fs::read(&path).await.ok().and_then(|b| image_dimensions(&b))
     } else {
         None

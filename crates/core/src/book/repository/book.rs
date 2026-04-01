@@ -107,8 +107,8 @@ pub trait BookRepository: Send + Sync {
         batch_size: u64,
     ) -> Result<Vec<BookId>, Error>;
 
-    /// Returns up to `batch_size` IDs of Available books that have a non-null
-    /// `cover_path`, with `id > after_id`, ordered by id ASC.
+    /// Returns up to `batch_size` IDs of Available books that have `has_cover =
+    /// true`, with `id > after_id`, ordered by id ASC.
     ///
     /// Used by the `BackfillThumbnailsHandler` cursor sweep to identify books
     /// that need a `thumb.jpg` generated.

@@ -11,7 +11,7 @@ pub(crate) struct IncomingBookSummary {
     pub detected_at: String,
     pub title: Option<String>,
     pub author_names: Vec<String>,
-    pub cover_path: Option<String>,
+    pub has_cover: bool,
 }
 
 #[cfg(feature = "server")]
@@ -46,7 +46,7 @@ async fn list_incoming_books() -> Result<Vec<IncomingBookSummary>, ServerFnError
 
     let mut summaries = Vec::with_capacity(jobs.len());
     for job in jobs {
-        let (title, author_names, cover_path) = if let Some(book_id) = job.candidate_book_id {
+        let (title, author_names, has_cover) = if let Some(book_id) = job.candidate_book_id {
             match book_service.find_book_by_token(BookToken::new(book_id)).await.map_err(to_server_err)? {
                 Some(book) => {
                     let book_authors = book_service.authors_for_book(book.id).await.map_err(to_server_err)?;
@@ -56,12 +56,12 @@ async fn list_incoming_books() -> Result<Vec<IncomingBookSummary>, ServerFnError
                             names.push(author.name);
                         }
                     }
-                    (Some(book.title), names, book.cover_path)
+                    (Some(book.title), names, book.has_cover)
                 }
-                None => (None, vec![], None),
+                None => (None, vec![], false),
             }
         } else {
-            (None, vec![], None)
+            (None, vec![], false)
         };
 
         let filename = std::path::Path::new(&job.file_path)
@@ -77,7 +77,7 @@ async fn list_incoming_books() -> Result<Vec<IncomingBookSummary>, ServerFnError
             detected_at: job.detected_at.to_rfc3339(),
             title,
             author_names,
-            cover_path,
+            has_cover,
         });
     }
 

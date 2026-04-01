@@ -351,7 +351,7 @@ mod tests {
                     page_count: None,
                     rating: None,
                     metadata_source: None,
-                    cover_path: None,
+                    has_cover: false,
                 },
             )
             .await
@@ -398,7 +398,7 @@ mod tests {
                     publisher_id: None,
                     page_count: None,
                     metadata_source: None,
-                    cover_path: None,
+                    has_cover: false,
                 },
             )
             .await
@@ -942,7 +942,7 @@ mod tests {
                     page_count: None,
                     rating: None,
                     metadata_source: None,
-                    cover_path: None,
+                    has_cover: false,
                 },
             )
             .await
@@ -1004,7 +1004,7 @@ mod tests {
                     page_count: None,
                     rating: None,
                     metadata_source: None,
-                    cover_path: None,
+                    has_cover: false,
                 },
             )
             .await

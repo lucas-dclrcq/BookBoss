@@ -47,7 +47,7 @@ impl From<books::Model> for Book {
             page_count: model.page_count,
             rating: model.rating,
             metadata_source: model.metadata_source.as_deref().map(|s| s.parse().expect("DB has unknown metadata source")),
-            cover_path: model.cover_path,
+            has_cover: model.has_cover,
             sidecar_fingerprint: model.sidecar_fingerprint,
             created_at: model.created_at.with_timezone(&Utc),
             updated_at: model.updated_at.with_timezone(&Utc),
@@ -87,7 +87,7 @@ impl BookRepository for BookRepositoryAdapter {
             page_count: Set(book.page_count),
             rating: Set(book.rating),
             metadata_source: Set(book.metadata_source.as_ref().map(std::string::ToString::to_string)),
-            cover_path: Set(book.cover_path),
+            has_cover: Set(book.has_cover),
             sidecar_fingerprint: Set(None),
             version: Set(0),
             created_at: Set(now.into()),
@@ -127,7 +127,7 @@ impl BookRepository for BookRepositoryAdapter {
         updater.page_count = Set(book.page_count);
         updater.rating = Set(book.rating);
         updater.metadata_source = Set(book.metadata_source.as_ref().map(std::string::ToString::to_string));
-        updater.cover_path = Set(book.cover_path);
+        updater.has_cover = Set(book.has_cover);
         updater.sidecar_fingerprint = Set(None);
 
         let result = updater.update(transaction).await.map_err(handle_dberr)?;
@@ -898,7 +898,7 @@ impl BookRepository for BookRepositoryAdapter {
             .select_only()
             .column_as(books::Column::Id, "book_id")
             .filter(books::Column::Status.eq("available"))
-            .filter(books::Column::CoverPath.is_not_null())
+            .filter(books::Column::HasCover.eq(true))
             .order_by_asc(books::Column::Id)
             .limit(batch_size);
 
@@ -949,7 +949,7 @@ mod tests {
             page_count: None,
             rating: None,
             metadata_source: None,
-            cover_path: None,
+            has_cover: false,
         }
     }
 
@@ -989,7 +989,7 @@ mod tests {
             page_count: Some(244),
             rating: Some(5),
             metadata_source: Some(MetadataSource::Manual),
-            cover_path: Some("/covers/foundation.jpg".to_owned()),
+            has_cover: true,
         };
 
         let b = svc.book_repository().add_book(&*tx, book).await.unwrap();
@@ -1001,7 +1001,7 @@ mod tests {
         assert_eq!(b.page_count, Some(244));
         assert_eq!(b.rating, Some(5));
         assert_eq!(b.metadata_source, Some(MetadataSource::Manual));
-        assert_eq!(b.cover_path.as_deref(), Some("/covers/foundation.jpg"));
+        assert!(b.has_cover);
     }
 
     // ─── find_by_id ──────────────────────────────────────────────────────────
@@ -1101,7 +1101,7 @@ mod tests {
             page_count: None,
             rating: None,
             metadata_source: None,
-            cover_path: None,
+            has_cover: false,
             sidecar_fingerprint: None,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
@@ -1148,7 +1148,7 @@ mod tests {
             page_count: None,
             rating: None,
             metadata_source: None,
-            cover_path: None,
+            has_cover: false,
             sidecar_fingerprint: None,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),

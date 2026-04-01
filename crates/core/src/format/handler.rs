@@ -148,7 +148,7 @@ impl EnrichBookFilesHandler {
         };
 
         // ── 4. Resolve cover path ───────────────────────────────────────────
-        let cover_path = book.cover_path.as_ref().map(|filename| self.core.file_store.cover_path(book.token, filename));
+        let cover_path = book.has_cover.then(|| self.core.file_store.cover_path(book.token, "cover.jpg"));
 
         // ── 5. Derive slug and output paths ─────────────────────────────────
         let first_author_name = authors.first().map(|(name, _, _)| name.as_str());

@@ -171,7 +171,7 @@ pub struct Book {
     #[builder(default)]
     pub metadata_source: Option<MetadataSource>,
     #[builder(default)]
-    pub cover_path: Option<String>,
+    pub has_cover: bool,
     #[builder(default)]
     pub sidecar_fingerprint: Option<String>,
     #[builder(default = "Utc::now()")]
@@ -207,5 +207,5 @@ pub struct NewBook {
     pub page_count: Option<i32>,
     pub rating: Option<i16>,
     pub metadata_source: Option<MetadataSource>,
-    pub cover_path: Option<String>,
+    pub has_cover: bool,
 }

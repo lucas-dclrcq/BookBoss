@@ -22,7 +22,7 @@ pub struct Model {
     pub rating: Option<i16>,
     pub status: String,
     pub metadata_source: Option<String>,
-    pub cover_path: Option<String>,
+    pub has_cover: bool,
     pub version: i64,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,

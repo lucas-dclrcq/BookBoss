@@ -120,7 +120,7 @@ mod tests {
                     page_count: None,
                     rating: None,
                     metadata_source: None,
-                    cover_path: None,
+                    has_cover: false,
                 },
             )
             .await

@@ -166,7 +166,7 @@ pub async fn insert_book(repos: &RepositoryService, title: &str, status: BookSta
                         page_count: None,
                         rating: None,
                         metadata_source: None,
-                        cover_path: None,
+                        has_cover: false,
                     },
                 )
                 .await

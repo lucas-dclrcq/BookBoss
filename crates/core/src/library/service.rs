@@ -67,8 +67,8 @@ pub trait LibraryService: Send + Sync {
     /// Replaces the cover image for a book (candidate or library book).
     ///
     /// Writes `cover_bytes` to the book's directory as `cover.jpg`, normalizing
-    /// the image to JPEG in the storage layer. Updates `book.cover_path` in the
-    /// database.
+    /// the image to JPEG in the storage layer. Sets `book.has_cover = true` in
+    /// the database.
     async fn replace_cover(&self, book_token: BookToken, cover_bytes: Vec<u8>) -> Result<(), Error>;
 }
 
@@ -308,8 +308,8 @@ impl LibraryService for LibraryServiceImpl {
                 updated_book.publisher_id = publisher_id;
                 updated_book.page_count = edit_c.page_count;
                 updated_book.status = BookStatus::Available;
-                if let Some(filename) = cover_filename {
-                    updated_book.cover_path = Some(filename);
+                if cover_filename.is_some() {
+                    updated_book.has_cover = true;
                 }
                 book_repo2.update_book(tx, updated_book).await?;
 
@@ -673,8 +673,8 @@ impl LibraryService for LibraryServiceImpl {
                 updated_book.series_number = series_number;
                 updated_book.publisher_id = publisher_id;
                 updated_book.page_count = edit_c.page_count;
-                if let Some(filename) = cover_filename {
-                    updated_book.cover_path = Some(filename);
+                if cover_filename.is_some() {
+                    updated_book.has_cover = true;
                 }
                 book_repo2.update_book(tx, updated_book).await?;
 
@@ -866,7 +866,7 @@ impl LibraryService for LibraryServiceImpl {
         // ── 2. Store cover (normalization happens in the storage layer) ───────
         self.file_store.store_cover(book_token, "cover.jpg", &cover_bytes).await?;
 
-        // ── 3. Update cover_path in DB ────────────────────────────────────────
+        // ── 3. Set has_cover = true in DB ────────────────────────────────────
         let book_repo2 = self.repository_service.book_repository().clone();
         transaction(&**self.repository_service.repository(), |tx| {
             Box::pin(async move {
@@ -877,7 +877,7 @@ impl LibraryService for LibraryServiceImpl {
                 if updated_book.version != book_version {
                     return Err(Error::RepositoryError(RepositoryError::Conflict));
                 }
-                updated_book.cover_path = Some("cover.jpg".to_string());
+                updated_book.has_cover = true;
                 book_repo2.update_book(tx, updated_book).await
             })
         })

@@ -51,11 +51,10 @@ impl BookIdSweep for BackfillThumbnailsHandler {
                 continue;
             };
 
-            let Some(cover_filename) = book.cover_path else {
+            if !book.has_cover {
                 continue;
-            };
-
-            core.file_store.backfill_thumbnail(book.token, &cover_filename).await?;
+            }
+            core.file_store.backfill_thumbnail(book.token, "cover.jpg").await?;
             backfilled += 1;
         }
 
@@ -103,7 +102,7 @@ mod tests {
         let mut store = MockFileStoreService::new();
 
         let mut book = Book::fake(1, "Some Book", BookStatus::Available);
-        book.cover_path = Some("cover.jpg".to_string());
+        book.has_cover = true;
 
         book_repo
             .expect_find_book_ids_with_cover_for_sweep()

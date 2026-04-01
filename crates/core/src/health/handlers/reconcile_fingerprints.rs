@@ -159,7 +159,7 @@ mod tests {
             page_count: None,
             rating: None,
             metadata_source: Some(MetadataSource::Hardcover),
-            cover_path: None,
+            has_cover: false,
             sidecar_fingerprint: fingerprint,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),

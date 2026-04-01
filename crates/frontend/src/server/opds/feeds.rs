@@ -187,8 +187,8 @@ pub(crate) fn add_file_links(mut entry: AtomEntry, book_token: &str, files: &[bb
 }
 
 /// Adds cover image link if the book has a cover.
-pub(crate) fn add_cover_link(mut entry: AtomEntry, book_token: &str, cover_path: Option<&str>) -> AtomEntry {
-    if cover_path.is_some() {
+pub(crate) fn add_cover_link(mut entry: AtomEntry, book_token: &str, has_cover: bool) -> AtomEntry {
+    if has_cover {
         let cover_url = format!("/opds/covers/{book_token}");
         entry = entry
             .with_link(AtomLink::new(rel::IMAGE, &cover_url).with_type("image/jpeg"))
@@ -553,7 +553,7 @@ async fn book_to_entry(book: &Book, core_services: &Arc<CoreServices>) -> AtomEn
 
     let token_str = book.token.to_string();
     entry = add_file_links(entry, &token_str, &files);
-    entry = add_cover_link(entry, &token_str, book.cover_path.as_deref());
+    entry = add_cover_link(entry, &token_str, book.has_cover);
 
     entry
 }
@@ -573,20 +573,20 @@ pub async fn serve_cover(Path(book_token_str): Path<String>, _opds_user: OpdsUse
         Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR),
     };
 
-    let Some(filename) = book.cover_path else {
+    if !book.has_cover {
         return Response::builder()
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, HeaderValue::from_static("image/png"))
             .header(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"))
             .body(Body::from(BLANK_COVER))
             .unwrap();
-    };
+    }
 
-    let path = core_services.file_store.cover_path(token, &filename);
+    let path = core_services.file_store.cover_path(token, "cover.jpg");
 
     match tokio::fs::read(&path).await {
         Ok(data) => {
-            let content_type = cover_content_type(&filename);
+            let content_type = "image/jpeg";
             Response::builder()
                 .status(StatusCode::OK)
                 .header(header::CONTENT_TYPE, HeaderValue::from_static(content_type))
@@ -681,16 +681,6 @@ pub async fn serve_download(
         .header(header::CACHE_CONTROL, HeaderValue::from_static("private, no-cache"))
         .body(Body::from(data))
         .unwrap()
-}
-
-fn cover_content_type(filename: &str) -> &'static str {
-    let ext = filename.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
-    match ext.as_str() {
-        "png" => "image/png",
-        "gif" => "image/gif",
-        "webp" => "image/webp",
-        _ => "image/jpeg",
-    }
 }
 
 fn sanitize_filename(s: &str) -> String {

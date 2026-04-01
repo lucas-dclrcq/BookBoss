@@ -146,8 +146,8 @@ impl JobHandler for VerifyFileIntegrityHandler {
                 recovered_count += 1;
 
                 // Also warn if the cover file is missing.
-                if let Some(ref cover_filename) = book.cover_path {
-                    let cover_abs = self.core.file_store.resolve(&format!("{}/{}", book.token, cover_filename));
+                if book.has_cover {
+                    let cover_abs = self.core.file_store.resolve(&format!("{}/cover.jpg", book.token));
                     if !cover_abs.exists() {
                         self.core
                             .system_message_service
@@ -354,7 +354,7 @@ mod tests {
     async fn missing_cover_adds_additional_warning() {
         let book_id: BookId = 1;
         let mut book = Book::fake(book_id, "Test Book", BookStatus::Available);
-        book.cover_path = Some("cover.jpg".to_string());
+        book.has_cover = true;
         let original_path = "Originals/test-book.epub";
         let enriched_path = "BK_1/test-book.epub";
 

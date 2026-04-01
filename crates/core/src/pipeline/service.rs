@@ -443,7 +443,7 @@ impl PipelineService for PipelineServiceImpl {
 
         let fm = final_meta.clone();
         let bms = book_metadata_source.clone();
-        let cover_fn = cover_filename.clone();
+        let has_cover = cover_filename.is_some();
         let js = job_source.clone();
         let file_hash = job.file_hash.clone();
         let file_format = detected_format.clone();
@@ -494,7 +494,7 @@ impl PipelineService for PipelineServiceImpl {
                             page_count: fm.page_count,
                             rating: None,
                             metadata_source: bms,
-                            cover_path: cover_fn,
+                            has_cover,
                         },
                     )
                     .await?;

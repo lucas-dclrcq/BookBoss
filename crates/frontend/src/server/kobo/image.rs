@@ -46,15 +46,12 @@ pub async fn handle(kobo: KoboDevice, Path(params): Path<HashMap<String, String>
         }
     };
 
-    // Only serve JPEG covers. Non-JPEG formats (cover.png, cover.webp,
-    // cover.gif) return 404 — the route implies JPEG via the /image.jpg suffix.
-    let cover_filename = match book.cover_path.as_deref() {
-        Some("cover.jpg") => "cover.jpg",
-        _ => return StatusCode::NOT_FOUND.into_response(),
-    };
+    if !book.has_cover {
+        return StatusCode::NOT_FOUND.into_response();
+    }
 
     // Resolve and read the cover file.
-    let cover_path = core_services.file_store.cover_path(token, cover_filename);
+    let cover_path = core_services.file_store.cover_path(token, "cover.jpg");
     let bytes = match tokio::fs::read(&cover_path).await {
         Ok(b) => b,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
