@@ -53,19 +53,31 @@ pub(crate) async fn serve_cover(
             .unwrap();
     };
 
-    let path = core_services.file_store.cover_path(token, &filename);
-
-    let (data, content_type) = match tokio::fs::read(&path).await {
-        Ok(d) => (d, content_type_for_filename(&filename)),
+    // Serve thumbnail if available, fall back to full-size cover.
+    let thumb_path = core_services.file_store.cover_path(token, "thumb.jpg");
+    let (data, content_type) = match tokio::fs::read(&thumb_path).await {
+        Ok(d) => (d, "image/jpeg"),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return Response::builder()
-                .status(StatusCode::OK)
-                .header(header::CONTENT_TYPE, HeaderValue::from_static("image/png"))
-                .header(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"))
-                .body(Body::from(BLANK_COVER))
-                .unwrap();
+            // Thumbnail not yet generated — serve full-size cover.
+            let cover_path = core_services.file_store.cover_path(token, &filename);
+            match tokio::fs::read(&cover_path).await {
+                Ok(d) => (d, content_type_for_filename(&filename)),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    return Response::builder()
+                        .status(StatusCode::OK)
+                        .header(header::CONTENT_TYPE, HeaderValue::from_static("image/png"))
+                        .header(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"))
+                        .body(Body::from(BLANK_COVER))
+                        .unwrap();
+                }
+                Err(_) => {
+                    return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap();
+                }
+            }
         }
-        Err(_) => return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap(),
+        Err(_) => {
+            return Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap();
+        }
     };
 
     Response::builder()
