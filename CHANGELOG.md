@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.16](https://github.com/szinn/BookBoss/compare/v0.7.15..v0.7.16) - 2026-04-01
+
+### Bug Fixes
+
+- _(core)_ Use human-readable names in enrichment and stale-job system messages - ([9a7179f](https://github.com/szinn/BookBoss/commit/9a7179fe2a6eb82dd1b25d1de2038098d4be388f))
+- _(core)_ Active recovery in VerifyFileIntegrityHandler + fix KEPUB download blank screen - ([5c1902a](https://github.com/szinn/BookBoss/commit/5c1902af007ab7ea1f1dce2e9783c7598eeb2ea1))
+- _(frontend)_ Clear search text when clicking top-level nav links - ([c01287c](https://github.com/szinn/BookBoss/commit/c01287cc7aa4abd5c32e318679de71c5c83c6fe7))
+- _(frontend)_ Show error and disable Approve on review page when original file missing - ([a6cf27e](https://github.com/szinn/BookBoss/commit/a6cf27ef3b54d2fdd5a0e9c9ad52d8fe80d4ee62))
+
+### Refactor
+
+- _(core)_ Standardize owner-check errors in DeviceService - ([4b3fe19](https://github.com/szinn/BookBoss/commit/4b3fe19f36d0ef8f8b9534e68f89fd5e3db3fd3d))
+- _(core)_ Extract normalize_name to bb-utils - ([8957412](https://github.com/szinn/BookBoss/commit/8957412e16d75060460260620b4cbb419f9e0eca))
+- _(formats)_ Replace string OPF manipulation with quick_xml streaming - ([e66ddf5](https://github.com/szinn/BookBoss/commit/e66ddf5717b4ae8c4c5a1b4512775800652d0fbf))
+- _(formats)_ Add FormatService::read_raw_opf, demote epub visibility - ([f2a63da](https://github.com/szinn/BookBoss/commit/f2a63da519506b7fb5d540749be5b30b6fe162ec))
+- _(formats)_ Extract shared test utilities - ([a44f075](https://github.com/szinn/BookBoss/commit/a44f0751bae38f61c90812f1cd4a10efecc6dc36))
+- _(frontend)_ Consolidate password validation into crate::password - ([3a81698](https://github.com/szinn/BookBoss/commit/3a81698b8997b9dbd594cb0f023de0f56bfce95e))
+- _(frontend)_ Extract require_capability helper - ([736137c](https://github.com/szinn/BookBoss/commit/736137c64e38ab765c47a131f7601f3ea067ec9e))
+- _(frontend)_ Extract to_server_err helper - ([56718ee](https://github.com/szinn/BookBoss/commit/56718ee3d9b6f2514a2498ee8f4ef53ff6fe8ddb))
+- _(metadata)_ Consolidate OL author-list building into helper - ([0b716fa](https://github.com/szinn/BookBoss/commit/0b716fa7af0380bb9a91c4bd91018dcb5302fff7))
+- _(metadata)_ Extract parse_year to bb-utils - ([cfd805c](https://github.com/szinn/BookBoss/commit/cfd805c3fe31a1071d54f3665806eb40a34a3760))
+- _(storage)_ Log JPEG encoding fallback + extract ensure_dir helper - ([ea2364f](https://github.com/szinn/BookBoss/commit/ea2364f9eae8046f229ed93aba0c7e321627917d))
+
+### Testing
+
+- _(core)_ Add library service guard tests - ([c226f80](https://github.com/szinn/BookBoss/commit/c226f80babb535f4764fbcd6e38407e58eda6bc8))
+- _(core)_ Add missing reading service tests - ([81b9c2f](https://github.com/szinn/BookBoss/commit/81b9c2f6bbe36b63d68725663dbb78626d928cef))
+- _(core)_ Add pipeline pure-function tests - ([ddc1b80](https://github.com/szinn/BookBoss/commit/ddc1b80c550b99988757eb6978c11d23fd872044))
+- _(formats)_ Add missing test coverage for parse and write modules - ([6d35640](https://github.com/szinn/BookBoss/commit/6d356405d544687be76f1dc48e4d2dcf82227197))
+- _(frontend)_ Add review page pure function tests - ([3f9f200](https://github.com/szinn/BookBoss/commit/3f9f200fdbcefb95ca09abb1d488f75a10e99ff8))
+- _(metadata)_ Add error-path tests to all three adapters - ([27cf26c](https://github.com/szinn/BookBoss/commit/27cf26c339777545cbbddbd162151726822a0984))
+- _(storage)_ Add missing storage operation tests - ([5fa1365](https://github.com/szinn/BookBoss/commit/5fa1365f4b8491de86eec2d32484d99f02080001))
+- _(storage)_ Add normalize_to_jpeg unit tests - ([7dc50b0](https://github.com/szinn/BookBoss/commit/7dc50b06ae284187264438f7319be7ebf5945d1d))
+
 ## [0.7.15](https://github.com/szinn/BookBoss/compare/v0.7.14..v0.7.15) - 2026-03-31
 
 ### Features
