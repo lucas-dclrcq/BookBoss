@@ -43,10 +43,19 @@ pub trait BookService: Send + Sync {
     /// Fetches all data needed to hydrate a slice of books into view-models.
     ///
     /// Issues five batch repository queries within a single read-only
-    /// transaction. Pass `series_ids` as the deduplicated set of
-    /// `book.series_id` values from the caller's already-loaded `Book`
-    /// slice. Returns `BookHydrationData::default()` immediately if
-    /// `book_ids` is empty.
+    /// transaction.
+    ///
+    /// # Parameters
+    ///
+    /// - `book_ids`: IDs of the books to hydrate.
+    /// - `series_ids`: Deduplicated series IDs referenced by the caller's
+    ///   already-loaded `Book` slice (i.e. `books.iter().filter_map(|b|
+    ///   b.series_id)`). The caller supplies this to avoid an extra DB
+    ///   round-trip; passing IDs inconsistent with `book_ids` will silently
+    ///   produce missing series data.
+    ///
+    /// Returns `BookHydrationData::default()` immediately if `book_ids` is
+    /// empty.
     async fn fetch_hydration_data(&self, book_ids: &[BookId], series_ids: &[SeriesId]) -> Result<BookHydrationData, Error>;
 }
 

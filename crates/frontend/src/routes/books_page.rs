@@ -52,7 +52,7 @@ use {
     axum_session_auth::{Auth, Rights},
     bb_core::{
         CoreServices,
-        book::{AuthorToken, Book, BookQuery, SeriesToken},
+        book::{Author, AuthorId, Book, BookAuthor, BookHydrationData, BookId, BookQuery, Series, SeriesId},
         reading::ReadStatus,
         types::Capability,
     },
@@ -61,8 +61,8 @@ use {
 
 /// Hydrates a slice of `Book`s into `BookSummary` view-models.
 ///
-/// For each book this fetches the linked authors and series names in two
-/// batched passes (one per unique ID), then assembles `BookSummary`.
+/// Issues O(1) DB queries via a single `fetch_hydration_data` call
+/// regardless of library size.
 /// `reading_map` is an optional pre-built map of `book_id → ReadingStateDto`
 /// used to attach per-user reading state; pass `None` for read-only contexts.
 #[cfg(feature = "server")]
@@ -71,70 +71,65 @@ pub(crate) async fn hydrate_books(
     core_services: &CoreServices,
     reading_map: Option<&std::collections::HashMap<u64, ReadingStateDto>>,
 ) -> Result<Vec<BookSummary>, ServerFnError> {
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashMap;
 
-    let book_service = &core_services.book_service;
-
-    // Gather per-book author links and collect unique author IDs.
-    let mut book_author_pairs: Vec<Vec<(i32, u64)>> = Vec::with_capacity(books.len());
-    let mut all_author_ids: HashSet<u64> = HashSet::new();
-    for book in books {
-        let authors = book_service.authors_for_book(book.id).await.map_err(to_server_err)?;
-        let pairs: Vec<(i32, u64)> = authors.iter().map(|ba| (ba.sort_order, ba.author_id)).collect();
-        for &(_, aid) in &pairs {
-            all_author_ids.insert(aid);
-        }
-        book_author_pairs.push(pairs);
+    if books.is_empty() {
+        return Ok(vec![]);
     }
 
-    // Batch-load unique authors (token + name).
-    let mut author_map: HashMap<u64, (String, String)> = HashMap::new();
-    for author_id in all_author_ids {
-        if let Some(a) = book_service.find_author_by_token(AuthorToken::new(author_id)).await.map_err(to_server_err)? {
-            author_map.insert(author_id, (a.token.to_string(), a.name));
-        }
+    let book_ids: Vec<BookId> = books.iter().map(|b| b.id).collect();
+    let series_ids: Vec<SeriesId> = {
+        let mut ids: Vec<SeriesId> = books.iter().filter_map(|b| b.series_id).collect();
+        ids.sort_unstable();
+        ids.dedup();
+        ids
+    };
+
+    let data: BookHydrationData = core_services
+        .book_service
+        .fetch_hydration_data(&book_ids, &series_ids)
+        .await
+        .map_err(to_server_err)?;
+
+    // Build lookup maps for O(1) assembly.
+    let author_map: HashMap<AuthorId, &Author> = data.authors.iter().map(|a| (a.id, a)).collect();
+    let series_map: HashMap<SeriesId, &Series> = data.series.iter().map(|s| (s.id, s)).collect();
+
+    let mut book_authors_map: HashMap<BookId, Vec<&BookAuthor>> = HashMap::new();
+    for ba in &data.book_authors {
+        book_authors_map.entry(ba.book_id).or_default().push(ba);
     }
 
-    // Batch-load unique series (token + name).
-    let unique_series: HashSet<u64> = books.iter().filter_map(|b| b.series_id).collect();
-    let mut series_map: HashMap<u64, (String, String)> = HashMap::new();
-    for series_id in unique_series {
-        if let Some(s) = book_service.find_series_by_token(SeriesToken::new(series_id)).await.map_err(to_server_err)? {
-            series_map.insert(series_id, (s.token.to_string(), s.name));
-        }
+    let mut genres_map: HashMap<BookId, Vec<String>> = HashMap::new();
+    for (book_id, genre) in &data.genres {
+        genres_map.entry(*book_id).or_default().push(genre.name.clone());
     }
 
-    // Load genres and tags per book.
-    let mut book_genres: Vec<Vec<String>> = Vec::with_capacity(books.len());
-    let mut book_tags: Vec<Vec<String>> = Vec::with_capacity(books.len());
-    for book in books {
-        let genres = book_service.genres_for_book(book.id).await.map_err(to_server_err)?;
-        book_genres.push(genres.into_iter().map(|g| g.name).collect());
-
-        let tags = book_service.tags_for_book(book.id).await.map_err(to_server_err)?;
-        book_tags.push(tags.into_iter().map(|t| t.name).collect());
+    let mut tags_map: HashMap<BookId, Vec<String>> = HashMap::new();
+    for (book_id, tag) in &data.tags {
+        tags_map.entry(*book_id).or_default().push(tag.name.clone());
     }
 
     let summaries = books
         .iter()
-        .zip(book_author_pairs.iter())
-        .enumerate()
-        .map(|(idx, (book, author_pairs))| {
-            let mut sorted = author_pairs.clone();
-            sorted.sort_by_key(|&(order, _)| order);
-            let authors = sorted
+        .map(|book| {
+            let mut author_links = book_authors_map.get(&book.id).cloned().unwrap_or_default();
+            author_links.sort_by_key(|ba| ba.sort_order);
+            let authors = author_links
                 .iter()
-                .filter_map(|&(_, aid)| {
-                    author_map.get(&aid).map(|(token, name)| AuthorLink {
-                        token: token.clone(),
-                        name: name.clone(),
+                .filter_map(|ba| {
+                    author_map.get(&ba.author_id).map(|a| AuthorLink {
+                        token: a.token.to_string(),
+                        name: a.name.clone(),
                     })
                 })
                 .collect();
+
             let (series_token, series_name) = book
                 .series_id
                 .and_then(|sid| series_map.get(&sid))
-                .map_or((None, None), |(tok, name)| (Some(tok.clone()), Some(name.clone())));
+                .map_or((None, None), |s| (Some(s.token.to_string()), Some(s.name.clone())));
+
             BookSummary {
                 token: book.token.to_string(),
                 title: book.title.clone(),
@@ -143,8 +138,8 @@ pub(crate) async fn hydrate_books(
                 series_token,
                 series_name,
                 series_number: book.series_number.as_ref().map(std::string::ToString::to_string),
-                genres: book_genres[idx].clone(),
-                tags: book_tags[idx].clone(),
+                genres: genres_map.get(&book.id).cloned().unwrap_or_default(),
+                tags: tags_map.get(&book.id).cloned().unwrap_or_default(),
                 reading_state: reading_map.and_then(|m| m.get(&book.id).cloned()),
                 created_at: book.created_at.to_rfc3339(),
                 updated_at: book.updated_at.timestamp().to_string(),

@@ -1800,6 +1800,56 @@ mod tests {
         assert!(result.is_empty());
     }
 
+    #[tokio::test]
+    async fn test_book_authors_for_books_sort_order() {
+        // A book with two co-authors at sort_order 1 and 0 — result must come back in
+        // ascending sort_order order (primary author first).
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+        let book = svc.book_repository().add_book(&*tx, new_book("Dune")).await.unwrap();
+        let a_primary = svc
+            .author_repository()
+            .add_author(
+                &*tx,
+                NewAuthor {
+                    name: "Herbert".into(),
+                    bio: None,
+                },
+            )
+            .await
+            .unwrap();
+        let a_editor = svc
+            .author_repository()
+            .add_author(
+                &*tx,
+                NewAuthor {
+                    name: "Anderson".into(),
+                    bio: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        // Insert editor (sort_order=1) before primary (sort_order=0) to ensure
+        // the result ordering comes from the DB query, not insertion order.
+        svc.book_repository()
+            .add_book_author(&*tx, book.id, a_editor.id, bb_core::book::AuthorRole::Author, 1)
+            .await
+            .unwrap();
+        svc.book_repository()
+            .add_book_author(&*tx, book.id, a_primary.id, bb_core::book::AuthorRole::Author, 0)
+            .await
+            .unwrap();
+
+        let result = svc.book_repository().book_authors_for_books(&*tx, &[book.id]).await.unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].sort_order, 0, "primary author should come first");
+        assert_eq!(result[1].sort_order, 1, "editor should come second");
+        assert_eq!(result[0].author_id, a_primary.id);
+        assert_eq!(result[1].author_id, a_editor.id);
+    }
+
     // ─── book_genres_for_books ───────────────────────────────────────────────────
 
     #[tokio::test]
@@ -1877,5 +1927,14 @@ mod tests {
         assert_eq!(result.len(), 2);
         assert!(result.iter().any(|(bid, _)| *bid == book1.id));
         assert!(result.iter().any(|(bid, _)| *bid == book2.id));
+    }
+
+    #[tokio::test]
+    async fn test_book_tags_for_books_no_tags() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+        let book = svc.book_repository().add_book(&*tx, new_book("Dune")).await.unwrap();
+        let result = svc.book_repository().book_tags_for_books(&*tx, &[book.id]).await.unwrap();
+        assert!(result.is_empty());
     }
 }
