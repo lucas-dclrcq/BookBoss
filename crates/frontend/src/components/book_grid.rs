@@ -189,7 +189,7 @@ fn BookCard(book: BookSummary) -> Element {
                 img {
                     src: "/api/v1/covers/{book.token}?v={book.updated_at}",
                     alt: "{book.title}",
-                    class: "w-full object-cover rounded shadow-sm",
+                    class: "w-full max-w-[256px] mx-auto object-cover rounded shadow-sm",
                     style: "aspect-ratio: 2/3",
                 }
                 // Reading status badge
