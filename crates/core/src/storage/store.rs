@@ -50,6 +50,15 @@ pub trait FileStoreService: Send + Sync {
     /// file name within the book's directory (e.g. `"cover.jpg"`).
     async fn store_cover(&self, token: BookToken, filename: &str, data: &[u8]) -> Result<(), Error>;
 
+    /// Generates and writes `thumb.jpg` alongside the book's cover if it does
+    /// not already exist.
+    ///
+    /// Reads `cover_filename` from the book's directory, generates a 256×384
+    /// thumbnail, and writes it as `thumb.jpg`. Idempotent: no-op if
+    /// `thumb.jpg` already exists. Returns `Ok(())` even if the cover file
+    /// is missing on disk or cannot be decoded (logs a warning instead).
+    async fn backfill_thumbnail(&self, token: BookToken, cover_filename: &str) -> Result<(), Error>;
+
     /// Renames all `{old_slug}.*` files in the book's directory to
     /// `{new_slug}.*`.
     async fn rename_book_files(&self, token: BookToken, old_slug: &str, new_slug: &str) -> Result<(), Error>;

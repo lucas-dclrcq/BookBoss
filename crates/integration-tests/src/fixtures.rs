@@ -47,6 +47,9 @@ impl FileStoreService for SilentFileStore {
     async fn store_cover(&self, _token: BookToken, _filename: &str, _data: &[u8]) -> Result<(), Error> {
         Ok(())
     }
+    async fn backfill_thumbnail(&self, _token: BookToken, _cover_filename: &str) -> Result<(), Error> {
+        Ok(())
+    }
     async fn rename_book_files(&self, _token: BookToken, _old_slug: &str, _new_slug: &str) -> Result<(), Error> {
         Ok(())
     }

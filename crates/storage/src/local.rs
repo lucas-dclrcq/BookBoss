@@ -216,6 +216,36 @@ impl FileStoreService for LocalFileStore {
         Ok(())
     }
 
+    async fn backfill_thumbnail(&self, token: BookToken, cover_filename: &str) -> Result<(), Error> {
+        let thumb_path = self.cover_path(token, "thumb.jpg");
+
+        // Idempotent: skip if thumbnail already exists.
+        if tokio::fs::try_exists(&thumb_path).await.unwrap_or(false) {
+            return Ok(());
+        }
+
+        let cover_path = self.cover_path(token, cover_filename);
+        let cover_bytes = match tokio::fs::read(&cover_path).await {
+            Ok(b) => b,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                tracing::warn!(cover_filename, "cover file missing during thumbnail backfill, skipping");
+                return Ok(());
+            }
+            Err(e) => return Err(io_err(e)),
+        };
+
+        let Some(thumb_bytes) = generate_thumbnail_bytes(&cover_bytes) else {
+            tracing::warn!(cover_filename, "could not decode cover for thumbnail backfill");
+            return Ok(());
+        };
+
+        if let Err(e) = tokio::fs::write(&thumb_path, thumb_bytes).await {
+            tracing::warn!(error = %e, "failed to write thumbnail during backfill");
+        }
+
+        Ok(())
+    }
+
     async fn rename_book_files(&self, token: BookToken, old_slug: &str, new_slug: &str) -> Result<(), Error> {
         let book_dir = self.book_dir(token);
         let prefix = format!("{old_slug}.");
@@ -627,6 +657,62 @@ mod tests {
         assert!(thumb.exists(), "thumb.jpg should have been written alongside cover.jpg");
         let bytes = tokio::fs::read(&thumb).await.unwrap();
         assert_eq!(&bytes[..2], &[0xFF, 0xD8], "thumb should be JPEG");
+    }
+
+    #[tokio::test]
+    async fn backfill_thumbnail_writes_thumb_when_missing() {
+        use image::{ImageBuffer, Rgb, codecs::jpeg::JpegEncoder};
+
+        let dir = tempdir().unwrap();
+        let store = test_store(dir.path().to_path_buf());
+        let token = test_token();
+
+        // Write a valid JPEG as cover.jpg
+        let book_dir = dir.path().join(token.to_string());
+        tokio::fs::create_dir_all(&book_dir).await.unwrap();
+        let img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(10, 10);
+        let mut jpeg = Vec::new();
+        JpegEncoder::new_with_quality(&mut jpeg, 85).encode_image(&img).unwrap();
+        tokio::fs::write(book_dir.join("cover.jpg"), &jpeg).await.unwrap();
+
+        store.backfill_thumbnail(token, "cover.jpg").await.unwrap();
+
+        let thumb = store.cover_path(token, "thumb.jpg");
+        assert!(thumb.exists(), "thumb.jpg should have been created");
+        let bytes = tokio::fs::read(&thumb).await.unwrap();
+        assert_eq!(&bytes[..2], &[0xFF, 0xD8], "thumb should be JPEG");
+    }
+
+    #[tokio::test]
+    async fn backfill_thumbnail_is_noop_when_thumb_exists() {
+        let dir = tempdir().unwrap();
+        let store = test_store(dir.path().to_path_buf());
+        let token = test_token();
+
+        let book_dir = dir.path().join(token.to_string());
+        tokio::fs::create_dir_all(&book_dir).await.unwrap();
+        // Pre-populate thumb.jpg with sentinel bytes
+        tokio::fs::write(book_dir.join("thumb.jpg"), b"sentinel").await.unwrap();
+
+        store.backfill_thumbnail(token, "cover.jpg").await.unwrap();
+
+        // Sentinel bytes should be unchanged
+        let bytes = tokio::fs::read(book_dir.join("thumb.jpg")).await.unwrap();
+        assert_eq!(bytes, b"sentinel", "thumb.jpg should not have been overwritten");
+    }
+
+    #[tokio::test]
+    async fn backfill_thumbnail_is_noop_when_cover_missing() {
+        let dir = tempdir().unwrap();
+        let store = test_store(dir.path().to_path_buf());
+        let token = test_token();
+
+        // No cover.jpg exists — should return Ok without creating thumb.jpg
+        let result = store.backfill_thumbnail(token, "cover.jpg").await;
+        assert!(result.is_ok(), "should succeed even when cover is missing");
+
+        let thumb = store.cover_path(token, "thumb.jpg");
+        assert!(!thumb.exists(), "thumb.jpg should not be created when cover is missing");
     }
 
     #[tokio::test]
