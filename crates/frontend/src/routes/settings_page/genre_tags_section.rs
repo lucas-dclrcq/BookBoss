@@ -168,6 +168,36 @@ pub(crate) async fn admin_delete_tag(token: String) -> Result<(), ServerFnError>
     Ok(())
 }
 
+#[post(
+    "/api/v1/admin/genres/remove-unused",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+pub(crate) async fn admin_remove_unused_genres() -> Result<u64, ServerFnError> {
+    let user = authenticated_user(&auth_session)?;
+
+    if !user.permissions.contains("SuperAdmin") && !user.permissions.contains("Admin") {
+        return Err(ServerFnError::new("Insufficient permissions"));
+    }
+
+    core_services.book_service.remove_unused_genres().await.map_err(to_server_err)
+}
+
+#[post(
+    "/api/v1/admin/tags/remove-unused",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+pub(crate) async fn admin_remove_unused_tags() -> Result<u64, ServerFnError> {
+    let user = authenticated_user(&auth_session)?;
+
+    if !user.permissions.contains("SuperAdmin") && !user.permissions.contains("Admin") {
+        return Err(ServerFnError::new("Insufficient permissions"));
+    }
+
+    core_services.book_service.remove_unused_tags().await.map_err(to_server_err)
+}
+
 // ---------------------------------------------------------------------------
 // EntityPanel — shared panel for genres and tags
 // ---------------------------------------------------------------------------
@@ -179,10 +209,12 @@ fn EntityPanel(
     on_add: EventHandler<String>,
     on_delete: EventHandler<String>,
     on_click_name: EventHandler<String>,
+    on_remove_unused: EventHandler<()>,
     add_error: Option<String>,
 ) -> Element {
     let mut adding = use_signal(|| false);
     let mut new_name = use_signal(String::new);
+    let unused_count = entries.iter().filter(|e| e.book_count == 0).count();
 
     let submit_add = move || {
         let name = new_name();
@@ -197,13 +229,22 @@ fn EntityPanel(
             // Panel header
             div { class: "flex items-center justify-between mb-3",
                 h3 { class: "text-base font-semibold text-gray-900", "{title}" }
-                button {
-                    class: "px-3 py-1.5 text-sm font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700",
-                    onclick: move |_| {
-                        new_name.set(String::new());
-                        adding.set(true);
-                    },
-                    "+ Add"
+                div { class: "flex items-center gap-2",
+                    if unused_count > 0 {
+                        button {
+                            class: "px-3 py-1.5 text-sm font-medium rounded border border-gray-300 text-gray-600 hover:bg-gray-50",
+                            onclick: move |_| on_remove_unused.call(()),
+                            "Remove unused"
+                        }
+                    }
+                    button {
+                        class: "px-3 py-1.5 text-sm font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700",
+                        onclick: move |_| {
+                            new_name.set(String::new());
+                            adding.set(true);
+                        },
+                        "+ Add"
+                    }
                 }
             }
 
@@ -326,12 +367,23 @@ pub(crate) fn GenreTagsSection() -> Element {
     let mut add_genre_error: Signal<Option<String>> = use_signal(|| None);
     let mut add_tag_error: Signal<Option<String>> = use_signal(|| None);
 
+    // (kind, count) — Some(...) means the modal is open
+    let mut remove_unused_target: Signal<Option<(&'static str, usize)>> = use_signal(|| None);
+    let mut removing_unused = use_signal(|| false);
+    let mut remove_unused_error: Signal<Option<String>> = use_signal(|| None);
+
     rsx! {
         div { class: "w-full max-w-2xl",
             h2 { class: "text-lg font-semibold text-gray-900 mb-6", "Genre/Tags" }
 
             // Global delete error banner
             if let Some(msg) = delete_error() {
+                div { class: "mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm",
+                    "{msg}"
+                }
+            }
+
+            if let Some(msg) = remove_unused_error() {
                 div { class: "mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm",
                     "{msg}"
                 }
@@ -346,66 +398,137 @@ pub(crate) fn GenreTagsSection() -> Element {
                         "{e}"
                     }
                 },
-                Some(Ok(data)) => rsx! {
-                    EntityPanel {
-                        title: "Genres",
-                        entries: data.genres.clone(),
-                        add_error: add_genre_error(),
-                        on_add: move |name: String| {
-                            add_genre_error.set(None);
-                            spawn(async move {
-                                match admin_create_genre(name).await {
-                                    Ok(()) => *refresh.write() += 1,
-                                    Err(ServerFnError::ServerError { message, .. }) => {
-                                        add_genre_error.set(Some(message));
+                Some(Ok(data)) => {
+                    let unused_genres_count = data.genres.iter().filter(|e| e.book_count == 0).count();
+                    let unused_tags_count = data.tags.iter().filter(|e| e.book_count == 0).count();
+                    rsx! {
+                        EntityPanel {
+                            title: "Genres",
+                            entries: data.genres.clone(),
+                            add_error: add_genre_error(),
+                            on_add: move |name: String| {
+                                add_genre_error.set(None);
+                                spawn(async move {
+                                    match admin_create_genre(name).await {
+                                        Ok(()) => *refresh.write() += 1,
+                                        Err(ServerFnError::ServerError { message, .. }) => {
+                                            add_genre_error.set(Some(message));
+                                        }
+                                        Err(e) => add_genre_error.set(Some(e.to_string())),
                                     }
-                                    Err(e) => add_genre_error.set(Some(e.to_string())),
+                                });
+                            },
+                            on_delete: move |token: String| {
+                                delete_error.set(None);
+                                let entry = data.genres.iter().find(|g| g.token == token).cloned();
+                                if let Some(entry) = entry {
+                                    delete_kind.set(Some("genre"));
+                                    delete_target.set(Some(entry));
                                 }
-                            });
-                        },
-                        on_delete: move |token: String| {
-                            delete_error.set(None);
-                            let entry = data.genres.iter().find(|g| g.token == token).cloned();
-                            if let Some(entry) = entry {
-                                delete_kind.set(Some("genre"));
-                                delete_target.set(Some(entry));
-                            }
-                        },
-                        on_click_name: move |name: String| {
-                            *crate::components::SEARCH_TEXT.write() = format!("genre:{name}");
-                            navigator.push(crate::Route::BooksPage {});
-                        },
-                    }
-                    EntityPanel {
-                        title: "Tags",
-                        entries: data.tags.clone(),
-                        add_error: add_tag_error(),
-                        on_add: move |name: String| {
-                            add_tag_error.set(None);
-                            spawn(async move {
-                                match admin_create_tag(name).await {
-                                    Ok(()) => *refresh.write() += 1,
-                                    Err(ServerFnError::ServerError { message, .. }) => {
-                                        add_tag_error.set(Some(message));
+                            },
+                            on_click_name: move |name: String| {
+                                *crate::components::SEARCH_TEXT.write() = format!("genre:{name}");
+                                navigator.push(crate::Route::BooksPage {});
+                            },
+                            on_remove_unused: move |()| {
+                                remove_unused_error.set(None);
+                                remove_unused_target.set(Some(("genre", unused_genres_count)));
+                            },
+                        }
+                        EntityPanel {
+                            title: "Tags",
+                            entries: data.tags.clone(),
+                            add_error: add_tag_error(),
+                            on_add: move |name: String| {
+                                add_tag_error.set(None);
+                                spawn(async move {
+                                    match admin_create_tag(name).await {
+                                        Ok(()) => *refresh.write() += 1,
+                                        Err(ServerFnError::ServerError { message, .. }) => {
+                                            add_tag_error.set(Some(message));
+                                        }
+                                        Err(e) => add_tag_error.set(Some(e.to_string())),
                                     }
-                                    Err(e) => add_tag_error.set(Some(e.to_string())),
+                                });
+                            },
+                            on_delete: move |token: String| {
+                                delete_error.set(None);
+                                let entry = data.tags.iter().find(|t| t.token == token).cloned();
+                                if let Some(entry) = entry {
+                                    delete_kind.set(Some("tag"));
+                                    delete_target.set(Some(entry));
                                 }
-                            });
-                        },
-                        on_delete: move |token: String| {
-                            delete_error.set(None);
-                            let entry = data.tags.iter().find(|t| t.token == token).cloned();
-                            if let Some(entry) = entry {
-                                delete_kind.set(Some("tag"));
-                                delete_target.set(Some(entry));
-                            }
-                        },
-                        on_click_name: move |name: String| {
-                            *crate::components::SEARCH_TEXT.write() = format!("tag:{name}");
-                            navigator.push(crate::Route::BooksPage {});
-                        },
+                            },
+                            on_click_name: move |name: String| {
+                                *crate::components::SEARCH_TEXT.write() = format!("tag:{name}");
+                                navigator.push(crate::Route::BooksPage {});
+                            },
+                            on_remove_unused: move |()| {
+                                remove_unused_error.set(None);
+                                remove_unused_target.set(Some(("tag", unused_tags_count)));
+                            },
+                        }
                     }
                 },
+            }
+        }
+
+        // ── Remove-unused confirmation modal ────────────────────────────────────
+        if let Some((kind, count)) = remove_unused_target() {
+            div {
+                class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+                onkeydown: move |e| { if e.key() == Key::Escape { remove_unused_target.set(None); } },
+                div { class: "bg-white rounded-2xl shadow-xl w-full max-w-sm p-6",
+                    h3 { class: "text-base font-semibold text-gray-900 mb-2",
+                        "Remove unused {kind}s"
+                    }
+                    p { class: "text-sm text-gray-600 mb-6",
+                        {
+                            let plural = if count == 1 { "" } else { "s" };
+                            let have = if count == 1 { "has" } else { "have" };
+                            rsx! {
+                                "This will permanently delete "
+                                span { class: "font-medium text-gray-900", "{count} {kind}{plural}" }
+                                " that {have} no books assigned. This cannot be undone."
+                            }
+                        }
+                    }
+                    div { class: "flex justify-end gap-3",
+                        button {
+                            class: "px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50",
+                            disabled: removing_unused(),
+                            onmounted: move |e| { spawn(async move { let _ = e.set_focus(true).await; }); },
+                            onclick: move |_| remove_unused_target.set(None),
+                            "Cancel"
+                        }
+                        button {
+                            class: "px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50",
+                            disabled: removing_unused(),
+                            onclick: move |_| {
+                                removing_unused.set(true);
+                                spawn(async move {
+                                    let result = match kind {
+                                        "genre" => admin_remove_unused_genres().await.map(|_| ()),
+                                        "tag"   => admin_remove_unused_tags().await.map(|_| ()),
+                                        _       => Ok(()),
+                                    };
+                                    match result {
+                                        Ok(()) => {
+                                            remove_unused_target.set(None);
+                                            *refresh.write() += 1;
+                                        }
+                                        Err(e) => {
+                                            remove_unused_error.set(Some(e.to_string()));
+                                            remove_unused_target.set(None);
+                                        }
+                                    }
+                                    removing_unused.set(false);
+                                });
+                            },
+                            if removing_unused() { "Removing…" } else { "Remove {count}" }
+                        }
+                    }
+                }
             }
         }
 
