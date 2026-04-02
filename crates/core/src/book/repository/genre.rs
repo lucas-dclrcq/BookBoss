@@ -19,4 +19,7 @@ pub trait GenreRepository: Send + Sync {
     /// is the number of Available books with this genre, and `has_incoming`
     /// is true if any non-Available book references it.
     async fn list_genres_with_counts(&self, transaction: &dyn Transaction) -> Result<Vec<(Genre, u64, bool)>, Error>;
+    /// Deletes all genres not referenced by any book. Returns the number of
+    /// deleted rows.
+    async fn delete_unused_genres(&self, transaction: &dyn Transaction) -> Result<u64, Error>;
 }
