@@ -9,7 +9,7 @@ use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 
 use crate::{
-    entities::{books, prelude, tags},
+    entities::{book_tags, books, prelude, tags},
     error::handle_dberr,
     transaction::TransactionImpl,
 };
@@ -199,6 +199,33 @@ impl TagRepository for TagRepositoryAdapter {
                 (t.into(), available_count, has_incoming)
             })
             .collect())
+    }
+
+    async fn delete_unused_tags(&self, transaction: &dyn Transaction) -> Result<u64, Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        // Collect all tag IDs referenced by at least one book (deduplicated).
+        let used_ids: Vec<i64> = prelude::BookTags::find()
+            .select_only()
+            .column(book_tags::Column::TagId)
+            .distinct()
+            .into_tuple()
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+
+        let result = if used_ids.is_empty() {
+            // No tags are referenced — delete everything.
+            prelude::Tags::delete_many().exec(transaction).await.map_err(handle_dberr)?
+        } else {
+            prelude::Tags::delete_many()
+                .filter(tags::Column::Id.is_not_in(used_ids))
+                .exec(transaction)
+                .await
+                .map_err(handle_dberr)?
+        };
+
+        Ok(result.rows_affected)
     }
 }
 
@@ -442,5 +469,37 @@ mod tests {
         };
 
         assert!(matches!(svc.tag_repository().update_tag(&*tx, t).await, Err(Error::InvalidId(0))));
+    }
+
+    // ─── delete_unused_tags ──────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_delete_unused_tags_empty_db_returns_zero() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+        let count = svc.tag_repository().delete_unused_tags(&*tx).await.unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_delete_unused_tags_removes_all_when_none_used() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+        svc.tag_repository().add_tag(&*tx, NewTag { name: "unused-a".into() }).await.unwrap();
+        svc.tag_repository().add_tag(&*tx, NewTag { name: "unused-b".into() }).await.unwrap();
+
+        let count = svc.tag_repository().delete_unused_tags(&*tx).await.unwrap();
+        assert_eq!(count, 2);
+        assert!(svc.tag_repository().list_all_tags(&*tx).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_delete_unused_tags_single_unused_is_deleted() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+        svc.tag_repository().add_tag(&*tx, NewTag { name: "only-tag".into() }).await.unwrap();
+
+        let count = svc.tag_repository().delete_unused_tags(&*tx).await.unwrap();
+        assert_eq!(count, 1);
     }
 }

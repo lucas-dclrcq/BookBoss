@@ -19,4 +19,7 @@ pub trait TagRepository: Send + Sync {
     /// is the number of Available books with this tag, and `has_incoming`
     /// is true if any non-Available book references it.
     async fn list_tags_with_counts(&self, transaction: &dyn Transaction) -> Result<Vec<(Tag, u64, bool)>, Error>;
+    /// Deletes all tags not referenced by any book. Returns the number of
+    /// deleted rows.
+    async fn delete_unused_tags(&self, transaction: &dyn Transaction) -> Result<u64, Error>;
 }
