@@ -39,7 +39,7 @@ pub(crate) async fn list_libraries_admin() -> Result<Vec<LibraryRow>, ServerFnEr
 
     let entries = core_services.library_service.list_libraries().await.map_err(to_server_err)?;
 
-    Ok(entries
+    let mut rows: Vec<LibraryRow> = entries
         .into_iter()
         .map(|e| LibraryRow {
             token: e.library.token.to_string(),
@@ -48,7 +48,12 @@ pub(crate) async fn list_libraries_admin() -> Result<Vec<LibraryRow>, ServerFnEr
             user_count: e.user_count,
             book_count: e.book_count,
         })
-        .collect())
+        .collect();
+
+    // System libraries first (alphabetically), then non-system (alphabetically).
+    rows.sort_by(|a, b| b.is_system.cmp(&a.is_system).then_with(|| a.name.cmp(&b.name)));
+
+    Ok(rows)
 }
 
 #[post(

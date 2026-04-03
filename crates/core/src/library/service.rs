@@ -246,15 +246,14 @@ impl LibraryService for LibraryServiceImpl {
                 .reparent_shelves_for_user(tx, user_id, ALL_BOOKS_LIBRARY_ID, library.id)
                 .await?;
 
-            // 4. Seed with books the user has a meaningful relationship with:
-            //    books on any of their shelves, plus books they have metadata for
-            //    (read status, rating, notes). add_book_to_library is idempotent
-            //    so the union is naturally deduplicated.
+            // 4. Seed with books the user has a meaningful relationship with: books on any
+            //    of their shelves, plus books they have metadata for (read status, rating,
+            //    notes). add_book_to_library is idempotent so the union is naturally
+            //    deduplicated.
             let shelf_book_ids = shelf_repository.book_ids_for_user(tx, user_id).await?;
             let metadata_book_ids = user_book_metadata_repository.book_ids_for_user(tx, user_id).await?;
 
-            let mut all_book_ids: std::collections::HashSet<crate::book::BookId> =
-                shelf_book_ids.into_iter().collect();
+            let mut all_book_ids: std::collections::HashSet<crate::book::BookId> = shelf_book_ids.into_iter().collect();
             all_book_ids.extend(metadata_book_ids);
 
             for book_id in all_book_ids {
