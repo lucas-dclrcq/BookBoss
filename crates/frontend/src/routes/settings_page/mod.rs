@@ -1,10 +1,12 @@
 mod genre_tags_section;
+mod libraries_section;
 mod messages_section;
 mod tasks_section;
 mod users_section;
 
 use dioxus::prelude::*;
 use genre_tags_section::GenreTagsSection;
+use libraries_section::LibrariesSection;
 use messages_section::MessagesSection;
 use tasks_section::TasksSection;
 use users_section::UsersSection;
@@ -50,6 +52,7 @@ async fn get_settings_context() -> Result<SettingsContext, ServerFnError> {
 #[derive(Clone, Copy, PartialEq)]
 enum Section {
     Users,
+    Libraries,
     Tasks,
     Messages,
     GenreTags,
@@ -58,6 +61,7 @@ enum Section {
 impl Section {
     fn from_hash(hash: &str) -> Self {
         match hash.trim_start_matches('#') {
+            "libraries" => Self::Libraries,
             "tasks" => Self::Tasks,
             "messages" => Self::Messages,
             "genre-tags" => Self::GenreTags,
@@ -68,6 +72,7 @@ impl Section {
     fn as_hash(self) -> &'static str {
         match self {
             Self::Users => "#users",
+            Self::Libraries => "#libraries",
             Self::Tasks => "#tasks",
             Self::Messages => "#messages",
             Self::GenreTags => "#genre-tags",
@@ -148,6 +153,13 @@ pub(crate) fn SettingsPage() -> Element {
                     }
                     li {
                         button {
+                            class: nav_button_class(Section::Libraries),
+                            onclick: move |_| active_section.set(Section::Libraries),
+                            "Libraries"
+                        }
+                    }
+                    li {
+                        button {
                             class: nav_button_class(Section::GenreTags),
                             onclick: move |_| active_section.set(Section::GenreTags),
                             "Genre/Tags"
@@ -179,6 +191,9 @@ pub(crate) fn SettingsPage() -> Element {
                             is_super_admin: context.is_super_admin,
                             current_user_token: context.current_user_token.clone(),
                         }
+                    },
+                    Section::Libraries => rsx! {
+                        LibrariesSection {}
                     },
                     Section::Tasks => rsx! {
                         TasksSection {}
