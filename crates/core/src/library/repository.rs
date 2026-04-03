@@ -33,6 +33,8 @@ pub trait LibraryRepository: Send + Sync {
     /// references to All Books.
     async fn reset_default_library_for_users(&self, transaction: &dyn Transaction, old_token: &str, new_token: &str) -> Result<(), Error>;
     async fn reparent_shelves(&self, transaction: &dyn Transaction, from_library_id: LibraryId, to_library_id: LibraryId) -> Result<(), Error>;
+    /// Renames a library by id.
+    async fn rename_library(&self, transaction: &dyn Transaction, id: LibraryId, new_name: String) -> Result<(), Error>;
     /// Re-parents all shelves owned by a user from one library to another.
     async fn reparent_shelves_for_user(
         &self,

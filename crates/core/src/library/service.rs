@@ -69,6 +69,13 @@ pub trait LibraryService: Send + Sync {
     /// shelves from All Books to new library, copy books from All Books
     /// into new library.
     async fn create_personal_library_for_user(&self, user_id: UserId, library_name: String) -> Result<Library, Error>;
+
+    /// Returns the personal library owned by `user_id`, if any.
+    async fn find_personal_library_for_user(&self, user_id: UserId) -> Result<Option<Library>, Error>;
+
+    /// Renames a library. Fails if the library is a system library or the
+    /// name is empty.
+    async fn rename_library(&self, token: LibraryToken, new_name: String) -> Result<(), Error>;
 }
 
 pub struct LibraryServiceImpl {
@@ -283,5 +290,26 @@ impl LibraryService for LibraryServiceImpl {
         let _ = self.user_setting_service.set(user_id, "default_library", &library.token.to_string()).await;
 
         Ok(library)
+    }
+
+    async fn find_personal_library_for_user(&self, user_id: UserId) -> Result<Option<Library>, Error> {
+        with_read_only_transaction!(self, library_repository, |tx| library_repository.find_by_owner(tx, user_id).await)
+    }
+
+    async fn rename_library(&self, token: LibraryToken, new_name: String) -> Result<(), Error> {
+        let new_name = new_name.trim().to_string();
+        if new_name.is_empty() {
+            return Err(Error::Validation("Library name must not be empty".into()));
+        }
+        with_transaction!(self, library_repository, |tx| {
+            let lib = library_repository
+                .find_by_token(tx, token)
+                .await?
+                .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
+            if lib.is_system {
+                return Err(Error::Validation("Cannot rename a system library".into()));
+            }
+            library_repository.rename_library(tx, lib.id, new_name).await
+        })
     }
 }

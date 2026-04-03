@@ -51,13 +51,20 @@ pub(crate) struct LibraryAssignRow {
     pub is_system: bool,
 }
 
+/// The user's personal library (owned by them, not a system library).
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct PersonalLibraryInfo {
+    pub token: String,
+    pub name: String,
+}
+
 /// Returned by `get_user_assigned_libraries` — the set of library tokens
 /// assigned to the user plus their current default.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct UserLibraryAssignment {
     pub assigned_tokens: Vec<String>,
     pub default_token: String,
-    pub has_personal_library: bool,
+    pub personal_library: Option<PersonalLibraryInfo>,
 }
 
 // ---------------------------------------------------------------------------
@@ -120,13 +127,20 @@ pub(crate) async fn get_user_assigned_libraries(user_token: String) -> Result<Us
 
     let default_token = core_services.library_service.get_default_library_token(user.id).await.map_err(to_server_err)?;
 
-    // A user has a personal library if they have any non-system library.
-    let has_personal_library = libraries.iter().any(|l| !l.is_system);
+    let personal_library = core_services
+        .library_service
+        .find_personal_library_for_user(user.id)
+        .await
+        .map_err(to_server_err)?
+        .map(|l| PersonalLibraryInfo {
+            token: l.token.to_string(),
+            name: l.name,
+        });
 
     Ok(UserLibraryAssignment {
         assigned_tokens,
         default_token,
-        has_personal_library,
+        personal_library,
     })
 }
 
@@ -218,6 +232,69 @@ pub(crate) async fn assign_user_libraries(
     }
 
     Ok(())
+}
+
+#[post(
+    "/api/v1/admin/users/rename-personal-library",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+async fn admin_rename_personal_library(user_token: String, new_name: String) -> Result<(), ServerFnError> {
+    use bb_core::user::UserToken;
+
+    let actor = authenticated_user(&auth_session)?;
+    if !actor.permissions.contains("SuperAdmin") && !actor.permissions.contains("Admin") {
+        return Err(ServerFnError::new("Insufficient permissions"));
+    }
+
+    let user_token_parsed: UserToken = user_token.parse().map_err(|_| ServerFnError::new("Invalid user token"))?;
+    let user = core_services
+        .user_service
+        .find_by_token(user_token_parsed)
+        .await
+        .map_err(to_server_err)?
+        .ok_or_else(|| ServerFnError::new("User not found"))?;
+
+    let lib = core_services
+        .library_service
+        .find_personal_library_for_user(user.id)
+        .await
+        .map_err(to_server_err)?
+        .ok_or_else(|| ServerFnError::new("No personal library found"))?;
+
+    core_services.library_service.rename_library(lib.token, new_name).await.map_err(to_server_err)
+}
+
+#[post(
+    "/api/v1/admin/users/delete-personal-library",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+async fn admin_delete_personal_library(user_token: String) -> Result<(), ServerFnError> {
+    use bb_core::user::UserToken;
+
+    let actor = authenticated_user(&auth_session)?;
+    if !actor.permissions.contains("SuperAdmin") && !actor.permissions.contains("Admin") {
+        return Err(ServerFnError::new("Insufficient permissions"));
+    }
+
+    let user_token_parsed: UserToken = user_token.parse().map_err(|_| ServerFnError::new("Invalid user token"))?;
+    let user = core_services
+        .user_service
+        .find_by_token(user_token_parsed)
+        .await
+        .map_err(to_server_err)?
+        .ok_or_else(|| ServerFnError::new("User not found"))?;
+
+    let lib = core_services
+        .library_service
+        .find_personal_library_for_user(user.id)
+        .await
+        .map_err(to_server_err)?
+        .ok_or_else(|| ServerFnError::new("No personal library found"))?;
+
+    // delete_library re-parents shelves to All Books and resets default settings.
+    core_services.library_service.delete_library(lib.token).await.map_err(to_server_err)
 }
 
 #[post(
@@ -726,13 +803,24 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
     let mut checked_library_tokens: Signal<Vec<String>> = use_signal(Vec::new);
     // default_library_token: the selected default library (from checked ones)
     let mut default_library_token = use_signal(String::new);
-    // create_personal_library: whether to create a personal library on save
+    // create_personal_library: whether to create a personal library on save (create
+    // mode only)
     let mut create_personal_library = use_signal(|| false);
-    // personal_library_name: name for the personal library
+    // personal_library_name: name for new (create mode) or existing (edit mode)
+    // personal library
     let mut personal_library_name = use_signal(String::new);
     // personal_name_dirty: true once the user has manually edited the personal
     // library name field
     let mut personal_name_dirty = use_signal(|| false);
+    // edit mode: token of the user's existing personal library (None if they don't
+    // have one)
+    let mut personal_library_token: Signal<Option<String>> = use_signal(|| None);
+    // edit mode: original name of the personal library (to detect changes)
+    let mut personal_name_original = use_signal(String::new);
+    // edit mode: whether to show the inline delete confirmation
+    let mut confirm_delete_shown = use_signal(|| false);
+    // edit mode: whether to delete the personal library on save
+    let mut delete_personal_on_save = use_signal(|| false);
 
     // Load all libraries on mount
     let libraries_resource = use_resource(move || async move { list_all_libraries_simple().await });
@@ -755,6 +843,11 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
         if let Some(Some(Ok(assignment))) = user_assignment_resource() {
             checked_library_tokens.set(assignment.assigned_tokens.clone());
             default_library_token.set(assignment.default_token.clone());
+            if let Some(ref p) = assignment.personal_library {
+                personal_library_token.set(Some(p.token.clone()));
+                personal_library_name.set(p.name.clone());
+                personal_name_original.set(p.name.clone());
+            }
         }
     });
 
@@ -1077,13 +1170,129 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                         }
                     }
 
-                    // ── Personal library creation ──────────────────────────
-                    // Always shown — admins/super-admins may manage multiple
-                    // libraries, so we can't reliably detect whether they already
-                    // have their own personal library via the has_personal_library
-                    // heuristic (which returns true whenever any non-system library
-                    // is assigned, even one owned by another user).
-                    div { class: "mb-4",
+                    // ── Personal library ───────────────────────────────────
+                    if is_edit {
+                        if let Some(_tok) = personal_library_token() {
+                            // User has a personal library — show rename / delete controls.
+                            div { class: "mb-4",
+                                label { class: "block text-sm font-medium text-gray-700 mb-1",
+                                    "Personal Library"
+                                }
+                                if delete_personal_on_save() {
+                                    // Marked for deletion — show undo option.
+                                    div { class: "flex items-center gap-2 p-2 bg-red-50 border border-red-200 rounded-lg",
+                                        span { class: "flex-1 text-sm text-red-600 line-through", "{personal_library_name()}" }
+                                        span { class: "text-xs text-red-500", "Will be deleted on save" }
+                                        button {
+                                            r#type: "button",
+                                            class: "ml-2 text-xs text-gray-500 hover:text-gray-700 underline",
+                                            disabled: saving,
+                                            onclick: move |_| {
+                                                delete_personal_on_save.set(false);
+                                                confirm_delete_shown.set(false);
+                                            },
+                                            "Undo"
+                                        }
+                                    }
+                                } else if confirm_delete_shown() {
+                                    // Confirmation prompt.
+                                    div { class: "p-3 bg-amber-50 border border-amber-200 rounded-lg",
+                                        p { class: "text-sm text-amber-800 mb-2",
+                                            "Delete personal library on save? Shelves will be moved to All Books."
+                                        }
+                                        div { class: "flex gap-2",
+                                            button {
+                                                r#type: "button",
+                                                class: "px-3 py-1 text-xs font-medium bg-red-600 text-white rounded hover:bg-red-700",
+                                                disabled: saving,
+                                                onclick: move |_| {
+                                                    delete_personal_on_save.set(true);
+                                                    confirm_delete_shown.set(false);
+                                                },
+                                                "Yes, delete"
+                                            }
+                                            button {
+                                                r#type: "button",
+                                                class: "px-3 py-1 text-xs font-medium border border-gray-300 text-gray-700 rounded hover:bg-gray-50",
+                                                disabled: saving,
+                                                onclick: move |_| confirm_delete_shown.set(false),
+                                                "Cancel"
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    // Normal state — editable name + delete button.
+                                    div { class: "flex items-center gap-2",
+                                        input {
+                                            r#type: "text",
+                                            class: "flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm",
+                                            value: personal_library_name,
+                                            disabled: saving,
+                                            oninput: move |e| personal_library_name.set(e.value()),
+                                        }
+                                        button {
+                                            r#type: "button",
+                                            class: "p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded",
+                                            title: "Delete personal library",
+                                            disabled: saving,
+                                            onclick: move |_| confirm_delete_shown.set(true),
+                                            svg {
+                                                class: "w-4 h-4",
+                                                xmlns: "http://www.w3.org/2000/svg",
+                                                fill: "none",
+                                                view_box: "0 0 24 24",
+                                                stroke_width: "2",
+                                                stroke: "currentColor",
+                                                path {
+                                                    stroke_linecap: "round",
+                                                    stroke_linejoin: "round",
+                                                    d: "M6 18 18 6M6 6l12 12",
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            // No personal library — offer to create one.
+                            div { class: "mb-4",
+                                label { class: "flex items-center gap-2 cursor-pointer select-none",
+                                    input {
+                                        r#type: "checkbox",
+                                        class: "rounded border-gray-300 text-indigo-600 focus:ring-indigo-500",
+                                        checked: create_personal_library,
+                                        disabled: saving,
+                                        onchange: move |e| {
+                                            let checked = e.checked();
+                                            create_personal_library.set(checked);
+                                            if checked && !personal_name_dirty() {
+                                                let name = full_name().trim().to_string();
+                                                if !name.is_empty() {
+                                                    personal_library_name.set(format!("{name}'s Library"));
+                                                }
+                                            }
+                                        },
+                                    }
+                                    span { class: "text-sm font-medium text-gray-700", "Create personal library" }
+                                }
+                                if create_personal_library() {
+                                    input {
+                                        r#type: "text",
+                                        class: "mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm",
+                                        placeholder: "Personal library name",
+                                        value: personal_library_name,
+                                        oninput: move |e| {
+                                            personal_name_dirty.set(true);
+                                            personal_library_name.set(e.value());
+                                        },
+                                        disabled: saving,
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Create mode — always show create checkbox.
+                        div { class: "mb-4",
                             label { class: "flex items-center gap-2 cursor-pointer select-none",
                                 input {
                                     r#type: "checkbox",
@@ -1091,15 +1300,15 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                                     checked: create_personal_library,
                                     disabled: saving,
                                     onchange: move |e| {
-                                    let checked = e.checked();
-                                    create_personal_library.set(checked);
-                                    if checked && !personal_name_dirty() {
-                                        let name = full_name().trim().to_string();
-                                        if !name.is_empty() {
-                                            personal_library_name.set(format!("{name}'s Library"));
+                                        let checked = e.checked();
+                                        create_personal_library.set(checked);
+                                        if checked && !personal_name_dirty() {
+                                            let name = full_name().trim().to_string();
+                                            if !name.is_empty() {
+                                                personal_library_name.set(format!("{name}'s Library"));
+                                            }
                                         }
-                                    }
-                                },
+                                    },
                                 }
                                 span { class: "text-sm font-medium text-gray-700", "Create personal library" }
                             }
@@ -1117,6 +1326,7 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                                 }
                             }
                         }
+                    }
 
                     // Actions
                     div { class: "flex justify-end gap-3 pt-2",
@@ -1140,6 +1350,9 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                                 let def_lib = default_library_token();
                                 let do_create_personal = create_personal_library();
                                 let personal_name = personal_library_name().trim().to_string();
+                                let pers_lib_tok = personal_library_token();
+                                let do_delete_personal = delete_personal_on_save();
+                                let pers_name_original = personal_name_original();
 
                                 if !is_edit && un.is_empty() {
                                     error_msg.set(Some("Username is required.".to_string()));
@@ -1215,8 +1428,8 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                                     };
 
                                     if !lib_tokens.is_empty() || do_create_personal {
-                                        let personal_opt = if do_create_personal { Some(personal_name) } else { None };
-                                        match assign_user_libraries(tok, lib_tokens, def_lib, do_create_personal, personal_opt).await {
+                                        let personal_opt = if do_create_personal { Some(personal_name.clone()) } else { None };
+                                        match assign_user_libraries(tok.clone(), lib_tokens, def_lib, do_create_personal, personal_opt).await {
                                             Err(ServerFnError::ServerError { message, .. }) => {
                                                 error_msg.set(Some(format!("User saved, but library assignment failed: {message}")));
                                                 saving.set(false);
@@ -1228,6 +1441,25 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                                                 return;
                                             }
                                             Ok(()) => {}
+                                        }
+                                    }
+
+                                    // Step 3: personal library rename or delete (edit mode only)
+                                    if pers_lib_tok.is_some() {
+                                        if do_delete_personal {
+                                            if let Err(e) = admin_delete_personal_library(tok.clone()).await {
+                                                let msg = match e { ServerFnError::ServerError { message, .. } => message, other => other.to_string() };
+                                                error_msg.set(Some(format!("User saved, but library deletion failed: {msg}")));
+                                                saving.set(false);
+                                                return;
+                                            }
+                                        } else if personal_name != pers_name_original {
+                                            if let Err(e) = admin_rename_personal_library(tok.clone(), personal_name).await {
+                                                let msg = match e { ServerFnError::ServerError { message, .. } => message, other => other.to_string() };
+                                                error_msg.set(Some(format!("User saved, but library rename failed: {msg}")));
+                                                saving.set(false);
+                                                return;
+                                            }
                                         }
                                     }
 

@@ -300,6 +300,20 @@ impl LibraryRepository for LibraryRepositoryAdapter {
         Ok(())
     }
 
+    async fn rename_library(&self, transaction: &dyn Transaction, id: LibraryId, new_name: String) -> Result<(), Error> {
+        use sea_orm::sea_query::Expr;
+        let db = TransactionImpl::get_db_transaction(transaction)?;
+
+        prelude::Libraries::update_many()
+            .col_expr(libraries::Column::Name, Expr::value(new_name))
+            .filter(libraries::Column::Id.eq(id as i64))
+            .exec(db)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(())
+    }
+
     async fn reparent_shelves(&self, transaction: &dyn Transaction, from_library_id: LibraryId, to_library_id: LibraryId) -> Result<(), Error> {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
