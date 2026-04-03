@@ -43,9 +43,177 @@ impl UserAdminRow {
     }
 }
 
+/// Simple library row for user assignment UI (no counts needed).
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct LibraryAssignRow {
+    pub token: String,
+    pub name: String,
+    pub is_system: bool,
+}
+
+/// Returned by `get_user_assigned_libraries` — the set of library tokens
+/// assigned to the user plus their current default.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct UserLibraryAssignment {
+    pub assigned_tokens: Vec<String>,
+    pub default_token: String,
+    pub has_personal_library: bool,
+}
+
 // ---------------------------------------------------------------------------
 // Server functions
 // ---------------------------------------------------------------------------
+
+#[get(
+    "/api/v1/admin/libraries/simple",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+pub(crate) async fn list_all_libraries_simple() -> Result<Vec<LibraryAssignRow>, ServerFnError> {
+    let user = authenticated_user(&auth_session)?;
+
+    if !user.permissions.contains("SuperAdmin") && !user.permissions.contains("Admin") {
+        return Err(ServerFnError::new("Insufficient permissions"));
+    }
+
+    let entries = core_services.library_service.list_libraries().await.map_err(to_server_err)?;
+
+    let mut rows: Vec<LibraryAssignRow> = entries
+        .into_iter()
+        .map(|e| LibraryAssignRow {
+            token: e.library.token.to_string(),
+            name: e.library.name,
+            is_system: e.library.is_system,
+        })
+        .collect();
+
+    rows.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(rows)
+}
+
+#[post(
+    "/api/v1/admin/users/libraries",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+pub(crate) async fn get_user_assigned_libraries(user_token: String) -> Result<UserLibraryAssignment, ServerFnError> {
+    use bb_core::user::UserToken;
+
+    let actor = authenticated_user(&auth_session)?;
+
+    if !actor.permissions.contains("SuperAdmin") && !actor.permissions.contains("Admin") {
+        return Err(ServerFnError::new("Insufficient permissions"));
+    }
+
+    let user_token_parsed: UserToken = user_token.parse().map_err(|_| ServerFnError::new("Invalid user token"))?;
+
+    let user = core_services
+        .user_service
+        .find_by_token(user_token_parsed)
+        .await
+        .map_err(to_server_err)?
+        .ok_or_else(|| ServerFnError::new("User not found"))?;
+
+    let libraries = core_services.library_service.libraries_for_user(user.id).await.map_err(to_server_err)?;
+
+    let assigned_tokens: Vec<String> = libraries.iter().map(|l| l.token.to_string()).collect();
+
+    let default_token = core_services.library_service.get_default_library_token(user.id).await.map_err(to_server_err)?;
+
+    // A user has a personal library if they have any non-system library.
+    let has_personal_library = libraries.iter().any(|l| !l.is_system);
+
+    Ok(UserLibraryAssignment {
+        assigned_tokens,
+        default_token,
+        has_personal_library,
+    })
+}
+
+#[post(
+    "/api/v1/admin/users/assign-libraries",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+pub(crate) async fn assign_user_libraries(
+    user_token: String,
+    library_tokens: Vec<String>,
+    default_library_token: String,
+    create_personal_library: bool,
+    personal_library_name: Option<String>,
+) -> Result<(), ServerFnError> {
+    use bb_core::{library::LibraryToken, user::UserToken};
+
+    let actor = authenticated_user(&auth_session)?;
+
+    if !actor.permissions.contains("SuperAdmin") && !actor.permissions.contains("Admin") {
+        return Err(ServerFnError::new("Insufficient permissions"));
+    }
+
+    let user_token_parsed: UserToken = user_token.parse().map_err(|_| ServerFnError::new("Invalid user token"))?;
+
+    let user = core_services
+        .user_service
+        .find_by_token(user_token_parsed)
+        .await
+        .map_err(to_server_err)?
+        .ok_or_else(|| ServerFnError::new("User not found"))?;
+
+    // Optionally create a personal library first.
+    if create_personal_library {
+        let name = personal_library_name
+            .filter(|s| !s.trim().is_empty())
+            .ok_or_else(|| ServerFnError::new("Personal library name is required"))?;
+        core_services
+            .library_service
+            .create_personal_library_for_user(user.id, name.trim().to_string())
+            .await
+            .map_err(to_server_err)?;
+    }
+
+    // Compute the desired set of library token strings.
+    let desired_tokens: std::collections::HashSet<String> = library_tokens.iter().cloned().collect();
+
+    // Get the user's current library assignments.
+    let current_libs = core_services
+        .library_service
+        .libraries_for_user(user.id)
+        .await
+        .map_err(to_server_err)?;
+    let current_tokens: std::collections::HashSet<String> =
+        current_libs.iter().map(|l| l.token.to_string()).collect();
+
+    // Remove libraries that are no longer desired.
+    for lib in current_libs.iter().filter(|l| !desired_tokens.contains(&l.token.to_string())) {
+        core_services
+            .library_service
+            .unassign_library_from_user(user.id, lib.token)
+            .await
+            .map_err(to_server_err)?;
+    }
+
+    // Add newly desired libraries that are not already assigned.
+    for token_str in desired_tokens.iter().filter(|t| !current_tokens.contains(*t)) {
+        let lib_token: LibraryToken = token_str.parse().map_err(|_| ServerFnError::new("Invalid library token"))?;
+        core_services
+            .library_service
+            .assign_library_to_user(user.id, lib_token)
+            .await
+            .map_err(to_server_err)?;
+    }
+
+    // Set the default library (if one was chosen and assigned).
+    if !default_library_token.is_empty() {
+        let def_token: LibraryToken = default_library_token.parse().map_err(|_| ServerFnError::new("Invalid default library token"))?;
+        core_services
+            .library_service
+            .set_default_library(user.id, def_token)
+            .await
+            .map_err(to_server_err)?;
+    }
+
+    Ok(())
+}
 
 #[post(
     "/api/v1/admin/users/list",
@@ -104,7 +272,7 @@ pub(crate) async fn admin_create_user(
     email: String,
     password: String,
     capabilities: Vec<String>,
-) -> Result<(), ServerFnError> {
+) -> Result<String, ServerFnError> {
     use std::collections::HashSet;
 
     let actor = authenticated_user(&auth_session)?;
@@ -131,7 +299,7 @@ pub(crate) async fn admin_create_user(
         }
     })?;
 
-    core_services.user_service.add_user(new_user).await.map_err(|e| {
+    let user = core_services.user_service.add_user(new_user).await.map_err(|e| {
         let msg = e.to_string();
         if msg.contains("Constraint") || msg.contains("unique") || msg.contains("duplicate") {
             ServerFnError::new("Username or email address is already in use")
@@ -140,7 +308,7 @@ pub(crate) async fn admin_create_user(
         }
     })?;
 
-    Ok(())
+    Ok(user.token.to_string())
 }
 
 #[post(
@@ -547,6 +715,56 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
     let mut saving = use_signal(|| false);
     let mut generating = use_signal(|| false);
 
+    // Library assignment state
+    // checked_library_tokens: set of library tokens the admin has checked
+    let mut checked_library_tokens: Signal<Vec<String>> = use_signal(Vec::new);
+    // default_library_token: the selected default library (from checked ones)
+    let mut default_library_token = use_signal(String::new);
+    // create_personal_library: whether to create a personal library on save
+    let mut create_personal_library = use_signal(|| false);
+    // personal_library_name: name for the personal library
+    let mut personal_library_name = use_signal(String::new);
+    // personal_name_dirty: true once the user has manually edited the personal library name field
+    let mut personal_name_dirty = use_signal(|| false);
+    // whether the user being edited already has a personal library (edit mode only)
+    let mut has_personal_library = use_signal(|| false);
+
+    // Load all libraries on mount
+    let libraries_resource = use_resource(move || async move { list_all_libraries_simple().await });
+
+    // For edit mode: load the user's current library assignments
+    let edit_token_for_load = editing.as_ref().map(|r| r.token.clone());
+    let user_assignment_resource = use_resource(move || {
+        let tok = edit_token_for_load.clone();
+        async move {
+            if let Some(t) = tok {
+                Some(get_user_assigned_libraries(t).await)
+            } else {
+                None
+            }
+        }
+    });
+
+    // When user assignment data loads, populate signals
+    use_effect(move || {
+        if let Some(Some(Ok(assignment))) = user_assignment_resource() {
+            checked_library_tokens.set(assignment.assigned_tokens.clone());
+            default_library_token.set(assignment.default_token.clone());
+            has_personal_library.set(assignment.has_personal_library);
+        }
+    });
+
+    // When full_name changes and this is a create form, update personal library
+    // name (only if user hasn't manually changed it)
+    use_effect(move || {
+        if !is_edit && !personal_name_dirty() {
+            let name = full_name();
+            if !name.trim().is_empty() {
+                personal_library_name.set(format!("{}'s Library", name.trim()));
+            }
+        }
+    });
+
     const GRANTABLE: [(&str, &str); 5] = [
         ("ApproveImports", "Approve Imports"),
         ("ConvertBook", "Convert Books"),
@@ -565,7 +783,7 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                     on_close.call(());
                 }
             },
-            div { class: "bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto",
+            div { class: "bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto",
                 div { class: "p-6",
                     h3 { class: "text-base font-semibold text-gray-900 mb-5",
                         if is_edit { "Edit User" } else { "Add User" }
@@ -750,6 +968,142 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                         }
                     }
 
+                    // ── Library assignment ──────────────────────────────────
+                    div { class: "mb-4",
+                        label { class: "block text-sm font-medium text-gray-700 mb-2", "Libraries" }
+
+                        match libraries_resource() {
+                            None => rsx! {
+                                div { class: "text-gray-400 text-xs", "Loading libraries…" }
+                            },
+                            Some(Err(e)) => rsx! {
+                                div { class: "p-2 bg-red-50 border border-red-200 text-red-700 rounded text-xs",
+                                    "{e}"
+                                }
+                            },
+                            Some(Ok(libs)) => {
+                                // Separate system and non-system libraries
+                                let non_system: Vec<_> = libs.iter().filter(|l| !l.is_system).collect();
+                                let system_libs: Vec<_> = libs.iter().filter(|l| l.is_system).collect();
+                                let checked = checked_library_tokens();
+                                // Compute the set of checked non-system library tokens for the default picker
+                                let checked_non_system: Vec<LibraryAssignRow> = non_system
+                                    .iter()
+                                    .filter(|l| checked.contains(&l.token))
+                                    .map(|l| (*l).clone())
+                                    .collect();
+                                let checked_system: Vec<LibraryAssignRow> = system_libs
+                                    .iter()
+                                    .filter(|l| checked.contains(&l.token))
+                                    .map(|l| (*l).clone())
+                                    .collect();
+                                // All checked libraries (for default picker)
+                                let all_checked: Vec<LibraryAssignRow> = checked_non_system
+                                    .iter()
+                                    .chain(checked_system.iter())
+                                    .cloned()
+                                    .collect();
+
+                                rsx! {
+                                    div { class: "rounded-lg border border-gray-200 p-3 space-y-1.5 max-h-40 overflow-y-auto",
+                                        if libs.is_empty() {
+                                            div { class: "text-xs text-gray-400", "No libraries configured." }
+                                        }
+                                        for lib in &libs {
+                                            {
+                                                let tok = lib.token.clone();
+                                                let tok_remove = tok.clone();
+                                                let tok_def = tok.clone();
+                                                let is_checked = checked_library_tokens().contains(&tok);
+                                                rsx! {
+                                                    label { class: "flex items-center gap-2 cursor-pointer select-none",
+                                                        input {
+                                                            r#type: "checkbox",
+                                                            class: "rounded border-gray-300 text-indigo-600 focus:ring-indigo-500",
+                                                            checked: is_checked,
+                                                            disabled: saving,
+                                                            onchange: move |e| {
+                                                                if e.checked() {
+                                                                    checked_library_tokens.write().push(tok.clone());
+                                                                    // Auto-select as default if none set yet
+                                                                    if default_library_token().is_empty() {
+                                                                        default_library_token.set(tok.clone());
+                                                                    }
+                                                                } else {
+                                                                    checked_library_tokens.write().retain(|t| t != &tok_remove);
+                                                                    // If this was the default, clear it
+                                                                    if default_library_token() == tok_def {
+                                                                        default_library_token.set(String::new());
+                                                                    }
+                                                                }
+                                                            },
+                                                        }
+                                                        span { class: "text-sm text-gray-700", "{lib.name}" }
+                                                        if lib.is_system {
+                                                            span { class: "text-xs text-blue-500 font-medium", "(system)" }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Default library picker (shown when at least one library is checked)
+                                    if !all_checked.is_empty() {
+                                        div { class: "mt-3",
+                                            label { class: "block text-xs font-medium text-gray-600 mb-1", "Default Library" }
+                                            select {
+                                                class: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm bg-white",
+                                                disabled: saving,
+                                                value: default_library_token,
+                                                onchange: move |e| default_library_token.set(e.value()),
+                                                option { value: "", disabled: true, selected: default_library_token().is_empty(), "Select default…" }
+                                                for lib in &all_checked {
+                                                    option {
+                                                        value: lib.token.clone(),
+                                                        selected: default_library_token() == lib.token,
+                                                        "{lib.name}"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                        }
+                    }
+
+                    // ── Personal library creation ──────────────────────────
+                    // Create form: always shown.
+                    // Edit form: only shown if user has no personal (non-system) library.
+                    if !is_edit || !has_personal_library() {
+                        div { class: "mb-4",
+                            label { class: "flex items-center gap-2 cursor-pointer select-none",
+                                input {
+                                    r#type: "checkbox",
+                                    class: "rounded border-gray-300 text-indigo-600 focus:ring-indigo-500",
+                                    checked: create_personal_library,
+                                    disabled: saving,
+                                    onchange: move |e| create_personal_library.set(e.checked()),
+                                }
+                                span { class: "text-sm font-medium text-gray-700", "Create personal library" }
+                            }
+                            if create_personal_library() {
+                                input {
+                                    r#type: "text",
+                                    class: "mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm",
+                                    placeholder: "Personal library name",
+                                    value: personal_library_name,
+                                    oninput: move |e| {
+                                        personal_name_dirty.set(true);
+                                        personal_library_name.set(e.value());
+                                    },
+                                    disabled: saving,
+                                }
+                            }
+                        }
+                    }
+
                     // Actions
                     div { class: "flex justify-end gap-3 pt-2",
                         button {
@@ -768,6 +1122,10 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                                 let pw = password();
                                 let chosen_role = role();
                                 let caps = user_caps();
+                                let lib_tokens = checked_library_tokens();
+                                let def_lib = default_library_token();
+                                let do_create_personal = create_personal_library();
+                                let personal_name = personal_library_name().trim().to_string();
 
                                 if !is_edit && un.is_empty() {
                                     error_msg.set(Some("Username is required.".to_string()));
@@ -785,6 +1143,10 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                                     error_msg.set(Some("Password is required for new users.".to_string()));
                                     return;
                                 }
+                                if do_create_personal && personal_name.is_empty() {
+                                    error_msg.set(Some("Personal library name is required.".to_string()));
+                                    return;
+                                }
 
                                 let capabilities: Vec<String> = match chosen_role {
                                     RoleChoice::SuperAdmin => vec!["SuperAdmin".to_string()],
@@ -797,24 +1159,65 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                                 saving.set(true);
 
                                 spawn(async move {
-                                    let result = if let Some(tok) = edit_token {
+                                    // Step 1: create or update the user
+                                    // For create, admin_create_user returns the new user's token
+                                    // directly so we avoid a list_users round-trip.
+                                    let target_token: Option<String> = if let Some(tok) = edit_token.clone() {
                                         let pw_opt = if pw.is_empty() { None } else { Some(pw) };
-                                        admin_update_user(tok, fn_, em, pw_opt, capabilities).await
+                                        match admin_update_user(tok.clone(), fn_, em, pw_opt, capabilities).await {
+                                            Err(ServerFnError::ServerError { message, .. }) => {
+                                                error_msg.set(Some(message));
+                                                saving.set(false);
+                                                return;
+                                            }
+                                            Err(e) => {
+                                                error_msg.set(Some(e.to_string()));
+                                                saving.set(false);
+                                                return;
+                                            }
+                                            Ok(()) => Some(tok),
+                                        }
                                     } else {
-                                        admin_create_user(un, fn_, em, pw, capabilities).await
+                                        match admin_create_user(un.clone(), fn_, em, pw, capabilities).await {
+                                            Err(ServerFnError::ServerError { message, .. }) => {
+                                                error_msg.set(Some(message));
+                                                saving.set(false);
+                                                return;
+                                            }
+                                            Err(e) => {
+                                                error_msg.set(Some(e.to_string()));
+                                                saving.set(false);
+                                                return;
+                                            }
+                                            Ok(new_token) => Some(new_token),
+                                        }
                                     };
 
-                                    match result {
-                                        Ok(()) => on_saved.call(()),
-                                        Err(ServerFnError::ServerError { message, .. }) => {
-                                            error_msg.set(Some(message));
-                                            saving.set(false);
-                                        }
-                                        Err(e) => {
-                                            error_msg.set(Some(e.to_string()));
-                                            saving.set(false);
+                                    // Step 2: assign libraries (if any checked or personal library requested)
+                                    let Some(tok) = target_token else {
+                                        error_msg.set(Some("User created, but could not retrieve user token for library assignment.".to_string()));
+                                        saving.set(false);
+                                        return;
+                                    };
+
+                                    if !lib_tokens.is_empty() || do_create_personal {
+                                        let personal_opt = if do_create_personal { Some(personal_name) } else { None };
+                                        match assign_user_libraries(tok, lib_tokens, def_lib, do_create_personal, personal_opt).await {
+                                            Err(ServerFnError::ServerError { message, .. }) => {
+                                                error_msg.set(Some(format!("User saved, but library assignment failed: {message}")));
+                                                saving.set(false);
+                                                return;
+                                            }
+                                            Err(e) => {
+                                                error_msg.set(Some(format!("User saved, but library assignment failed: {e}")));
+                                                saving.set(false);
+                                                return;
+                                            }
+                                            Ok(()) => {}
                                         }
                                     }
+
+                                    on_saved.call(());
                                 });
                             },
                             if saving() { "Saving…" } else { "Save" }

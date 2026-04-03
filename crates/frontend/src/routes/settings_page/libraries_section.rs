@@ -37,11 +37,7 @@ pub(crate) async fn list_libraries_admin() -> Result<Vec<LibraryRow>, ServerFnEr
         return Err(ServerFnError::new("Insufficient permissions"));
     }
 
-    let entries = core_services
-        .library_service
-        .list_libraries()
-        .await
-        .map_err(to_server_err)?;
+    let entries = core_services.library_service.list_libraries().await.map_err(to_server_err)?;
 
     Ok(entries
         .into_iter()
