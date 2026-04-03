@@ -343,7 +343,7 @@ pub(crate) async fn admin_update_user(
 
     let new_caps: HashSet<Capability> = parse_capabilities(&capabilities)?;
 
-    if new_caps.contains(&Capability::SuperAdmin) {
+    if new_caps.contains(&Capability::SuperAdmin) && !user.capabilities.contains(&Capability::SuperAdmin) {
         return Err(ServerFnError::new("Cannot assign Super Admin role"));
     }
     if user.capabilities.contains(&Capability::SuperAdmin) && !new_caps.contains(&Capability::SuperAdmin) {
@@ -462,6 +462,7 @@ fn parse_capabilities(capabilities: &[String]) -> Result<bb_core::types::Capabil
             "DeleteBook" => Capability::DeleteBook,
             "EditBook" => Capability::EditBook,
             "OpdsAccess" => Capability::OpdsAccess,
+            "SuperAdmin" => Capability::SuperAdmin,
             other => return Err(ServerFnError::new(format!("Unknown capability: {other}"))),
         };
         caps.insert(cap);
