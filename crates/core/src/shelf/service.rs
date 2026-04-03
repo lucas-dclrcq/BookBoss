@@ -6,7 +6,7 @@ use crate::{
     device::{Device, DeviceId},
     filter::BookFilter,
     repository::RepositoryService,
-    shelf::{BookShelf, Shelf, ShelfToken, ShelfType, ShelfVisibility},
+    shelf::{BookShelf, Shelf, ShelfToken, ShelfType},
     user::UserId,
     with_read_only_transaction, with_transaction,
 };
@@ -17,7 +17,7 @@ pub trait ShelfService: Send + Sync {
     ///
     /// Returns an error if the name is empty or a shelf with the same name
     /// already exists for the user.
-    async fn create_manual_shelf(&self, owner_id: UserId, name: String, visibility: ShelfVisibility) -> Result<ShelfToken, Error>;
+    async fn create_manual_shelf(&self, owner_id: UserId, name: String) -> Result<ShelfToken, Error>;
 
     /// Renames a shelf. Only the owner may rename.
     async fn rename_shelf(&self, token: ShelfToken, new_name: String, user_id: UserId) -> Result<(), Error>;
@@ -33,37 +33,29 @@ pub trait ShelfService: Send + Sync {
 
     /// Returns paginated books for a shelf.
     ///
-    /// Owners can access private shelves; other users may only access public
-    /// shelves.
+    /// Only the owner may access the shelf.
     async fn books_for_shelf(&self, token: ShelfToken, user_id: UserId, offset: Option<u64>, page_size: Option<u64>) -> Result<Vec<BookShelf>, Error>;
 
     /// Returns all shelves owned by the given user.
     async fn list_shelves_for_user(&self, user_id: UserId) -> Result<Vec<Shelf>, Error>;
 
-    /// Updates the visibility of a shelf. Only the owner may change visibility.
-    async fn set_visibility(&self, token: ShelfToken, visibility: ShelfVisibility, user_id: UserId) -> Result<(), Error>;
-
-    /// Returns all public shelves not owned by the given user, sorted by name.
-    async fn list_public_shelves(&self, user_id: UserId) -> Result<Vec<Shelf>, Error>;
-
     /// Returns metadata for a single shelf.
     ///
-    /// Owners can access private shelves; other users may only access public
-    /// shelves. Returns `NotFound` for missing shelves and a validation error
-    /// for private shelves the requester does not own.
+    /// Returns `NotFound` for missing shelves and a validation error
+    /// if the requester does not own the shelf.
     async fn get_shelf(&self, token: ShelfToken, user_id: UserId) -> Result<Shelf, Error>;
 
-    /// Updates the name and visibility of a shelf in a single transaction.
+    /// Updates the name of a shelf in a single transaction.
     ///
     /// Only the owner may update. Returns an error if the name is empty or
     /// another shelf owned by the same user already has that name.
-    async fn update_shelf(&self, token: ShelfToken, new_name: String, visibility: ShelfVisibility, user_id: UserId) -> Result<(), Error>;
+    async fn update_shelf(&self, token: ShelfToken, new_name: String, user_id: UserId) -> Result<(), Error>;
 
     /// Creates a new smart shelf for the given user with the provided filter.
     ///
     /// Returns an error if the name is empty or a shelf with the same name
     /// already exists for the user.
-    async fn create_smart_shelf(&self, owner_id: UserId, name: String, visibility: ShelfVisibility, filter: BookFilter) -> Result<ShelfToken, Error>;
+    async fn create_smart_shelf(&self, owner_id: UserId, name: String, filter: BookFilter) -> Result<ShelfToken, Error>;
 
     /// Replaces the filter on an existing smart shelf.
     ///
@@ -73,8 +65,7 @@ pub trait ShelfService: Send + Sync {
 
     /// Returns paginated books matching this smart shelf's filter.
     ///
-    /// Only callable for smart shelves. Owners can access private shelves;
-    /// other users may only access public shelves.
+    /// Only callable for smart shelves. Only the owner may access the shelf.
     async fn books_for_filter(
         &self,
         token: ShelfToken,
@@ -112,7 +103,7 @@ impl ShelfServiceImpl {
 
 #[async_trait::async_trait]
 impl ShelfService for ShelfServiceImpl {
-    async fn create_manual_shelf(&self, owner_id: UserId, name: String, visibility: ShelfVisibility) -> Result<ShelfToken, Error> {
+    async fn create_manual_shelf(&self, owner_id: UserId, name: String) -> Result<ShelfToken, Error> {
         if name.trim().is_empty() {
             return Err(Error::Validation("shelf name must not be empty".to_string()));
         }
@@ -133,7 +124,6 @@ impl ShelfService for ShelfServiceImpl {
                         library_id: crate::library::ALL_BOOKS_LIBRARY_ID,
                         name,
                         shelf_type: crate::shelf::ShelfType::Manual,
-                        visibility,
                         device_id: None,
                         filter_criteria: None,
                     },
@@ -257,8 +247,8 @@ impl ShelfService for ShelfServiceImpl {
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
-            if current_shelf.visibility == ShelfVisibility::Private && current_shelf.owner_id != user_id {
-                return Err(Error::Validation("this shelf is private".to_string()));
+            if current_shelf.owner_id != user_id {
+                return Err(Error::Validation("only the owner may access this shelf".to_string()));
             }
 
             shelf_repository.books_for_shelf(tx, current_shelf.id, offset, page_size).await
@@ -269,10 +259,6 @@ impl ShelfService for ShelfServiceImpl {
         with_read_only_transaction!(self, shelf_repository, |tx| shelf_repository.list_for_user(tx, user_id).await)
     }
 
-    async fn list_public_shelves(&self, user_id: UserId) -> Result<Vec<Shelf>, Error> {
-        with_read_only_transaction!(self, shelf_repository, |tx| shelf_repository.list_public_shelves(tx, user_id).await)
-    }
-
     async fn get_shelf(&self, token: ShelfToken, user_id: UserId) -> Result<Shelf, Error> {
         with_read_only_transaction!(self, shelf_repository, |tx| {
             let target_shelf = shelf_repository
@@ -280,15 +266,15 @@ impl ShelfService for ShelfServiceImpl {
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
-            if target_shelf.visibility == ShelfVisibility::Private && target_shelf.owner_id != user_id {
-                return Err(Error::Validation("this shelf is private".to_string()));
+            if target_shelf.owner_id != user_id {
+                return Err(Error::Validation("only the owner may access this shelf".to_string()));
             }
 
             Ok(target_shelf)
         })
     }
 
-    async fn update_shelf(&self, token: ShelfToken, new_name: String, visibility: ShelfVisibility, user_id: UserId) -> Result<(), Error> {
+    async fn update_shelf(&self, token: ShelfToken, new_name: String, user_id: UserId) -> Result<(), Error> {
         if new_name.trim().is_empty() {
             return Err(Error::Validation("shelf name must not be empty".to_string()));
         }
@@ -313,7 +299,6 @@ impl ShelfService for ShelfServiceImpl {
             let device_id = target_shelf.device_id;
             let updated = Shelf {
                 name: new_name.clone(),
-                visibility,
                 ..target_shelf
             };
             shelf_repository.update_shelf(tx, updated).await?;
@@ -328,7 +313,7 @@ impl ShelfService for ShelfServiceImpl {
         })
     }
 
-    async fn create_smart_shelf(&self, owner_id: UserId, name: String, visibility: ShelfVisibility, filter: BookFilter) -> Result<ShelfToken, Error> {
+    async fn create_smart_shelf(&self, owner_id: UserId, name: String, filter: BookFilter) -> Result<ShelfToken, Error> {
         if name.trim().is_empty() {
             return Err(Error::Validation("shelf name must not be empty".to_string()));
         }
@@ -349,7 +334,6 @@ impl ShelfService for ShelfServiceImpl {
                         library_id: crate::library::ALL_BOOKS_LIBRARY_ID,
                         name,
                         shelf_type: ShelfType::Smart,
-                        visibility,
                         device_id: None,
                         filter_criteria: Some(filter),
                     },
@@ -399,8 +383,8 @@ impl ShelfService for ShelfServiceImpl {
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
-            if target_shelf.visibility == ShelfVisibility::Private && target_shelf.owner_id != user_id {
-                return Err(Error::Validation("this shelf is private".to_string()));
+            if target_shelf.owner_id != user_id {
+                return Err(Error::Validation("only the owner may access this shelf".to_string()));
             }
 
             if target_shelf.shelf_type != ShelfType::Smart {
@@ -424,8 +408,8 @@ impl ShelfService for ShelfServiceImpl {
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
 
-            if target_shelf.visibility == ShelfVisibility::Private && target_shelf.owner_id != user_id {
-                return Err(Error::Validation("this shelf is private".to_string()));
+            if target_shelf.owner_id != user_id {
+                return Err(Error::Validation("only the owner may access this shelf".to_string()));
             }
 
             if target_shelf.shelf_type != ShelfType::Smart {
@@ -437,24 +421,6 @@ impl ShelfService for ShelfServiceImpl {
                 .ok_or_else(|| Error::Validation("smart shelf has no filter criteria".to_string()))?;
 
             collection_repository.count_for_filter(tx, &filter, user_id, None).await
-        })
-    }
-
-    async fn set_visibility(&self, token: ShelfToken, visibility: ShelfVisibility, user_id: UserId) -> Result<(), Error> {
-        with_transaction!(self, shelf_repository, |tx| {
-            let target_shelf = shelf_repository
-                .find_by_token(tx, token)
-                .await?
-                .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
-
-            if target_shelf.owner_id != user_id {
-                return Err(Error::Validation("only the owner may change shelf visibility".to_string()));
-            }
-
-            let updated = Shelf { visibility, ..target_shelf };
-            shelf_repository.update_shelf(tx, updated).await?;
-
-            Ok(())
         })
     }
 
@@ -478,7 +444,6 @@ impl ShelfService for ShelfServiceImpl {
                         library_id,
                         name,
                         shelf_type: ShelfType::Smart,
-                        visibility: ShelfVisibility::Private,
                         device_id: Some(device_id),
                         filter_criteria: Some(filter),
                     },
@@ -504,7 +469,7 @@ mod tests {
         Error, RepositoryError,
         book::{Book, BookStatus, BookToken, repository::book::MockBookRepository},
         library::MockLibraryRepository,
-        shelf::{BookShelf, Shelf, ShelfToken, ShelfType, ShelfVisibility, repository::shelf::MockShelfRepository},
+        shelf::{BookShelf, Shelf, ShelfToken, ShelfType, repository::shelf::MockShelfRepository},
         user::{UserId, repository::user_settings::MockUserSettingRepository},
     };
 
@@ -539,7 +504,7 @@ mod tests {
         ShelfServiceImpl::new(repository_service)
     }
 
-    fn fake_shelf(owner_id: UserId, visibility: ShelfVisibility) -> Shelf {
+    fn fake_shelf(owner_id: UserId) -> Shelf {
         Shelf {
             id: 1,
             version: 1,
@@ -548,7 +513,6 @@ mod tests {
             library_id: crate::library::ALL_BOOKS_LIBRARY_ID,
             name: "My Shelf".to_string(),
             shelf_type: ShelfType::Manual,
-            visibility,
             device_id: None,
             filter_criteria: None,
             created_at: Utc::now(),
@@ -573,7 +537,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_manual_shelf_returns_token() {
-        let shelf = fake_shelf(1, ShelfVisibility::Private);
+        let shelf = fake_shelf(1);
         let expected_token = shelf.token;
         let mut shelf_repo = MockShelfRepository::new();
         shelf_repo.expect_list_for_user().returning(|_, _| Box::pin(async { Ok(vec![]) }));
@@ -583,7 +547,7 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.create_manual_shelf(1, "My Shelf".to_string(), ShelfVisibility::Private).await;
+        let result = svc.create_manual_shelf(1, "My Shelf".to_string()).await;
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), expected_token);
@@ -594,14 +558,14 @@ mod tests {
         let svc = create_service(MockShelfRepository::new(), MockBookRepository::new());
 
         for name in ["", "   "] {
-            let result = svc.create_manual_shelf(1, name.to_string(), ShelfVisibility::Private).await;
+            let result = svc.create_manual_shelf(1, name.to_string()).await;
             assert!(matches!(result, Err(Error::Validation(_))), "expected Validation for name={name:?}");
         }
     }
 
     #[tokio::test]
     async fn test_create_manual_shelf_duplicate_name_returns_conflict() {
-        let existing = fake_shelf(1, ShelfVisibility::Private);
+        let existing = fake_shelf(1);
         let mut shelf_repo = MockShelfRepository::new();
         shelf_repo.expect_list_for_user().returning(move |_, _| {
             let e = existing.clone();
@@ -609,14 +573,14 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.create_manual_shelf(1, "My Shelf".to_string(), ShelfVisibility::Private).await;
+        let result = svc.create_manual_shelf(1, "My Shelf".to_string()).await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::Conflict))));
     }
 
     #[tokio::test]
     async fn test_create_manual_shelf_case_insensitive_duplicate() {
-        let mut existing = fake_shelf(1, ShelfVisibility::Private);
+        let mut existing = fake_shelf(1);
         existing.name = "Fantasy".to_string();
         let mut shelf_repo = MockShelfRepository::new();
         shelf_repo.expect_list_for_user().returning(move |_, _| {
@@ -625,7 +589,7 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.create_manual_shelf(1, "fantasy".to_string(), ShelfVisibility::Private).await;
+        let result = svc.create_manual_shelf(1, "fantasy".to_string()).await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::Conflict))));
     }
@@ -634,7 +598,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_rename_shelf_success() {
-        let shelf = fake_shelf(1, ShelfVisibility::Private);
+        let shelf = fake_shelf(1);
         let token = shelf.token;
         let updated = Shelf {
             name: "New Name".to_string(),
@@ -682,7 +646,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_rename_shelf_wrong_owner_returns_validation_error() {
-        let shelf = fake_shelf(1, ShelfVisibility::Private); // owned by user 1
+        let shelf = fake_shelf(1); // owned by user 1
         let token = shelf.token;
         let mut shelf_repo = MockShelfRepository::new();
         shelf_repo.expect_find_by_token().returning(move |_, _| {
@@ -698,9 +662,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_rename_shelf_duplicate_name_returns_conflict() {
-        let shelf = fake_shelf(1, ShelfVisibility::Private);
+        let shelf = fake_shelf(1);
         let token = shelf.token;
-        let mut other = fake_shelf(1, ShelfVisibility::Private);
+        let mut other = fake_shelf(1);
         other.id = 2;
         other.token = ShelfToken::new(2);
         other.name = "Other Shelf".to_string();
@@ -723,7 +687,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_rename_shelf_same_name_as_self_succeeds() {
-        let shelf = fake_shelf(1, ShelfVisibility::Private);
+        let shelf = fake_shelf(1);
         let token = shelf.token;
         let updated = shelf.clone();
         let shelf_for_token = shelf.clone();
@@ -756,7 +720,7 @@ mod tests {
     async fn test_delete_shelf_success() {
         let mut shelf_repo = MockShelfRepository::new();
         shelf_repo.expect_find_by_token().returning(|_, _| {
-            let s = fake_shelf(1, ShelfVisibility::Private);
+            let s = fake_shelf(1);
             Box::pin(async move { Ok(Some(s)) })
         });
         shelf_repo.expect_delete_shelf().times(1).returning(|_, _| Box::pin(async { Ok(()) }));
@@ -782,7 +746,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_shelf_wrong_owner() {
-        let shelf = fake_shelf(1, ShelfVisibility::Private); // owned by user 1
+        let shelf = fake_shelf(1); // owned by user 1
         let token = shelf.token;
         let mut shelf_repo = MockShelfRepository::new();
         shelf_repo.expect_find_by_token().returning(move |_, _| {
@@ -802,7 +766,7 @@ mod tests {
     async fn test_add_book_to_shelf_success() {
         let mut shelf_repo = MockShelfRepository::new();
         shelf_repo.expect_find_by_token().returning(|_, _| {
-            let s = fake_shelf(1, ShelfVisibility::Private);
+            let s = fake_shelf(1);
             Box::pin(async move { Ok(Some(s)) })
         });
         shelf_repo.expect_add_book_to_shelf().times(1).returning(|_, _| {
@@ -836,7 +800,7 @@ mod tests {
     async fn test_add_book_to_shelf_book_not_found() {
         let mut shelf_repo = MockShelfRepository::new();
         shelf_repo.expect_find_by_token().returning(|_, _| {
-            let s = fake_shelf(1, ShelfVisibility::Private);
+            let s = fake_shelf(1);
             Box::pin(async move { Ok(Some(s)) })
         });
         let mut book_repo = MockBookRepository::new();
@@ -852,7 +816,7 @@ mod tests {
     async fn test_add_book_to_shelf_wrong_owner() {
         let mut shelf_repo = MockShelfRepository::new();
         shelf_repo.expect_find_by_token().returning(|_, _| {
-            let s = fake_shelf(1, ShelfVisibility::Private);
+            let s = fake_shelf(1);
             Box::pin(async move { Ok(Some(s)) })
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
@@ -868,11 +832,11 @@ mod tests {
     async fn test_remove_book_from_shelf_success() {
         let mut shelf_repo = MockShelfRepository::new();
         shelf_repo.expect_find_by_token().returning(|_, _| {
-            let s = fake_shelf(1, ShelfVisibility::Private);
+            let s = fake_shelf(1);
             Box::pin(async move { Ok(Some(s)) })
         });
         shelf_repo.expect_find_by_token().returning(|_, _| {
-            let s = fake_shelf(1, ShelfVisibility::Private);
+            let s = fake_shelf(1);
             Box::pin(async move { Ok(Some(s)) })
         });
         shelf_repo
@@ -895,7 +859,7 @@ mod tests {
     async fn test_remove_book_from_shelf_wrong_owner() {
         let mut shelf_repo = MockShelfRepository::new();
         shelf_repo.expect_find_by_token().returning(|_, _| {
-            let s = fake_shelf(1, ShelfVisibility::Private);
+            let s = fake_shelf(1);
             Box::pin(async move { Ok(Some(s)) })
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
@@ -909,7 +873,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_books_for_shelf_owner_can_access_private() {
-        let shelf = fake_shelf(1, ShelfVisibility::Private);
+        let shelf = fake_shelf(1);
         let token = shelf.token;
         let bs = fake_book_shelf();
         let mut shelf_repo = MockShelfRepository::new();
@@ -930,26 +894,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_books_for_shelf_public_accessible_by_other_user() {
-        let mut shelf = fake_shelf(1, ShelfVisibility::Public);
-        shelf.owner_id = 1;
-        let token = shelf.token;
-        let mut shelf_repo = MockShelfRepository::new();
-        shelf_repo.expect_find_by_token().returning(move |_, _| {
-            let s = shelf.clone();
-            Box::pin(async move { Ok(Some(s)) })
-        });
-        shelf_repo.expect_books_for_shelf().returning(|_, _, _, _| Box::pin(async { Ok(vec![]) }));
-        let svc = create_service(shelf_repo, MockBookRepository::new());
-
-        let result = svc.books_for_shelf(token, 2, None, None).await; // user 2 accessing user 1's public shelf
-
-        result.unwrap();
-    }
-
-    #[tokio::test]
-    async fn test_books_for_shelf_private_blocked_for_other_user() {
-        let shelf = fake_shelf(1, ShelfVisibility::Private);
+    async fn test_books_for_shelf_non_owner_blocked() {
+        let shelf = fake_shelf(1); // owned by user 1
         let token = shelf.token;
         let mut shelf_repo = MockShelfRepository::new();
         shelf_repo.expect_find_by_token().returning(move |_, _| {
@@ -958,7 +904,7 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.books_for_shelf(token, 2, None, None).await; // user 2 accessing user 1's private shelf
+        let result = svc.books_for_shelf(token, 2, None, None).await; // user 2 accessing user 1's shelf
 
         assert!(matches!(result, Err(Error::Validation(_))));
     }
@@ -975,82 +921,15 @@ mod tests {
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::NotFound))));
     }
 
-    // ─── list_public_shelves ──────────────────────────────────────────────────
-
-    #[tokio::test]
-    async fn test_list_public_shelves_returns_others_public_shelves() {
-        let mut shelf_repo = MockShelfRepository::new();
-        // list_public_shelves delegates to shelf_repository.list_public_shelves
-        shelf_repo.expect_list_public_shelves().returning(|_, _| Box::pin(async { Ok(vec![]) }));
-        let svc = create_service(shelf_repo, MockBookRepository::new());
-
-        let result = svc.list_public_shelves(1).await;
-        result.unwrap();
-    }
-
-    // ─── set_visibility ───────────────────────────────────────────────────────
-
-    #[tokio::test]
-    async fn test_set_visibility_success() {
-        let shelf = fake_shelf(1, ShelfVisibility::Private);
-        let token = shelf.token;
-        let updated = Shelf {
-            visibility: ShelfVisibility::Public,
-            ..shelf.clone()
-        };
-        let mut shelf_repo = MockShelfRepository::new();
-        shelf_repo.expect_find_by_token().returning(move |_, _| {
-            let s = shelf.clone();
-            Box::pin(async move { Ok(Some(s)) })
-        });
-        shelf_repo.expect_update_shelf().returning(move |_, _| {
-            let u = updated.clone();
-            Box::pin(async move { Ok(u) })
-        });
-        let svc = create_service(shelf_repo, MockBookRepository::new());
-
-        let result = svc.set_visibility(token, ShelfVisibility::Public, 1).await;
-
-        result.unwrap();
-    }
-
-    #[tokio::test]
-    async fn test_set_visibility_not_found() {
-        let token = ShelfToken::new(99);
-        let mut shelf_repo = MockShelfRepository::new();
-        shelf_repo.expect_find_by_token().returning(|_, _| Box::pin(async { Ok(None) }));
-        let svc = create_service(shelf_repo, MockBookRepository::new());
-
-        let result = svc.set_visibility(token, ShelfVisibility::Public, 1).await;
-
-        assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::NotFound))));
-    }
-
-    #[tokio::test]
-    async fn test_set_visibility_wrong_owner() {
-        let shelf = fake_shelf(1, ShelfVisibility::Private); // owned by user 1
-        let token = shelf.token;
-        let mut shelf_repo = MockShelfRepository::new();
-        shelf_repo.expect_find_by_token().returning(move |_, _| {
-            let s = shelf.clone();
-            Box::pin(async move { Ok(Some(s)) })
-        });
-        let svc = create_service(shelf_repo, MockBookRepository::new());
-
-        let result = svc.set_visibility(token, ShelfVisibility::Public, 2).await; // user 2
-
-        assert!(matches!(result, Err(Error::Validation(_))));
-    }
-
     // ─── list_shelves_for_user ────────────────────────────────────────────────
 
     #[tokio::test]
     async fn test_list_shelves_for_user_returns_all() {
-        let mut shelf2 = fake_shelf(1, ShelfVisibility::Public);
+        let mut shelf2 = fake_shelf(1);
         shelf2.id = 2;
         shelf2.token = ShelfToken::new(2);
         shelf2.name = "Public Shelf".to_string();
-        let shelves = vec![fake_shelf(1, ShelfVisibility::Private), shelf2];
+        let shelves = vec![fake_shelf(1), shelf2];
         let mut shelf_repo = MockShelfRepository::new();
         shelf_repo.expect_list_for_user().returning(move |_, _| {
             let v = shelves.clone();
@@ -1067,8 +946,8 @@ mod tests {
     // ─── get_shelf ────────────────────────────────────────────────────────────
 
     #[tokio::test]
-    async fn test_get_shelf_owner_can_access_private() {
-        let shelf = fake_shelf(1, ShelfVisibility::Private);
+    async fn test_get_shelf_owner_can_access() {
+        let shelf = fake_shelf(1);
         let token = shelf.token;
         let mut shelf_repo = MockShelfRepository::new();
         shelf_repo.expect_find_by_token().returning(move |_, _| {
@@ -1077,15 +956,12 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.get_shelf(token, 1).await;
-
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap().visibility, ShelfVisibility::Private);
+        svc.get_shelf(token, 1).await.unwrap();
     }
 
     #[tokio::test]
     async fn test_get_shelf_non_owner_denied_private() {
-        let shelf = fake_shelf(1, ShelfVisibility::Private); // owned by user 1
+        let shelf = fake_shelf(1); // owned by user 1
         let token = shelf.token;
         let mut shelf_repo = MockShelfRepository::new();
         shelf_repo.expect_find_by_token().returning(move |_, _| {
@@ -1100,8 +976,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_shelf_non_owner_can_access_public() {
-        let shelf = fake_shelf(1, ShelfVisibility::Public); // owned by user 1
+    async fn test_get_shelf_non_owner_blocked() {
+        let shelf = fake_shelf(1); // owned by user 1
         let token = shelf.token;
         let mut shelf_repo = MockShelfRepository::new();
         shelf_repo.expect_find_by_token().returning(move |_, _| {
@@ -1110,20 +986,19 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.get_shelf(token, 2).await; // user 2
+        let result = svc.get_shelf(token, 2).await; // user 2 — not the owner
 
-        result.unwrap();
+        assert!(matches!(result, Err(Error::Validation(_))));
     }
 
     // ─── update_shelf ─────────────────────────────────────────────────────────
 
     #[tokio::test]
     async fn test_update_shelf_success() {
-        let shelf = fake_shelf(1, ShelfVisibility::Private);
+        let shelf = fake_shelf(1);
         let token = shelf.token;
         let updated = Shelf {
             name: "Renamed".to_string(),
-            visibility: ShelfVisibility::Public,
             ..shelf.clone()
         };
         let mut shelf_repo = MockShelfRepository::new();
@@ -1138,7 +1013,7 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.update_shelf(token, "Renamed".to_string(), ShelfVisibility::Public, 1).await;
+        let result = svc.update_shelf(token, "Renamed".to_string(), 1).await;
 
         result.unwrap();
     }
@@ -1148,7 +1023,7 @@ mod tests {
         let svc = create_service(MockShelfRepository::new(), MockBookRepository::new());
         let token = ShelfToken::new(1);
 
-        let result = svc.update_shelf(token, "  ".to_string(), ShelfVisibility::Private, 1).await;
+        let result = svc.update_shelf(token, "  ".to_string(), 1).await;
 
         assert!(matches!(result, Err(Error::Validation(_))));
     }
@@ -1160,14 +1035,14 @@ mod tests {
         shelf_repo.expect_find_by_token().returning(|_, _| Box::pin(async { Ok(None) }));
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.update_shelf(token, "New Name".to_string(), ShelfVisibility::Private, 1).await;
+        let result = svc.update_shelf(token, "New Name".to_string(), 1).await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::NotFound))));
     }
 
     #[tokio::test]
     async fn test_update_shelf_wrong_owner_returns_validation_error() {
-        let shelf = fake_shelf(1, ShelfVisibility::Private); // owned by user 1
+        let shelf = fake_shelf(1); // owned by user 1
         let token = shelf.token;
         let mut shelf_repo = MockShelfRepository::new();
         shelf_repo.expect_find_by_token().returning(move |_, _| {
@@ -1176,16 +1051,16 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.update_shelf(token, "New Name".to_string(), ShelfVisibility::Private, 2).await; // user 2
+        let result = svc.update_shelf(token, "New Name".to_string(), 2).await; // user 2
 
         assert!(matches!(result, Err(Error::Validation(_))));
     }
 
     #[tokio::test]
     async fn test_update_shelf_duplicate_name_returns_conflict() {
-        let shelf = fake_shelf(1, ShelfVisibility::Private);
+        let shelf = fake_shelf(1);
         let token = shelf.token;
-        let mut other = fake_shelf(1, ShelfVisibility::Private);
+        let mut other = fake_shelf(1);
         other.id = 2;
         other.token = ShelfToken::new(2);
         other.name = "Other Shelf".to_string();
@@ -1200,19 +1075,16 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        let result = svc.update_shelf(token, "Other Shelf".to_string(), ShelfVisibility::Public, 1).await;
+        let result = svc.update_shelf(token, "Other Shelf".to_string(), 1).await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::Conflict))));
     }
 
     #[tokio::test]
     async fn test_update_shelf_same_name_as_self_succeeds() {
-        let shelf = fake_shelf(1, ShelfVisibility::Private);
+        let shelf = fake_shelf(1);
         let token = shelf.token;
-        let updated = Shelf {
-            visibility: ShelfVisibility::Public,
-            ..shelf.clone()
-        };
+        let updated = shelf.clone();
         let shelf_for_token = shelf.clone();
         let shelf_for_list = shelf.clone();
         let mut shelf_repo = MockShelfRepository::new();
@@ -1230,8 +1102,8 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        // Same name, different visibility — must not conflict with itself
-        let result = svc.update_shelf(token, "My Shelf".to_string(), ShelfVisibility::Public, 1).await;
+        // Same name — must not conflict with itself
+        let result = svc.update_shelf(token, "My Shelf".to_string(), 1).await;
 
         result.unwrap();
     }
@@ -1250,7 +1122,7 @@ mod tests {
         Shelf {
             shelf_type: ShelfType::Smart,
             filter_criteria: Some(simple_filter()),
-            ..fake_shelf(owner_id, ShelfVisibility::Private)
+            ..fake_shelf(owner_id)
         }
     }
 
@@ -1265,23 +1137,21 @@ mod tests {
         });
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
-        svc.create_smart_shelf(1, "Unread Sci-Fi".to_string(), ShelfVisibility::Private, simple_filter())
-            .await
-            .unwrap();
+        svc.create_smart_shelf(1, "Unread Sci-Fi".to_string(), simple_filter()).await.unwrap();
     }
 
     #[tokio::test]
     async fn test_create_smart_shelf_rejects_empty_name() {
         let svc = create_service(MockShelfRepository::new(), MockBookRepository::new());
 
-        let result = svc.create_smart_shelf(1, "  ".to_string(), ShelfVisibility::Private, simple_filter()).await;
+        let result = svc.create_smart_shelf(1, "  ".to_string(), simple_filter()).await;
 
         assert!(matches!(result, Err(Error::Validation(_))));
     }
 
     #[tokio::test]
     async fn test_create_smart_shelf_rejects_duplicate_name() {
-        let existing = fake_shelf(1, ShelfVisibility::Private);
+        let existing = fake_shelf(1);
         let mut shelf_repo = MockShelfRepository::new();
         shelf_repo.expect_list_for_user().returning(move |_, _| {
             let e = existing.clone();
@@ -1290,9 +1160,7 @@ mod tests {
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
         // "my shelf" matches existing "My Shelf" (case-insensitive)
-        let result = svc
-            .create_smart_shelf(1, "My Shelf".to_string(), ShelfVisibility::Private, simple_filter())
-            .await;
+        let result = svc.create_smart_shelf(1, "My Shelf".to_string(), simple_filter()).await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::Conflict))));
     }
@@ -1341,7 +1209,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_shelf_filter_rejects_non_smart_shelf() {
-        let shelf = fake_shelf(1, ShelfVisibility::Private); // Manual shelf
+        let shelf = fake_shelf(1); // Manual shelf
         let token = shelf.token;
         let mut shelf_repo = MockShelfRepository::new();
         shelf_repo.expect_find_by_token().returning(move |_, _| {
@@ -1366,7 +1234,7 @@ mod tests {
                 op: SetOp::IncludesAny,
                 values: vec![FilterReadStatus::Active],
             })),
-            ..fake_shelf(owner_id, ShelfVisibility::Private)
+            ..fake_shelf(owner_id)
         }
     }
 

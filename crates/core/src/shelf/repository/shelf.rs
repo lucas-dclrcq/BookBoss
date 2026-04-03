@@ -17,8 +17,6 @@ pub trait ShelfRepository: Send + Sync {
     async fn find_by_id(&self, transaction: &dyn Transaction, id: ShelfId) -> Result<Option<Shelf>, Error>;
     async fn find_by_token(&self, transaction: &dyn Transaction, token: ShelfToken) -> Result<Option<Shelf>, Error>;
     async fn list_for_user(&self, transaction: &dyn Transaction, owner_id: UserId) -> Result<Vec<Shelf>, Error>;
-    /// Returns all public shelves not owned by `exclude_owner_id`.
-    async fn list_public_shelves(&self, transaction: &dyn Transaction, exclude_owner_id: UserId) -> Result<Vec<Shelf>, Error>;
 
     // Manual shelf book management
     async fn add_book_to_shelf(&self, transaction: &dyn Transaction, book_shelf: BookShelf) -> Result<BookShelf, Error>;

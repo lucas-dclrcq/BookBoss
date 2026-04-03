@@ -7,17 +7,10 @@ pub struct Migration;
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         // Drop index first, then the column
-        manager
-            .drop_index(Index::drop().name("idx_shelves_visibility").to_owned())
-            .await?;
+        manager.drop_index(Index::drop().name("idx_shelves_visibility").to_owned()).await?;
 
         manager
-            .alter_table(
-                Table::alter()
-                    .table(Shelves::Table)
-                    .drop_column(Shelves::Visibility)
-                    .to_owned(),
-            )
+            .alter_table(Table::alter().table(Shelves::Table).drop_column(Shelves::Visibility).to_owned())
             .await
     }
 
@@ -26,12 +19,7 @@ impl MigrationTrait for Migration {
             .alter_table(
                 Table::alter()
                     .table(Shelves::Table)
-                    .add_column(
-                        ColumnDef::new(Shelves::Visibility)
-                            .string()
-                            .not_null()
-                            .default("private"),
-                    )
+                    .add_column(ColumnDef::new(Shelves::Visibility).string().not_null().default("private"))
                     .to_owned(),
             )
             .await?;
