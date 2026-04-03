@@ -18,6 +18,7 @@ use bb_core::{
     device::DeviceRepository,
     import::ImportJobRepository,
     jobs::JobRepository,
+    library::LibraryRepository,
     message::SystemMessageRepository,
     reading::UserBookMetadataRepository,
     repository::{Repository, RepositoryService, RepositoryServiceBuilder},
@@ -43,10 +44,10 @@ mod transaction;
 use crate::{
     adapters::{
         author::AuthorRepositoryAdapter, book::BookRepositoryAdapter, collection::CollectionRepositoryAdapter, device::DeviceRepositoryAdapter,
-        genre::GenreRepositoryAdapter, import_job::ImportJobRepositoryAdapter, job::JobRepositoryAdapter, publisher::PublisherRepositoryAdapter,
-        series::SeriesRepositoryAdapter, session::SessionRepositoryAdapter, shelf::ShelfRepositoryAdapter, system_message::SystemMessageRepositoryAdapter,
-        tag::TagRepositoryAdapter, user::UserRepositoryAdapter, user_book_metadata::UserBookMetadataRepositoryAdapter,
-        user_settings::UserSettingRepositoryAdapter,
+        genre::GenreRepositoryAdapter, import_job::ImportJobRepositoryAdapter, job::JobRepositoryAdapter, library::LibraryRepositoryAdapter,
+        publisher::PublisherRepositoryAdapter, series::SeriesRepositoryAdapter, session::SessionRepositoryAdapter, shelf::ShelfRepositoryAdapter,
+        system_message::SystemMessageRepositoryAdapter, tag::TagRepositoryAdapter, user::UserRepositoryAdapter,
+        user_book_metadata::UserBookMetadataRepositoryAdapter, user_settings::UserSettingRepositoryAdapter,
     },
     migrations::Migrator,
     repository::RepositoryImpl,
@@ -90,6 +91,7 @@ pub async fn create_repository_service(database: DatabaseConnection) -> Result<A
         .import_job_repository(Arc::new(ImportJobRepositoryAdapter::new()) as Arc<dyn ImportJobRepository>)
         .job_repository(Arc::new(JobRepositoryAdapter::new()) as Arc<dyn JobRepository>)
         .collection_repository(Arc::new(CollectionRepositoryAdapter::new()) as Arc<dyn CollectionRepository>)
+        .library_repository(Arc::new(LibraryRepositoryAdapter::new()) as Arc<dyn LibraryRepository>)
         .shelf_repository(Arc::new(ShelfRepositoryAdapter::new()) as Arc<dyn ShelfRepository>)
         .user_book_metadata_repository(Arc::new(UserBookMetadataRepositoryAdapter::new()) as Arc<dyn UserBookMetadataRepository>)
         .device_repository(Arc::new(DeviceRepositoryAdapter::new()) as Arc<dyn DeviceRepository>)

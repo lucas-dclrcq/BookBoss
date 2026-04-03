@@ -10,6 +10,7 @@ use crate::{
     device::DeviceRepository,
     import::ImportJobRepository,
     jobs::JobRepository,
+    library::LibraryRepository,
     message::SystemMessageRepository,
     reading::UserBookMetadataRepository,
     shelf::ShelfRepository,
@@ -32,6 +33,7 @@ pub struct RepositoryService {
     import_job_repository: Arc<dyn ImportJobRepository>,
     job_repository: Arc<dyn JobRepository>,
     collection_repository: Arc<dyn CollectionRepository>,
+    library_repository: Arc<dyn LibraryRepository>,
     shelf_repository: Arc<dyn ShelfRepository>,
     user_book_metadata_repository: Arc<dyn UserBookMetadataRepository>,
     device_repository: Arc<dyn DeviceRepository>,
@@ -115,6 +117,12 @@ impl RepositoryService {
     #[must_use]
     pub fn collection_repository(&self) -> &Arc<dyn CollectionRepository> {
         &self.collection_repository
+    }
+
+    /// Returns a reference to the library repository.
+    #[must_use]
+    pub fn library_repository(&self) -> &Arc<dyn LibraryRepository> {
+        &self.library_repository
     }
 
     /// Returns a reference to the shelf repository.
@@ -280,6 +288,7 @@ pub(crate) mod testing {
         device::repository::device::MockDeviceRepository,
         import::repository::import_job::MockImportJobRepository,
         jobs::repository::MockJobRepository,
+        library::MockLibraryRepository,
         message::repository::MockSystemMessageRepository,
         reading::repository::user_book_metadata::MockUserBookMetadataRepository,
         shelf::repository::shelf::MockShelfRepository,
@@ -316,7 +325,7 @@ pub(crate) mod testing {
     }
 
     /// Returns a `RepositoryServiceBuilder` pre-populated with default mocks
-    /// for all 16 repositories. Override individual fields for the repo(s)
+    /// for all 17 repositories. Override individual fields for the repo(s)
     /// under test before calling `.build()`.
     pub(crate) fn default_repository_service_builder() -> RepositoryServiceBuilder {
         RepositoryServiceBuilder::default()
@@ -333,6 +342,7 @@ pub(crate) mod testing {
             .import_job_repository(Arc::new(MockImportJobRepository::new()))
             .job_repository(Arc::new(MockJobRepository::new()))
             .collection_repository(Arc::new(MockCollectionRepository::new()))
+            .library_repository(Arc::new(MockLibraryRepository::new()))
             .shelf_repository(Arc::new(MockShelfRepository::new()))
             .user_book_metadata_repository(Arc::new(MockUserBookMetadataRepository::new()))
             .device_repository(Arc::new(MockDeviceRepository::new()))
