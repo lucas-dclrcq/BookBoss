@@ -159,20 +159,28 @@ pub(crate) async fn assign_user_libraries(
         .map_err(to_server_err)?
         .ok_or_else(|| ServerFnError::new("User not found"))?;
 
-    // Optionally create a personal library first.
-    if create_personal_library {
+    // Optionally create a personal library first. Capture its token so we can
+    // include it in the desired assignment set and make it the default.
+    let new_personal_token: Option<String> = if create_personal_library {
         let name = personal_library_name
             .filter(|s| !s.trim().is_empty())
             .ok_or_else(|| ServerFnError::new("Personal library name is required"))?;
-        core_services
+        let lib = core_services
             .library_service
             .create_personal_library_for_user(user.id, name.trim().to_string())
             .await
             .map_err(to_server_err)?;
-    }
+        Some(lib.token.to_string())
+    } else {
+        None
+    };
 
-    // Compute the desired set of library token strings.
-    let desired_tokens: std::collections::HashSet<String> = library_tokens.iter().cloned().collect();
+    // Compute the desired set of library token strings. Always include the
+    // newly created personal library so the assignment diff doesn't remove it.
+    let mut desired_tokens: std::collections::HashSet<String> = library_tokens.iter().cloned().collect();
+    if let Some(ref tok) = new_personal_token {
+        desired_tokens.insert(tok.clone());
+    }
 
     // Get the user's current library assignments.
     let current_libs = core_services.library_service.libraries_for_user(user.id).await.map_err(to_server_err)?;
@@ -197,9 +205,11 @@ pub(crate) async fn assign_user_libraries(
             .map_err(to_server_err)?;
     }
 
-    // Set the default library (if one was chosen and assigned).
-    if !default_library_token.is_empty() {
-        let def_token: LibraryToken = default_library_token.parse().map_err(|_| ServerFnError::new("Invalid default library token"))?;
+    // Set the default library. The newly created personal library takes
+    // precedence; otherwise use whatever the frontend selected.
+    let effective_default = new_personal_token.as_deref().unwrap_or(default_library_token.as_str());
+    if !effective_default.is_empty() {
+        let def_token: LibraryToken = effective_default.parse().map_err(|_| ServerFnError::new("Invalid default library token"))?;
         core_services
             .library_service
             .set_default_library(user.id, def_token)
