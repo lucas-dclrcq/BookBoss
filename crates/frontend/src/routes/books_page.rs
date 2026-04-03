@@ -172,6 +172,14 @@ async fn list_books(sort: crate::components::SortOrder, library_token: Option<St
         .validate(&current_user, &Method::POST, None)
         .await;
 
+    // When no token is provided (initial SSR load or first client render before
+    // LibraryInit has run), resolve the user's default library so the correct
+    // content is shown immediately.
+    let library_token = match library_token {
+        None => Some(core_services.library_service.get_default_library_token(user_id).await.map_err(to_server_err)?),
+        some => some,
+    };
+
     // Resolve the active library, distinguishing system from non-system.
     let is_all_books = library_token.as_deref().is_none_or(|t| t == ALL_BOOKS_LIBRARY_TOKEN);
     let (library_id, library_is_system, user_is_library_owner, active_library_token) = if is_all_books {
@@ -295,9 +303,44 @@ pub(crate) fn BooksPage() -> Element {
     use crate::components::ACTIVE_LIBRARY;
     use_context_provider(|| Signal::new(None::<String>)); // DraggedBookToken
     let mut books_refresh = use_signal(|| 0u32);
+
+    // `explicit_library` drives the fetch.  It is initialised from the current
+    // ACTIVE_LIBRARY (already set when navigating *back* to this page) but is
+    // intentionally NOT a reactive subscriber of ACTIVE_LIBRARY.  This prevents
+    // the initial LibraryInit write (None → Some) from triggering a redundant
+    // re-fetch that causes the "All Books flash" on browser refresh.
+    //
+    // `initialized` tracks whether ACTIVE_LIBRARY has been set at least once
+    // since this component mounted, so the effect can tell the difference between
+    // "LibraryInit is just now setting the default for the first time" (skip) and
+    // "the user explicitly switched libraries" (re-fetch).
+    let mut explicit_library = use_signal(|| ACTIVE_LIBRARY.peek().clone());
+    let mut initialized = use_signal(|| ACTIVE_LIBRARY.peek().is_some());
+
+    // Keep `explicit_library` in sync with user-initiated library switches, but
+    // ignore the first None → Some transition that comes from LibraryInit.
+    use_effect(move || {
+        let active = ACTIVE_LIBRARY();
+        // Use peek() for `initialized` so reading it here does NOT create a
+        // reactive subscription.  Without peek(), setting initialized to true
+        // would re-fire this effect, fall into the "already initialized" branch,
+        // and write to explicit_library — causing the very re-fetch we want to prevent.
+        if *initialized.peek() {
+            // Already past initialization — this is a real user switch.
+            if *explicit_library.peek() != active {
+                *explicit_library.write() = active;
+            }
+        } else if active.is_some() {
+            // First time we see Some: LibraryInit just set the default.
+            // Mark as initialized but do NOT update explicit_library so the
+            // server future doesn't re-run.
+            initialized.set(true);
+        }
+    });
+
     let mut page_data = use_server_future(move || {
         let sort = crate::components::SORT_ORDER();
-        let library_token = ACTIVE_LIBRARY();
+        let library_token = explicit_library();
         let _ = books_refresh();
         list_books(sort, library_token)
     })?;

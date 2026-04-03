@@ -106,7 +106,9 @@ pub(crate) struct UserLibraryDto {
 pub(crate) async fn get_user_libraries() -> Result<Vec<UserLibraryDto>, ServerFnError> {
     let current_user = authenticated_user(&auth_session)?;
     let user_id = current_user.id();
-    let libs = core_services.library_service.libraries_for_user(user_id).await.map_err(to_server_err)?;
+    let mut libs = core_services.library_service.libraries_for_user(user_id).await.map_err(to_server_err)?;
+    // Sort the user's personal library (the one they own) to the top of the list.
+    libs.sort_by_key(|l| if l.owner_id == Some(user_id) { 0u8 } else { 1u8 });
     Ok(libs
         .into_iter()
         .map(|l| UserLibraryDto {
@@ -407,18 +409,40 @@ fn LibraryInit() -> Element {
 #[component]
 fn LibraryPicker() -> Element {
     let libs_res = use_server_future(get_user_libraries)?;
+    let default_res = use_server_future(get_default_library_token_for_user)?;
     let libs: Vec<UserLibraryDto> = libs_res().and_then(|r: Result<Vec<UserLibraryDto>, ServerFnError>| r.ok()).unwrap_or_default();
+    let default_token: String = default_res().and_then(|r: Result<String, ServerFnError>| r.ok()).unwrap_or_default();
 
     if libs.len() < 2 {
         return rsx! {};
     }
 
+    // Initialise ACTIVE_LIBRARY / DEFAULT_LIBRARY from the server-resolved
+    // default for the 2+-library case. `use_effect` only runs on the client —
+    // the server already has the correct value in `default_token` which is used
+    // directly below for the initial render, eliminating the "All Books" flash.
+    use_effect(move || {
+        if let Some(Ok(tok)) = default_res() {
+            *DEFAULT_LIBRARY.write() = Some(tok.clone());
+            if ACTIVE_LIBRARY.peek().is_none() {
+                *ACTIVE_LIBRARY.write() = Some(tok);
+            }
+        }
+    });
+
     let active = ACTIVE_LIBRARY();
     let mut open = use_signal(|| false);
 
+    // When ACTIVE_LIBRARY hasn't been initialised yet (initial SSR render or the
+    // brief moment before the client effect runs), fall back to the
+    // server-resolved default so the label is correct from the very first paint.
+    let resolved_active: Option<&str> = active
+        .as_deref()
+        .or_else(|| if default_token.is_empty() { None } else { Some(default_token.as_str()) });
+
     let active_name = libs
         .iter()
-        .find(|l| Some(l.token.as_str()) == active.as_deref())
+        .find(|l| Some(l.token.as_str()) == resolved_active)
         .map_or_else(|| "All Books".to_string(), |l| l.name.clone());
 
     rsx! {
@@ -445,7 +469,7 @@ fn LibraryPicker() -> Element {
                 div { class: "absolute left-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 z-50 py-1 min-w-[160px]",
                     for lib in &libs {
                         {
-                            let is_active = Some(lib.token.as_str()) == active.as_deref();
+                            let is_active = Some(lib.token.as_str()) == resolved_active;
                             let tok = lib.token.clone();
                             rsx! {
                                 button {
