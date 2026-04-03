@@ -35,6 +35,11 @@ pub(crate) enum BookGridContext {
 /// highlight).
 pub(crate) type DraggedBookToken = Signal<Option<String>>;
 
+/// Global signal mirroring the page-level `DraggedBookToken`.
+/// Written by `BookCard` alongside the page-local signal so that components
+/// outside the page's context tree (e.g. `NavBar`) can also react to drags.
+pub(crate) static DRAGGED_BOOK_GLOBAL: GlobalSignal<Option<String>> = Signal::global(|| None);
+
 // ---------------------------------------------------------------------------
 // Components
 // ---------------------------------------------------------------------------
@@ -170,10 +175,14 @@ fn BookCard(book: BookSummary) -> Element {
                 move |_| {
                     if !in_selection_mode {
                         *dragged_token.write() = Some(tok.clone());
+                        *DRAGGED_BOOK_GLOBAL.write() = Some(tok.clone());
                     }
                 }
             },
-            ondragend: move |_| *dragged_token.write() = None,
+            ondragend: move |_| {
+                *dragged_token.write() = None;
+                *DRAGGED_BOOK_GLOBAL.write() = None;
+            },
 
             div { class: "relative cursor-pointer",
                 onclick: {

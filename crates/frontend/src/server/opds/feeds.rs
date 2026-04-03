@@ -13,6 +13,7 @@ use bb_core::{
     CoreServices,
     book::{AuthorToken, Book, BookQuery, BookToken, FileFormat, FileRole, SeriesToken},
     filter::{BookFilter, FilterRule, TextOp},
+    library::LibraryToken,
     shelf::ShelfType,
 };
 use chrono::Utc;
@@ -46,11 +47,13 @@ fn xml_response(xml: String) -> Response {
 }
 
 /// `GET /opds/` — Root catalog (navigation feed).
-pub async fn root(opds_user: OpdsUser) -> Response {
+pub async fn root(opds_user: OpdsUser, Extension(core_services): Extension<Arc<CoreServices>>) -> Response {
     let now = Utc::now();
-    let _ = &opds_user;
+    let user_id = opds_user.user.id;
 
-    let feed = AtomFeed::new("urn:bookboss:opds:root", "BookBoss Catalog", now)
+    let libs = core_services.library_service.libraries_for_user(user_id).await.unwrap_or_default();
+
+    let mut feed = AtomFeed::new("urn:bookboss:opds:root", "BookBoss Catalog", now)
         .with_link(AtomLink::new(rel::SELF, "/opds/").with_type(mime::NAVIGATION))
         .with_link(AtomLink::new(rel::START, "/opds/").with_type(mime::NAVIGATION))
         .with_link(
@@ -60,9 +63,19 @@ pub async fn root(opds_user: OpdsUser) -> Response {
         )
         .with_entry(
             AtomEntry::new("urn:bookboss:opds:all", "All Books", now)
-                .with_content("Browse all books in the library")
+                .with_content("Browse books in your default library")
                 .with_link(AtomLink::new(rel::SUBSECTION, "/opds/all").with_type(mime::ACQUISITION)),
-        )
+        );
+
+    if libs.len() >= 2 {
+        feed = feed.with_entry(
+            AtomEntry::new("urn:bookboss:opds:libraries", "Libraries", now)
+                .with_content("Browse books by library")
+                .with_link(AtomLink::new(rel::SUBSECTION, "/opds/libraries").with_type(mime::NAVIGATION)),
+        );
+    }
+
+    feed = feed
         .with_entry(
             AtomEntry::new("urn:bookboss:opds:shelves", "Shelves", now)
                 .with_content("Browse books by shelf")
@@ -88,15 +101,26 @@ pub async fn root(opds_user: OpdsUser) -> Response {
     }
 }
 
-/// `GET /opds/all` — All available books (acquisition feed, paginated).
+/// `GET /opds/all` — Books in the user's default library (acquisition feed,
+/// paginated).
 pub async fn all_books(opds_user: OpdsUser, Query(params): Query<PaginationParams>, Extension(core_services): Extension<Arc<CoreServices>>) -> Response {
-    let _ = &opds_user;
     let now = Utc::now();
+    let user_id = opds_user.user.id;
+
+    // Resolve default library — return 500 rather than silently expanding to all
+    // books
+    let library_id = match core_services.library_service.get_default_library_token(user_id).await {
+        Ok(token_str) => match LibraryToken::parse(&token_str) {
+            Ok(token) => Some(token.id()),
+            Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR),
+        },
+        Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR),
+    };
 
     let filter = BookQuery::default();
 
     let offset = params.start;
-    let Ok(books) = core_services.book_service.list_books(&filter, None, offset, Some(PAGE_SIZE + 1)).await else {
+    let Ok(books) = core_services.book_service.list_books(&filter, library_id, offset, Some(PAGE_SIZE + 1)).await else {
         return Response::builder()
             .status(StatusCode::INTERNAL_SERVER_ERROR)
             .body(axum::body::Body::empty())
@@ -126,6 +150,98 @@ pub async fn all_books(opds_user: OpdsUser, Query(params): Query<PaginationParam
             .status(StatusCode::INTERNAL_SERVER_ERROR)
             .body(axum::body::Body::empty())
             .unwrap(),
+    }
+}
+
+/// `GET /opds/libraries` — User's assigned libraries (navigation feed).
+/// Only includes a Libraries entry in the root when user has 2+ libraries.
+pub async fn libraries(opds_user: OpdsUser, Extension(core_services): Extension<Arc<CoreServices>>) -> Response {
+    let now = Utc::now();
+    let user_id = opds_user.user.id;
+
+    let Ok(libs) = core_services.library_service.libraries_for_user(user_id).await else {
+        return error_response(StatusCode::INTERNAL_SERVER_ERROR);
+    };
+
+    let mut feed = AtomFeed::new("urn:bookboss:opds:libraries", "Libraries", now)
+        .with_link(AtomLink::new(rel::SELF, "/opds/libraries").with_type(mime::NAVIGATION))
+        .with_link(AtomLink::new(rel::START, "/opds/").with_type(mime::NAVIGATION));
+
+    for lib in &libs {
+        let token_str = lib.token.to_string();
+        let entry = AtomEntry::new(format!("urn:bookboss:library:{token_str}"), &lib.name, now)
+            .with_link(AtomLink::new(rel::SUBSECTION, format!("/opds/libraries/{token_str}")).with_type(mime::ACQUISITION));
+        feed = feed.with_entry(entry);
+    }
+
+    match feed.to_xml() {
+        Ok(xml) => xml_response(xml),
+        Err(_) => error_response(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+/// `GET /opds/libraries/{token}` — Books in a specific library (acquisition
+/// feed, paginated).
+pub async fn library_books(
+    opds_user: OpdsUser,
+    Path(library_token_str): Path<String>,
+    Query(params): Query<PaginationParams>,
+    Extension(core_services): Extension<Arc<CoreServices>>,
+) -> Response {
+    let now = Utc::now();
+    let user_id = opds_user.user.id;
+
+    let library_token: LibraryToken = match LibraryToken::parse(&library_token_str) {
+        Ok(t) => t,
+        Err(_) => return error_response(StatusCode::BAD_REQUEST),
+    };
+    let library_id = library_token.id();
+
+    // Access check
+    if core_services.library_service.validate_user_library_access(user_id, library_id).await.is_err() {
+        return error_response(StatusCode::FORBIDDEN);
+    }
+
+    // Get library name for feed title
+    let library_name = match core_services.library_service.libraries_for_user(user_id).await {
+        Ok(libs) => libs
+            .into_iter()
+            .find(|l| l.id == library_id)
+            .map_or_else(|| library_token_str.clone(), |l| l.name),
+        Err(_) => return error_response(StatusCode::INTERNAL_SERVER_ERROR),
+    };
+
+    let filter = BookQuery::default();
+    let offset = params.start;
+    let Ok(books) = core_services
+        .book_service
+        .list_books(&filter, Some(library_id), offset, Some(PAGE_SIZE + 1))
+        .await
+    else {
+        return error_response(StatusCode::INTERNAL_SERVER_ERROR);
+    };
+
+    let has_next = books.len() as u64 > PAGE_SIZE;
+    let page_books = if has_next { &books[..PAGE_SIZE as usize] } else { &books };
+    let self_url = format!("/opds/libraries/{library_token_str}");
+
+    let mut feed = AtomFeed::new(format!("urn:bookboss:library:{library_token_str}"), &library_name, now)
+        .with_link(AtomLink::new(rel::SELF, format_paginated_url(&self_url, offset)).with_type(mime::ACQUISITION))
+        .with_link(AtomLink::new(rel::START, "/opds/").with_type(mime::NAVIGATION));
+
+    if has_next {
+        let next_offset = offset.unwrap_or(0) + PAGE_SIZE;
+        feed = feed.with_link(AtomLink::new(rel::NEXT, format_paginated_url(&self_url, Some(next_offset))).with_type(mime::ACQUISITION));
+    }
+
+    for book in page_books {
+        let entry = book_to_entry(book, &core_services).await;
+        feed = feed.with_entry(entry);
+    }
+
+    match feed.to_xml() {
+        Ok(xml) => xml_response(xml),
+        Err(_) => error_response(StatusCode::INTERNAL_SERVER_ERROR),
     }
 }
 

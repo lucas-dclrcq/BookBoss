@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 use crate::{
     Route,
     components::{BookFilter, DraggedBookToken, FilterBuilder, FilterEntityOptions, SelectionToggle, SortControl, default_book_filter, filter_to_summary},
-    routes::shelf_page::{ShelfSummary, add_book_to_shelf, create_shelf, create_smart_shelf, get_filter_entity_options},
+    routes::shelf_page::{ShelfSummary, add_book_to_shelf_with_library, create_shelf, create_smart_shelf, get_filter_entity_options},
 };
 
 /// Horizontal pill-button row listing the user's shelves and a "+" new-shelf
@@ -157,7 +157,7 @@ pub(crate) fn ShelfBar(
                                     if let Some(book_tok) = dragged_token() {
                                         let s = stok.clone();
                                         spawn(async move {
-                                            if add_book_to_shelf(s.clone(), book_tok).await.is_ok() {
+                                            if add_book_to_shelf_with_library(s.clone(), book_tok).await.is_ok() {
                                                 success_shelf.set(Some(s));
                                             }
                                         });

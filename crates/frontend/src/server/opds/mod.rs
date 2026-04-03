@@ -9,7 +9,9 @@
 //! | Method | Path                              | Description              |
 //! |--------|-----------------------------------|--------------------------|
 //! | GET    | `/opds/`                          | Root catalog (nav feed)  |
-//! | GET    | `/opds/all`                       | All books (acquisition)  |
+//! | GET    | `/opds/all`                       | Default library books    |
+//! | GET    | `/opds/libraries`                 | Libraries (nav feed)     |
+//! | GET    | `/opds/libraries/:token`          | Library books (acq feed) |
 //! | GET    | `/opds/shelves`                   | User shelves (nav feed)  |
 //! | GET    | `/opds/shelves/:token`            | Shelf books (acquisition)|
 //! | GET    | `/opds/authors`                   | Authors (nav feed)       |
@@ -35,6 +37,8 @@ pub fn opds_router() -> Router {
         .route("/opds/all", routing::get(feeds::all_books))
         .route("/opds/search", routing::get(feeds::search))
         .route("/opds/search/description.xml", routing::get(feeds::search_description))
+        .route("/opds/libraries", routing::get(feeds::libraries))
+        .route("/opds/libraries/{library_token}", routing::get(feeds::library_books))
         .route("/opds/shelves", routing::get(feeds::shelves))
         .route("/opds/shelves/{shelf_token}", routing::get(feeds::shelf_books))
         .route("/opds/authors", routing::get(feeds::authors))

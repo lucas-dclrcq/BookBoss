@@ -5,7 +5,7 @@ use {
     crate::server::{AuthSession, AuthUser, BackendSessionPool},
     axum::http::Method,
     axum_session_auth::{Auth, Rights},
-    bb_core::{CoreServices, types::Capability, user::UserId},
+    bb_core::{CoreServices, book::BookToken, library::LibraryToken, types::Capability, user::UserId},
     std::sync::Arc,
 };
 
@@ -121,6 +121,26 @@ pub(crate) async fn get_default_library_token_for_user() -> Result<String, Serve
     let current_user = authenticated_user(&auth_session)?;
     let user_id = current_user.id();
     core_services.library_service.get_default_library_token(user_id).await.map_err(to_server_err)
+}
+
+#[post(
+    "/api/v1/user/default-library/add-book",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+async fn add_book_to_default_library(book_token: String) -> Result<(), ServerFnError> {
+    let user_id = authenticated_user(&auth_session)?.id();
+
+    let token_str = core_services.library_service.get_default_library_token(user_id).await.map_err(to_server_err)?;
+    let lib_token: LibraryToken = LibraryToken::parse(&token_str).map_err(|_| ServerFnError::new("Invalid library token"))?;
+    let book_token_parsed: BookToken = book_token.parse().map_err(|_| ServerFnError::new("Invalid book token"))?;
+
+    core_services
+        .library_service
+        .add_book_to_library(lib_token, book_token_parsed)
+        .await
+        .map_err(to_server_err)?;
+    Ok(())
 }
 
 // ── Badge / button sub-components
@@ -491,23 +511,51 @@ pub(crate) fn NavBar() -> Element {
                         class: "h-8 w-auto",
                     }
                 }
-                // Home icon — always visible, navigates to the books page
-                Link {
-                    to: Route::BooksPage {},
-                    class: "flex items-center hover:text-indigo-200",
-                    title: "Home",
-                    onclick: move |_| *SEARCH_TEXT.write() = String::new(),
-                    svg {
-                        class: "w-5 h-5",
-                        xmlns: "http://www.w3.org/2000/svg",
-                        fill: "none",
-                        view_box: "0 0 24 24",
-                        stroke_width: "1.5",
-                        stroke: "currentColor",
-                        path {
-                            stroke_linecap: "round",
-                            stroke_linejoin: "round",
-                            d: "m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25",
+                // Home icon — always visible, navigates to the books page, also a drag target
+                {
+                    let drag_active = crate::components::DRAGGED_BOOK_GLOBAL().is_some();
+                    let mut home_drop_success = use_signal(|| false);
+                    rsx! {
+                        div {
+                            class: if home_drop_success() {
+                                "shelf-drop-success flex items-center hover:text-indigo-200 cursor-pointer text-green-400"
+                            } else if drag_active {
+                                "flex items-center hover:text-indigo-200 cursor-pointer ring-2 ring-inset ring-indigo-300 rounded p-0.5"
+                            } else {
+                                "flex items-center hover:text-indigo-200 cursor-pointer"
+                            },
+                            title: "Home",
+                            onclick: move |_| {
+                                *SEARCH_TEXT.write() = String::new();
+                                navigator.push(Route::BooksPage {});
+                            },
+                            ondragover: move |e: DragEvent| {
+                                e.prevent_default();
+                            },
+                            ondrop: move |e: DragEvent| {
+                                e.prevent_default();
+                                if let Some(book_tok) = crate::components::DRAGGED_BOOK_GLOBAL() {
+                                    spawn(async move {
+                                        if add_book_to_default_library(book_tok).await.is_ok() {
+                                            home_drop_success.set(true);
+                                        }
+                                    });
+                                }
+                            },
+                            onanimationend: move |_| home_drop_success.set(false),
+                            svg {
+                                class: "w-5 h-5",
+                                xmlns: "http://www.w3.org/2000/svg",
+                                fill: "none",
+                                view_box: "0 0 24 24",
+                                stroke_width: "1.5",
+                                stroke: "currentColor",
+                                path {
+                                    stroke_linecap: "round",
+                                    stroke_linejoin: "round",
+                                    d: "m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25",
+                                }
+                            }
                         }
                     }
                 }

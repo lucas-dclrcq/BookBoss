@@ -14,7 +14,7 @@ mod sort_control;
 
 pub(crate) use app_layout::{AppLayout, IncomingRefresh, JobsRefresh, SystemMessagesRefresh};
 pub(crate) use autocomplete_input::AutocompleteInput;
-pub(crate) use book_grid::{BookGrid, BookGridContext, DraggedBookToken};
+pub(crate) use book_grid::{BookGrid, BookGridContext, DRAGGED_BOOK_GLOBAL, DraggedBookToken};
 pub(crate) use chip_input::ChipInput;
 pub(crate) use filter_builder::{BookFilter, FilterBuilder, FilterEntityOptions, default_book_filter, filter_to_summary, freshen_entity_labels};
 pub(crate) use login_form::LoginForm;

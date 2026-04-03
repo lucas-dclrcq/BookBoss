@@ -41,6 +41,8 @@ pub(crate) struct ShelfSummary {
     pub filter_json: Option<String>,
     /// Matching book count — populated for own smart shelves only.
     pub count: Option<u64>,
+    /// Token of the library this shelf belongs to. Present for own shelves.
+    pub library_token: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -121,6 +123,7 @@ pub(crate) async fn list_my_shelves() -> Result<Vec<ShelfSummary>, ServerFnError
                 is_device_shelf: s.device_id.is_some(),
                 filter_json,
                 count: None,
+                library_token: Some(bb_core::library::LibraryToken::new(s.library_id).to_string()),
             }
         })
         .collect())
@@ -216,6 +219,38 @@ pub(crate) async fn add_book_to_shelf(shelf_token: String, book_token: String) -
     let book: BookToken = book_token.parse().map_err(|_| ServerFnError::new("Invalid book token"))?;
 
     core_services.shelf_service.add_book_to_shelf(shelf, book, user_id).await.map_err(to_server_err)
+}
+
+/// Adds a book to a manual shelf AND to the shelf's parent library.
+/// Idempotent — if the book is already in either, no error.
+#[post(
+    "/api/v1/shelves/books/drop",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+pub(crate) async fn add_book_to_shelf_with_library(shelf_token: String, book_token: String) -> Result<(), ServerFnError> {
+    let user_id = authenticated_user(&auth_session)?.id();
+
+    let shelf: ShelfToken = shelf_token.parse().map_err(|_| ServerFnError::new("Invalid shelf token"))?;
+    let book: BookToken = book_token.parse().map_err(|_| ServerFnError::new("Invalid book token"))?;
+
+    // Add to shelf (service validates ownership)
+    core_services
+        .shelf_service
+        .add_book_to_shelf(shelf, book, user_id)
+        .await
+        .map_err(to_server_err)?;
+
+    // Find the shelf to get its library_id, then add book to that library
+    let shelf_info = core_services.shelf_service.get_shelf(shelf, user_id).await.map_err(to_server_err)?;
+    let lib_token = bb_core::library::LibraryToken::new(shelf_info.library_id);
+    core_services
+        .library_service
+        .add_book_to_library(lib_token, book)
+        .await
+        .map_err(to_server_err)?;
+
+    Ok(())
 }
 
 /// Removes a book from a shelf. Only the owner may remove books.
@@ -387,6 +422,7 @@ pub(crate) async fn list_all_accessible_shelves() -> Result<Vec<ShelfSummary>, S
             is_device_shelf: s.device_id.is_some(),
             filter_json,
             count,
+            library_token: Some(bb_core::library::LibraryToken::new(s.library_id).to_string()),
         });
     }
 
@@ -405,6 +441,7 @@ pub(crate) async fn list_all_accessible_shelves() -> Result<Vec<ShelfSummary>, S
             is_device_shelf: false,
             filter_json: None,
             count: None,
+            library_token: None,
         });
 
     own.extend(others);
