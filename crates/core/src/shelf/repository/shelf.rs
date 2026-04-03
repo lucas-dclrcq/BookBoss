@@ -29,6 +29,9 @@ pub trait ShelfRepository: Send + Sync {
         page_size: Option<u64>,
     ) -> Result<Vec<BookShelf>, Error>;
 
+    /// Returns the IDs of all books on any shelf owned by the given user.
+    async fn book_ids_for_user(&self, transaction: &dyn Transaction, user_id: UserId) -> Result<Vec<BookId>, Error>;
+
     // Device-linked shelf lookup
     async fn find_by_device_id(&self, transaction: &dyn Transaction, device_id: DeviceId) -> Result<Option<Shelf>, Error>;
 }

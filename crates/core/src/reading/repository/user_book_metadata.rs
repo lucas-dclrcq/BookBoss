@@ -24,4 +24,8 @@ pub trait UserBookMetadataRepository: Send + Sync {
     /// specified book IDs. Rows that do not exist are simply absent from the
     /// result (no row ≡ Unread).
     async fn list_for_user_and_books(&self, transaction: &dyn Transaction, user_id: UserId, book_ids: &[BookId]) -> Result<Vec<UserBookMetadata>, Error>;
+
+    /// Returns the IDs of all books for which the given user has any metadata
+    /// row (read status, rating, notes, etc.).
+    async fn book_ids_for_user(&self, transaction: &dyn Transaction, user_id: UserId) -> Result<Vec<BookId>, Error>;
 }

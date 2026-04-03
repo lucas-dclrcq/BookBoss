@@ -189,6 +189,21 @@ impl UserBookMetadataRepository for UserBookMetadataRepositoryAdapter {
 
         Ok(rows.into_iter().map(Into::into).collect())
     }
+
+    async fn book_ids_for_user(&self, transaction: &dyn Transaction, user_id: UserId) -> Result<Vec<BookId>, Error> {
+        let tx = TransactionImpl::get_db_transaction(transaction)?;
+
+        let rows = prelude::UserBookMetadata::find()
+            .filter(user_book_metadata::Column::UserId.eq(user_id as i64))
+            .select_only()
+            .column(user_book_metadata::Column::BookId)
+            .into_tuple::<i64>()
+            .all(tx)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(rows.into_iter().map(|id| id as BookId).collect())
+    }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

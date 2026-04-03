@@ -246,6 +246,37 @@ impl ShelfRepository for ShelfRepositoryAdapter {
         Ok(rows.into_iter().map(Into::into).collect())
     }
 
+    async fn book_ids_for_user(&self, transaction: &dyn Transaction, user_id: UserId) -> Result<Vec<BookId>, Error> {
+        let tx = TransactionImpl::get_db_transaction(transaction)?;
+
+        // Step 1: shelf IDs owned by this user.
+        let shelf_ids: Vec<i64> = prelude::Shelves::find()
+            .filter(shelves::Column::OwnerId.eq(user_id as i64))
+            .select_only()
+            .column(shelves::Column::Id)
+            .into_tuple::<i64>()
+            .all(tx)
+            .await
+            .map_err(handle_dberr)?;
+
+        if shelf_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Step 2: distinct book IDs across all those shelves.
+        let book_ids: Vec<i64> = prelude::BookShelves::find()
+            .filter(book_shelves::Column::ShelfId.is_in(shelf_ids))
+            .select_only()
+            .column(book_shelves::Column::BookId)
+            .distinct()
+            .into_tuple::<i64>()
+            .all(tx)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(book_ids.into_iter().map(|id| id as BookId).collect())
+    }
+
     async fn find_by_device_id(&self, transaction: &dyn Transaction, device_id: DeviceId) -> Result<Option<Shelf>, Error> {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
