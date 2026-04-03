@@ -32,6 +32,11 @@ mod m20260330_000029_add_index_jobs_indexes;
 mod m20260330_000030_add_index_import_jobs_updated_at;
 mod m20260330_000031_add_index_shelves_visibility;
 mod m20260401_000032_replace_cover_path_with_has_cover;
+mod m20260403_000033_create_libraries_table;
+mod m20260403_000034_create_library_books_table;
+mod m20260403_000035_create_user_libraries_table;
+mod m20260403_000036_add_library_id_to_shelves;
+mod m20260403_000037_seed_default_library_user_setting;
 
 pub struct Migrator;
 
@@ -71,6 +76,11 @@ impl MigratorTrait for Migrator {
             Box::new(m20260330_000030_add_index_import_jobs_updated_at::Migration),
             Box::new(m20260330_000031_add_index_shelves_visibility::Migration),
             Box::new(m20260401_000032_replace_cover_path_with_has_cover::Migration),
+            Box::new(m20260403_000033_create_libraries_table::Migration),
+            Box::new(m20260403_000034_create_library_books_table::Migration),
+            Box::new(m20260403_000035_create_user_libraries_table::Migration),
+            Box::new(m20260403_000036_add_library_id_to_shelves::Migration),
+            Box::new(m20260403_000037_seed_default_library_user_setting::Migration),
         ]
     }
 }
