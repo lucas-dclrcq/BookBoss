@@ -227,55 +227,58 @@ pub(crate) fn LibrariesSection() -> Element {
                                 "No libraries yet."
                             }
                         } else {
-                            // Table header
-                            div { class: "grid grid-cols-[1fr_auto_auto_auto] gap-x-4 px-4 py-2 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wide",
-                                span { "Name" }
-                                span { class: "text-right", "Users" }
-                                span { class: "text-right", "Books" }
-                                span {}
-                            }
-                            ul { class: "divide-y divide-gray-100",
-                                for row in rows {
-                                    {
-                                        let token = row.token.clone();
-                                        let user_label = if row.user_count == 1 { "user" } else { "users" };
-                                        let book_label = if row.book_count == 1 { "book" } else { "books" };
-                                        rsx! {
-                                            li { class: "grid grid-cols-[1fr_auto_auto_auto] gap-x-4 items-center px-4 py-2.5 hover:bg-gray-50",
-                                                div { class: "flex items-center gap-2",
-                                                    span { class: "text-sm text-gray-900", "{row.name}" }
-                                                    if row.is_system {
-                                                        span {
-                                                            class: "inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-600 border border-blue-200",
-                                                            "system"
+                            table { class: "w-full",
+                                thead {
+                                    tr { class: "bg-gray-50 border-b border-gray-200",
+                                        th { class: "px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide", "Name" }
+                                        th { class: "px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap", "Users" }
+                                        th { class: "px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap", "Books" }
+                                        th { class: "px-4 py-2" }
+                                    }
+                                }
+                                tbody { class: "divide-y divide-gray-100",
+                                    for row in rows {
+                                        {
+                                            let token = row.token.clone();
+                                            let user_label = if row.user_count == 1 { "user" } else { "users" };
+                                            let book_label = if row.book_count == 1 { "book" } else { "books" };
+                                            rsx! {
+                                                tr { class: "hover:bg-gray-50",
+                                                    td { class: "px-4 py-2.5",
+                                                        div { class: "flex items-center gap-2",
+                                                            span { class: "text-sm text-gray-900", "{row.name}" }
+                                                            if row.is_system {
+                                                                span {
+                                                                    class: "inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-600 border border-blue-200",
+                                                                    "system"
+                                                                }
+                                                            }
                                                         }
                                                     }
-                                                }
-                                                span { class: "text-xs text-gray-400 text-right",
-                                                    "{row.user_count} {user_label}"
-                                                }
-                                                span { class: "text-xs text-gray-400 text-right",
-                                                    "{row.book_count} {book_label}"
-                                                }
-                                                div { class: "flex items-center justify-end",
-                                                    if !row.is_system {
-                                                        button {
-                                                            class: "p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded text-xs",
-                                                            title: "Delete",
-                                                            onclick: move |_| {
-                                                                delete_error.set(None);
-                                                                delete_target.set(Some(LibraryRow {
-                                                                    token: token.clone(),
-                                                                    name: row.name.clone(),
-                                                                    is_system: row.is_system,
-                                                                    user_count: row.user_count,
-                                                                    book_count: row.book_count,
-                                                                }));
-                                                            },
-                                                            "✕"
+                                                    td { class: "px-4 py-2.5 text-xs text-gray-400 text-right whitespace-nowrap",
+                                                        "{row.user_count} {user_label}"
+                                                    }
+                                                    td { class: "px-4 py-2.5 text-xs text-gray-400 text-right whitespace-nowrap",
+                                                        "{row.book_count} {book_label}"
+                                                    }
+                                                    td { class: "px-4 py-2.5 text-right",
+                                                        if !row.is_system {
+                                                            button {
+                                                                class: "p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded text-xs",
+                                                                title: "Delete",
+                                                                onclick: move |_| {
+                                                                    delete_error.set(None);
+                                                                    delete_target.set(Some(LibraryRow {
+                                                                        token: token.clone(),
+                                                                        name: row.name.clone(),
+                                                                        is_system: row.is_system,
+                                                                        user_count: row.user_count,
+                                                                        book_count: row.book_count,
+                                                                    }));
+                                                                },
+                                                                "✕"
+                                                            }
                                                         }
-                                                    } else {
-                                                        span { class: "w-6" }
                                                     }
                                                 }
                                             }
