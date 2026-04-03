@@ -267,6 +267,8 @@ pub(crate) async fn update_shelf(token: String, name: String, visibility: String
 )]
 pub(crate) async fn get_filter_entity_options() -> Result<FilterEntityOptions, ServerFnError> {
     let user_id = authenticated_user(&auth_session)?.id();
+    let current_user = auth_session.current_user.clone().unwrap_or_default();
+    let is_admin = !current_user.username.is_empty() && (current_user.permissions.contains("Admin") || current_user.permissions.contains("SuperAdmin"));
 
     let book_service = &core_services.book_service;
 
@@ -320,6 +322,19 @@ pub(crate) async fn get_filter_entity_options() -> Result<FilterEntityOptions, S
         .map(|s| (s.id as i64, s.name))
         .collect();
 
+    let libraries: Vec<(i64, String)> = if is_admin {
+        core_services
+            .library_service
+            .list_libraries()
+            .await
+            .map_err(to_server_err)?
+            .into_iter()
+            .map(|e| (e.library.id as i64, e.library.name))
+            .collect()
+    } else {
+        vec![]
+    };
+
     Ok(FilterEntityOptions {
         authors,
         series,
@@ -327,6 +342,7 @@ pub(crate) async fn get_filter_entity_options() -> Result<FilterEntityOptions, S
         tags,
         publishers,
         shelves,
+        libraries,
     })
 }
 
@@ -505,6 +521,9 @@ pub(crate) fn ShelfPage(token: String) -> Element {
     // Entity options for the smart shelf filter editor
     let entity_options_resource = use_resource(get_filter_entity_options);
 
+    // Admin check for Library filter rule visibility
+    let is_admin_resource = use_resource(crate::components::get_is_admin);
+
     // Delete shelf modal state
     let mut show_delete = use_signal(|| false);
     let mut deleting = use_signal(|| false);
@@ -553,6 +572,7 @@ pub(crate) fn ShelfPage(token: String) -> Element {
     let current_filter_json = current_shelf.as_ref().and_then(|s| s.filter_json.clone());
 
     let entity_options: FilterEntityOptions = entity_options_resource().and_then(std::result::Result::ok).unwrap_or_default();
+    let is_admin = is_admin_resource().and_then(std::result::Result::ok).unwrap_or(false);
 
     // Smart shelves are read-only (no drag-drop, no remove button).
     let context = if is_own && !current_is_smart {
@@ -804,6 +824,7 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                                     filter: edit_filter,
                                     entity_options: entity_options.clone(),
                                     current_shelf_id: current_shelf.as_ref().map(|s| s.id),
+                                    is_admin,
                                 }
                             }
                         }

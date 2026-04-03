@@ -48,7 +48,7 @@ async fn get_job_queue_count() -> Result<u64, ServerFnError> {
 }
 
 #[get("/api/v1/user/is_admin", auth_session: axum::Extension<AuthSession>)]
-async fn get_is_admin() -> Result<bool, ServerFnError> {
+pub(crate) async fn get_is_admin() -> Result<bool, ServerFnError> {
     let Some(user) = auth_session.current_user.as_ref().filter(|u| !u.username.is_empty()) else {
         return Ok(false);
     };
@@ -99,7 +99,7 @@ pub(crate) struct UserLibraryDto {
     auth_session: axum::Extension<AuthSession>,
     core_services: axum::Extension<Arc<CoreServices>>
 )]
-async fn get_user_libraries() -> Result<Vec<UserLibraryDto>, ServerFnError> {
+pub(crate) async fn get_user_libraries() -> Result<Vec<UserLibraryDto>, ServerFnError> {
     let current_user = authenticated_user(&auth_session)?;
     let user_id = current_user.id();
     let libs = core_services.library_service.libraries_for_user(user_id).await.map_err(to_server_err)?;
@@ -117,7 +117,7 @@ async fn get_user_libraries() -> Result<Vec<UserLibraryDto>, ServerFnError> {
     auth_session: axum::Extension<AuthSession>,
     core_services: axum::Extension<Arc<CoreServices>>
 )]
-async fn get_default_library_token_for_user() -> Result<String, ServerFnError> {
+pub(crate) async fn get_default_library_token_for_user() -> Result<String, ServerFnError> {
     let current_user = authenticated_user(&auth_session)?;
     let user_id = current_user.id();
     core_services.library_service.get_default_library_token(user_id).await.map_err(to_server_err)

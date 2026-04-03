@@ -18,7 +18,7 @@ pub(crate) use book_grid::{BookGrid, BookGridContext, DraggedBookToken};
 pub(crate) use chip_input::ChipInput;
 pub(crate) use filter_builder::{BookFilter, FilterBuilder, FilterEntityOptions, default_book_filter, filter_to_summary, freshen_entity_labels};
 pub(crate) use login_form::LoginForm;
-pub(crate) use nav_bar::{ACTIVE_LIBRARY, NavBar};
+pub(crate) use nav_bar::{ACTIVE_LIBRARY, NavBar, get_default_library_token_for_user, get_is_admin, get_user_libraries};
 pub(crate) use register_admin_form::RegisterAdminForm;
 pub(crate) use search::{SEARCH_TEXT, filter_books_by_search};
 pub(crate) use selection::{LANGUAGE_CODES, SelectionActionBar, SelectionToggle};

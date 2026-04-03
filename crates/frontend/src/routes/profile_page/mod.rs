@@ -10,6 +10,7 @@ use {
     bb_core::{
         CoreServices,
         device::{DeviceToken, OnRemovalAction},
+        library::LibraryToken,
         types::{Capability, EmailAddress},
         user::User,
     },
@@ -394,6 +395,29 @@ async fn reset_device_sync_for_profile(token: String) -> Result<(), ServerFnErro
 }
 
 // ---------------------------------------------------------------------------
+// Default library server function
+// ---------------------------------------------------------------------------
+
+#[post(
+    "/api/v1/profile/default-library",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+async fn set_default_library_for_profile(library_token: String) -> Result<(), ServerFnError> {
+    let user_id = authenticated_user(&auth_session)?.id();
+
+    let lib_token = LibraryToken::from_str(&library_token).map_err(|_| ServerFnError::new("Invalid library token"))?;
+
+    core_services
+        .library_service
+        .set_default_library(user_id, lib_token)
+        .await
+        .map_err(to_server_err)?;
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // ProfilePage
 // ---------------------------------------------------------------------------
 
@@ -419,6 +443,9 @@ pub(crate) fn ProfilePage() -> Element {
                 }
 
                 hr { class: "border-gray-200" }
+
+                // ── Default Library (only if 2+ libraries) ────────────────
+                DefaultLibrarySectionContent {}
 
                 // ── My Devices ────────────────────────────────────────────
                 section {
@@ -618,6 +645,85 @@ fn ProfileSectionContent() -> Element {
                 }
             }
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Default Library section
+// ---------------------------------------------------------------------------
+
+#[component]
+fn DefaultLibrarySectionContent() -> Element {
+    let user_libs = use_server_future(crate::components::get_user_libraries)?;
+    let default_lib = use_server_future(crate::components::get_default_library_token_for_user)?;
+
+    let libs: Vec<(String, String)> = user_libs()
+        .and_then(std::result::Result::ok)
+        .map(|libs| libs.into_iter().map(|l| (l.token, l.name)).collect())
+        .unwrap_or_default();
+
+    // Only render if user has 2+ libraries
+    if libs.len() < 2 {
+        return rsx! {};
+    }
+
+    let current_default = default_lib().and_then(std::result::Result::ok).unwrap_or_default();
+
+    let mut saving = use_signal(|| false);
+    let mut error: Signal<Option<String>> = use_signal(|| None);
+    let mut saved = use_signal(|| false);
+
+    let select_class = "rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500";
+
+    rsx! {
+        section {
+            h2 { class: "text-lg font-semibold text-gray-900 mb-4", "Default Library" }
+            div { class: "rounded-lg border border-gray-200 bg-white px-4 py-4 flex flex-col gap-3",
+                p { class: "text-sm text-gray-600",
+                    "Choose which library is shown by default when you open BookBoss."
+                }
+                div { class: "flex items-center gap-3",
+                    select {
+                        class: select_class,
+                        value: current_default.clone(),
+                        disabled: saving(),
+                        onchange: move |e| {
+                            let token = e.value();
+                            saving.set(true);
+                            saved.set(false);
+                            error.set(None);
+                            spawn(async move {
+                                match set_default_library_for_profile(token.clone()).await {
+                                    Ok(()) => {
+                                        *crate::components::ACTIVE_LIBRARY.write() = Some(token);
+                                        saved.set(true);
+                                    }
+                                    Err(e) => error.set(Some(e.to_string())),
+                                }
+                                saving.set(false);
+                            });
+                        },
+                        for (token, name) in &libs {
+                            option {
+                                value: "{token}",
+                                selected: *token == current_default,
+                                "{name}"
+                            }
+                        }
+                    }
+                    if saving() {
+                        span { class: "text-sm text-gray-500", "Saving\u{2026}" }
+                    } else if saved() {
+                        span { class: "text-sm text-green-600", "Saved!" }
+                    }
+                }
+                if let Some(err) = error() {
+                    p { class: "text-xs text-red-600", "{err}" }
+                }
+            }
+        }
+
+        hr { class: "border-gray-200" }
     }
 }
 

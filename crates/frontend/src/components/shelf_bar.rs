@@ -47,6 +47,9 @@ pub(crate) fn ShelfBar(
     // Entity options — always loaded so the hook order is stable
     let entity_options_resource = use_resource(get_filter_entity_options);
 
+    // Admin check for Library filter rule visibility
+    let is_admin_resource = use_resource(crate::components::get_is_admin);
+
     let dragged_token = use_context::<DraggedBookToken>();
     let drag_active = dragged_token().is_some();
     let mut success_shelf: Signal<Option<String>> = use_signal(|| None);
@@ -87,6 +90,7 @@ pub(crate) fn ShelfBar(
     };
 
     let entity_options: FilterEntityOptions = entity_options_resource().and_then(std::result::Result::ok).unwrap_or_default();
+    let is_admin = is_admin_resource().and_then(std::result::Result::ok).unwrap_or(false);
 
     rsx! {
         // Outer bar: flex but no overflow — "+" and Edit/Delete are never clipped.
@@ -390,7 +394,7 @@ pub(crate) fn ShelfBar(
 
                     div { class: "mb-6",
                         p { class: "text-sm font-medium text-gray-700 mb-2", "Filter rules" }
-                        FilterBuilder { filter: smart_filter, entity_options: entity_options.clone(), current_shelf_id: None }
+                        FilterBuilder { filter: smart_filter, entity_options: entity_options.clone(), current_shelf_id: None, is_admin }
                     }
 
                     if let Some(msg) = smart_error() {

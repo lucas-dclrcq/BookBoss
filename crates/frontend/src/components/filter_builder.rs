@@ -125,6 +125,7 @@ pub(crate) enum FilterRule {
     Tag { op: SetOp, values: Vec<EntityRef> },
     Publisher { op: SetOp, values: Vec<EntityRef> },
     Shelf { op: SetOp, values: Vec<EntityRef> },
+    Library { op: SetOp, values: Vec<EntityRef> },
     Language { op: SetOp, values: Vec<String> },
     ReadStatus { op: SetOp, values: Vec<FilterReadStatus> },
     Rating { op: NumericOp, value: u8 },
@@ -142,6 +143,7 @@ pub(crate) struct FilterEntityOptions {
     pub tags: Vec<(i64, String)>,
     pub publishers: Vec<(i64, String)>,
     pub shelves: Vec<(i64, String)>,
+    pub libraries: Vec<(i64, String)>,
 }
 
 // ── Public helpers
@@ -178,6 +180,7 @@ fn freshen_rule_labels(rule: &mut FilterRule, options: &FilterEntityOptions) {
         FilterRule::Tag { values, .. } => apply(values, &options.tags),
         FilterRule::Publisher { values, .. } => apply(values, &options.publishers),
         FilterRule::Shelf { values, .. } => apply(values, &options.shelves),
+        FilterRule::Library { values, .. } => apply(values, &options.libraries),
         _ => {}
     }
 }
@@ -235,6 +238,7 @@ fn rule_to_summary(rule: &FilterRule) -> String {
         FilterRule::Tag { op, values } => format!("tag {} {}", set_op_summary(*op), entity_label_list(values)),
         FilterRule::Publisher { op, values } => format!("publisher {} {}", set_op_summary(*op), entity_label_list(values)),
         FilterRule::Shelf { op, values } => format!("shelf {} {}", set_op_summary(*op), entity_label_list(values)),
+        FilterRule::Library { op, values } => format!("library {} {}", set_op_summary(*op), entity_label_list(values)),
         FilterRule::Language { op, values } => format!("language {} {}", set_op_summary(*op), values.join(", ")),
         FilterRule::ReadStatus { op, values } => {
             let labels: Vec<&str> = values.iter().map(|status: &FilterReadStatus| FilterReadStatus::label(*status)).collect();
@@ -333,6 +337,7 @@ fn field_key(rule: &FilterRule) -> &'static str {
         FilterRule::Tag { .. } => "tag",
         FilterRule::Publisher { .. } => "publisher",
         FilterRule::Shelf { .. } => "shelf",
+        FilterRule::Library { .. } => "library",
         FilterRule::Language { .. } => "language",
         FilterRule::ReadStatus { .. } => "read_status",
         FilterRule::Rating { .. } => "rating",
@@ -367,6 +372,10 @@ fn default_rule_for_field(field: &str) -> FilterRule {
             values: vec![],
         },
         "shelf" => FilterRule::Shelf {
+            op: SetOp::IncludesAny,
+            values: vec![],
+        },
+        "library" => FilterRule::Library {
             op: SetOp::IncludesAny,
             values: vec![],
         },
@@ -504,7 +513,12 @@ fn datetime_to_date_str(dt: &DateTime<Utc>) -> String {
 /// `current_shelf_id` — when set, the shelf with this numeric id is excluded
 /// from the shelf picker (prevents a shelf from filtering on itself).
 #[component]
-pub(crate) fn FilterBuilder(mut filter: Signal<BookFilter>, entity_options: FilterEntityOptions, current_shelf_id: Option<i64>) -> Element {
+pub(crate) fn FilterBuilder(
+    mut filter: Signal<BookFilter>,
+    entity_options: FilterEntityOptions,
+    current_shelf_id: Option<i64>,
+    #[props(default)] is_admin: bool,
+) -> Element {
     let root = filter();
     let root_group = match root {
         BookFilter::Group(g) => g,
@@ -523,6 +537,7 @@ pub(crate) fn FilterBuilder(mut filter: Signal<BookFilter>, entity_options: Filt
             group: root_group,
             entity_options,
             is_root: true,
+            is_admin,
             on_change: move |g: FilterGroup| filter.set(BookFilter::Group(g)),
             on_remove: move |()| {},
         }
@@ -535,6 +550,7 @@ fn FilterGroupEditor(
     group: FilterGroup,
     entity_options: FilterEntityOptions,
     is_root: bool,
+    is_admin: bool,
     on_change: EventHandler<FilterGroup>,
     on_remove: EventHandler<()>,
 ) -> Element {
@@ -618,6 +634,7 @@ fn FilterGroupEditor(
                                 key: "{i}",
                                 rule,
                                 entity_options: entity_options.clone(),
+                                is_admin,
                                 on_change: move |new_rule: FilterRule| {
                                     let mut g = gc1.clone();
                                     g.items[i] = BookFilter::Rule(new_rule);
@@ -640,6 +657,7 @@ fn FilterGroupEditor(
                                 group: sub,
                                 entity_options: entity_options.clone(),
                                 is_root: false,
+                                is_admin,
                                 on_change: move |new_sub: FilterGroup| {
                                     let mut g = gc1.clone();
                                     g.items[i] = BookFilter::Group(new_sub);
@@ -665,7 +683,13 @@ fn FilterGroupEditor(
 
 /// A single filter rule row: [field ▼] [operator ▼] [value input] [× remove].
 #[component]
-fn FilterRuleRow(rule: FilterRule, entity_options: FilterEntityOptions, on_change: EventHandler<FilterRule>, on_remove: EventHandler<()>) -> Element {
+fn FilterRuleRow(
+    rule: FilterRule,
+    entity_options: FilterEntityOptions,
+    is_admin: bool,
+    on_change: EventHandler<FilterRule>,
+    on_remove: EventHandler<()>,
+) -> Element {
     let field = field_key(&rule);
 
     let select_class = "text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400";
@@ -686,6 +710,9 @@ fn FilterRuleRow(rule: FilterRule, entity_options: FilterEntityOptions, on_chang
             option { value: "tag", "Tag" }
             option { value: "publisher", "Publisher" }
             option { value: "shelf", "Shelf" }
+            if is_admin {
+                option { value: "library", "Library" }
+            }
             option { value: "language", "Language" }
             option { value: "read_status", "Read Status" }
             option { value: "rating", "Rating" }
@@ -769,6 +796,10 @@ fn FilterRuleRow(rule: FilterRule, entity_options: FilterEntityOptions, on_chang
         FilterRule::Shelf { op, values } => {
             let options = entity_options.shelves.clone();
             entity_set_rule_ui(select_class, op, values, options, on_change, |op, values| FilterRule::Shelf { op, values })
+        }
+        FilterRule::Library { op, values } => {
+            let options = entity_options.libraries.clone();
+            entity_set_rule_ui(select_class, op, values, options, on_change, |op, values| FilterRule::Library { op, values })
         }
 
         FilterRule::Language { op, values } => {
