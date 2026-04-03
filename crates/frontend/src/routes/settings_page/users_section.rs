@@ -175,13 +175,8 @@ pub(crate) async fn assign_user_libraries(
     let desired_tokens: std::collections::HashSet<String> = library_tokens.iter().cloned().collect();
 
     // Get the user's current library assignments.
-    let current_libs = core_services
-        .library_service
-        .libraries_for_user(user.id)
-        .await
-        .map_err(to_server_err)?;
-    let current_tokens: std::collections::HashSet<String> =
-        current_libs.iter().map(|l| l.token.to_string()).collect();
+    let current_libs = core_services.library_service.libraries_for_user(user.id).await.map_err(to_server_err)?;
+    let current_tokens: std::collections::HashSet<String> = current_libs.iter().map(|l| l.token.to_string()).collect();
 
     // Remove libraries that are no longer desired.
     for lib in current_libs.iter().filter(|l| !desired_tokens.contains(&l.token.to_string())) {
@@ -724,7 +719,8 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
     let mut create_personal_library = use_signal(|| false);
     // personal_library_name: name for the personal library
     let mut personal_library_name = use_signal(String::new);
-    // personal_name_dirty: true once the user has manually edited the personal library name field
+    // personal_name_dirty: true once the user has manually edited the personal
+    // library name field
     let mut personal_name_dirty = use_signal(|| false);
     // whether the user being edited already has a personal library (edit mode only)
     let mut has_personal_library = use_signal(|| false);

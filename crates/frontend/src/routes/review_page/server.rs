@@ -3,6 +3,7 @@ use dioxus::prelude::*;
 // ───────────────────────────────────────────────────────
 #[cfg(feature = "server")]
 use {
+    super::types::SeriesOption,
     crate::routes::server_helpers::{require_capability, to_server_err},
     crate::server::{AuthSession, AuthUser, BackendSessionPool},
     axum::http::Method,
@@ -21,7 +22,7 @@ use {
     std::{str::FromStr, sync::Arc},
 };
 
-use super::types::{BookEditFields, BookReviewData, IdentifierMap, PicklistData, ProviderResult, SeriesOption};
+use super::types::{BookEditFields, BookReviewData, IdentifierMap, PicklistData, ProviderResult};
 
 // ── Helpers (server only)
 // ─────────────────────────────────────────────────────
@@ -688,6 +689,109 @@ pub(crate) async fn get_picklist_data((): ()) -> Result<PicklistData, ServerFnEr
         series: series_options,
         publishers,
     })
+}
+
+// ── Library membership server functions
+// ─────────────────────────────────────
+
+/// Returns the tokens of non-system libraries the book currently belongs to.
+#[post(
+    "/api/v1/books/libraries/list",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+pub(crate) async fn get_book_libraries(book_token: String) -> Result<Vec<String>, ServerFnError> {
+    require_capability(&auth_session, Capability::EditBook, Method::POST).await?;
+
+    let book_token_parsed = BookToken::from_str(&book_token).map_err(|_| ServerFnError::new("Invalid book token"))?;
+    let book = core_services
+        .book_service
+        .find_book_by_token(book_token_parsed)
+        .await
+        .map_err(to_server_err)?
+        .ok_or_else(|| ServerFnError::new("Book not found"))?;
+
+    // Get all library IDs the book belongs to.
+    let book_library_ids = core_services.library_service.library_ids_for_book(book.id).await.map_err(to_server_err)?;
+
+    // Load all libraries, filter to non-system, and intersect with book's
+    // libraries.
+    let all_libraries = core_services.library_service.list_libraries().await.map_err(to_server_err)?;
+    let tokens: Vec<String> = all_libraries
+        .into_iter()
+        .filter(|e| !e.library.is_system && book_library_ids.contains(&e.library.id))
+        .map(|e| e.library.token.to_string())
+        .collect();
+
+    Ok(tokens)
+}
+
+/// Returns all non-system libraries (token + name) for the picker.
+#[post(
+    "/api/v1/books/libraries/non-system",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+pub(crate) async fn list_non_system_libraries() -> Result<Vec<(String, String)>, ServerFnError> {
+    require_capability(&auth_session, Capability::EditBook, Method::POST).await?;
+
+    let all_libraries = core_services.library_service.list_libraries().await.map_err(to_server_err)?;
+    let result: Vec<(String, String)> = all_libraries
+        .into_iter()
+        .filter(|e| !e.library.is_system)
+        .map(|e| (e.library.token.to_string(), e.library.name))
+        .collect();
+
+    Ok(result)
+}
+
+/// Syncs non-system library memberships for a book.
+/// NEVER removes the book from system libraries (All Books stays always).
+#[put(
+    "/api/v1/books/libraries/set",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+pub(crate) async fn set_book_libraries(book_token: String, library_tokens: Vec<String>) -> Result<(), ServerFnError> {
+    require_capability(&auth_session, Capability::EditBook, Method::PUT).await?;
+
+    let book_token_parsed = BookToken::from_str(&book_token).map_err(|_| ServerFnError::new("Invalid book token"))?;
+    let book = core_services
+        .book_service
+        .find_book_by_token(book_token_parsed)
+        .await
+        .map_err(to_server_err)?
+        .ok_or_else(|| ServerFnError::new("Book not found"))?;
+
+    // Load all non-system libraries.
+    let all_libraries = core_services.library_service.list_libraries().await.map_err(to_server_err)?;
+    let non_system: Vec<_> = all_libraries.into_iter().filter(|e| !e.library.is_system).collect();
+
+    // Current library IDs for the book.
+    let current_ids = core_services.library_service.library_ids_for_book(book.id).await.map_err(to_server_err)?;
+
+    for entry in &non_system {
+        let lib = &entry.library;
+        let token_str = lib.token.to_string();
+        let desired = library_tokens.contains(&token_str);
+        let has = current_ids.contains(&lib.id);
+
+        if desired && !has {
+            core_services
+                .library_service
+                .add_book_to_library(lib.token, book_token_parsed)
+                .await
+                .map_err(to_server_err)?;
+        } else if !desired && has {
+            core_services
+                .library_service
+                .remove_book_from_library(lib.token, book_token_parsed)
+                .await
+                .map_err(to_server_err)?;
+        }
+    }
+
+    Ok(())
 }
 
 // ── Cover staging server functions

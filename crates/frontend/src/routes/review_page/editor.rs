@@ -3,8 +3,8 @@ use dioxus::{html::HasFileData, prelude::*};
 
 use super::{
     server::{
-        accept_incoming_provider_cover, accept_library_provider_cover, approve_book, fetch_provider_for_edit, fetch_provider_metadata, get_picklist_data,
-        reject_review_book, save_library_book, stage_incoming_cover, stage_library_cover,
+        accept_incoming_provider_cover, accept_library_provider_cover, approve_book, fetch_provider_for_edit, fetch_provider_metadata, get_book_libraries,
+        get_picklist_data, list_non_system_libraries, reject_review_book, save_library_book, set_book_libraries, stage_incoming_cover, stage_library_cover,
     },
     types::{BookEditFields, BookReviewData, IdentifierMap, ProviderResult},
 };
@@ -42,6 +42,43 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
     let mut authors = use_signal(|| data.authors.clone());
     let genres = use_signal(|| data.genres.clone());
     let tags = use_signal(|| data.tags.clone());
+
+    // ── Library membership state ──────────────────────────────────────────────
+    // All non-system libraries: Vec<(token, name)>
+    let non_system_libraries = use_resource(list_non_system_libraries);
+    // For edit_mode: fetch book's current library memberships. In review mode
+    // we skip the server round-trip by returning an empty vec immediately.
+    let book_token_for_libs = data.book_token.clone();
+    let book_existing_libraries = use_resource(move || {
+        let token = book_token_for_libs.clone();
+        async move { if edit_mode { get_book_libraries(token).await } else { Ok(vec![]) } }
+    });
+    // Checked library tokens (controlled by checkboxes). None = not yet
+    // initialised.
+    let mut checked_library_tokens: Signal<Option<Vec<String>>> = use_signal(|| None);
+
+    // Initialise checked_library_tokens once resource data arrives (runs once per
+    // render until initialised, then becomes a no-op because it won't be None
+    // any more).
+    {
+        let nsl = non_system_libraries.read();
+        let bel = book_existing_libraries.read();
+        if checked_library_tokens.read().is_none() {
+            if let (Some(Ok(libs)), Some(bel_res)) = (nsl.as_ref(), bel.as_ref()) {
+                let init: Vec<String> = if edit_mode {
+                    // Pre-check the libraries the book already belongs to.
+                    match bel_res {
+                        Ok(existing) => existing.clone(),
+                        Err(_) => vec![],
+                    }
+                } else {
+                    // Review mode: all non-system libraries checked by default.
+                    libs.iter().map(|(token, _)| token.clone()).collect()
+                };
+                checked_library_tokens.set(Some(init));
+            }
+        }
+    }
 
     // ── Pick-list data (loads client-side after hydration) ────────────────────
     let picklist = use_resource(move || get_picklist_data(()));
@@ -163,14 +200,20 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                     action_busy.set(true);
                                     error_msg.set(None);
                                     let bk = bk.clone();
+                                    let lib_tokens = checked_library_tokens.read().clone().unwrap_or_default();
                                     spawn(async move {
                                         let result = if edit_mode {
-                                            save_library_book(bk, fields).await
+                                            save_library_book(bk.clone(), fields).await
                                         } else {
                                             approve_book(fields).await
                                         };
                                         match result {
-                                            Ok(()) => on_back.call(()),
+                                            Ok(()) => {
+                                                // Sync library memberships (best-effort — don't fail
+                                                // the whole save if this errors).
+                                                let _ = set_book_libraries(bk, lib_tokens).await;
+                                                on_back.call(());
+                                            }
                                             Err(e) => {
                                                 error_msg.set(Some(e.to_string()));
                                                 action_busy.set(false);
@@ -619,6 +662,65 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                             td { class: "py-2 text-gray-600",
                                 if let Some(pr) = provider_result.read().as_ref() {
                                     "{pr.page_count}"
+                                }
+                            }
+                        }
+
+                        // Libraries
+                        tr {
+                            td { class: "py-2 pr-4 text-gray-500 font-medium whitespace-nowrap align-top pt-2", "Libraries" }
+                            td { class: "py-2 pr-4 col-span-3",
+                                colspan: "3",
+                                {
+                                    let nsl_ref = non_system_libraries.read();
+                                    match nsl_ref.as_ref() {
+                                        None => rsx! {
+                                            span { class: "text-xs text-gray-400", "Loading…" }
+                                        },
+                                        Some(Err(e)) => rsx! {
+                                            span { class: "text-xs text-red-500", "Could not load libraries: {e}" }
+                                        },
+                                        Some(Ok(libs)) if libs.is_empty() => rsx! {
+                                            span { class: "text-xs text-gray-400 italic", "No custom libraries" }
+                                        },
+                                        Some(Ok(libs)) => {
+                                            let checked = checked_library_tokens.read().clone().unwrap_or_default();
+                                            rsx! {
+                                                div { class: "flex flex-wrap gap-x-6 gap-y-1",
+                                                    for (token , name) in libs.clone() {
+                                                        {
+                                                            let token = token.clone();
+                                                            let name = name.clone();
+                                                            let is_checked = checked.contains(&token);
+                                                            rsx! {
+                                                                label {
+                                                                    key: "{token}",
+                                                                    class: "flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer select-none",
+                                                                    input {
+                                                                        r#type: "checkbox",
+                                                                        class: "rounded border-gray-300 text-indigo-600",
+                                                                        checked: is_checked,
+                                                                        onchange: move |e| {
+                                                                            let mut cur = checked_library_tokens.write();
+                                                                            let tokens = cur.get_or_insert_with(Vec::new);
+                                                                            if e.checked() {
+                                                                                if !tokens.contains(&token) {
+                                                                                    tokens.push(token.clone());
+                                                                                }
+                                                                            } else {
+                                                                                tokens.retain(|t| t != &token);
+                                                                            }
+                                                                        },
+                                                                    }
+                                                                    "{name}"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }

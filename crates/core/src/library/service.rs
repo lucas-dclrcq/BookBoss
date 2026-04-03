@@ -52,6 +52,11 @@ pub trait LibraryService: Send + Sync {
     /// Returns the library_ids for a book.
     async fn library_ids_for_book(&self, book_id: crate::book::BookId) -> Result<Vec<LibraryId>, Error>;
 
+    /// Removes a book from a library (by tokens). Is a no-op if the book is not
+    /// in the library. NEVER call this with a system library token — use
+    /// the repository directly if needed.
+    async fn remove_book_from_library(&self, library_token: LibraryToken, book_token: BookToken) -> Result<(), Error>;
+
     /// Validates that a user has access to the requested library. Returns Err
     /// if not.
     async fn validate_user_library_access(&self, user_id: UserId, library_id: LibraryId) -> Result<(), Error>;
@@ -197,6 +202,25 @@ impl LibraryService for LibraryServiceImpl {
 
     async fn library_ids_for_book(&self, book_id: crate::book::BookId) -> Result<Vec<LibraryId>, Error> {
         with_read_only_transaction!(self, library_repository, |tx| library_repository.library_ids_for_book(tx, book_id).await)
+    }
+
+    async fn remove_book_from_library(&self, library_token: LibraryToken, book_token: BookToken) -> Result<(), Error> {
+        with_transaction!(self, library_repository, book_repository, |tx| {
+            let library = library_repository
+                .find_by_token(tx, library_token)
+                .await?
+                .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
+
+            if library.is_system {
+                return Err(Error::Validation("Cannot remove a book from a system library".into()));
+            }
+
+            let book = book_repository
+                .find_by_token(tx, book_token)
+                .await?
+                .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
+            library_repository.remove_book_from_library(tx, library.id, book.id).await
+        })
     }
 
     async fn validate_user_library_access(&self, user_id: UserId, library_id: LibraryId) -> Result<(), Error> {
