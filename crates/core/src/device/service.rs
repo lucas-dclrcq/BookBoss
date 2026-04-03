@@ -185,7 +185,7 @@ impl DeviceService for DeviceServiceImpl {
             return Err(Error::Validation("device name must not be empty".to_string()));
         }
 
-        with_transaction!(self, device_repository, shelf_repository, |tx| {
+        with_transaction!(self, device_repository, shelf_repository, user_setting_repository, library_repository, |tx| {
             let device = device_repository
                 .add_device(
                     tx,
@@ -198,11 +198,15 @@ impl DeviceService for DeviceServiceImpl {
                 )
                 .await?;
 
+            // Resolve the user's default library, falling back to All Books.
+            let library_id = crate::library::resolve_user_default_library(tx, user_setting_repository.as_ref(), library_repository.as_ref(), owner_id).await?;
+
             shelf_repository
                 .add_shelf(
                     tx,
                     NewShelf {
                         owner_id,
+                        library_id,
                         name,
                         shelf_type: ShelfType::Smart,
                         visibility: ShelfVisibility::Private,
@@ -573,8 +577,12 @@ mod tests {
         book::{Book, BookStatus, repository::book::MockBookRepository},
         collection::MockCollectionRepository,
         device::repository::device::MockDeviceRepository,
+        library::MockLibraryRepository,
         shelf::{ShelfToken, repository::shelf::MockShelfRepository},
-        user::{User, UserToken, repository::user::MockUserRepository},
+        user::{
+            User, UserToken,
+            repository::{user::MockUserRepository, user_settings::MockUserSettingRepository},
+        },
     };
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -585,6 +593,24 @@ mod tests {
                 .user_repository(Arc::new(user_repo))
                 .shelf_repository(Arc::new(shelf_repo))
                 .device_repository(Arc::new(device_repo))
+                .build()
+                .expect("all fields provided"),
+        );
+        DeviceServiceImpl::new(repository_service)
+    }
+
+    fn create_service_for_create_device(
+        device_repo: MockDeviceRepository,
+        shelf_repo: MockShelfRepository,
+        setting_repo: MockUserSettingRepository,
+        library_repo: MockLibraryRepository,
+    ) -> DeviceServiceImpl {
+        let repository_service = Arc::new(
+            crate::repository::testing::default_repository_service_builder()
+                .shelf_repository(Arc::new(shelf_repo))
+                .device_repository(Arc::new(device_repo))
+                .user_setting_repository(Arc::new(setting_repo))
+                .library_repository(Arc::new(library_repo))
                 .build()
                 .expect("all fields provided"),
         );
@@ -612,6 +638,7 @@ mod tests {
             version: 1,
             token: ShelfToken::new(10),
             owner_id,
+            library_id: crate::library::ALL_BOOKS_LIBRARY_ID,
             name: "My Device".to_string(),
             shelf_type: ShelfType::Smart,
             visibility: ShelfVisibility::Private,
@@ -772,7 +799,9 @@ mod tests {
             let s = shelf.clone();
             Box::pin(async move { Ok(s) })
         });
-        let svc = create_service(device_repo, shelf_repo, MockUserRepository::new());
+        let mut setting_repo = MockUserSettingRepository::new();
+        setting_repo.expect_get().returning(|_, _, _| Box::pin(async { Ok(None) }));
+        let svc = create_service_for_create_device(device_repo, shelf_repo, setting_repo, MockLibraryRepository::new());
 
         let result = svc
             .create_device(1, "My Device".to_string(), "kobo".to_string(), OnRemovalAction::Nothing)

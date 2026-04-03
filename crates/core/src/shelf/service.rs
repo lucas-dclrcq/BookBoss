@@ -130,6 +130,7 @@ impl ShelfService for ShelfServiceImpl {
                     tx,
                     crate::shelf::NewShelf {
                         owner_id,
+                        library_id: crate::library::ALL_BOOKS_LIBRARY_ID,
                         name,
                         shelf_type: crate::shelf::ShelfType::Manual,
                         visibility,
@@ -345,6 +346,7 @@ impl ShelfService for ShelfServiceImpl {
                     tx,
                     crate::shelf::NewShelf {
                         owner_id,
+                        library_id: crate::library::ALL_BOOKS_LIBRARY_ID,
                         name,
                         shelf_type: ShelfType::Smart,
                         visibility,
@@ -464,12 +466,16 @@ impl ShelfService for ShelfServiceImpl {
             values: vec![FilterReadStatus::Active],
         });
 
-        with_transaction!(self, shelf_repository, |tx| {
+        with_transaction!(self, shelf_repository, user_setting_repository, library_repository, |tx| {
+            // Resolve the user's default library, falling back to All Books.
+            let library_id = crate::library::resolve_user_default_library(tx, user_setting_repository.as_ref(), library_repository.as_ref(), owner_id).await?;
+
             let target_shelf = shelf_repository
                 .add_shelf(
                     tx,
                     crate::shelf::NewShelf {
                         owner_id,
+                        library_id,
                         name,
                         shelf_type: ShelfType::Smart,
                         visibility: ShelfVisibility::Private,
@@ -497,8 +503,9 @@ mod tests {
     use crate::{
         Error, RepositoryError,
         book::{Book, BookStatus, BookToken, repository::book::MockBookRepository},
+        library::MockLibraryRepository,
         shelf::{BookShelf, Shelf, ShelfToken, ShelfType, ShelfVisibility, repository::shelf::MockShelfRepository},
-        user::UserId,
+        user::{UserId, repository::user_settings::MockUserSettingRepository},
     };
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -514,12 +521,31 @@ mod tests {
         ShelfServiceImpl::new(repository_service)
     }
 
+    fn create_service_with_setting_and_library_repos(
+        shelf_repo: MockShelfRepository,
+        book_repo: MockBookRepository,
+        setting_repo: MockUserSettingRepository,
+        library_repo: MockLibraryRepository,
+    ) -> ShelfServiceImpl {
+        let repository_service = Arc::new(
+            crate::repository::testing::default_repository_service_builder()
+                .book_repository(Arc::new(book_repo))
+                .shelf_repository(Arc::new(shelf_repo))
+                .user_setting_repository(Arc::new(setting_repo))
+                .library_repository(Arc::new(library_repo))
+                .build()
+                .expect("all fields provided"),
+        );
+        ShelfServiceImpl::new(repository_service)
+    }
+
     fn fake_shelf(owner_id: UserId, visibility: ShelfVisibility) -> Shelf {
         Shelf {
             id: 1,
             version: 1,
             token: ShelfToken::new(1),
             owner_id,
+            library_id: crate::library::ALL_BOOKS_LIBRARY_ID,
             name: "My Shelf".to_string(),
             shelf_type: ShelfType::Manual,
             visibility,
@@ -1353,7 +1379,9 @@ mod tests {
             let s = shelf.clone();
             Box::pin(async move { Ok(s) })
         });
-        let svc = create_service(shelf_repo, MockBookRepository::new());
+        let mut setting_repo = MockUserSettingRepository::new();
+        setting_repo.expect_get().returning(|_, _, _| Box::pin(async { Ok(None) }));
+        let svc = create_service_with_setting_and_library_repos(shelf_repo, MockBookRepository::new(), setting_repo, MockLibraryRepository::new());
 
         let result = svc.create_device_shelf(device_id, 1, "My Kobo".to_string()).await;
 
@@ -1370,7 +1398,9 @@ mod tests {
             let s = shelf.clone();
             Box::pin(async move { Ok(s) })
         });
-        let svc = create_service(shelf_repo, MockBookRepository::new());
+        let mut setting_repo = MockUserSettingRepository::new();
+        setting_repo.expect_get().returning(|_, _, _| Box::pin(async { Ok(None) }));
+        let svc = create_service_with_setting_and_library_repos(shelf_repo, MockBookRepository::new(), setting_repo, MockLibraryRepository::new());
 
         let token = svc.create_device_shelf(device_id, 1, "My Kobo".to_string()).await.unwrap();
 

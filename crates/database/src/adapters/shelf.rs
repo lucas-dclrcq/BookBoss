@@ -61,6 +61,7 @@ impl From<shelves::Model> for Shelf {
             version: m.version as u64,
             token,
             owner_id: m.owner_id as u64,
+            library_id: m.library_id as u64,
             name: m.name,
             shelf_type: str_to_shelf_type(&m.shelf_type),
             visibility: str_to_shelf_visibility(&m.visibility),
@@ -106,7 +107,7 @@ impl ShelfRepository for ShelfRepositoryAdapter {
             id: Set(token.id() as i64),
             token: Set(token.to_string()),
             owner_id: Set(book_shelf.owner_id as i64),
-            library_id: Set(1i64), // Default to system library (ID 1)
+            library_id: Set(book_shelf.library_id as i64),
             name: Set(book_shelf.name),
             shelf_type: Set(shelf_type_to_str(&book_shelf.shelf_type).to_owned()),
             visibility: Set(shelf_visibility_to_str(&book_shelf.visibility).to_owned()),
@@ -135,6 +136,7 @@ impl ShelfRepository for ShelfRepositoryAdapter {
         }
 
         let mut updater: shelves::ActiveModel = existing.into();
+        updater.library_id = Set(book_shelf.library_id as i64);
         updater.name = Set(book_shelf.name);
         updater.visibility = Set(shelf_visibility_to_str(&book_shelf.visibility).to_owned());
         updater.device_id = Set(book_shelf.device_id.map(|id| id as i64));
@@ -364,6 +366,7 @@ mod tests {
     fn manual_shelf(owner_id: u64, name: &str) -> NewShelf {
         NewShelf {
             owner_id,
+            library_id: bb_core::library::ALL_BOOKS_LIBRARY_ID,
             name: name.to_owned(),
             shelf_type: ShelfType::Manual,
             visibility: ShelfVisibility::Private,

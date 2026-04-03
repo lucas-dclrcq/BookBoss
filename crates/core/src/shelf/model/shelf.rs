@@ -1,7 +1,7 @@
 use bb_utils::{define_token_prefix, token::Token};
 use chrono::{DateTime, Utc};
 
-use crate::{device::DeviceId, filter::BookFilter, user::UserId};
+use crate::{device::DeviceId, filter::BookFilter, library::LibraryId, user::UserId};
 
 define_token_prefix!(ShelfTokenPrefix, "SH_");
 pub type ShelfId = u64;
@@ -26,6 +26,7 @@ pub struct Shelf {
     pub version: u64,
     pub token: ShelfToken,
     pub owner_id: UserId,
+    pub library_id: LibraryId,
     pub name: String,
     pub shelf_type: ShelfType,
     pub visibility: ShelfVisibility,
@@ -40,6 +41,7 @@ pub struct Shelf {
 #[derive(Debug, Clone)]
 pub struct NewShelf {
     pub owner_id: UserId,
+    pub library_id: LibraryId,
     pub name: String,
     pub shelf_type: ShelfType,
     pub visibility: ShelfVisibility,
