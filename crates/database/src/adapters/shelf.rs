@@ -3,7 +3,7 @@ use bb_core::{
     book::BookId,
     device::DeviceId,
     repository::Transaction,
-    shelf::{BookShelf, NewShelf, Shelf, ShelfId, ShelfRepository, ShelfToken, ShelfType, ShelfVisibility},
+    shelf::{BookShelf, NewShelf, Shelf, ShelfId, ShelfRepository, ShelfToken, ShelfType},
     user::UserId,
 };
 use chrono::Utc;
@@ -34,20 +34,6 @@ fn str_to_shelf_type(s: &str) -> ShelfType {
     }
 }
 
-fn shelf_visibility_to_str(v: &ShelfVisibility) -> &'static str {
-    match v {
-        ShelfVisibility::Private => "private",
-        ShelfVisibility::Public => "public",
-    }
-}
-
-fn str_to_shelf_visibility(s: &str) -> ShelfVisibility {
-    match s {
-        "public" => ShelfVisibility::Public,
-        _ => ShelfVisibility::Private,
-    }
-}
-
 // ── From impls
 // ────────────────────────────────────────────────────────────────
 
@@ -64,7 +50,6 @@ impl From<shelves::Model> for Shelf {
             library_id: m.library_id as u64,
             name: m.name,
             shelf_type: str_to_shelf_type(&m.shelf_type),
-            visibility: str_to_shelf_visibility(&m.visibility),
             device_id: m.device_id.map(|id| id as u64),
             filter_criteria,
             created_at: m.created_at.with_timezone(&Utc),
@@ -110,7 +95,6 @@ impl ShelfRepository for ShelfRepositoryAdapter {
             library_id: Set(book_shelf.library_id as i64),
             name: Set(book_shelf.name),
             shelf_type: Set(shelf_type_to_str(&book_shelf.shelf_type).to_owned()),
-            visibility: Set(shelf_visibility_to_str(&book_shelf.visibility).to_owned()),
             device_id: Set(book_shelf.device_id.map(|id| id as i64)),
             filter_criteria: Set(book_shelf.filter_criteria.and_then(|f| serde_json::to_value(f).ok())),
             version: Set(0),
@@ -138,7 +122,6 @@ impl ShelfRepository for ShelfRepositoryAdapter {
         let mut updater: shelves::ActiveModel = existing.into();
         updater.library_id = Set(book_shelf.library_id as i64);
         updater.name = Set(book_shelf.name);
-        updater.visibility = Set(shelf_visibility_to_str(&book_shelf.visibility).to_owned());
         updater.device_id = Set(book_shelf.device_id.map(|id| id as i64));
         updater.filter_criteria = Set(book_shelf.filter_criteria.and_then(|f| serde_json::to_value(f).ok()));
 
@@ -180,20 +163,6 @@ impl ShelfRepository for ShelfRepositoryAdapter {
         let rows = prelude::Shelves::find()
             .filter(shelves::Column::OwnerId.eq(owner_id as i64))
             .order_by_asc(shelves::Column::CreatedAt)
-            .all(transaction)
-            .await
-            .map_err(handle_dberr)?;
-
-        Ok(rows.into_iter().map(Into::into).collect())
-    }
-
-    async fn list_public_shelves(&self, transaction: &dyn Transaction, exclude_owner_id: UserId) -> Result<Vec<Shelf>, Error> {
-        let transaction = TransactionImpl::get_db_transaction(transaction)?;
-
-        let rows = prelude::Shelves::find()
-            .filter(shelves::Column::Visibility.eq("public"))
-            .filter(shelves::Column::OwnerId.ne(exclude_owner_id as i64))
-            .order_by_asc(shelves::Column::Name)
             .all(transaction)
             .await
             .map_err(handle_dberr)?;
@@ -300,7 +269,7 @@ mod tests {
         filter::{BookFilter, EntityRef, FilterCondition, FilterGroup, FilterReadStatus, FilterRule, NumericOp, SetOp, TextOp},
         reading::{ReadStatus, UserBookMetadata},
         repository::RepositoryService,
-        shelf::{BookShelf, NewShelf, ShelfType, ShelfVisibility},
+        shelf::{BookShelf, NewShelf, ShelfType},
         types::Capabilities,
         user::NewUser,
     };
@@ -369,7 +338,6 @@ mod tests {
             library_id: bb_core::library::ALL_BOOKS_LIBRARY_ID,
             name: name.to_owned(),
             shelf_type: ShelfType::Manual,
-            visibility: ShelfVisibility::Private,
             device_id: None,
             filter_criteria: None,
         }
@@ -514,7 +482,6 @@ mod tests {
         assert_eq!(shelf.name, "Favourites");
         assert_eq!(shelf.owner_id, user_id);
         assert_eq!(shelf.shelf_type, ShelfType::Manual);
-        assert_eq!(shelf.visibility, ShelfVisibility::Private);
         assert_eq!(shelf.token.id(), shelf.id);
     }
 
@@ -599,13 +566,11 @@ mod tests {
 
         let mut updated = shelf;
         updated.name = "New Name".to_owned();
-        updated.visibility = ShelfVisibility::Public;
 
         let result = svc.shelf_repository().update_shelf(&*tx, updated).await;
         assert!(result.is_ok());
         let saved = result.unwrap();
         assert_eq!(saved.name, "New Name");
-        assert_eq!(saved.visibility, ShelfVisibility::Public);
         assert_eq!(saved.version, version_before + 1);
     }
 

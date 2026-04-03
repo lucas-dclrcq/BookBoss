@@ -1,7 +1,6 @@
 use bb_core::{
     book::BookStatus,
     filter::{BookFilter, FilterCondition, FilterGroup, FilterRule, SetOp, TextOp},
-    shelf::ShelfVisibility,
 };
 
 use crate::{fixtures, setup};
@@ -14,12 +13,7 @@ async fn create_manual_shelf_appears_in_list() {
     let ctx = setup().await;
     let user = fixtures::insert_user(&ctx.repos, "shelf_owner").await;
 
-    let token = ctx
-        .services
-        .shelf_service
-        .create_manual_shelf(user.id, "My Shelf".to_string(), ShelfVisibility::Private)
-        .await
-        .unwrap();
+    let token = ctx.services.shelf_service.create_manual_shelf(user.id, "My Shelf".to_string()).await.unwrap();
 
     let shelves = ctx.services.shelf_service.list_shelves_for_user(user.id).await.unwrap();
     assert!(shelves.iter().any(|s| s.token == token), "created shelf should be in user's list");
@@ -33,7 +27,7 @@ async fn add_book_to_manual_shelf_and_retrieve() {
     let shelf_token = ctx
         .services
         .shelf_service
-        .create_manual_shelf(user.id, "Reading List".to_string(), ShelfVisibility::Private)
+        .create_manual_shelf(user.id, "Reading List".to_string())
         .await
         .unwrap();
 
@@ -49,12 +43,7 @@ async fn remove_book_from_manual_shelf() {
     let ctx = setup().await;
     let user = fixtures::insert_user(&ctx.repos, "shelf_remover").await;
     let book = fixtures::insert_book(&ctx.repos, "Foundation", BookStatus::Available).await;
-    let shelf_token = ctx
-        .services
-        .shelf_service
-        .create_manual_shelf(user.id, "To Remove".to_string(), ShelfVisibility::Private)
-        .await
-        .unwrap();
+    let shelf_token = ctx.services.shelf_service.create_manual_shelf(user.id, "To Remove".to_string()).await.unwrap();
     ctx.services.shelf_service.add_book_to_shelf(shelf_token, book.token, user.id).await.unwrap();
 
     ctx.services
@@ -71,12 +60,7 @@ async fn remove_book_from_manual_shelf() {
 async fn delete_shelf_removes_it_from_list() {
     let ctx = setup().await;
     let user = fixtures::insert_user(&ctx.repos, "shelf_deleter").await;
-    let token = ctx
-        .services
-        .shelf_service
-        .create_manual_shelf(user.id, "Temp Shelf".to_string(), ShelfVisibility::Private)
-        .await
-        .unwrap();
+    let token = ctx.services.shelf_service.create_manual_shelf(user.id, "Temp Shelf".to_string()).await.unwrap();
 
     ctx.services.shelf_service.delete_shelf(token, user.id).await.unwrap();
 
@@ -101,7 +85,7 @@ async fn smart_shelf_title_contains_filter() {
     let shelf_token = ctx
         .services
         .shelf_service
-        .create_smart_shelf(user.id, "Dune Books".to_string(), ShelfVisibility::Private, filter)
+        .create_smart_shelf(user.id, "Dune Books".to_string(), filter)
         .await
         .unwrap();
 
@@ -130,7 +114,7 @@ async fn smart_shelf_title_does_not_contain_filter() {
     let shelf_token = ctx
         .services
         .shelf_service
-        .create_smart_shelf(user.id, "Not Dune".to_string(), ShelfVisibility::Private, filter)
+        .create_smart_shelf(user.id, "Not Dune".to_string(), filter)
         .await
         .unwrap();
 
@@ -169,7 +153,7 @@ async fn smart_shelf_and_filter_requires_both_conditions() {
     let shelf_token = ctx
         .services
         .shelf_service
-        .create_smart_shelf(user.id, "Dune Messiah Only".to_string(), ShelfVisibility::Private, filter)
+        .create_smart_shelf(user.id, "Dune Messiah Only".to_string(), filter)
         .await
         .unwrap();
 
@@ -208,7 +192,7 @@ async fn smart_shelf_or_filter_accepts_either_condition() {
     let shelf_token = ctx
         .services
         .shelf_service
-        .create_smart_shelf(user.id, "Dune or Foundation".to_string(), ShelfVisibility::Private, filter)
+        .create_smart_shelf(user.id, "Dune or Foundation".to_string(), filter)
         .await
         .unwrap();
 
@@ -240,7 +224,7 @@ async fn count_for_filter_matches_books_for_filter_length() {
     let shelf_token = ctx
         .services
         .shelf_service
-        .create_smart_shelf(user.id, "Dune Count".to_string(), ShelfVisibility::Private, filter)
+        .create_smart_shelf(user.id, "Dune Count".to_string(), filter)
         .await
         .unwrap();
 
@@ -271,7 +255,7 @@ async fn smart_shelf_language_filter() {
     let shelf_token = ctx
         .services
         .shelf_service
-        .create_smart_shelf(user.id, "English Books".to_string(), ShelfVisibility::Private, filter.clone())
+        .create_smart_shelf(user.id, "English Books".to_string(), filter.clone())
         .await
         .unwrap();
 

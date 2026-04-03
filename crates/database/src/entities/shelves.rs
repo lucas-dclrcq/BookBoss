@@ -15,7 +15,6 @@ pub struct Model {
     pub library_id: i64,
     pub name: String,
     pub shelf_type: String,
-    pub visibility: String,
     pub device_id: Option<i64>,
     pub filter_criteria: Option<Json>,
     pub version: i64,
