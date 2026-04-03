@@ -1,9 +1,5 @@
+use bb_core::library::ALL_BOOKS_LIBRARY_TOKEN;
 use sea_orm_migration::prelude::*;
-
-// All Books token = LibraryToken::new(1_u64).to_string() = "LB_YYYYYYYYYYYY4"
-// Deterministic from id=1 via bb_utils::token base-32 encoding.
-// Verified by test `known_value_encoding` in crates/utils/src/token.rs.
-const ALL_BOOKS_LIBRARY_TOKEN: &str = "LB_YYYYYYYYYYYY4";
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
