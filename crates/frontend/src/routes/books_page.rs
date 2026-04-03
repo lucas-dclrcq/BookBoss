@@ -53,8 +53,10 @@ use {
     bb_core::{
         CoreServices,
         book::{Author, AuthorId, Book, BookAuthor, BookHydrationData, BookId, BookQuery, Series, SeriesId},
+        library::{ALL_BOOKS_LIBRARY_TOKEN, LibraryId, LibraryToken},
         reading::ReadStatus,
         types::Capability,
+        user::UserId,
     },
     std::sync::Arc,
 };
@@ -150,8 +152,39 @@ pub(crate) async fn hydrate_books(
     Ok(summaries)
 }
 
+/// Resolves an optional library token string to a `LibraryId`, validating user
+/// access.
+///
+/// Returns `Ok(None)` when:
+/// - `library_token` is `None` (no filter → all books)
+/// - The token refers to the "All Books" system library (no filter needed)
+///
+/// Returns `Ok(Some(id))` for any other library the user has access to.
+/// Returns `Err` if the token is malformed, the library does not exist, or the
+/// user does not have access.
+#[cfg(feature = "server")]
+async fn resolve_library_id(core_services: &CoreServices, user_id: UserId, library_token: Option<String>) -> Result<Option<LibraryId>, ServerFnError> {
+    let Some(token_str) = library_token else {
+        return Ok(None);
+    };
+    // Fast path: All Books token → no library_id filter.
+    if token_str == ALL_BOOKS_LIBRARY_TOKEN {
+        return Ok(None);
+    }
+    let token = token_str.parse::<LibraryToken>().map_err(|_| ServerFnError::new("Invalid library token"))?;
+    // Decode the library ID directly from the token (token encodes the ID).
+    let library_id: LibraryId = token.id();
+    // Validate that the user has access to this library.
+    core_services
+        .library_service
+        .validate_user_library_access(user_id, library_id)
+        .await
+        .map_err(|_| ServerFnError::new("Access denied"))?;
+    Ok(Some(library_id))
+}
+
 #[post("/api/v1/books", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
-async fn list_books(sort: crate::components::SortOrder) -> Result<ListBooksResponse, ServerFnError> {
+async fn list_books(sort: crate::components::SortOrder, library_token: Option<String>) -> Result<ListBooksResponse, ServerFnError> {
     use std::collections::HashMap;
 
     let current_user = authenticated_user(&auth_session)?;
@@ -162,11 +195,17 @@ async fn list_books(sort: crate::components::SortOrder) -> Result<ListBooksRespo
         .validate(&current_user, &Method::POST, None)
         .await;
 
+    let library_id = resolve_library_id(&core_services, user_id, library_token).await?;
+
     let filter = BookQuery {
         sort: Some(to_core_sort(sort)),
         ..Default::default()
     };
-    let books = core_services.book_service.list_books(&filter, None, None, None).await.map_err(to_server_err)?;
+    let books = core_services
+        .book_service
+        .list_books(&filter, library_id, None, None)
+        .await
+        .map_err(to_server_err)?;
 
     // Load per-user reading state scoped to the fetched books (avoids page limits).
     let book_ids: Vec<bb_core::book::BookId> = books.iter().map(|b| b.id).collect();
@@ -205,12 +244,14 @@ async fn list_books(sort: crate::components::SortOrder) -> Result<ListBooksRespo
 
 #[component]
 pub(crate) fn BooksPage() -> Element {
+    use crate::components::ACTIVE_LIBRARY;
     use_context_provider(|| Signal::new(None::<String>)); // DraggedBookToken
     let mut books_refresh = use_signal(|| 0u32);
     let mut page_data = use_server_future(move || {
         let sort = crate::components::SORT_ORDER();
+        let library_token = ACTIVE_LIBRARY();
         let _ = books_refresh();
-        list_books(sort)
+        list_books(sort, library_token)
     })?;
     let mut shelves_resource = use_server_future(list_all_accessible_shelves)?;
     let shelves: Vec<ShelfSummary> = shelves_resource().and_then(std::result::Result::ok).unwrap_or_default();
