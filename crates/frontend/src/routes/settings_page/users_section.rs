@@ -723,8 +723,6 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
     // personal_name_dirty: true once the user has manually edited the personal
     // library name field
     let mut personal_name_dirty = use_signal(|| false);
-    // whether the user being edited already has a personal library (edit mode only)
-    let mut has_personal_library = use_signal(|| false);
 
     // Load all libraries on mount
     let libraries_resource = use_resource(move || async move { list_all_libraries_simple().await });
@@ -747,7 +745,6 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
         if let Some(Some(Ok(assignment))) = user_assignment_resource() {
             checked_library_tokens.set(assignment.assigned_tokens.clone());
             default_library_token.set(assignment.default_token.clone());
-            has_personal_library.set(assignment.has_personal_library);
         }
     });
 
@@ -1071,10 +1068,12 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                     }
 
                     // ── Personal library creation ──────────────────────────
-                    // Create form: always shown.
-                    // Edit form: only shown if user has no personal (non-system) library.
-                    if !is_edit || !has_personal_library() {
-                        div { class: "mb-4",
+                    // Always shown — admins/super-admins may manage multiple
+                    // libraries, so we can't reliably detect whether they already
+                    // have their own personal library via the has_personal_library
+                    // heuristic (which returns true whenever any non-system library
+                    // is assigned, even one owned by another user).
+                    div { class: "mb-4",
                             label { class: "flex items-center gap-2 cursor-pointer select-none",
                                 input {
                                     r#type: "checkbox",
@@ -1108,7 +1107,6 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                                 }
                             }
                         }
-                    }
 
                     // Actions
                     div { class: "flex justify-end gap-3 pt-2",
