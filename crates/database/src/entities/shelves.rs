@@ -12,6 +12,7 @@ pub struct Model {
     #[sea_orm(unique)]
     pub token: String,
     pub owner_id: i64,
+    pub library_id: i64,
     pub name: String,
     pub shelf_type: String,
     pub visibility: String,

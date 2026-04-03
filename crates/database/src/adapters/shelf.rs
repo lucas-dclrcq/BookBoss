@@ -106,6 +106,7 @@ impl ShelfRepository for ShelfRepositoryAdapter {
             id: Set(token.id() as i64),
             token: Set(token.to_string()),
             owner_id: Set(book_shelf.owner_id as i64),
+            library_id: Set(1i64), // Default to system library (ID 1)
             name: Set(book_shelf.name),
             shelf_type: Set(shelf_type_to_str(&book_shelf.shelf_type).to_owned()),
             visibility: Set(shelf_visibility_to_str(&book_shelf.visibility).to_owned()),
