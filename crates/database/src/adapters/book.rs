@@ -4,6 +4,7 @@ use bb_core::{
         AuthorId, AuthorRole, Book, BookAuthor, BookFile, BookId, BookIdentifier, BookQuery, BookRepository, BookToken, FileFormat, FileRole, Genre, GenreId,
         IdentifierType, NewBook, Tag, TagId,
     },
+    library::LibraryId,
     repository::Transaction,
 };
 use chrono::Utc;
@@ -12,7 +13,7 @@ use sea_orm::{
 };
 
 use crate::{
-    entities::{book_authors, book_files, book_genres, book_identifiers, book_tags, books, genres, prelude, tags},
+    entities::{book_authors, book_files, book_genres, book_identifiers, book_tags, books, genres, library_books, prelude, tags},
     error::handle_dberr,
     transaction::TransactionImpl,
 };
@@ -165,7 +166,14 @@ impl BookRepository for BookRepositoryAdapter {
         self.find_by_id(transaction, token.id()).await
     }
 
-    async fn list_books(&self, transaction: &dyn Transaction, filter: &BookQuery, offset: Option<u64>, page_size: Option<u64>) -> Result<Vec<Book>, Error> {
+    async fn list_books(
+        &self,
+        transaction: &dyn Transaction,
+        filter: &BookQuery,
+        library_id: Option<LibraryId>,
+        offset: Option<u64>,
+        page_size: Option<u64>,
+    ) -> Result<Vec<Book>, Error> {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
         let mut query = prelude::Books::find().filter(books::Column::Status.eq("available"));
@@ -195,6 +203,14 @@ impl BookRepository for BookRepositoryAdapter {
             subq.column(book_tags::Column::BookId)
                 .from(book_tags::Entity)
                 .and_where(book_tags::Column::TagId.eq(tag_id as i64));
+            query = query.filter(books::Column::Id.in_subquery(subq));
+        }
+
+        if let Some(lib_id) = library_id {
+            let mut subq = Query::select();
+            subq.column(library_books::Column::BookId)
+                .from(library_books::Entity)
+                .and_where(library_books::Column::LibraryId.eq(lib_id as i64));
             query = query.filter(books::Column::Id.in_subquery(subq));
         }
 
@@ -1283,7 +1299,7 @@ mod tests {
 
         assert!(
             svc.book_repository()
-                .list_books(&*tx, &BookQuery::default(), None, None)
+                .list_books(&*tx, &BookQuery::default(), None, None, None)
                 .await
                 .unwrap()
                 .is_empty()
@@ -1299,7 +1315,11 @@ mod tests {
         svc.book_repository().add_book(&*tx, new_book("Book B")).await.unwrap();
 
         assert_eq!(
-            svc.book_repository().list_books(&*tx, &BookQuery::default(), None, None).await.unwrap().len(),
+            svc.book_repository()
+                .list_books(&*tx, &BookQuery::default(), None, None, None)
+                .await
+                .unwrap()
+                .len(),
             2
         );
     }
@@ -1322,7 +1342,7 @@ mod tests {
             .unwrap();
 
         let filter = BookQuery::default();
-        let results = svc.book_repository().list_books(&*tx, &filter, None, None).await.unwrap();
+        let results = svc.book_repository().list_books(&*tx, &filter, None, None, None).await.unwrap();
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].title, "Available");
@@ -1361,7 +1381,7 @@ mod tests {
             series_id: Some(series.id),
             ..Default::default()
         };
-        let results = svc.book_repository().list_books(&*tx, &filter, None, None).await.unwrap();
+        let results = svc.book_repository().list_books(&*tx, &filter, None, None, None).await.unwrap();
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].id, b1.id);
@@ -1401,7 +1421,7 @@ mod tests {
             author_id: Some(author.id),
             ..Default::default()
         };
-        let results = svc.book_repository().list_books(&*tx, &filter, None, None).await.unwrap();
+        let results = svc.book_repository().list_books(&*tx, &filter, None, None, None).await.unwrap();
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].id, book.id);
@@ -1429,7 +1449,7 @@ mod tests {
             genre_id: Some(genre.id),
             ..Default::default()
         };
-        let results = svc.book_repository().list_books(&*tx, &filter, None, None).await.unwrap();
+        let results = svc.book_repository().list_books(&*tx, &filter, None, None, None).await.unwrap();
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].id, book.id);
@@ -1457,7 +1477,7 @@ mod tests {
             tag_id: Some(tag.id),
             ..Default::default()
         };
-        let results = svc.book_repository().list_books(&*tx, &filter, None, None).await.unwrap();
+        let results = svc.book_repository().list_books(&*tx, &filter, None, None, None).await.unwrap();
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].id, book.id);
@@ -1471,10 +1491,14 @@ mod tests {
         svc.book_repository().add_book(&*tx, new_book("Book A")).await.unwrap();
         svc.book_repository().add_book(&*tx, new_book("Book B")).await.unwrap();
 
-        let all = svc.book_repository().list_books(&*tx, &BookQuery::default(), None, None).await.unwrap();
+        let all = svc.book_repository().list_books(&*tx, &BookQuery::default(), None, None, None).await.unwrap();
         assert_eq!(all.len(), 2);
 
-        let result = svc.book_repository().list_books(&*tx, &BookQuery::default(), Some(1), None).await.unwrap();
+        let result = svc
+            .book_repository()
+            .list_books(&*tx, &BookQuery::default(), None, Some(1), None)
+            .await
+            .unwrap();
 
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].id, all[1].id);

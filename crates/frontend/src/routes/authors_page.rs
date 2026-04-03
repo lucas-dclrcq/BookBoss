@@ -37,6 +37,7 @@ async fn get_authors() -> Result<Vec<AuthorRow>, ServerFnError> {
                 },
                 None,
                 None,
+                None,
             )
             .await
             .map_err(to_server_err)?;

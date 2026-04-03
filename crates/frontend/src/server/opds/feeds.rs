@@ -96,7 +96,7 @@ pub async fn all_books(opds_user: OpdsUser, Query(params): Query<PaginationParam
     let filter = BookQuery::default();
 
     let offset = params.start;
-    let Ok(books) = core_services.book_service.list_books(&filter, offset, Some(PAGE_SIZE + 1)).await else {
+    let Ok(books) = core_services.book_service.list_books(&filter, None, offset, Some(PAGE_SIZE + 1)).await else {
         return Response::builder()
             .status(StatusCode::INTERNAL_SERVER_ERROR)
             .body(axum::body::Body::empty())
@@ -323,7 +323,7 @@ pub async fn author_books(
     };
 
     let offset = params.start;
-    let Ok(books) = core_services.book_service.list_books(&filter, offset, Some(PAGE_SIZE + 1)).await else {
+    let Ok(books) = core_services.book_service.list_books(&filter, None, offset, Some(PAGE_SIZE + 1)).await else {
         return error_response(StatusCode::INTERNAL_SERVER_ERROR);
     };
 
@@ -407,7 +407,7 @@ pub async fn series_books(
     };
 
     let offset = params.start;
-    let Ok(books) = core_services.book_service.list_books(&filter, offset, Some(PAGE_SIZE + 1)).await else {
+    let Ok(books) = core_services.book_service.list_books(&filter, None, offset, Some(PAGE_SIZE + 1)).await else {
         return error_response(StatusCode::INTERNAL_SERVER_ERROR);
     };
 
@@ -481,7 +481,7 @@ pub async fn search(opds_user: OpdsUser, Query(params): Query<SearchParams>, Ext
     }));
 
     let offset = params.start;
-    let Ok(books) = core_services.collection_service.search_books(&filter, offset, Some(PAGE_SIZE + 1)).await else {
+    let Ok(books) = core_services.collection_service.search_books(&filter, None, offset, Some(PAGE_SIZE + 1)).await else {
         return error_response(StatusCode::INTERNAL_SERVER_ERROR);
     };
 

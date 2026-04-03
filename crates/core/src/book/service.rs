@@ -14,7 +14,13 @@ use crate::{
 
 #[async_trait::async_trait]
 pub trait BookService: Send + Sync {
-    async fn list_books(&self, filter: &BookQuery, offset: Option<u64>, page_size: Option<u64>) -> Result<Vec<Book>, Error>;
+    async fn list_books(
+        &self,
+        filter: &BookQuery,
+        library_id: Option<crate::library::LibraryId>,
+        offset: Option<u64>,
+        page_size: Option<u64>,
+    ) -> Result<Vec<Book>, Error>;
     async fn find_book_by_token(&self, token: BookToken) -> Result<Option<Book>, Error>;
     async fn authors_for_book(&self, book_id: BookId) -> Result<Vec<BookAuthor>, Error>;
     async fn files_for_book(&self, book_id: BookId) -> Result<Vec<BookFile>, Error>;
@@ -77,9 +83,17 @@ impl BookServiceImpl {
 
 #[async_trait::async_trait]
 impl BookService for BookServiceImpl {
-    async fn list_books(&self, filter: &BookQuery, offset: Option<u64>, page_size: Option<u64>) -> Result<Vec<Book>, Error> {
+    async fn list_books(
+        &self,
+        filter: &BookQuery,
+        library_id: Option<crate::library::LibraryId>,
+        offset: Option<u64>,
+        page_size: Option<u64>,
+    ) -> Result<Vec<Book>, Error> {
         let filter = filter.clone();
-        with_read_only_transaction!(self, book_repository, |tx| book_repository.list_books(tx, &filter, offset, page_size).await)
+        with_read_only_transaction!(self, book_repository, |tx| book_repository
+            .list_books(tx, &filter, library_id, offset, page_size)
+            .await)
     }
 
     async fn find_book_by_token(&self, token: BookToken) -> Result<Option<Book>, Error> {
@@ -321,13 +335,13 @@ mod tests {
     async fn test_list_books_returns_results() {
         let books = vec![fake_book(1, "Dune"), fake_book(2, "Foundation")];
         let mut book_repo = MockBookRepository::new();
-        book_repo.expect_list_books().returning(move |_, _, _, _| {
+        book_repo.expect_list_books().returning(move |_, _, _, _, _| {
             let books = books.clone();
             Box::pin(async move { Ok(books) })
         });
         let svc = default_service_with_book_repo(book_repo);
 
-        let result = svc.list_books(&BookQuery::default(), None, None).await;
+        let result = svc.list_books(&BookQuery::default(), None, None, None).await;
 
         assert!(result.is_ok());
         let list = result.unwrap();
@@ -339,10 +353,10 @@ mod tests {
     #[tokio::test]
     async fn test_list_books_returns_empty() {
         let mut book_repo = MockBookRepository::new();
-        book_repo.expect_list_books().returning(|_, _, _, _| Box::pin(async { Ok(vec![]) }));
+        book_repo.expect_list_books().returning(|_, _, _, _, _| Box::pin(async { Ok(vec![]) }));
         let svc = default_service_with_book_repo(book_repo);
 
-        let result = svc.list_books(&BookQuery::default(), None, None).await;
+        let result = svc.list_books(&BookQuery::default(), None, None, None).await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
@@ -353,10 +367,10 @@ mod tests {
         let mut book_repo = MockBookRepository::new();
         book_repo
             .expect_list_books()
-            .returning(|_, _, _, _| Box::pin(async { Err(Error::RepositoryError(RepositoryError::Database("db error".into()))) }));
+            .returning(|_, _, _, _, _| Box::pin(async { Err(Error::RepositoryError(RepositoryError::Database("db error".into()))) }));
         let svc = default_service_with_book_repo(book_repo);
 
-        let result = svc.list_books(&BookQuery::default(), None, None).await;
+        let result = svc.list_books(&BookQuery::default(), None, None, None).await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::Database(_)))));
     }

@@ -314,7 +314,7 @@ impl DeviceService for DeviceServiceImpl {
 
             // 2. Load all shelf books with no page limit, then sort by book_id for
             //    deterministic keyset pagination
-            let mut shelf_books = collection_repository.books_for_filter(tx, filter, owner_id, None, None, None).await?;
+            let mut shelf_books = collection_repository.books_for_filter(tx, filter, owner_id, None, None, None, None).await?;
             shelf_books.sort_by_key(|b| b.id);
 
             // 3. Load all DeviceBook records for quick lookup
@@ -1002,7 +1002,7 @@ mod tests {
         let mut collection_repo = MockCollectionRepository::new();
         collection_repo
             .expect_books_for_filter()
-            .returning(|_, _, _, _, _, _| Box::pin(async { Ok(vec![]) }));
+            .returning(|_, _, _, _, _, _, _| Box::pin(async { Ok(vec![]) }));
         let svc = create_sync_service(device_repo, shelf_repo, collection_repo, MockBookRepository::new());
 
         let diff = svc.compute_sync_diff(1, 1, None, None, 100).await.unwrap();
@@ -1038,7 +1038,7 @@ mod tests {
             Box::pin(async move { Ok(Some(s)) })
         });
         let mut collection_repo = MockCollectionRepository::new();
-        collection_repo.expect_books_for_filter().returning(move |_, _, _, _, _, _| {
+        collection_repo.expect_books_for_filter().returning(move |_, _, _, _, _, _, _| {
             let b = book.clone();
             Box::pin(async move { Ok(vec![b]) })
         });
@@ -1067,7 +1067,7 @@ mod tests {
             Box::pin(async move { Ok(Some(s)) })
         });
         let mut collection_repo = MockCollectionRepository::new();
-        collection_repo.expect_books_for_filter().returning(move |_, _, _, _, _, _| {
+        collection_repo.expect_books_for_filter().returning(move |_, _, _, _, _, _, _| {
             let b = books.clone();
             Box::pin(async move { Ok(b) })
         });
@@ -1102,7 +1102,7 @@ mod tests {
         });
         let mut collection_repo = MockCollectionRepository::new();
 
-        collection_repo.expect_books_for_filter().returning(move |_, _, _, _, _, _| {
+        collection_repo.expect_books_for_filter().returning(move |_, _, _, _, _, _, _| {
             let b = book.clone();
             Box::pin(async move { Ok(vec![b]) })
         });
@@ -1142,7 +1142,7 @@ mod tests {
         });
         let mut collection_repo = MockCollectionRepository::new();
 
-        collection_repo.expect_books_for_filter().returning(move |_, _, _, _, _, _| {
+        collection_repo.expect_books_for_filter().returning(move |_, _, _, _, _, _, _| {
             let b = book.clone();
             Box::pin(async move { Ok(vec![b]) })
         });
@@ -1186,7 +1186,7 @@ mod tests {
         });
         let mut collection_repo = MockCollectionRepository::new();
 
-        collection_repo.expect_books_for_filter().returning(move |_, _, _, _, _, _| {
+        collection_repo.expect_books_for_filter().returning(move |_, _, _, _, _, _, _| {
             let b = book.clone();
             Box::pin(async move { Ok(vec![b]) })
         });
@@ -1221,7 +1221,7 @@ mod tests {
         });
         let mut collection_repo = MockCollectionRepository::new();
 
-        collection_repo.expect_books_for_filter().returning(move |_, _, _, _, _, _| {
+        collection_repo.expect_books_for_filter().returning(move |_, _, _, _, _, _, _| {
             let b = book.clone();
             Box::pin(async move { Ok(vec![b]) })
         });
@@ -1250,7 +1250,7 @@ mod tests {
         });
         let mut collection_repo = MockCollectionRepository::new();
 
-        collection_repo.expect_books_for_filter().returning(move |_, _, _, _, _, _| {
+        collection_repo.expect_books_for_filter().returning(move |_, _, _, _, _, _, _| {
             let b = book.clone();
             Box::pin(async move { Ok(vec![b]) })
         });
@@ -1282,7 +1282,7 @@ mod tests {
         });
         let mut collection_repo = MockCollectionRepository::new();
 
-        collection_repo.expect_books_for_filter().returning(move |_, _, _, _, _, _| {
+        collection_repo.expect_books_for_filter().returning(move |_, _, _, _, _, _, _| {
             let b = books.clone();
             Box::pin(async move { Ok(b) })
         });

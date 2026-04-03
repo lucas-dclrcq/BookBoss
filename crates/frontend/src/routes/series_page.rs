@@ -30,7 +30,7 @@ async fn get_all_series() -> Result<Vec<SeriesTileData>, ServerFnError> {
             series_id: Some(series.id),
             ..Default::default()
         };
-        let mut books = book_service.list_books(&filter, None, None).await.map_err(to_server_err)?;
+        let mut books = book_service.list_books(&filter, None, None, None).await.map_err(to_server_err)?;
 
         // Skip series with no available books (e.g. all still incoming).
         if books.is_empty() {

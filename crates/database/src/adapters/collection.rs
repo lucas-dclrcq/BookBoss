@@ -3,13 +3,14 @@ use bb_core::{
     book::{Book, BookSortOrder},
     collection::CollectionRepository,
     filter::BookFilter,
+    library::LibraryId,
     repository::Transaction,
     user::UserId,
 };
-use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QuerySelect};
+use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QuerySelect, sea_query::Query};
 
 use crate::{
-    entities::{books, prelude},
+    entities::{books, library_books, prelude},
     error::handle_dberr,
     filter::build_condition,
     transaction::TransactionImpl,
@@ -46,6 +47,7 @@ impl CollectionRepository for CollectionRepositoryAdapter {
         transaction: &dyn Transaction,
         filter: &BookFilter,
         user_id: UserId,
+        library_id: Option<LibraryId>,
         offset: Option<u64>,
         page_size: Option<u64>,
         sort: Option<BookSortOrder>,
@@ -58,9 +60,20 @@ impl CollectionRepository for CollectionRepositoryAdapter {
 
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
-        let query = prelude::Books::find()
+        let mut query = prelude::Books::find()
             .filter(books::Column::Status.eq("available"))
             .filter(build_condition(filter, user_id).map_err(bb_core::Error::RepositoryError)?);
+
+        // TODO: when Task 7 adds FilterRule::Library, skip scoping when
+        // the filter already contains a library rule (the filter itself handles
+        // library scoping in that case).
+        if let Some(lib_id) = library_id {
+            let mut subq = Query::select();
+            subq.column(library_books::Column::BookId)
+                .from(library_books::Entity)
+                .and_where(library_books::Column::LibraryId.eq(lib_id as i64));
+            query = query.filter(books::Column::Id.in_subquery(subq));
+        }
 
         let query = crate::sort::apply_book_sort(query, sort);
 
@@ -73,12 +86,22 @@ impl CollectionRepository for CollectionRepositoryAdapter {
         Ok(rows.into_iter().map(Into::into).collect())
     }
 
-    async fn count_for_filter(&self, transaction: &dyn Transaction, filter: &BookFilter, user_id: UserId) -> Result<u64, Error> {
+    async fn count_for_filter(&self, transaction: &dyn Transaction, filter: &BookFilter, user_id: UserId, library_id: Option<LibraryId>) -> Result<u64, Error> {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
-        let query = prelude::Books::find()
+        let mut query = prelude::Books::find()
             .filter(books::Column::Status.eq("available"))
             .filter(build_condition(filter, user_id).map_err(bb_core::Error::RepositoryError)?);
+
+        // TODO: when Task 7 adds FilterRule::Library, skip scoping when
+        // the filter already contains a library rule.
+        if let Some(lib_id) = library_id {
+            let mut subq = Query::select();
+            subq.column(library_books::Column::BookId)
+                .from(library_books::Entity)
+                .and_where(library_books::Column::LibraryId.eq(lib_id as i64));
+            query = query.filter(books::Column::Id.in_subquery(subq));
+        }
 
         Ok(query.count(transaction).await.map_err(handle_dberr)?)
     }
@@ -205,7 +228,7 @@ mod tests {
         let tx = svc.repository().begin().await.unwrap();
         let results = svc
             .collection_repository()
-            .books_for_filter(&*tx, &empty_filter(), 0, None, None, None)
+            .books_for_filter(&*tx, &empty_filter(), 0, None, None, None, None)
             .await
             .unwrap();
 
@@ -221,7 +244,7 @@ mod tests {
         let tx = svc.repository().begin().await.unwrap();
         assert!(matches!(
             svc.collection_repository()
-                .books_for_filter(&*tx, &empty_filter(), 0, None, Some(0), None)
+                .books_for_filter(&*tx, &empty_filter(), 0, None, None, Some(0), None)
                 .await,
             Err(Error::InvalidPageSize(0))
         ));
@@ -237,10 +260,10 @@ mod tests {
         add_book(&svc, "Incoming", BookStatus::Incoming).await;
 
         let tx = svc.repository().begin().await.unwrap();
-        let count = svc.collection_repository().count_for_filter(&*tx, &empty_filter(), 0).await.unwrap();
+        let count = svc.collection_repository().count_for_filter(&*tx, &empty_filter(), 0, None).await.unwrap();
         let list = svc
             .collection_repository()
-            .books_for_filter(&*tx, &empty_filter(), 0, None, None, None)
+            .books_for_filter(&*tx, &empty_filter(), 0, None, None, None, None)
             .await
             .unwrap();
 

@@ -166,7 +166,7 @@ async fn list_books(sort: crate::components::SortOrder) -> Result<ListBooksRespo
         sort: Some(to_core_sort(sort)),
         ..Default::default()
     };
-    let books = core_services.book_service.list_books(&filter, None, None).await.map_err(to_server_err)?;
+    let books = core_services.book_service.list_books(&filter, None, None, None).await.map_err(to_server_err)?;
 
     // Load per-user reading state scoped to the fetched books (avoids page limits).
     let book_ids: Vec<bb_core::book::BookId> = books.iter().map(|b| b.id).collect();

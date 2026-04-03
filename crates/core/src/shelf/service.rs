@@ -409,7 +409,9 @@ impl ShelfService for ShelfServiceImpl {
                 .filter_criteria
                 .ok_or_else(|| Error::Validation("smart shelf has no filter criteria".to_string()))?;
 
-            collection_repository.books_for_filter(tx, &filter, user_id, offset, page_size, sort).await
+            collection_repository
+                .books_for_filter(tx, &filter, user_id, None, offset, page_size, sort)
+                .await
         })
     }
 
@@ -432,7 +434,7 @@ impl ShelfService for ShelfServiceImpl {
                 .filter_criteria
                 .ok_or_else(|| Error::Validation("smart shelf has no filter criteria".to_string()))?;
 
-            collection_repository.count_for_filter(tx, &filter, user_id).await
+            collection_repository.count_for_filter(tx, &filter, user_id, None).await
         })
     }
 

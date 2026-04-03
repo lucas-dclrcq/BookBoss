@@ -49,7 +49,7 @@ async fn get_series(token: String) -> Result<SeriesPageData, ServerFnError> {
         series_id: Some(series.id),
         ..Default::default()
     };
-    let mut books = book_service.list_books(&filter, None, None).await.map_err(to_server_err)?;
+    let mut books = book_service.list_books(&filter, None, None, None).await.map_err(to_server_err)?;
 
     // Sort books by series_number ascending (None sorts last)
     books.sort_by(|a, b| match (&a.series_number, &b.series_number) {

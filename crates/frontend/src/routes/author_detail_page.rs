@@ -53,7 +53,7 @@ async fn get_author(token: String) -> Result<AuthorPageData, ServerFnError> {
         }),
         ..Default::default()
     };
-    let books = book_service.list_books(&filter, None, None).await.map_err(to_server_err)?;
+    let books = book_service.list_books(&filter, None, None, None).await.map_err(to_server_err)?;
 
     let reading_metas = core_services
         .reading_service

@@ -179,7 +179,7 @@ async fn reject_job_removes_orphan_author() {
     svc.collection_service.reject_book(job.token).await.unwrap();
 
     // "Test Author" was only on this book — must be cleaned up
-    let books = svc.book_service.list_books(&BookQuery::default(), None, None).await.unwrap();
+    let books = svc.book_service.list_books(&BookQuery::default(), None, None, None).await.unwrap();
     assert!(books.is_empty(), "all books deleted");
     // No author listing service exposed directly; verify indirectly via library
     // stats

@@ -28,7 +28,7 @@ async fn list_books_returns_empty_initially() {
     let ctx = setup().await;
     let filter = BookQuery::default();
 
-    let books = ctx.services.book_service.list_books(&filter, None, None).await.unwrap();
+    let books = ctx.services.book_service.list_books(&filter, None, None, None).await.unwrap();
 
     assert!(books.is_empty());
 }
@@ -40,7 +40,7 @@ async fn list_books_filters_by_status() {
     fixtures::insert_book(&ctx.repos, "Incoming Book", BookStatus::Incoming).await;
 
     let filter = BookQuery::default();
-    let books = ctx.services.book_service.list_books(&filter, None, None).await.unwrap();
+    let books = ctx.services.book_service.list_books(&filter, None, None, None).await.unwrap();
 
     assert_eq!(books.len(), 1);
     assert_eq!(books[0].title, "Available Book");
@@ -53,7 +53,7 @@ async fn list_books_returns_all_available_without_filter() {
     fixtures::insert_book(&ctx.repos, "Book B", BookStatus::Available).await;
     fixtures::insert_book(&ctx.repos, "Book C", BookStatus::Incoming).await;
 
-    let books = ctx.services.book_service.list_books(&BookQuery::default(), None, None).await.unwrap();
+    let books = ctx.services.book_service.list_books(&BookQuery::default(), None, None, None).await.unwrap();
 
     assert_eq!(books.len(), 2);
 }
