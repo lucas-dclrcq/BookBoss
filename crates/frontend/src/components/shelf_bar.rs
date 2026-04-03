@@ -29,14 +29,12 @@ pub(crate) fn ShelfBar(
     // Static shelf modal state
     let mut show_modal = use_signal(|| false);
     let mut shelf_name = use_signal(String::new);
-    let mut is_private = use_signal(|| true);
     let mut creating = use_signal(|| false);
     let mut error_msg: Signal<Option<String>> = use_signal(|| None);
 
     // Smart shelf modal state
     let mut show_smart_modal = use_signal(|| false);
     let mut smart_name = use_signal(String::new);
-    let mut smart_is_private = use_signal(|| true);
     let mut smart_filter = use_signal(default_book_filter);
     let mut smart_creating = use_signal(|| false);
     let mut smart_error: Signal<Option<String>> = use_signal(|| None);
@@ -71,11 +69,10 @@ pub(crate) fn ShelfBar(
             error_msg.set(Some("You already have a shelf with that name.".into()));
             return;
         }
-        let visibility = if is_private() { "Private" } else { "Public" }.to_string();
         creating.set(true);
         error_msg.set(None);
         spawn(async move {
-            match create_shelf(name, visibility).await {
+            match create_shelf(name).await {
                 Ok(token) => {
                     show_modal.set(false);
                     creating.set(false);
@@ -122,10 +119,8 @@ pub(crate) fn ShelfBar(
                             "px-3 py-1 rounded-full text-sm bg-indigo-600 text-white font-medium whitespace-nowrap shrink-0 cursor-pointer"
                         } else if is_drop_target {
                             "px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-700 whitespace-nowrap shrink-0 cursor-pointer ring-2 ring-inset ring-indigo-300 hover:ring-indigo-500"
-                        } else if shelf.visibility == "Private" {
-                            "px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 whitespace-nowrap shrink-0 cursor-pointer"
                         } else {
-                            "px-3 py-1 rounded-full text-sm bg-blue-50 text-blue-700 hover:bg-indigo-50 hover:text-indigo-600 whitespace-nowrap shrink-0 cursor-pointer"
+                            "px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 whitespace-nowrap shrink-0 cursor-pointer"
                         };
                         let stok = shelf.token.clone();
                         let is_smart = shelf.is_smart;
@@ -194,7 +189,6 @@ pub(crate) fn ShelfBar(
                             onclick: move |_| {
                                 show_add_dropdown.set(false);
                                 shelf_name.set(String::new());
-                                is_private.set(true);
                                 error_msg.set(None);
                                 show_modal.set(true);
                             },
@@ -205,30 +199,11 @@ pub(crate) fn ShelfBar(
                             onclick: move |_| {
                                 show_add_dropdown.set(false);
                                 smart_name.set(String::new());
-                                smart_is_private.set(true);
                                 smart_filter.set(default_book_filter());
                                 smart_error.set(None);
                                 show_smart_modal.set(true);
                             },
                             "Smart Shelf"
-                        }
-                    }
-                }
-            }
-
-            // Others' public shelves — separate scrollable section after "+"
-            if shelves.iter().any(|s| !s.is_own) {
-                span { class: "text-gray-300 select-none shrink-0", "|" }
-                div { class: "flex items-center gap-2 overflow-x-auto min-w-0",
-                    for shelf in shelves.iter().filter(|s| !s.is_own) {
-                        Link {
-                            to: Route::ShelfPage { token: shelf.token.clone() },
-                            class: if current_shelf_token.as_deref() == Some(shelf.token.as_str()) {
-                                "px-3 py-1 rounded-full text-sm bg-indigo-600 text-white font-medium whitespace-nowrap shrink-0 italic"
-                            } else {
-                                "px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-500 hover:bg-indigo-50 hover:text-indigo-600 whitespace-nowrap shrink-0 italic"
-                            },
-                            "{shelf.name}"
                         }
                     }
                 }
@@ -314,19 +289,6 @@ pub(crate) fn ShelfBar(
                             }
                         }
 
-                        div { class: "mb-6 flex items-center gap-2",
-                            input {
-                                id: "shelf-private-checkbox",
-                                class: "h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500",
-                                r#type: "checkbox",
-                                checked: is_private(),
-                                onchange: move |e| is_private.set(e.checked()),
-                            }
-                            label { class: "text-sm text-gray-700 cursor-pointer", r#for: "shelf-private-checkbox",
-                                "Private"
-                            }
-                        }
-
                         div { class: "flex gap-3 justify-end",
                             button {
                                 r#type: "button",
@@ -379,19 +341,6 @@ pub(crate) fn ShelfBar(
                         }
                     }
 
-                    div { class: "mb-4 flex items-center gap-2",
-                        input {
-                            id: "smart-shelf-private",
-                            class: "h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500",
-                            r#type: "checkbox",
-                            checked: smart_is_private(),
-                            onchange: move |e| smart_is_private.set(e.checked()),
-                        }
-                        label { class: "text-sm text-gray-700 cursor-pointer", r#for: "smart-shelf-private",
-                            "Private"
-                        }
-                    }
-
                     div { class: "mb-6",
                         p { class: "text-sm font-medium text-gray-700 mb-2", "Filter rules" }
                         FilterBuilder { filter: smart_filter, entity_options: entity_options.clone(), current_shelf_id: None, is_admin }
@@ -425,11 +374,10 @@ pub(crate) fn ShelfBar(
                                         return;
                                     }
                                 };
-                                let visibility = if smart_is_private() { "Private" } else { "Public" }.to_string();
                                 smart_creating.set(true);
                                 smart_error.set(None);
                                 spawn(async move {
-                                    match create_smart_shelf(name, visibility, filter_json).await {
+                                    match create_smart_shelf(name, filter_json).await {
                                         Ok(token) => {
                                             show_smart_modal.set(false);
                                             smart_creating.set(false);

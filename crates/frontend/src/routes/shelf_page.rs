@@ -28,8 +28,6 @@ pub(crate) struct ShelfSummary {
     pub id: i64,
     pub token: String,
     pub name: String,
-    /// `"Private"` or `"Public"`
-    pub visibility: String,
     /// `true` if the current user owns this shelf.
     pub is_own: bool,
     /// `true` if this is a smart (filter-based) shelf.
@@ -63,7 +61,7 @@ use {
         book::{Book, BookToken},
         filter::BookFilter as CoreBookFilter,
         reading::ReadStatus,
-        shelf::{ShelfToken, ShelfType, ShelfVisibility},
+        shelf::{ShelfToken, ShelfType},
     },
     std::sync::Arc,
 };
@@ -71,23 +69,6 @@ use {
 // ---------------------------------------------------------------------------
 // Helpers (server only)
 // ---------------------------------------------------------------------------
-
-#[cfg(feature = "server")]
-fn parse_visibility(s: &str) -> Result<ShelfVisibility, ServerFnError> {
-    match s {
-        "Public" => Ok(ShelfVisibility::Public),
-        "Private" => Ok(ShelfVisibility::Private),
-        other => Err(ServerFnError::new(format!("invalid visibility: {other}"))),
-    }
-}
-
-#[cfg(feature = "server")]
-fn visibility_str(v: &ShelfVisibility) -> &'static str {
-    match v {
-        ShelfVisibility::Public => "Public",
-        ShelfVisibility::Private => "Private",
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Server functions
@@ -117,7 +98,6 @@ pub(crate) async fn list_my_shelves() -> Result<Vec<ShelfSummary>, ServerFnError
                 id: s.id as i64,
                 token: s.token.to_string(),
                 name: s.name.clone(),
-                visibility: visibility_str(&s.visibility).to_string(),
                 is_own: true,
                 is_smart,
                 is_device_shelf: s.device_id.is_some(),
@@ -135,16 +115,10 @@ pub(crate) async fn list_my_shelves() -> Result<Vec<ShelfSummary>, ServerFnError
     auth_session: axum::Extension<AuthSession>,
     core_services: axum::Extension<Arc<CoreServices>>
 )]
-pub(crate) async fn create_shelf(name: String, visibility: String) -> Result<String, ServerFnError> {
+pub(crate) async fn create_shelf(name: String) -> Result<String, ServerFnError> {
     let user_id = authenticated_user(&auth_session)?.id();
 
-    let vis = parse_visibility(&visibility)?;
-
-    let token = core_services
-        .shelf_service
-        .create_manual_shelf(user_id, name, vis)
-        .await
-        .map_err(to_server_err)?;
+    let token = core_services.shelf_service.create_manual_shelf(user_id, name).await.map_err(to_server_err)?;
 
     Ok(token.to_string())
 }
@@ -158,15 +132,14 @@ pub(crate) async fn create_shelf(name: String, visibility: String) -> Result<Str
     auth_session: axum::Extension<AuthSession>,
     core_services: axum::Extension<Arc<CoreServices>>
 )]
-pub(crate) async fn create_smart_shelf(name: String, visibility: String, filter_json: String) -> Result<String, ServerFnError> {
+pub(crate) async fn create_smart_shelf(name: String, filter_json: String) -> Result<String, ServerFnError> {
     let user_id = authenticated_user(&auth_session)?.id();
 
-    let vis = parse_visibility(&visibility)?;
     let filter: CoreBookFilter = serde_json::from_str(&filter_json).map_err(|e| ServerFnError::new(format!("Invalid filter: {e}")))?;
 
     let token = core_services
         .shelf_service
-        .create_smart_shelf(user_id, name, vis, filter)
+        .create_smart_shelf(user_id, name, filter)
         .await
         .map_err(to_server_err)?;
 
@@ -272,22 +245,20 @@ pub(crate) async fn remove_book_from_shelf(shelf_token: String, book_token: Stri
         .map_err(to_server_err)
 }
 
-/// Updates the name and visibility of a shelf in one call. Only the owner may
-/// update.
+/// Updates the name of a shelf. Only the owner may update.
 #[put(
     "/api/v1/shelves/update",
     auth_session: axum::Extension<AuthSession>,
     core_services: axum::Extension<Arc<CoreServices>>
 )]
-pub(crate) async fn update_shelf(token: String, name: String, visibility: String) -> Result<(), ServerFnError> {
+pub(crate) async fn update_shelf(token: String, name: String) -> Result<(), ServerFnError> {
     let user_id = authenticated_user(&auth_session)?.id();
 
     let shelf_token: ShelfToken = token.parse().map_err(|_| ServerFnError::new("Invalid shelf token"))?;
-    let vis = parse_visibility(&visibility)?;
 
     core_services
         .shelf_service
-        .update_shelf(shelf_token, name, vis, user_id)
+        .update_shelf(shelf_token, name, user_id)
         .await
         .map_err(to_server_err)
 }
@@ -379,73 +350,6 @@ pub(crate) async fn get_filter_entity_options() -> Result<FilterEntityOptions, S
         shelves,
         libraries,
     })
-}
-
-/// Returns the current user's own shelves plus all public shelves from other
-/// users.
-///
-/// Own shelves come first (in creation order), then others' public shelves
-/// sorted by name. Each entry carries `is_own` so the UI can split them into
-/// two groups.
-#[get(
-    "/api/v1/shelves/all",
-    auth_session: axum::Extension<AuthSession>,
-    core_services: axum::Extension<Arc<CoreServices>>
-)]
-pub(crate) async fn list_all_accessible_shelves() -> Result<Vec<ShelfSummary>, ServerFnError> {
-    let user_id = authenticated_user(&auth_session)?.id();
-
-    let shelf_service = &core_services.shelf_service;
-
-    let own_shelves = shelf_service.list_shelves_for_user(user_id).await.map_err(to_server_err)?;
-
-    let mut own = Vec::with_capacity(own_shelves.len());
-    for s in own_shelves {
-        let is_smart = s.shelf_type == ShelfType::Smart;
-        let filter_json = if is_smart {
-            s.filter_criteria.as_ref().and_then(|f| serde_json::to_string(f).ok())
-        } else {
-            None
-        };
-        let count = if is_smart {
-            shelf_service.count_for_filter(s.token, user_id).await.ok()
-        } else {
-            None
-        };
-        own.push(ShelfSummary {
-            id: s.id as i64,
-            token: s.token.to_string(),
-            name: s.name.clone(),
-            visibility: visibility_str(&s.visibility).to_string(),
-            is_own: true,
-            is_smart,
-            is_device_shelf: s.device_id.is_some(),
-            filter_json,
-            count,
-            library_token: Some(bb_core::library::LibraryToken::new(s.library_id).to_string()),
-        });
-    }
-
-    let others = shelf_service
-        .list_public_shelves(user_id)
-        .await
-        .map_err(to_server_err)?
-        .into_iter()
-        .map(|s| ShelfSummary {
-            id: s.id as i64,
-            token: s.token.to_string(),
-            name: s.name.clone(),
-            visibility: visibility_str(&s.visibility).to_string(),
-            is_own: false,
-            is_smart: s.shelf_type == ShelfType::Smart,
-            is_device_shelf: false,
-            filter_json: None,
-            count: None,
-            library_token: None,
-        });
-
-    own.extend(others);
-    Ok(own)
 }
 
 /// Returns a paginated list of books on a shelf, with author and series data
@@ -550,7 +454,6 @@ pub(crate) fn ShelfPage(token: String) -> Element {
     // Edit shelf modal state
     let mut show_edit = use_signal(|| false);
     let mut edit_name = use_signal(String::new);
-    let mut edit_private = use_signal(|| true);
     let mut edit_filter = use_signal(default_book_filter);
     let mut saving = use_signal(|| false);
     let mut edit_error: Signal<Option<String>> = use_signal(|| None);
@@ -566,7 +469,7 @@ pub(crate) fn ShelfPage(token: String) -> Element {
     let mut deleting = use_signal(|| false);
 
     // Data loading
-    let mut shelves_resource = use_server_future(list_all_accessible_shelves)?;
+    let mut shelves_resource = use_server_future(list_my_shelves)?;
 
     // Sync `token` prop into a signal so `use_server_future` restarts reactively
     // when navigating between shelves (Dioxus re-renders in-place; plain captured
@@ -602,9 +505,15 @@ pub(crate) fn ShelfPage(token: String) -> Element {
     // call).
     let shelves: Vec<ShelfSummary> = shelves_resource().and_then(std::result::Result::ok).unwrap_or_default();
     let current_shelf = shelves.iter().find(|s| s.token == token).cloned();
+
+    // Redirect if the shelf is not in the user's own shelves (not found or not
+    // owner). Only redirect after the resource has finished loading (Some).
+    if shelves_resource().is_some() && current_shelf.is_none() {
+        nav.push(Route::BooksPage {});
+    }
+
     let is_own = current_shelf.as_ref().is_some_and(|s| s.is_own);
     let current_name = current_shelf.as_ref().map(|s| s.name.clone()).unwrap_or_default();
-    let current_vis = current_shelf.as_ref().map(|s| s.visibility.clone()).unwrap_or_default();
     let current_is_smart = current_shelf.as_ref().is_some_and(|s| s.is_smart);
     let current_filter_json = current_shelf.as_ref().and_then(|s| s.filter_json.clone());
 
@@ -640,12 +549,10 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                 current_shelf_token: Some(token.clone()),
                 on_edit_shelf: {
                     let name_for_edit = current_name.clone();
-                    let vis_for_edit = current_vis.clone();
                     let filter_json_for_edit = current_filter_json.clone();
                     let options_for_edit = entity_options.clone();
                     move |()| {
                         edit_name.set(name_for_edit.clone());
-                        edit_private.set(vis_for_edit == "Private");
                         let mut parsed = filter_json_for_edit
                             .as_deref()
                             .and_then(|j| serde_json::from_str::<BookFilter>(j).ok())
@@ -763,7 +670,6 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                                     edit_error.set(Some("Shelf name is required.".into()));
                                     return;
                                 }
-                                let vis = if edit_private() { "Private" } else { "Public" }.to_string();
                                 let tok = tok.clone();
                                 saving.set(true);
                                 edit_error.set(None);
@@ -777,7 +683,7 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                                         }
                                     };
                                     spawn(async move {
-                                        let r1 = update_shelf(tok.clone(), name, vis).await;
+                                        let r1 = update_shelf(tok.clone(), name).await;
                                         let r2 = update_smart_shelf_filter(tok, filter_json).await;
                                         match (r1, r2) {
                                             (Ok(()), Ok(())) => {
@@ -794,7 +700,7 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                                     });
                                 } else {
                                     spawn(async move {
-                                        match update_shelf(tok, name, vis).await {
+                                        match update_shelf(tok, name).await {
                                             Ok(()) => {
                                                 show_edit.set(false);
                                                 saving.set(false);
@@ -838,19 +744,6 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                             }
                             if let Some(msg) = edit_error() {
                                 p { class: "mt-1 text-xs text-red-600", "{msg}" }
-                            }
-                        }
-
-                        div { class: "mb-4 flex items-center gap-2",
-                            input {
-                                id: "edit-shelf-private",
-                                class: "h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500",
-                                r#type: "checkbox",
-                                checked: edit_private(),
-                                onchange: move |e| edit_private.set(e.checked()),
-                            }
-                            label { class: "text-sm text-gray-700 cursor-pointer", r#for: "edit-shelf-private",
-                                "Private"
                             }
                         }
 

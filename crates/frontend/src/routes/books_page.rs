@@ -6,7 +6,7 @@ use crate::{
     components::{BookGrid, BookGridContext, SelectionActionBar, ShelfBar, filter_books_by_search},
     routes::{
         book_detail_page::ReadingStateDto,
-        shelf_page::{ShelfSummary, list_all_accessible_shelves},
+        shelf_page::{ShelfSummary, list_my_shelves},
     },
 };
 
@@ -253,7 +253,7 @@ pub(crate) fn BooksPage() -> Element {
         let _ = books_refresh();
         list_books(sort, library_token)
     })?;
-    let mut shelves_resource = use_server_future(list_all_accessible_shelves)?;
+    let mut shelves_resource = use_server_future(list_my_shelves)?;
     let shelves: Vec<ShelfSummary> = shelves_resource().and_then(std::result::Result::ok).unwrap_or_default();
     rsx! {
         match page_data() {
