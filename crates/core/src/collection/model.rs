@@ -5,9 +5,9 @@ use crate::book::IdentifierType;
 /// Edits submitted by the user during the import review step or when editing
 /// an existing library book.
 ///
-/// Carries all mutable book fields. `LibraryService::approve_book` commits
+/// Carries all mutable book fields. `CollectionService::approve_book` commits
 /// these to the database and transitions the book to `Available`;
-/// `LibraryService::edit_book` applies them to an already-available book.
+/// `CollectionService::edit_book` applies them to an already-available book.
 #[derive(Debug, Clone)]
 pub struct BookEdit {
     pub title: String,

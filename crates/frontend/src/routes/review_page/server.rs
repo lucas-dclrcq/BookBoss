@@ -11,8 +11,8 @@ use {
     bb_core::{
         CoreServices,
         book::{AuthorToken, BookToken, FileRole, IdentifierType, PublisherToken, SeriesToken},
+        collection::BookEdit,
         import::ImportJobToken,
-        library::BookEdit,
         pipeline::ProviderBook,
         types::Capability,
         user::UserId,
@@ -365,7 +365,7 @@ pub(super) async fn approve_book(fields: BookEditFields) -> Result<(), ServerFnE
 
     let temp_dir = std::env::temp_dir();
     core_services
-        .library_service
+        .collection_service
         .approve_book(token, current_user.id(), edit, &temp_dir)
         .await
         .map_err(to_server_err)?;
@@ -392,7 +392,7 @@ pub(super) async fn reject_review_book(job_token: String) -> Result<(), ServerFn
     let _ = tokio::fs::remove_file(cover_dir.join(&job_token)).await;
     let _ = tokio::fs::remove_file(cover_dir.join(format!("{job_token}-provider"))).await;
 
-    core_services.library_service.reject_book(token).await.map_err(to_server_err)?;
+    core_services.collection_service.reject_book(token).await.map_err(to_server_err)?;
 
     Ok(())
 }
@@ -611,7 +611,7 @@ pub(super) async fn save_library_book(book_token: String, fields: BookEditFields
 
     let temp_dir = std::env::temp_dir();
     core_services
-        .library_service
+        .collection_service
         .edit_book(token, edit, &book_token, &temp_dir)
         .await
         .map_err(to_server_err)?;

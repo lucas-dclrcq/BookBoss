@@ -1,10 +1,10 @@
 pub(crate) mod author;
 pub(crate) mod book;
+pub(crate) mod collection;
 pub(crate) mod device;
 pub(crate) mod genre;
 pub(crate) mod import_job;
 pub(crate) mod job;
-pub(crate) mod library;
 pub(crate) mod publisher;
 pub(crate) mod series;
 pub(crate) mod session;

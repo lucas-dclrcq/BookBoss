@@ -55,7 +55,7 @@ async fn get_is_admin() -> Result<bool, ServerFnError> {
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-pub(crate) struct LibraryStats {
+pub(crate) struct CollectionStats {
     pub books: u64,
     pub authors: u64,
 }
@@ -65,16 +65,16 @@ pub(crate) struct LibraryStats {
     auth_session: axum::Extension<AuthSession>,
     core_services: axum::Extension<Arc<CoreServices>>
 )]
-async fn get_library_stats() -> Result<LibraryStats, ServerFnError> {
+async fn get_collection_stats() -> Result<CollectionStats, ServerFnError> {
     auth_session
         .current_user
         .as_ref()
         .filter(|u| !u.username.is_empty())
         .ok_or_else(|| ServerFnError::new("Not authenticated"))?;
 
-    let stats = core_services.library_service.library_stats().await.map_err(to_server_err)?;
+    let stats = core_services.collection_service.collection_stats().await.map_err(to_server_err)?;
 
-    Ok(LibraryStats {
+    Ok(CollectionStats {
         books: stats.books,
         authors: stats.authors,
     })
@@ -248,9 +248,9 @@ fn AdminSettingsButton() -> Element {
 /// the modal itself appears immediately without waiting for the response.
 #[component]
 fn AboutModal(on_close: EventHandler<()>) -> Element {
-    let stats_res = use_server_future(get_library_stats);
+    let stats_res = use_server_future(get_collection_stats);
     let stats = match stats_res {
-        Ok(ref r) => r().and_then(|r: Result<LibraryStats, ServerFnError>| r.ok()),
+        Ok(ref r) => r().and_then(|r: Result<CollectionStats, ServerFnError>| r.ok()),
         Err(_) => None,
     };
 

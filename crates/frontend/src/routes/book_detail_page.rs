@@ -231,7 +231,7 @@ pub(crate) async fn delete_library_book(token: String) -> Result<(), ServerFnErr
 
     let book_token = BookToken::from_str(&token).map_err(|_| ServerFnError::new("Invalid book token"))?;
 
-    core_services.library_service.delete_book(book_token).await.map_err(to_server_err)
+    core_services.collection_service.delete_book(book_token).await.map_err(to_server_err)
 }
 
 #[post(

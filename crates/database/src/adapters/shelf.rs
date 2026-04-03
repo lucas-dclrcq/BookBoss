@@ -813,7 +813,7 @@ mod tests {
 
         let tx = svc.repository().begin().await.unwrap();
         let books = svc
-            .library_repository()
+            .collection_repository()
             .books_for_filter(&*tx, &empty_and_filter(), user_id, None, None, None)
             .await
             .unwrap();
@@ -828,7 +828,7 @@ mod tests {
         let tx = svc.repository().begin().await.unwrap();
 
         assert!(matches!(
-            svc.library_repository()
+            svc.collection_repository()
                 .books_for_filter(&*tx, &empty_and_filter(), user_id, None, Some(0), None)
                 .await,
             Err(bb_core::Error::InvalidPageSize(0))
@@ -850,7 +850,7 @@ mod tests {
         });
         let tx = svc.repository().begin().await.unwrap();
         let books = svc
-            .library_repository()
+            .collection_repository()
             .books_for_filter(&*tx, &filter, user_id, None, None, None)
             .await
             .unwrap();
@@ -873,7 +873,7 @@ mod tests {
         });
         let tx = svc.repository().begin().await.unwrap();
         let books = svc
-            .library_repository()
+            .collection_repository()
             .books_for_filter(&*tx, &filter, user_id, None, None, None)
             .await
             .unwrap();
@@ -895,7 +895,7 @@ mod tests {
         });
         let tx = svc.repository().begin().await.unwrap();
         let books = svc
-            .library_repository()
+            .collection_repository()
             .books_for_filter(&*tx, &filter, user_id, None, None, None)
             .await
             .unwrap();
@@ -960,7 +960,7 @@ mod tests {
         });
         let tx = svc.repository().begin().await.unwrap();
         let books = svc
-            .library_repository()
+            .collection_repository()
             .books_for_filter(&*tx, &filter, user_id, None, None, None)
             .await
             .unwrap();
@@ -1019,7 +1019,7 @@ mod tests {
         });
         let tx = svc.repository().begin().await.unwrap();
         let books = svc
-            .library_repository()
+            .collection_repository()
             .books_for_filter(&*tx, &filter, user_id, None, None, None)
             .await
             .unwrap();
@@ -1050,7 +1050,7 @@ mod tests {
         });
         let tx = svc.repository().begin().await.unwrap();
         let books = svc
-            .library_repository()
+            .collection_repository()
             .books_for_filter(&*tx, &filter, user_id, None, None, None)
             .await
             .unwrap();
@@ -1087,7 +1087,7 @@ mod tests {
         });
         let tx = svc.repository().begin().await.unwrap();
         let books = svc
-            .library_repository()
+            .collection_repository()
             .books_for_filter(&*tx, &filter, user_id, None, None, None)
             .await
             .unwrap();
@@ -1115,7 +1115,7 @@ mod tests {
         });
         let tx = svc.repository().begin().await.unwrap();
         let books = svc
-            .library_repository()
+            .collection_repository()
             .books_for_filter(&*tx, &filter, user_id, None, None, None)
             .await
             .unwrap();
@@ -1139,7 +1139,7 @@ mod tests {
         });
         let tx = svc.repository().begin().await.unwrap();
         let books = svc
-            .library_repository()
+            .collection_repository()
             .books_for_filter(&*tx, &filter, user_id, None, None, None)
             .await
             .unwrap();
@@ -1168,7 +1168,7 @@ mod tests {
         });
         let tx = svc.repository().begin().await.unwrap();
         let books = svc
-            .library_repository()
+            .collection_repository()
             .books_for_filter(&*tx, &filter, user_id, None, None, None)
             .await
             .unwrap();
@@ -1197,7 +1197,7 @@ mod tests {
         });
         let tx = svc.repository().begin().await.unwrap();
         let books = svc
-            .library_repository()
+            .collection_repository()
             .books_for_filter(&*tx, &filter, user_id, None, None, None)
             .await
             .unwrap();
@@ -1222,7 +1222,7 @@ mod tests {
         });
         let tx = svc.repository().begin().await.unwrap();
         let books = svc
-            .library_repository()
+            .collection_repository()
             .books_for_filter(&*tx, &filter, user_id, None, None, None)
             .await
             .unwrap();
@@ -1246,7 +1246,7 @@ mod tests {
         });
         let tx = svc.repository().begin().await.unwrap();
         let books = svc
-            .library_repository()
+            .collection_repository()
             .books_for_filter(&*tx, &filter, user_id, None, None, None)
             .await
             .unwrap();
@@ -1272,7 +1272,7 @@ mod tests {
         });
         let tx = svc.repository().begin().await.unwrap();
         let mut books = svc
-            .library_repository()
+            .collection_repository()
             .books_for_filter(&*tx, &filter, user_id, None, None, None)
             .await
             .unwrap();
@@ -1299,7 +1299,7 @@ mod tests {
         });
         let tx = svc.repository().begin().await.unwrap();
         let books = svc
-            .library_repository()
+            .collection_repository()
             .books_for_filter(&*tx, &filter, user_id, None, None, None)
             .await
             .unwrap();
@@ -1321,7 +1321,7 @@ mod tests {
         let filter = BookFilter::Rule(FilterRule::Rating { op: NumericOp::Gte, value: 4 });
         let tx = svc.repository().begin().await.unwrap();
         let books = svc
-            .library_repository()
+            .collection_repository()
             .books_for_filter(&*tx, &filter, user_id, None, None, None)
             .await
             .unwrap();
@@ -1356,7 +1356,7 @@ mod tests {
         });
         let tx = svc.repository().begin().await.unwrap();
         let mut books = svc
-            .library_repository()
+            .collection_repository()
             .books_for_filter(&*tx, &filter, user_id, None, None, None)
             .await
             .unwrap();
@@ -1391,7 +1391,7 @@ mod tests {
         }));
         let tx = svc.repository().begin().await.unwrap();
         let books = svc
-            .library_repository()
+            .collection_repository()
             .books_for_filter(&*tx, &filter, user_id, None, None, None)
             .await
             .unwrap();
@@ -1412,7 +1412,7 @@ mod tests {
         });
         let tx = svc.repository().begin().await.unwrap();
         let books = svc
-            .library_repository()
+            .collection_repository()
             .books_for_filter(&*tx, &filter, user_id, None, None, None)
             .await
             .unwrap();
@@ -1433,11 +1433,11 @@ mod tests {
         let filter = empty_and_filter();
         let tx = svc.repository().begin().await.unwrap();
         let books = svc
-            .library_repository()
+            .collection_repository()
             .books_for_filter(&*tx, &filter, user_id, None, None, None)
             .await
             .unwrap();
-        let count = svc.library_repository().count_for_filter(&*tx, &filter, user_id).await.unwrap();
+        let count = svc.collection_repository().count_for_filter(&*tx, &filter, user_id).await.unwrap();
 
         assert_eq!(count, books.len() as u64);
         assert_eq!(count, 3);

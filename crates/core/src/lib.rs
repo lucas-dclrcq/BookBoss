@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod book;
+pub mod collection;
 pub mod device;
 pub mod error;
 pub mod event;
@@ -8,7 +9,6 @@ pub mod format;
 pub mod health;
 pub mod import;
 pub mod jobs;
-pub mod library;
 pub mod message;
 pub mod metadata;
 pub mod opds;
@@ -38,13 +38,13 @@ use tokio_graceful_shutdown::{
 use crate::{
     auth::{AuthService, AuthServiceImpl},
     book::{BookService, BookServiceImpl},
+    collection::{CollectionService, CollectionServiceImpl},
     device::{DeviceService, service::DeviceServiceImpl},
     event::{EventService, create_event_service},
     format::FormatService,
     health::{HealthCheckSubsystem, HealthService, create_health_subsystem},
     import::{BookdropScanSubsystem, ImportJobService, create_bookdrop_scan_subsystem},
     jobs::{JobService, JobWorker, create_job_service},
-    library::{LibraryService, LibraryServiceImpl},
     message::{SystemMessageService, SystemMessageServiceImpl},
     metadata::{MetadataService, create_metadata_service},
     opds::{OpdsService, OpdsServiceImpl},
@@ -86,7 +86,7 @@ pub struct CoreServices {
     pub file_store: Arc<dyn FileStoreService>,
     pub format_service: Arc<dyn FormatService>,
     pub metadata_service: Arc<dyn MetadataService>,
-    pub library_service: Arc<dyn LibraryService>,
+    pub collection_service: Arc<dyn CollectionService>,
     pub pipeline_service: Arc<dyn PipelineService>,
     pub job_service: Arc<dyn JobService>,
     pub health_service: Arc<dyn HealthService>,
@@ -145,7 +145,7 @@ impl CoreServices {
             user_setting_service: Arc::new(UserSettingServiceImpl::new(repository_service.clone())),
             book_service: Arc::new(BookServiceImpl::new(repository_service.clone(), job_service.clone())),
             import_job_service,
-            library_service: Arc::new(LibraryServiceImpl::new(
+            collection_service: Arc::new(CollectionServiceImpl::new(
                 repository_service.clone(),
                 file_store.clone(),
                 format_service.clone(),

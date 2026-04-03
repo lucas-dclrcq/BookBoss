@@ -102,7 +102,7 @@ async fn library_stats_counts_available_books() {
     fixtures::insert_book(&ctx.repos, "Available One", BookStatus::Available).await;
     fixtures::insert_book(&ctx.repos, "Incoming One", BookStatus::Incoming).await;
 
-    let stats = ctx.services.library_service.library_stats().await.unwrap();
+    let stats = ctx.services.collection_service.collection_stats().await.unwrap();
 
     // Only Available books count
     assert_eq!(stats.books, 1);

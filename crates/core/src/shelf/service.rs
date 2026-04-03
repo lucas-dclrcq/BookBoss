@@ -391,7 +391,7 @@ impl ShelfService for ShelfServiceImpl {
         page_size: Option<u64>,
         sort: Option<crate::book::BookSortOrder>,
     ) -> Result<Vec<Book>, Error> {
-        with_read_only_transaction!(self, shelf_repository, library_repository, |tx| {
+        with_read_only_transaction!(self, shelf_repository, collection_repository, |tx| {
             let target_shelf = shelf_repository
                 .find_by_token(tx, token)
                 .await?
@@ -409,12 +409,12 @@ impl ShelfService for ShelfServiceImpl {
                 .filter_criteria
                 .ok_or_else(|| Error::Validation("smart shelf has no filter criteria".to_string()))?;
 
-            library_repository.books_for_filter(tx, &filter, user_id, offset, page_size, sort).await
+            collection_repository.books_for_filter(tx, &filter, user_id, offset, page_size, sort).await
         })
     }
 
     async fn count_for_filter(&self, token: ShelfToken, user_id: UserId) -> Result<u64, Error> {
-        with_read_only_transaction!(self, shelf_repository, library_repository, |tx| {
+        with_read_only_transaction!(self, shelf_repository, collection_repository, |tx| {
             let target_shelf = shelf_repository
                 .find_by_token(tx, token)
                 .await?
@@ -432,7 +432,7 @@ impl ShelfService for ShelfServiceImpl {
                 .filter_criteria
                 .ok_or_else(|| Error::Validation("smart shelf has no filter criteria".to_string()))?;
 
-            library_repository.count_for_filter(tx, &filter, user_id).await
+            collection_repository.count_for_filter(tx, &filter, user_id).await
         })
     }
 

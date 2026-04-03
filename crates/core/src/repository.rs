@@ -6,10 +6,10 @@ use crate::{
     Error,
     auth::SessionRepository,
     book::{AuthorRepository, BookRepository, GenreRepository, PublisherRepository, SeriesRepository, TagRepository},
+    collection::CollectionRepository,
     device::DeviceRepository,
     import::ImportJobRepository,
     jobs::JobRepository,
-    library::LibraryRepository,
     message::SystemMessageRepository,
     reading::UserBookMetadataRepository,
     shelf::ShelfRepository,
@@ -31,7 +31,7 @@ pub struct RepositoryService {
     book_repository: Arc<dyn BookRepository>,
     import_job_repository: Arc<dyn ImportJobRepository>,
     job_repository: Arc<dyn JobRepository>,
-    library_repository: Arc<dyn LibraryRepository>,
+    collection_repository: Arc<dyn CollectionRepository>,
     shelf_repository: Arc<dyn ShelfRepository>,
     user_book_metadata_repository: Arc<dyn UserBookMetadataRepository>,
     device_repository: Arc<dyn DeviceRepository>,
@@ -111,10 +111,10 @@ impl RepositoryService {
         &self.job_repository
     }
 
-    /// Returns a reference to the library repository.
+    /// Returns a reference to the collection repository.
     #[must_use]
-    pub fn library_repository(&self) -> &Arc<dyn LibraryRepository> {
-        &self.library_repository
+    pub fn collection_repository(&self) -> &Arc<dyn CollectionRepository> {
+        &self.collection_repository
     }
 
     /// Returns a reference to the shelf repository.
@@ -276,10 +276,10 @@ pub(crate) mod testing {
             author::MockAuthorRepository, book::MockBookRepository, genre::MockGenreRepository, publisher::MockPublisherRepository,
             series::MockSeriesRepository, tag::MockTagRepository,
         },
+        collection::MockCollectionRepository,
         device::repository::device::MockDeviceRepository,
         import::repository::import_job::MockImportJobRepository,
         jobs::repository::MockJobRepository,
-        library::MockLibraryRepository,
         message::repository::MockSystemMessageRepository,
         reading::repository::user_book_metadata::MockUserBookMetadataRepository,
         shelf::repository::shelf::MockShelfRepository,
@@ -332,7 +332,7 @@ pub(crate) mod testing {
             .book_repository(Arc::new(MockBookRepository::new()))
             .import_job_repository(Arc::new(MockImportJobRepository::new()))
             .job_repository(Arc::new(MockJobRepository::new()))
-            .library_repository(Arc::new(MockLibraryRepository::new()))
+            .collection_repository(Arc::new(MockCollectionRepository::new()))
             .shelf_repository(Arc::new(MockShelfRepository::new()))
             .user_book_metadata_repository(Arc::new(MockUserBookMetadataRepository::new()))
             .device_repository(Arc::new(MockDeviceRepository::new()))

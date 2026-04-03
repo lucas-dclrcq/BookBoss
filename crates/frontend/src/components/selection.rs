@@ -10,7 +10,7 @@ use {
     bb_core::{
         CoreServices,
         book::{AuthorToken, BookToken, IdentifierType, PublisherToken, SeriesToken},
-        library::BookEdit,
+        collection::BookEdit,
         reading::ReadStatus,
         types::Capability,
         user::UserId,
@@ -234,7 +234,7 @@ async fn bulk_edit_single_book(
     };
 
     core_services
-        .library_service
+        .collection_service
         .edit_book(token, edit, token_str, temp_dir)
         .await
         .map_err(to_server_err)?;
@@ -260,7 +260,7 @@ async fn bulk_delete_books(tokens: Vec<String>) -> Result<u32, ServerFnError> {
             tracing::warn!(book_token = %token_str, "bulk delete: invalid token, skipping");
             continue;
         };
-        match core_services.library_service.delete_book(book_token).await {
+        match core_services.collection_service.delete_book(book_token).await {
             Ok(()) => deleted += 1,
             Err(e) => tracing::warn!(book_token = %token_str, error = %e, "bulk delete failed for book"),
         }

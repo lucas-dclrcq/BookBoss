@@ -102,7 +102,7 @@ impl JobHandler for VerifyFileIntegrityHandler {
                 } else {
                     // Library book with missing original — unrecoverable, delete it.
                     let token = book.token;
-                    if let Err(e) = self.core.library_service.delete_book(token).await {
+                    if let Err(e) = self.core.collection_service.delete_book(token).await {
                         tracing::error!(book_id, title, error = %e, "failed to delete unrecoverable book");
                     } else {
                         tracing::warn!(book_id, title, "deleted unrecoverable book (original file missing)");
@@ -450,7 +450,7 @@ mod tests {
             Box::pin(async move { Ok(Some(b)) })
         });
 
-        // LibraryServiceImpl::delete_book internals
+        // CollectionServiceImpl::delete_book internals
         book_repo.expect_find_by_token().returning(move |_, _| {
             let b = Book::fake(book_id, "Lost Book", BookStatus::Available);
             Box::pin(async move { Ok(Some(b)) })

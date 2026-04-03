@@ -97,7 +97,7 @@ async fn reject_incoming_book(job_token: String) -> Result<(), ServerFnError> {
 
     let token: ImportJobToken = job_token.parse().map_err(|_| ServerFnError::new("Invalid token"))?;
 
-    core_services.library_service.reject_book(token).await.map_err(to_server_err)?;
+    core_services.collection_service.reject_book(token).await.map_err(to_server_err)?;
 
     Ok(())
 }

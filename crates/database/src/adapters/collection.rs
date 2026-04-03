@@ -1,8 +1,8 @@
 use bb_core::{
     Error,
     book::{Book, BookSortOrder},
+    collection::CollectionRepository,
     filter::BookFilter,
-    library::LibraryRepository,
     repository::Transaction,
     user::UserId,
 };
@@ -15,16 +15,16 @@ use crate::{
     transaction::TransactionImpl,
 };
 
-pub struct LibraryRepositoryAdapter;
+pub struct CollectionRepositoryAdapter;
 
-impl LibraryRepositoryAdapter {
+impl CollectionRepositoryAdapter {
     pub fn new() -> Self {
         Self
     }
 }
 
 #[async_trait::async_trait]
-impl LibraryRepository for LibraryRepositoryAdapter {
+impl CollectionRepository for CollectionRepositoryAdapter {
     async fn count_available_books(&self, transaction: &dyn Transaction) -> Result<u64, Error> {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
@@ -142,7 +142,7 @@ mod tests {
     async fn test_count_available_books_empty() {
         let svc = setup().await;
         let tx = svc.repository().begin().await.unwrap();
-        assert_eq!(svc.library_repository().count_available_books(&*tx).await.unwrap(), 0);
+        assert_eq!(svc.collection_repository().count_available_books(&*tx).await.unwrap(), 0);
     }
 
     #[tokio::test]
@@ -152,7 +152,7 @@ mod tests {
         add_book(&svc, "Incoming Book", BookStatus::Incoming).await;
 
         let tx = svc.repository().begin().await.unwrap();
-        assert_eq!(svc.library_repository().count_available_books(&*tx).await.unwrap(), 1);
+        assert_eq!(svc.collection_repository().count_available_books(&*tx).await.unwrap(), 1);
     }
 
     // ─── count_authors ───────────────────────────────────────────────────────
@@ -161,7 +161,7 @@ mod tests {
     async fn test_count_authors_empty() {
         let svc = setup().await;
         let tx = svc.repository().begin().await.unwrap();
-        assert_eq!(svc.library_repository().count_authors(&*tx).await.unwrap(), 0);
+        assert_eq!(svc.collection_repository().count_authors(&*tx).await.unwrap(), 0);
     }
 
     #[tokio::test]
@@ -191,7 +191,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(svc.library_repository().count_authors(&*tx).await.unwrap(), 2);
+        assert_eq!(svc.collection_repository().count_authors(&*tx).await.unwrap(), 2);
     }
 
     // ─── books_for_filter ────────────────────────────────────────────────────
@@ -204,7 +204,7 @@ mod tests {
 
         let tx = svc.repository().begin().await.unwrap();
         let results = svc
-            .library_repository()
+            .collection_repository()
             .books_for_filter(&*tx, &empty_filter(), 0, None, None, None)
             .await
             .unwrap();
@@ -220,7 +220,9 @@ mod tests {
         let svc = setup().await;
         let tx = svc.repository().begin().await.unwrap();
         assert!(matches!(
-            svc.library_repository().books_for_filter(&*tx, &empty_filter(), 0, None, Some(0), None).await,
+            svc.collection_repository()
+                .books_for_filter(&*tx, &empty_filter(), 0, None, Some(0), None)
+                .await,
             Err(Error::InvalidPageSize(0))
         ));
     }
@@ -235,9 +237,9 @@ mod tests {
         add_book(&svc, "Incoming", BookStatus::Incoming).await;
 
         let tx = svc.repository().begin().await.unwrap();
-        let count = svc.library_repository().count_for_filter(&*tx, &empty_filter(), 0).await.unwrap();
+        let count = svc.collection_repository().count_for_filter(&*tx, &empty_filter(), 0).await.unwrap();
         let list = svc
-            .library_repository()
+            .collection_repository()
             .books_for_filter(&*tx, &empty_filter(), 0, None, None, None)
             .await
             .unwrap();

@@ -6,17 +6,17 @@ use tracing::warn;
 use crate::{
     Error, RepositoryError,
     book::{AuthorRole, Book, BookStatus, BookToken, FileRole, NewAuthor, NewGenre, NewPublisher, NewSeries, NewTag, book_slug},
+    collection::BookEdit,
     event::EventService,
     filter::BookFilter,
     format::{FormatService, handler::EnrichBookFilesPayload},
     import::{ImportJobToken, ImportStatus},
     jobs::{JobService, JobServiceExt},
-    library::BookEdit,
     repository::{RepositoryService, read_only_transaction, transaction},
     storage::{BookSidecar, FileStoreService, SidecarAuthor, SidecarFile, SidecarIdentifier, SidecarSeries},
 };
 
-pub struct LibraryStats {
+pub struct CollectionStats {
     pub books: u64,
     pub authors: u64,
 }
@@ -24,9 +24,9 @@ pub struct LibraryStats {
 #[async_trait::async_trait]
 #[cfg_attr(any(test, feature = "test-support"), mockall::automock)]
 #[allow(unused_lifetimes, reason = "async_trait + mockall expansion emits a spurious 'life0 parameter")]
-pub trait LibraryService: Send + Sync {
-    /// Returns aggregate counts for the library.
-    async fn library_stats(&self) -> Result<LibraryStats, Error>;
+pub trait CollectionService: Send + Sync {
+    /// Returns aggregate counts for the collection.
+    async fn collection_stats(&self) -> Result<CollectionStats, Error>;
 
     /// Searches the library catalog using a [`BookFilter`].
     ///
@@ -72,7 +72,7 @@ pub trait LibraryService: Send + Sync {
     async fn replace_cover(&self, book_token: BookToken, cover_bytes: Vec<u8>) -> Result<(), Error>;
 }
 
-pub struct LibraryServiceImpl {
+pub struct CollectionServiceImpl {
     repository_service: Arc<RepositoryService>,
     file_store: Arc<dyn FileStoreService>,
     format_service: Arc<dyn FormatService>,
@@ -80,7 +80,7 @@ pub struct LibraryServiceImpl {
     event_service: Arc<dyn EventService>,
 }
 
-impl LibraryServiceImpl {
+impl CollectionServiceImpl {
     pub(crate) fn new(
         repository_service: Arc<RepositoryService>,
         file_store: Arc<dyn FileStoreService>,
@@ -99,14 +99,14 @@ impl LibraryServiceImpl {
 }
 
 #[async_trait::async_trait]
-impl LibraryService for LibraryServiceImpl {
-    async fn library_stats(&self) -> Result<LibraryStats, Error> {
-        let library_repo = self.repository_service.library_repository().clone();
+impl CollectionService for CollectionServiceImpl {
+    async fn collection_stats(&self) -> Result<CollectionStats, Error> {
+        let library_repo = self.repository_service.collection_repository().clone();
         read_only_transaction(&**self.repository_service.repository(), |tx| {
             Box::pin(async move {
                 let books = library_repo.count_available_books(tx).await?;
                 let authors = library_repo.count_authors(tx).await?;
-                Ok(LibraryStats { books, authors })
+                Ok(CollectionStats { books, authors })
             })
         })
         .await
@@ -119,7 +119,7 @@ impl LibraryService for LibraryServiceImpl {
             ));
         }
         let filter = filter.clone();
-        let library_repo = self.repository_service.library_repository().clone();
+        let library_repo = self.repository_service.collection_repository().clone();
         read_only_transaction(&**self.repository_service.repository(), |tx| {
             Box::pin(async move { library_repo.books_for_filter(tx, &filter, 0, offset, page_size, None).await })
         })
@@ -890,15 +890,15 @@ impl LibraryService for LibraryServiceImpl {
 mod tests {
     use std::sync::Arc;
 
-    use super::{LibraryService, LibraryServiceImpl};
+    use super::{CollectionService, CollectionServiceImpl};
     use crate::{
         Error, RepositoryError,
         book::{
             AuthorId, BookAuthor, BookFile, BookId, BookStatus, BookToken, FileRole,
             repository::{author::MockAuthorRepository, book::MockBookRepository},
         },
+        collection::MockCollectionRepository,
         import::{ImportJob, ImportJobId, ImportJobToken, ImportStatus, repository::import_job::MockImportJobRepository},
-        library::MockLibraryRepository,
         storage::store::MockFileStoreService,
         test_support::{nop_event_service, nop_format_service, nop_job_service},
     };
@@ -909,19 +909,19 @@ mod tests {
         book_repo: MockBookRepository,
         author_repo: MockAuthorRepository,
         job_repo: MockImportJobRepository,
-        library_repo: MockLibraryRepository,
+        library_repo: MockCollectionRepository,
         file_store: MockFileStoreService,
-    ) -> LibraryServiceImpl {
+    ) -> CollectionServiceImpl {
         let repository_service = Arc::new(
             crate::repository::testing::default_repository_service_builder()
                 .author_repository(Arc::new(author_repo))
                 .book_repository(Arc::new(book_repo))
                 .import_job_repository(Arc::new(job_repo))
-                .library_repository(Arc::new(library_repo))
+                .collection_repository(Arc::new(library_repo))
                 .build()
                 .expect("all fields provided"),
         );
-        LibraryServiceImpl::new(
+        CollectionServiceImpl::new(
             repository_service,
             Arc::new(file_store),
             nop_format_service(),
@@ -958,11 +958,11 @@ mod tests {
         }
     }
 
-    // ─── library_stats ────────────────────────────────────────────────────────
+    // ─── collection_stats ─────────────────────────────────────────────────────
 
     #[tokio::test]
-    async fn library_stats_returns_counts() {
-        let mut library_repo = MockLibraryRepository::new();
+    async fn collection_stats_returns_counts() {
+        let mut library_repo = MockCollectionRepository::new();
         library_repo.expect_count_available_books().returning(|_| Box::pin(async { Ok(5) }));
         library_repo.expect_count_authors().returning(|_| Box::pin(async { Ok(3) }));
 
@@ -974,15 +974,15 @@ mod tests {
             MockFileStoreService::new(),
         );
 
-        let stats = svc.library_stats().await.unwrap();
+        let stats = svc.collection_stats().await.unwrap();
 
         assert_eq!(stats.books, 5);
         assert_eq!(stats.authors, 3);
     }
 
     #[tokio::test]
-    async fn library_stats_returns_zeroes_when_empty() {
-        let mut library_repo = MockLibraryRepository::new();
+    async fn collection_stats_returns_zeroes_when_empty() {
+        let mut library_repo = MockCollectionRepository::new();
         library_repo.expect_count_available_books().returning(|_| Box::pin(async { Ok(0) }));
         library_repo.expect_count_authors().returning(|_| Box::pin(async { Ok(0) }));
 
@@ -994,7 +994,7 @@ mod tests {
             MockFileStoreService::new(),
         );
 
-        let stats = svc.library_stats().await.unwrap();
+        let stats = svc.collection_stats().await.unwrap();
 
         assert_eq!(stats.books, 0);
         assert_eq!(stats.authors, 0);
@@ -1011,7 +1011,7 @@ mod tests {
             book_repo,
             MockAuthorRepository::new(),
             MockImportJobRepository::new(),
-            MockLibraryRepository::new(),
+            MockCollectionRepository::new(),
             MockFileStoreService::new(),
         );
         let token = BookToken::new(99);
@@ -1046,7 +1046,7 @@ mod tests {
         let mut store = MockFileStoreService::new();
         store.expect_delete_book().returning(|_| Box::pin(async { Ok(()) }));
 
-        let svc = create_service(book_repo, MockAuthorRepository::new(), job_repo, MockLibraryRepository::new(), store);
+        let svc = create_service(book_repo, MockAuthorRepository::new(), job_repo, MockCollectionRepository::new(), store);
         let token = BookToken::new(book_id);
 
         svc.delete_book(token).await.unwrap();
@@ -1087,7 +1087,7 @@ mod tests {
         let mut store = MockFileStoreService::new();
         store.expect_delete_book().returning(|_| Box::pin(async { Ok(()) }));
 
-        let svc = create_service(book_repo, author_repo, job_repo, MockLibraryRepository::new(), store);
+        let svc = create_service(book_repo, author_repo, job_repo, MockCollectionRepository::new(), store);
         let token = BookToken::new(book_id);
 
         svc.delete_book(token).await.unwrap();
@@ -1126,7 +1126,7 @@ mod tests {
         let mut store = MockFileStoreService::new();
         store.expect_delete_book().returning(|_| Box::pin(async { Ok(()) }));
 
-        let svc = create_service(book_repo, author_repo, job_repo, MockLibraryRepository::new(), store);
+        let svc = create_service(book_repo, author_repo, job_repo, MockCollectionRepository::new(), store);
         let token = BookToken::new(book_id);
 
         svc.delete_book(token).await.unwrap();
@@ -1164,7 +1164,7 @@ mod tests {
         let mut store = MockFileStoreService::new();
         store.expect_delete_book().returning(|_| Box::pin(async { Ok(()) }));
 
-        let svc = create_service(book_repo, MockAuthorRepository::new(), job_repo, MockLibraryRepository::new(), store);
+        let svc = create_service(book_repo, MockAuthorRepository::new(), job_repo, MockCollectionRepository::new(), store);
         let token = BookToken::new(book_id);
 
         svc.delete_book(token).await.unwrap();
@@ -1204,7 +1204,7 @@ mod tests {
             .times(1)
             .returning(|_| Box::pin(async { Ok(()) }));
 
-        let svc = create_service(book_repo, MockAuthorRepository::new(), job_repo, MockLibraryRepository::new(), store);
+        let svc = create_service(book_repo, MockAuthorRepository::new(), job_repo, MockCollectionRepository::new(), store);
         let token = BookToken::new(book_id);
 
         svc.delete_book(token).await.unwrap();
@@ -1246,7 +1246,7 @@ mod tests {
             .returning(|_, _| Box::pin(async { Ok(()) }));
         store.expect_delete_book().returning(|_| Box::pin(async { Ok(()) }));
 
-        let svc = create_service(book_repo, MockAuthorRepository::new(), job_repo, MockLibraryRepository::new(), store);
+        let svc = create_service(book_repo, MockAuthorRepository::new(), job_repo, MockCollectionRepository::new(), store);
         let token = BookToken::new(book_id);
 
         svc.delete_book(token).await.unwrap();
@@ -1283,7 +1283,7 @@ mod tests {
         store.expect_delete_book().returning(|_| Box::pin(async { Ok(()) }));
         store.expect_delete_original_file().returning(|_| Box::pin(async { Ok(()) }));
 
-        let svc = create_service(book_repo, MockAuthorRepository::new(), job_repo, MockLibraryRepository::new(), store);
+        let svc = create_service(book_repo, MockAuthorRepository::new(), job_repo, MockCollectionRepository::new(), store);
         let token = BookToken::new(book_id);
 
         svc.delete_book(token).await.unwrap();
@@ -1321,7 +1321,7 @@ mod tests {
             .returning(|_, _| Box::pin(async { Err(crate::Error::Infrastructure("disk full".to_owned())) }));
         store.expect_delete_book().returning(|_| Box::pin(async { Ok(()) }));
 
-        let svc = create_service(book_repo, MockAuthorRepository::new(), job_repo, MockLibraryRepository::new(), store);
+        let svc = create_service(book_repo, MockAuthorRepository::new(), job_repo, MockCollectionRepository::new(), store);
         let token = BookToken::new(book_id);
 
         // Should succeed despite trash copy failure
@@ -1360,11 +1360,11 @@ mod tests {
             crate::repository::testing::default_repository_service_builder()
                 .book_repository(Arc::new(book_repo))
                 .import_job_repository(Arc::new(MockImportJobRepository::new()))
-                .library_repository(Arc::new(MockLibraryRepository::new()))
+                .collection_repository(Arc::new(MockCollectionRepository::new()))
                 .build()
                 .expect("all fields provided"),
         );
-        let svc = LibraryServiceImpl::new(
+        let svc = CollectionServiceImpl::new(
             repository_service,
             Arc::new(store),
             nop_format_service(),
@@ -1384,7 +1384,7 @@ mod tests {
             MockBookRepository::new(),
             MockAuthorRepository::new(),
             MockImportJobRepository::new(),
-            MockLibraryRepository::new(),
+            MockCollectionRepository::new(),
             MockFileStoreService::new(),
         );
         let filter = BookFilter::Rule(FilterRule::ReadStatus {
@@ -1399,7 +1399,7 @@ mod tests {
 
     #[tokio::test]
     async fn approve_book_rejects_non_needs_review_status() {
-        use crate::library::BookEdit;
+        use crate::collection::BookEdit;
         let token = ImportJobToken::new(42);
         let mut import_mock = MockImportJobRepository::new();
         import_mock.expect_find_by_token().returning(move |_, _| {
@@ -1426,7 +1426,7 @@ mod tests {
             MockBookRepository::new(),
             MockAuthorRepository::new(),
             import_mock,
-            MockLibraryRepository::new(),
+            MockCollectionRepository::new(),
             MockFileStoreService::new(),
         );
         let edit = BookEdit {
@@ -1478,7 +1478,7 @@ mod tests {
             MockBookRepository::new(),
             MockAuthorRepository::new(),
             import_mock,
-            MockLibraryRepository::new(),
+            MockCollectionRepository::new(),
             MockFileStoreService::new(),
         );
         let result = svc.reject_book(token).await;

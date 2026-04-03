@@ -1,8 +1,8 @@
 use bb_core::{
     Error, RepositoryError,
     book::{AuthorRole, BookQuery, BookStatus},
+    collection::BookEdit,
     import::ImportStatus,
-    library::BookEdit,
     pipeline::{ExtractedAuthor, ExtractedMetadata},
 };
 
@@ -149,7 +149,7 @@ async fn reject_job_removes_candidate_book() {
     let book_id = job.candidate_book_id.expect("candidate_book_id set");
     let book = fixtures::find_book_by_id(&ctx.repos, book_id).await.expect("book exists");
 
-    svc.library_service.reject_book(job.token).await.unwrap();
+    svc.collection_service.reject_book(job.token).await.unwrap();
 
     let found = svc.book_service.find_book_by_token(book.token).await.unwrap();
     assert!(found.is_none(), "book should be deleted after reject");
@@ -163,7 +163,7 @@ async fn reject_job_removes_import_job() {
     let job = svc.pipeline_service.process_job(job).await.unwrap();
     let job_id = job.id;
 
-    svc.library_service.reject_book(job.token).await.unwrap();
+    svc.collection_service.reject_book(job.token).await.unwrap();
 
     let found = fixtures::find_job_by_id(&ctx.repos, job_id).await;
     assert!(found.is_none(), "import job should be deleted after reject");
@@ -176,14 +176,14 @@ async fn reject_job_removes_orphan_author() {
     let job = fixtures::insert_import_job(&ctx.repos, "hash_reject_orphan").await;
     let job = svc.pipeline_service.process_job(job).await.unwrap();
 
-    svc.library_service.reject_book(job.token).await.unwrap();
+    svc.collection_service.reject_book(job.token).await.unwrap();
 
     // "Test Author" was only on this book — must be cleaned up
     let books = svc.book_service.list_books(&BookQuery::default(), None, None).await.unwrap();
     assert!(books.is_empty(), "all books deleted");
     // No author listing service exposed directly; verify indirectly via library
     // stats
-    let stats = svc.library_service.library_stats().await.unwrap();
+    let stats = svc.collection_service.collection_stats().await.unwrap();
     assert_eq!(stats.authors, 0, "orphan author should be removed");
 }
 
@@ -194,7 +194,7 @@ async fn reject_job_fails_when_not_needs_review() {
     let job = fixtures::insert_import_job(&ctx.repos, "hash_reject_bad_status").await;
     // Job is still Pending — reject must fail
 
-    let result = svc.library_service.reject_book(job.token).await;
+    let result = svc.collection_service.reject_book(job.token).await;
 
     assert!(matches!(result, Err(Error::Validation(_))), "expected Validation error, got: {result:?}");
 }
@@ -205,7 +205,7 @@ async fn reject_job_fails_for_unknown_token() {
     let svc = fixtures::pipeline_services(&ctx, stub_metadata());
     let ghost_token = bb_core::import::ImportJobToken::new(999_999);
 
-    let result = svc.library_service.reject_book(ghost_token).await;
+    let result = svc.collection_service.reject_book(ghost_token).await;
 
     assert!(
         matches!(result, Err(Error::RepositoryError(RepositoryError::NotFound))),
@@ -228,7 +228,7 @@ async fn approve_job_transitions_book_to_available() {
     let edit = minimal_edit("Approved Book", "Test Author");
     let reviewer = fixtures::insert_user(&ctx.repos, "reviewer_approve").await;
 
-    svc.library_service
+    svc.collection_service
         .approve_book(job.token, reviewer.id, edit, &std::env::temp_dir())
         .await
         .unwrap();
@@ -246,7 +246,7 @@ async fn approve_job_fails_when_not_needs_review() {
     // Job is still Pending — approve must fail
     let edit = minimal_edit("Title", "Author");
 
-    let result = svc.library_service.approve_book(job.token, 1, edit, &std::env::temp_dir()).await;
+    let result = svc.collection_service.approve_book(job.token, 1, edit, &std::env::temp_dir()).await;
 
     assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::NotFound) | Error::Validation(_))));
 }

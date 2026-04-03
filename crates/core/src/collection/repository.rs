@@ -8,7 +8,7 @@ use crate::{
 
 #[async_trait::async_trait]
 #[cfg_attr(test, mockall::automock)]
-pub trait LibraryRepository: Send + Sync {
+pub trait CollectionRepository: Send + Sync {
     /// Returns the count of books with `status = available`.
     async fn count_available_books(&self, transaction: &dyn Transaction) -> Result<u64, Error>;
 
