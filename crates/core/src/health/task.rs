@@ -11,6 +11,8 @@ pub struct HealthTaskConfig {
     /// How often to re-run after each execution. `None` means manual-only —
     /// the task never auto-schedules and must be triggered via `mark_due_now`.
     pub interval_minutes: Option<u64>,
+    /// Job queue priority for this task. Defaults to `PRIORITY_HEALTH`.
+    pub priority: i16,
 }
 
 /// Runtime state for a single task, exposed to the frontend.
@@ -21,6 +23,7 @@ pub struct HealthTaskInfo {
     pub run_on_startup: bool,
     /// `None` for manual-only tasks.
     pub interval_minutes: Option<u64>,
+    pub priority: i16,
     pub last_run_at: Option<DateTime<Utc>>,
     /// `None` for manual-only tasks that have not been triggered.
     pub next_run_at: Option<DateTime<Utc>>,
@@ -57,6 +60,7 @@ impl HealthTaskState {
             job_type: config.job_type,
             run_on_startup: config.run_on_startup,
             interval_minutes: config.interval_minutes,
+            priority: config.priority,
             last_run_at: None,
             next_run_at: next,
         };
@@ -66,6 +70,18 @@ impl HealthTaskState {
     /// Returns a snapshot of all task info for display in the UI.
     pub fn list_tasks(&self) -> Vec<HealthTaskInfo> {
         self.tasks.read().expect("task lock poisoned").clone()
+    }
+
+    /// Returns the priority for the given `job_type`, or `PRIORITY_HEALTH` if
+    /// not found.
+    pub fn task_priority(&self, job_type: &str) -> i16 {
+        use crate::jobs::PRIORITY_HEALTH;
+        self.tasks
+            .read()
+            .expect("task lock poisoned")
+            .iter()
+            .find(|t| t.job_type == job_type)
+            .map_or(PRIORITY_HEALTH, |t| t.priority)
     }
 
     /// Returns the `job_type` values of tasks whose `next_run_at` has passed.
@@ -114,28 +130,33 @@ mod tests {
     use super::*;
 
     fn sample_configs() -> Vec<HealthTaskConfig> {
+        use crate::jobs::PRIORITY_HEALTH;
         vec![
             HealthTaskConfig {
                 name: "Startup Task".into(),
                 job_type: "health.startup".into(),
                 run_on_startup: true,
                 interval_minutes: Some(60),
+                priority: PRIORITY_HEALTH,
             },
             HealthTaskConfig {
                 name: "Periodic Task".into(),
                 job_type: "health.periodic".into(),
                 run_on_startup: false,
                 interval_minutes: Some(360),
+                priority: PRIORITY_HEALTH,
             },
         ]
     }
 
     fn manual_config() -> HealthTaskConfig {
+        use crate::jobs::PRIORITY_HEALTH;
         HealthTaskConfig {
             name: "Manual Task".into(),
             job_type: "health.manual".into(),
             run_on_startup: false,
             interval_minutes: None,
+            priority: PRIORITY_HEALTH,
         }
     }
 

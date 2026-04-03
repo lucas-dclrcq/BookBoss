@@ -33,16 +33,16 @@ Any OPDS 1.x compatible reader should work, including:
 
 The OPDS catalog provides the following navigation:
 
-| Feed             | URL                          | Description                                                        |
-| ---------------- | ---------------------------- | ------------------------------------------------------------------ |
-| Root catalog     | `/opds/`                     | Entry point; shows "Libraries" nav entry for users with 2+ libraries |
-| Default library  | `/opds/all`                  | Books in the user's **default library** (not the full catalogue)   |
-| Libraries        | `/opds/libraries`            | Navigation feed listing the user's assigned libraries              |
-| Library          | `/opds/libraries/{token}`    | Books in a specific library                                        |
-| Search           | `/opds/search?q=...`         | Full-text book search                                              |
-| Shelves          | `/opds/shelves`              | Browse by shelf                                                    |
-| Authors          | `/opds/authors`              | Browse by author                                                   |
-| Series           | `/opds/series`               | Browse by series                                                   |
+| Feed            | URL                       | Description                                                          |
+| --------------- | ------------------------- | -------------------------------------------------------------------- |
+| Root catalog    | `/opds/`                  | Entry point; shows "Libraries" nav entry for users with 2+ libraries |
+| Default library | `/opds/all`               | Books in the user's **default library** (not the full catalogue)     |
+| Libraries       | `/opds/libraries`         | Navigation feed listing the user's assigned libraries                |
+| Library         | `/opds/libraries/{token}` | Books in a specific library                                          |
+| Search          | `/opds/search?q=...`      | Full-text book search                                                |
+| Shelves         | `/opds/shelves`           | Browse by shelf                                                      |
+| Authors         | `/opds/authors`           | Browse by author                                                     |
+| Series          | `/opds/series`            | Browse by series                                                     |
 
 Each book entry includes download links for all available formats and cover images.
 

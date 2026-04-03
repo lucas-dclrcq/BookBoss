@@ -436,9 +436,7 @@ fn LibraryPicker() -> Element {
     // When ACTIVE_LIBRARY hasn't been initialised yet (initial SSR render or the
     // brief moment before the client effect runs), fall back to the
     // server-resolved default so the label is correct from the very first paint.
-    let resolved_active: Option<&str> = active
-        .as_deref()
-        .or(if default_token.is_empty() { None } else { Some(default_token.as_str()) });
+    let resolved_active: Option<&str> = active.as_deref().or(if default_token.is_empty() { None } else { Some(default_token.as_str()) });
 
     let active_name = libs
         .iter()

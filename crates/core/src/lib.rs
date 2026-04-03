@@ -207,7 +207,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         },
     };
     use import::handler::ProcessImportHandler;
-    use jobs::{ErasedJobHandler, JobServiceExt};
+    use jobs::{ErasedJobHandler, JobServiceExt, PRIORITY_HEALTH, PRIORITY_SWEEP};
 
     let js = &core.job_service;
     let hs = &core.health_service;
@@ -225,6 +225,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         job_type: handler.job_type().into(),
         run_on_startup: true,
         interval_minutes: Some(60),
+        priority: PRIORITY_HEALTH,
     });
     js.register(handler);
 
@@ -234,6 +235,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         job_type: handler.job_type().into(),
         run_on_startup: true,
         interval_minutes: Some(120),
+        priority: PRIORITY_HEALTH,
     });
     js.register(handler);
 
@@ -243,6 +245,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         job_type: handler.job_type().into(),
         run_on_startup: false,
         interval_minutes: None,
+        priority: PRIORITY_HEALTH,
     });
     js.register(handler);
 
@@ -252,6 +255,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         job_type: handler.job_type().into(),
         run_on_startup: false,
         interval_minutes: Some(360),
+        priority: PRIORITY_HEALTH,
     });
     js.register(handler);
 
@@ -261,6 +265,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         job_type: handler.job_type().into(),
         run_on_startup: false,
         interval_minutes: Some(360),
+        priority: PRIORITY_HEALTH,
     });
     js.register(handler);
 
@@ -270,6 +275,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         job_type: handler.job_type().into(),
         run_on_startup: false,
         interval_minutes: Some(360),
+        priority: PRIORITY_HEALTH,
     });
     js.register(handler);
 
@@ -279,6 +285,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         job_type: handler.job_type().into(),
         run_on_startup: false,
         interval_minutes: Some(1440),
+        priority: PRIORITY_HEALTH,
     });
     js.register(handler);
 
@@ -288,6 +295,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         job_type: handler.job_type().into(),
         run_on_startup: false,
         interval_minutes: Some(1440),
+        priority: PRIORITY_HEALTH,
     });
     js.register(handler);
 
@@ -297,6 +305,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         job_type: handler.job_type().into(),
         run_on_startup: false,
         interval_minutes: Some(1440),
+        priority: PRIORITY_HEALTH,
     });
     js.register(handler);
 
@@ -306,6 +315,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         job_type: handler.job_type().into(),
         run_on_startup: false,
         interval_minutes: Some(1440),
+        priority: PRIORITY_HEALTH,
     });
     js.register(handler);
 
@@ -315,6 +325,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         job_type: handler.job_type().into(),
         run_on_startup: false,
         interval_minutes: Some(720),
+        priority: PRIORITY_HEALTH,
     });
     js.register(handler);
 
@@ -324,6 +335,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         job_type: handler.job_type().into(),
         run_on_startup: true,
         interval_minutes: Some(360),
+        priority: PRIORITY_HEALTH,
     });
     js.register(handler);
 
@@ -333,6 +345,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         job_type: handler.job_type().into(),
         run_on_startup: true,
         interval_minutes: None,
+        priority: PRIORITY_SWEEP,
     });
     js.register(handler);
 }

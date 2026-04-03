@@ -25,6 +25,10 @@ pub trait HealthService: Send + Sync {
     /// Set a task's `next_run_at` to now so it's picked up on the next poll.
     async fn mark_due_now(&self, job_type: &str);
 
+    /// Returns the queue priority for the given `job_type`, falling back to
+    /// `PRIORITY_HEALTH` if the task is not registered.
+    fn task_priority(&self, job_type: &str) -> i16;
+
     /// Request that the health subsystem enqueue and run the given task now.
     ///
     /// Non-blocking: if the channel buffer is full the request is silently
@@ -59,6 +63,10 @@ impl HealthService for HealthServiceImpl {
         self.state.mark_due_now(job_type);
     }
 
+    fn task_priority(&self, job_type: &str) -> i16 {
+        self.state.task_priority(job_type)
+    }
+
     fn kick(&self, job_type: String) {
         let _ = self.kick_tx.try_send(job_type);
     }
@@ -88,11 +96,13 @@ mod tests {
     use super::*;
 
     fn sample_config() -> HealthTaskConfig {
+        use crate::jobs::PRIORITY_HEALTH;
         HealthTaskConfig {
             name: "Test Task".into(),
             job_type: "health.test".into(),
             run_on_startup: true,
             interval_minutes: Some(60),
+            priority: PRIORITY_HEALTH,
         }
     }
 

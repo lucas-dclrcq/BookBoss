@@ -27,7 +27,7 @@ impl Default for BookSweepPayload {
     fn default() -> Self {
         Self {
             after_id: None,
-            batch_size: 100,
+            batch_size: 25,
         }
     }
 }

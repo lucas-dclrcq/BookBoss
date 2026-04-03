@@ -24,13 +24,13 @@ Smart shelves recalculate their contents whenever books or reading state change 
 
 **Available filter rules include:**
 
-| Rule | Description |
-| ---- | ----------- |
-| Reading status | Match by read/reading/unread/etc. |
-| Author | Match books by a specific author |
-| Series | Match books in a specific series |
-| Genre / Tag | Match books with a specific genre or tag |
-| Library | Match books that belong to a specific library (admin only) |
+| Rule           | Description                                                |
+| -------------- | ---------------------------------------------------------- |
+| Reading status | Match by read/reading/unread/etc.                          |
+| Author         | Match books by a specific author                           |
+| Series         | Match books in a specific series                           |
+| Genre / Tag    | Match books with a specific genre or tag                   |
+| Library        | Match books that belong to a specific library (admin only) |
 
 The **Library** rule is only visible in the filter builder for admin accounts. It lets you build cross-library smart collections, such as a shelf that spans books from two different personal libraries.
 
