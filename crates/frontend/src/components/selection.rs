@@ -11,6 +11,7 @@ use {
         CoreServices,
         book::{AuthorToken, BookToken, IdentifierType, PublisherToken, SeriesToken},
         collection::BookEdit,
+        library::LibraryToken,
         reading::ReadStatus,
         types::Capability,
         user::UserId,
@@ -785,6 +786,50 @@ async fn check_edit_book_capability() -> Result<bool, ServerFnError> {
 }
 
 // ---------------------------------------------------------------------------
+// Server function: list non-system libraries for bulk add target
+// ---------------------------------------------------------------------------
+
+#[get(
+    "/api/v1/books/bulk/libraries",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+async fn list_bulk_target_libraries() -> Result<Vec<(String, String)>, ServerFnError> {
+    require_capability(&auth_session, Capability::EditBook, Method::GET).await?;
+    let all = core_services.library_service.list_libraries().await.map_err(to_server_err)?;
+    Ok(all
+        .into_iter()
+        .filter(|e| !e.library.is_system)
+        .map(|e| (e.library.token.to_string(), e.library.name))
+        .collect())
+}
+
+// ---------------------------------------------------------------------------
+// Server function: bulk add books to library
+// ---------------------------------------------------------------------------
+
+#[post(
+    "/api/v1/books/bulk/add-to-library",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+async fn bulk_add_books_to_library(book_tokens: Vec<String>, library_token: String) -> Result<u32, ServerFnError> {
+    require_capability(&auth_session, Capability::EditBook, Method::POST).await?;
+
+    let lib_token = LibraryToken::from_str(&library_token).map_err(|_| ServerFnError::new("Invalid library token"))?;
+
+    let mut added = 0u32;
+    for token_str in &book_tokens {
+        let book_token = BookToken::from_str(token_str).map_err(|_| ServerFnError::new(format!("Invalid book token: {token_str}")))?;
+        match core_services.library_service.add_book_to_library(lib_token, book_token).await {
+            Ok(()) => added += 1,
+            Err(e) => tracing::warn!(book_token = %token_str, error = %e, "bulk add to library failed for book"),
+        }
+    }
+    Ok(added)
+}
+
+// ---------------------------------------------------------------------------
 // SelectionActionBar — fixed bottom bar with actions for selected books
 // ---------------------------------------------------------------------------
 
@@ -801,8 +846,10 @@ pub(crate) fn SelectionActionBar(
     let mut show_status_dropdown = use_signal(|| false);
     let mut show_bulk_edit = use_signal(|| false);
     let mut show_bulk_delete = use_signal(|| false);
+    let mut show_add_to_library = use_signal(|| false);
     let mut busy = use_signal(|| false);
     let mut status_message = use_signal(|| None::<String>);
+    let available_libraries = use_resource(list_bulk_target_libraries);
 
     // Check if user has EditBook capability (for showing Edit Metadata button).
     let can_edit_resource = use_server_future(check_edit_book_capability);
@@ -838,7 +885,7 @@ pub(crate) fn SelectionActionBar(
                 let tokens_for_shortcut = all_book_tokens.clone();
                 move |e: KeyboardEvent| {
                     // Don't handle shortcuts when modal is open or busy
-                    if show_bulk_edit() || show_bulk_delete() || busy() { return; }
+                    if show_bulk_edit() || show_bulk_delete() || show_add_to_library() || busy() { return; }
                     match e.key() {
                         Key::Escape => {
                             // Close status dropdown if open, otherwise exit selection mode
@@ -906,6 +953,69 @@ pub(crate) fn SelectionActionBar(
                     disabled: busy() || !has_selection,
                     onclick: move |_| show_bulk_edit.set(true),
                     "Edit Metadata"
+                }
+            }
+
+            // Add to Library (only shown if user has EditBook capability)
+            if can_edit {
+                div { class: "relative",
+                    button {
+                        class: "px-4 py-2 text-sm font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer disabled:opacity-40",
+                        disabled: busy() || !has_selection,
+                        onclick: move |_| show_add_to_library.set(!show_add_to_library()),
+                        "Add to Library"
+                    }
+                    if show_add_to_library() {
+                        div { class: "absolute bottom-full right-0 mb-1 z-50 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-max",
+                            match available_libraries.read().as_ref() {
+                                None => rsx! { div { class: "px-4 py-2 text-sm text-gray-500", "Loading…" } },
+                                Some(Err(_)) => rsx! { div { class: "px-4 py-2 text-sm text-red-500", "Failed to load libraries" } },
+                                Some(Ok(libs)) if libs.is_empty() => rsx! { div { class: "px-4 py-2 text-sm text-gray-500", "No libraries available" } },
+                                Some(Ok(libs)) => rsx! {
+                                    for (token, name) in libs.iter() {
+                                        {
+                                            let t = token.clone();
+                                            let n = name.clone();
+                                            rsx! {
+                                                button {
+                                                    class: "block w-full text-left px-4 py-2 text-sm hover:bg-gray-50 cursor-pointer",
+                                                    onclick: move |_| {
+                                                        let lib_token = t.clone();
+                                                        let tokens: Vec<String> = SELECTED_BOOKS.read().iter().cloned().collect();
+                                                        let count = tokens.len();
+                                                        show_add_to_library.set(false);
+                                                        busy.set(true);
+                                                        status_message.set(Some(format!("Adding {count} books to library…")));
+                                                        spawn(async move {
+                                                            match bulk_add_books_to_library(tokens.clone(), lib_token).await {
+                                                                Ok(n) => {
+                                                                    busy.set(false);
+                                                                    let selected_count = tokens.len() as u32;
+                                                                    if n < selected_count {
+                                                                        status_message.set(Some(format!("Added {n} of {selected_count} books (some may already be in this library or were not found)")));
+                                                                        on_action.call(());
+                                                                    } else {
+                                                                        status_message.set(None);
+                                                                        on_action.call(());
+                                                                        exit_selection_mode();
+                                                                    }
+                                                                }
+                                                                Err(e) => {
+                                                                    status_message.set(Some(format!("Error: {e}")));
+                                                                    busy.set(false);
+                                                                }
+                                                            }
+                                                        });
+                                                    },
+                                                    "{n}"
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                            }
+                        }
+                    }
                 }
             }
 
