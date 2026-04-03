@@ -1081,7 +1081,16 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                                     class: "rounded border-gray-300 text-indigo-600 focus:ring-indigo-500",
                                     checked: create_personal_library,
                                     disabled: saving,
-                                    onchange: move |e| create_personal_library.set(e.checked()),
+                                    onchange: move |e| {
+                                    let checked = e.checked();
+                                    create_personal_library.set(checked);
+                                    if checked && !personal_name_dirty() {
+                                        let name = full_name().trim().to_string();
+                                        if !name.is_empty() {
+                                            personal_library_name.set(format!("{name}'s Library"));
+                                        }
+                                    }
+                                },
                                 }
                                 span { class: "text-sm font-medium text-gray-700", "Create personal library" }
                             }

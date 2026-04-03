@@ -414,8 +414,7 @@ fn LibraryPicker() -> Element {
     let active_name = libs
         .iter()
         .find(|l| Some(l.token.as_str()) == active.as_deref())
-        .map(|l| l.name.clone())
-        .unwrap_or_else(|| "All Books".to_string());
+        .map_or_else(|| "All Books".to_string(), |l| l.name.clone());
 
     rsx! {
         div { class: "relative",
