@@ -108,7 +108,7 @@ pub(crate) async fn get_user_libraries() -> Result<Vec<UserLibraryDto>, ServerFn
     let user_id = current_user.id();
     let mut libs = core_services.library_service.libraries_for_user(user_id).await.map_err(to_server_err)?;
     // Sort the user's personal library (the one they own) to the top of the list.
-    libs.sort_by_key(|l| if l.owner_id == Some(user_id) { 0u8 } else { 1u8 });
+    libs.sort_by_key(|l| u8::from(l.owner_id != Some(user_id)));
     Ok(libs
         .into_iter()
         .map(|l| UserLibraryDto {
@@ -438,7 +438,7 @@ fn LibraryPicker() -> Element {
     // server-resolved default so the label is correct from the very first paint.
     let resolved_active: Option<&str> = active
         .as_deref()
-        .or_else(|| if default_token.is_empty() { None } else { Some(default_token.as_str()) });
+        .or(if default_token.is_empty() { None } else { Some(default_token.as_str()) });
 
     let active_name = libs
         .iter()
