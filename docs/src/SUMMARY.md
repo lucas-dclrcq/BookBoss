@@ -9,6 +9,7 @@
 - [Database Configuration](user/database.md)
 - [Managing Your Library](user/managing-library.md)
 - [Shelves & Reading State](user/shelves.md)
+- [Libraries](user/libraries.md)
 - [OPDS Catalog](user/opds.md)
 - [Kobo Device Sync](user/kobo.md)
 - [Configuration Reference](user/configuration.md)

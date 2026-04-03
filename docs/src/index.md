@@ -17,6 +17,7 @@ New to BookBoss? Start here:
 - [Database Configuration](user/database.md) — choose and configure your database backend
 - [Managing Your Library](user/managing-library.md) — importing books, browsing, editing metadata
 - [Shelves & Reading State](user/shelves.md) — organise books into shelves, track reading progress
+- [Libraries](user/libraries.md) — virtual collections for multi-user installs
 - [OPDS Catalog](user/opds.md) — browse your library from any OPDS-compatible reader app
 - [Kobo Device Sync](user/kobo.md) — sync books and reading progress with Kobo e-readers
 - [Configuration Reference](user/configuration.md) — all available configuration options

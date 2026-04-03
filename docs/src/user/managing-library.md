@@ -19,7 +19,9 @@ Navigate to **Library > Incoming** to see books awaiting review.
 Each review page shows three columns: the field name, the current extracted value (editable), and the value fetched from the metadata provider. Use the copy buttons to pull individual fields from the provider into the current value.
 
 - **Fetch provider data** — re-queries the provider using the current identifiers in the form
-- **Approve** — commits the edited metadata, moves the book to your library, and sets its status to _Available_
+- **Libraries** — assign the book to one or more libraries at approval time (requires custom libraries to exist)
+- **Approve** — commits the edited metadata, moves the book to your library, and sets its status to _Available_.
+  The book is always added to All Books; any libraries ticked in the Libraries field are added as well.
 - **Reject** — discards the import
 - **Cancel** — returns to the Incoming list without changes
 
@@ -47,9 +49,14 @@ Files are SHA-256 hashed before ingestion. If a file with the same hash already 
 
 The main **Library** view shows your approved books as a grid of cover thumbnails.
 
+The grid is scoped to the **active library**. Use the library picker in the NavBar to switch
+libraries, or click the **Home** button to return to your default library. Selecting **All Books**
+shows every book in the catalogue.
+
 - **Sort** books by date added, title, or author using the sort controls
-- **Search** using the search bar in the navigation bar — type to filter the displayed books. Prefix terms with `author:`, `title:`, `series:`, `genre:`, or `tag:` for targeted filtering.
+- **Search** using the search bar in the navigation bar — type to filter the displayed books. Prefix terms with `author:`, `title:`, `series:`, `genre:`, or `tag:` for targeted filtering. Search is also scoped to the active library.
 - **Filter by shelf** using the shelf pills at the top of the screen
+- **Add to library** — drag a book cover onto the **Home** icon in the NavBar to add it to your default library
 
 ### Book Detail Page
 
@@ -65,7 +72,9 @@ Click any book to open its detail page. From there you can:
 Select multiple books from the grid to perform bulk operations:
 
 - **Set reading status** — change the reading status for all selected books at once
-- **Edit metadata** — bulk edit a subset of fields (genres, tags, etc.) across selected books
+- **Edit metadata** — bulk edit a subset of fields (genres, tags, libraries, etc.) across selected books
+- **Add to Library** — add all selected books to a library (admin / _Edit Book_ capability;
+  a dropdown picker lists non-system libraries). Only shown when custom libraries exist.
 
 Keyboard shortcuts are available for common actions.
 
@@ -108,6 +117,7 @@ Click **Edit** on any book's detail page to open the metadata editor. You can up
 - Cover image
 - Genres, tags, publishers
 - Identifiers (ISBN-13, ISBN-10, ASIN, etc.)
+- **Libraries** — which libraries the book belongs to (only shown when custom libraries exist)
 
 Changes are saved to the database and to the OPF sidecar file on disk.
 

@@ -15,9 +15,10 @@ This account becomes the administrator of your BookBoss instance.
 
 1. **Add books** — drop EPUB files into the bookdrop directory and [review incoming imports](managing-library.md#reviewing-and-approving)
 2. **Create shelves** — organise your library with [manual and smart shelves](shelves.md)
-3. **Set up OPDS** — [generate an OPDS password](opds.md) to browse your library from reader apps
-4. **Connect a Kobo** — [register your Kobo e-reader](kobo.md) to sync books and reading progress
-5. **Invite users** — add additional user accounts from the Settings page
+3. **Set up libraries** — in a multi-user install, [create libraries](libraries.md) to give each user a curated view of the collection
+4. **Set up OPDS** — [generate an OPDS password](opds.md) to browse your library from reader apps
+5. **Connect a Kobo** — [register your Kobo e-reader](kobo.md) to sync books and reading progress
+6. **Invite users** — add additional user accounts from the Settings page
 
 ## Additional Configuration
 
