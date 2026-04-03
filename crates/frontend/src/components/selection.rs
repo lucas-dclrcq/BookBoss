@@ -22,7 +22,7 @@ use {
 
 use crate::{
     components::{AutocompleteInput, ChipInput},
-    routes::review_page::{BulkEditFields, get_picklist_data},
+    routes::review_page::{BulkEditFields, get_picklist_data, list_non_system_libraries},
 };
 
 // ---------------------------------------------------------------------------
@@ -240,6 +240,24 @@ async fn bulk_edit_single_book(
         .await
         .map_err(to_server_err)?;
 
+    // Library membership update (best-effort — skip on error to keep processing other books)
+    if let Some(desired_tokens) = &fields.library_tokens {
+        let all_libraries = core_services.library_service.list_libraries().await.map_err(to_server_err)?;
+        let non_system: Vec<_> = all_libraries.into_iter().filter(|e| !e.library.is_system).collect();
+        let current_ids = core_services.library_service.library_ids_for_book(book.id).await.map_err(to_server_err)?;
+
+        for entry in &non_system {
+            let lib = &entry.library;
+            let desired = desired_tokens.contains(&lib.token.to_string());
+            let has = current_ids.contains(&lib.id);
+            if desired && !has {
+                let _ = core_services.library_service.add_book_to_library(lib.token, token).await;
+            } else if !desired && has {
+                let _ = core_services.library_service.remove_book_from_library(lib.token, token).await;
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -352,6 +370,7 @@ fn BulkEditModal(on_close: EventHandler<()>, on_saved: EventHandler<()>) -> Elem
     let mut series_name = use_signal(String::new);
     let mut genres = use_signal(Vec::<String>::new);
     let mut tags = use_signal(Vec::<String>::new);
+    let mut library_tokens: Signal<Vec<String>> = use_signal(Vec::new);
 
     // Apply flags — independent checkboxes
     let mut apply_authors = use_signal(|| false);
@@ -360,6 +379,7 @@ fn BulkEditModal(on_close: EventHandler<()>, on_saved: EventHandler<()>) -> Elem
     let mut apply_series = use_signal(|| false);
     let mut apply_genres = use_signal(|| false);
     let mut apply_tags = use_signal(|| false);
+    let mut apply_libraries = use_signal(|| false);
 
     // Auto-sync: content changes update checkboxes
     use_effect(move || {
@@ -387,14 +407,25 @@ fn BulkEditModal(on_close: EventHandler<()>, on_saved: EventHandler<()>) -> Elem
         apply_tags.set(!v.is_empty());
     });
 
+    // Load non-system libraries for the Libraries row
+    let non_system_libraries = use_resource(list_non_system_libraries);
+
     let mut busy = use_signal(|| false);
     let mut error_msg: Signal<Option<String>> = use_signal(|| None);
 
     // Picklist data for autocomplete
     let picklist = use_resource(move || get_picklist_data(()));
 
-    let any_checked = apply_authors() || apply_publisher() || apply_language() || apply_series() || apply_genres() || apply_tags();
+    let any_checked = apply_authors() || apply_publisher() || apply_language() || apply_series() || apply_genres() || apply_tags() || apply_libraries();
     let authors_invalid = apply_authors() && authors.read().is_empty();
+
+    // Non-system libraries for the Libraries row; empty = hide the row
+    let available_libraries: Vec<(String, String)> = non_system_libraries
+        .read()
+        .as_ref()
+        .and_then(|r| r.as_ref().ok())
+        .cloned()
+        .unwrap_or_default();
 
     let label = if count == 1 {
         "Editing 1 book — checked fields will be applied".to_string()
@@ -588,6 +619,55 @@ fn BulkEditModal(on_close: EventHandler<()>, on_saved: EventHandler<()>) -> Elem
                             }
                         }
                     }
+
+                    // Libraries — only rendered when there is at least one non-system library
+                    if !available_libraries.is_empty() {
+                        BulkEditRow {
+                            label: "Libraries",
+                            checked: apply_libraries(),
+                            on_toggle: move |()| {
+                                if apply_libraries() {
+                                    library_tokens.write().clear();
+                                    apply_libraries.set(false);
+                                } else {
+                                    apply_libraries.set(true);
+                                }
+                            },
+                            {
+                                rsx! {
+                                    div { class: "flex flex-wrap gap-x-6 gap-y-1 pt-1",
+                                        for (tok , name) in available_libraries.clone() {
+                                            {
+                                                let tok = tok.clone();
+                                                let is_checked = library_tokens.read().contains(&tok);
+                                                rsx! {
+                                                    label {
+                                                        key: "{tok}",
+                                                        class: "flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer select-none",
+                                                        input {
+                                                            r#type: "checkbox",
+                                                            class: "rounded border-gray-300 text-indigo-600",
+                                                            checked: is_checked,
+                                                            onchange: move |e| {
+                                                                let mut cur = library_tokens.write();
+                                                                if e.checked() {
+                                                                    if !cur.contains(&tok) { cur.push(tok.clone()); }
+                                                                } else {
+                                                                    cur.retain(|t| t != &tok);
+                                                                }
+                                                                apply_libraries.set(true);
+                                                            },
+                                                        }
+                                                        "{name}"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // Validation / error messages
@@ -621,6 +701,7 @@ fn BulkEditModal(on_close: EventHandler<()>, on_saved: EventHandler<()>) -> Elem
                                 series_name: if apply_series() { Some(series_name.read().clone()) } else { None },
                                 genres: if apply_genres() { Some(genres.read().clone()) } else { None },
                                 tags: if apply_tags() { Some(tags.read().clone()) } else { None },
+                                library_tokens: if apply_libraries() { Some(library_tokens.read().clone()) } else { None },
                             };
                             let tokens: Vec<String> = SELECTED_BOOKS.read().iter().cloned().collect();
                             busy.set(true);

@@ -5,7 +5,7 @@ mod types;
 use dioxus::prelude::*;
 pub(crate) use editor::ReviewEditor;
 use server::get_review_data;
-pub(crate) use server::{get_book_for_edit, get_picklist_data};
+pub(crate) use server::{get_book_for_edit, get_picklist_data, list_non_system_libraries};
 pub(crate) use types::BulkEditFields;
 
 use crate::components::IncomingRefresh;

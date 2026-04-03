@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 #[cfg(feature = "server")]
 use {
     super::types::SeriesOption,
-    crate::routes::server_helpers::{require_capability, to_server_err},
+    crate::routes::server_helpers::{require_any_capability, require_capability, to_server_err},
     crate::server::{AuthSession, AuthUser, BackendSessionPool},
     axum::http::Method,
     axum_session_auth::{Auth, Rights},
@@ -733,7 +733,7 @@ pub(crate) async fn get_book_libraries(book_token: String) -> Result<Vec<String>
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 pub(crate) async fn list_non_system_libraries() -> Result<Vec<(String, String)>, ServerFnError> {
-    require_capability(&auth_session, Capability::EditBook, Method::POST).await?;
+    require_any_capability(&auth_session, &[Capability::EditBook, Capability::ApproveImports], Method::GET).await?;
 
     let all_libraries = core_services.library_service.list_libraries().await.map_err(to_server_err)?;
     let result: Vec<(String, String)> = all_libraries
@@ -753,7 +753,7 @@ pub(crate) async fn list_non_system_libraries() -> Result<Vec<(String, String)>,
     core_services: axum::Extension<Arc<CoreServices>>
 )]
 pub(crate) async fn set_book_libraries(book_token: String, library_tokens: Vec<String>) -> Result<(), ServerFnError> {
-    require_capability(&auth_session, Capability::EditBook, Method::PUT).await?;
+    require_any_capability(&auth_session, &[Capability::EditBook, Capability::ApproveImports], Method::PUT).await?;
 
     let book_token_parsed = BookToken::from_str(&book_token).map_err(|_| ServerFnError::new("Invalid book token"))?;
     let book = core_services

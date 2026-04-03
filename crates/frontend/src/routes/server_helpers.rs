@@ -52,3 +52,25 @@ pub(crate) async fn require_capability(auth_session: &AuthSession, capability: C
     }
     Ok(())
 }
+
+/// Checks that the session user holds **at least one** of `capabilities`.
+///
+/// Useful when multiple distinct roles can perform the same action (e.g. both
+/// `EditBook` and `ApproveImports` users need to set library memberships).
+///
+/// Returns `Err(ServerFnError::new("Forbidden"))` if none of the capabilities
+/// match.
+#[cfg(feature = "server")]
+pub(crate) async fn require_any_capability(auth_session: &AuthSession, capabilities: &[Capability], method: Method) -> Result<(), ServerFnError> {
+    let current_user = auth_session.current_user.clone().unwrap_or_default();
+    for capability in capabilities {
+        if Auth::<AuthUser, UserId, BackendSessionPool>::build([method.clone()], true)
+            .requires(Rights::any([Rights::permission(capability.as_str())]))
+            .validate(&current_user, &method, None)
+            .await
+        {
+            return Ok(());
+        }
+    }
+    Err(ServerFnError::new("Forbidden"))
+}
