@@ -64,15 +64,14 @@ impl CollectionRepository for CollectionRepositoryAdapter {
             .filter(books::Column::Status.eq("available"))
             .filter(build_condition(filter, user_id).map_err(bb_core::Error::RepositoryError)?);
 
-        // TODO: when Task 7 adds FilterRule::Library, skip scoping when
-        // the filter already contains a library rule (the filter itself handles
-        // library scoping in that case).
         if let Some(lib_id) = library_id {
-            let mut subq = Query::select();
-            subq.column(library_books::Column::BookId)
-                .from(library_books::Entity)
-                .and_where(library_books::Column::LibraryId.eq(lib_id as i64));
-            query = query.filter(books::Column::Id.in_subquery(subq));
+            if !filter.contains_library_rule() {
+                let mut subq = Query::select();
+                subq.column(library_books::Column::BookId)
+                    .from(library_books::Entity)
+                    .and_where(library_books::Column::LibraryId.eq(lib_id as i64));
+                query = query.filter(books::Column::Id.in_subquery(subq));
+            }
         }
 
         let query = crate::sort::apply_book_sort(query, sort);
@@ -93,14 +92,14 @@ impl CollectionRepository for CollectionRepositoryAdapter {
             .filter(books::Column::Status.eq("available"))
             .filter(build_condition(filter, user_id).map_err(bb_core::Error::RepositoryError)?);
 
-        // TODO: when Task 7 adds FilterRule::Library, skip scoping when
-        // the filter already contains a library rule.
         if let Some(lib_id) = library_id {
-            let mut subq = Query::select();
-            subq.column(library_books::Column::BookId)
-                .from(library_books::Entity)
-                .and_where(library_books::Column::LibraryId.eq(lib_id as i64));
-            query = query.filter(books::Column::Id.in_subquery(subq));
+            if !filter.contains_library_rule() {
+                let mut subq = Query::select();
+                subq.column(library_books::Column::BookId)
+                    .from(library_books::Entity)
+                    .and_where(library_books::Column::LibraryId.eq(lib_id as i64));
+                query = query.filter(books::Column::Id.in_subquery(subq));
+            }
         }
 
         Ok(query.count(transaction).await.map_err(handle_dberr)?)

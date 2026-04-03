@@ -9,7 +9,7 @@ use sea_orm::{
     sea_query::{BinOper, Expr, Func, Query},
 };
 
-use crate::entities::{authors, book_authors, book_genres, book_shelves, book_tags, books, user_book_metadata};
+use crate::entities::{authors, book_authors, book_genres, book_shelves, book_tags, books, library_books, user_book_metadata};
 
 // ── Public entry point
 // ────────────────────────────────────────────────────────
@@ -48,6 +48,7 @@ fn rule_condition(rule: &FilterRule, user_id: UserId) -> Result<Condition, Repos
         FilterRule::Tag { op, values } => Ok(tag_condition(*op, values)),
         FilterRule::Publisher { op, values } => Ok(publisher_condition(*op, values)),
         FilterRule::Shelf { op, values } => Ok(shelf_condition(*op, values)),
+        FilterRule::Library { op, values } => Ok(library_condition(*op, values)),
         FilterRule::Language { op, values } => Ok(language_condition(*op, values)),
         FilterRule::ReadStatus { op, values } => read_status_condition(*op, values, user_id),
         FilterRule::Rating { op, value } => Ok(rating_condition(*op, *value)),
@@ -247,6 +248,34 @@ fn shelf_condition(op: SetOp, values: &[EntityRef]) -> Condition {
     let all_subq = || {
         let mut q = Query::select();
         q.column(book_shelves::Column::BookId).from(book_shelves::Entity);
+        q
+    };
+
+    junction_set_condition(op, ids, any_subq, one_subq, all_subq)
+}
+
+fn library_condition(op: SetOp, values: &[EntityRef]) -> Condition {
+    let ids: Vec<i64> = values.iter().map(|e| e.id).collect();
+
+    let any_subq = |ids: Vec<i64>| {
+        let mut q = Query::select();
+        q.column(library_books::Column::BookId)
+            .from(library_books::Entity)
+            .and_where(library_books::Column::LibraryId.is_in(ids));
+        q
+    };
+
+    let one_subq = |id: i64| {
+        let mut q = Query::select();
+        q.column(library_books::Column::BookId)
+            .from(library_books::Entity)
+            .and_where(library_books::Column::LibraryId.eq(id));
+        q
+    };
+
+    let all_subq = || {
+        let mut q = Query::select();
+        q.column(library_books::Column::BookId).from(library_books::Entity);
         q
     };
 

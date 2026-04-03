@@ -41,6 +41,19 @@ impl BookFilter {
     }
 
     /// Returns `true` if this filter (or any nested sub-filter) contains a
+    /// [`FilterRule::Library`] rule.
+    ///
+    /// When `true`, the caller should skip applying the active-library scope
+    /// on book queries, because the filter already handles library scoping.
+    pub fn contains_library_rule(&self) -> bool {
+        match self {
+            Self::Rule(FilterRule::Library { .. }) => true,
+            Self::Rule(_) => false,
+            Self::Group(group) => group.items.iter().any(Self::contains_library_rule),
+        }
+    }
+
+    /// Returns `true` if this filter (or any nested sub-filter) contains a
     /// rule that requires a specific user context to evaluate (e.g.
     /// `ReadStatus`).
     ///
@@ -177,6 +190,12 @@ pub enum FilterRule {
         values: Vec<EntityRef>,
     },
     Shelf {
+        op: SetOp,
+        values: Vec<EntityRef>,
+    },
+    /// Admin-only: filter by library membership.
+    /// When present, bypasses the active-library scope on book queries.
+    Library {
         op: SetOp,
         values: Vec<EntityRef>,
     },
@@ -334,6 +353,10 @@ mod tests {
             FilterRule::Shelf {
                 op: SetOp::IncludesAny,
                 values: vec![entity(10, "Fantasy Reads")],
+            },
+            FilterRule::Library {
+                op: SetOp::ExcludesAll,
+                values: vec![entity(1, "Scotte's Library")],
             },
             FilterRule::Language {
                 op: SetOp::IncludesAny,
