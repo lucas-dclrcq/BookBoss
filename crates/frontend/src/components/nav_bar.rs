@@ -1,13 +1,15 @@
 use dioxus::prelude::*;
 #[cfg(feature = "server")]
 use {
-    crate::routes::server_helpers::{require_capability, to_server_err},
+    crate::routes::server_helpers::{authenticated_user, require_capability, to_server_err},
     crate::server::{AuthSession, AuthUser, BackendSessionPool},
     axum::http::Method,
     axum_session_auth::{Auth, Rights},
     bb_core::{CoreServices, types::Capability, user::UserId},
     std::sync::Arc,
 };
+
+pub(crate) static ACTIVE_LIBRARY: GlobalSignal<Option<String>> = Signal::global(|| None);
 
 use crate::components::{IncomingRefresh, JobsRefresh};
 
@@ -84,6 +86,41 @@ async fn get_collection_stats() -> Result<CollectionStats, ServerFnError> {
 async fn logout() -> Result<(), ServerFnError> {
     auth_session.logout_user();
     Ok(())
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct UserLibraryDto {
+    pub token: String,
+    pub name: String,
+}
+
+#[get(
+    "/api/v1/user/libraries",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+async fn get_user_libraries() -> Result<Vec<UserLibraryDto>, ServerFnError> {
+    let current_user = authenticated_user(&auth_session)?;
+    let user_id = current_user.id();
+    let libs = core_services.library_service.libraries_for_user(user_id).await.map_err(to_server_err)?;
+    Ok(libs
+        .into_iter()
+        .map(|l| UserLibraryDto {
+            token: l.token.to_string(),
+            name: l.name,
+        })
+        .collect())
+}
+
+#[get(
+    "/api/v1/user/default_library",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+async fn get_default_library_token_for_user() -> Result<String, ServerFnError> {
+    let current_user = authenticated_user(&auth_session)?;
+    let user_id = current_user.id();
+    core_services.library_service.get_default_library_token(user_id).await.map_err(to_server_err)
 }
 
 // ── Badge / button sub-components
@@ -323,6 +360,55 @@ fn AboutStatRow(label: &'static str, value: Option<String>) -> Element {
     }
 }
 
+// ── Library picker
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Initialises `ACTIVE_LIBRARY` from the user's default library setting.
+/// Isolated so that suspension doesn't affect the rest of the NavBar.
+#[component]
+fn LibraryInit() -> Element {
+    let default_token = use_server_future(get_default_library_token_for_user)?;
+    use_effect(move || {
+        if let Some(Ok(token)) = default_token() {
+            if ACTIVE_LIBRARY.peek().is_none() {
+                *ACTIVE_LIBRARY.write() = Some(token);
+            }
+        }
+    });
+    rsx! {}
+}
+
+/// Renders a `<select>` dropdown when the user has 2+ assigned libraries.
+#[component]
+fn LibraryPicker() -> Element {
+    let libs_res = use_server_future(get_user_libraries)?;
+    let libs: Vec<UserLibraryDto> = libs_res().and_then(|r: Result<Vec<UserLibraryDto>, ServerFnError>| r.ok()).unwrap_or_default();
+
+    if libs.len() < 2 {
+        return rsx! {};
+    }
+
+    let active = ACTIVE_LIBRARY();
+
+    rsx! {
+        select {
+            class: "text-sm bg-indigo-600 text-white border border-indigo-400 rounded px-2 py-1 cursor-pointer hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-300",
+            value: active.as_deref().unwrap_or(""),
+            onchange: move |e| {
+                let val = e.value();
+                *ACTIVE_LIBRARY.write() = if val.is_empty() { None } else { Some(val) };
+            },
+            for lib in &libs {
+                option {
+                    value: "{lib.token}",
+                    selected: active.as_deref() == Some(&lib.token),
+                    "{lib.name}"
+                }
+            }
+        }
+    }
+}
+
 // ── NavBar
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -385,6 +471,7 @@ pub(crate) fn NavBar() -> Element {
 
     let on_logout = move |_| {
         user_menu_open.set(false);
+        *ACTIVE_LIBRARY.write() = None;
         spawn(async move {
             let _ = logout().await;
             navigator.push(Route::LandingPage {});
@@ -404,9 +491,30 @@ pub(crate) fn NavBar() -> Element {
                         class: "h-8 w-auto",
                     }
                 }
-                Link { to: Route::BooksPage {}, class: "text-sm hover:text-indigo-200",
+                // Home icon — always visible, navigates to the books page
+                Link {
+                    to: Route::BooksPage {},
+                    class: "flex items-center hover:text-indigo-200",
+                    title: "Home",
                     onclick: move |_| *SEARCH_TEXT.write() = String::new(),
-                    "Library"
+                    svg {
+                        class: "w-5 h-5",
+                        xmlns: "http://www.w3.org/2000/svg",
+                        fill: "none",
+                        view_box: "0 0 24 24",
+                        stroke_width: "1.5",
+                        stroke: "currentColor",
+                        path {
+                            stroke_linecap: "round",
+                            stroke_linejoin: "round",
+                            d: "m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25",
+                        }
+                    }
+                }
+                // Library picker — only shown when user has 2+ libraries
+                SuspenseBoundary {
+                    fallback: |_| rsx! {},
+                    LibraryPicker {}
                 }
                 Link { to: Route::AuthorsPage {}, class: "text-sm hover:text-indigo-200",
                     onclick: move |_| *SEARCH_TEXT.write() = String::new(),
@@ -424,6 +532,11 @@ pub(crate) fn NavBar() -> Element {
                     fallback: |_| rsx! {},
                     JobQueueBadge {}
                 }
+            }
+            // Initialise ACTIVE_LIBRARY signal in background
+            SuspenseBoundary {
+                fallback: |_| rsx! {},
+                LibraryInit {}
             }
             div { class: "absolute left-1/2 -translate-x-1/2 w-full max-w-md px-4",
                 if search_active {
