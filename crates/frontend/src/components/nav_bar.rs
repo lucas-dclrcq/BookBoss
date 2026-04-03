@@ -10,6 +10,10 @@ use {
 };
 
 pub(crate) static ACTIVE_LIBRARY: GlobalSignal<Option<String>> = Signal::global(|| None);
+/// The user's configured default library token — set once on login, never
+/// mutated by navigation or the library picker. Used by the home button to snap
+/// back to the default.
+pub(crate) static DEFAULT_LIBRARY: GlobalSignal<Option<String>> = Signal::global(|| None);
 
 use crate::components::{IncomingRefresh, JobsRefresh};
 
@@ -390,6 +394,7 @@ fn LibraryInit() -> Element {
     let default_token = use_server_future(get_default_library_token_for_user)?;
     use_effect(move || {
         if let Some(Ok(token)) = default_token() {
+            *DEFAULT_LIBRARY.write() = Some(token.clone());
             if ACTIVE_LIBRARY.peek().is_none() {
                 *ACTIVE_LIBRARY.write() = Some(token);
             }
@@ -562,6 +567,7 @@ pub(crate) fn NavBar() -> Element {
                             title: "Home",
                             onclick: move |_| {
                                 *SEARCH_TEXT.write() = String::new();
+                                *ACTIVE_LIBRARY.write() = DEFAULT_LIBRARY();
                                 navigator.push(Route::BooksPage {});
                             },
                             ondragover: move |e: DragEvent| {

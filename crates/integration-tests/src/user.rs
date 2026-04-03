@@ -7,7 +7,8 @@ use crate::{fixtures, setup};
 
 /// Deleting a user whose personal library contains a shelf:
 ///  - removes the library
-///  - deletes the shelf (not re-parented, because it belongs to the deleted user)
+///  - deletes the shelf (not re-parented, because it belongs to the deleted
+///    user)
 #[tokio::test]
 async fn delete_user_removes_personal_library_and_owned_shelves() {
     let ctx = setup().await;
