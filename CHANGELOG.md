@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0](https://github.com/szinn/BookBoss/compare/v0.7.18..v0.8.0) - 2026-04-03
+
+### Features
+
+- _(core)_ Delete user's shelves on user deletion; add delete_shelves_for_user - ([7754234](https://github.com/szinn/BookBoss/commit/775423438e88c77b4985ded646806a5e511133b4))
+- _(core)_ Seed personal library with user's shelf/metadata books only - ([75f1440](https://github.com/szinn/BookBoss/commit/75f1440450d9614cd07c546fcc4d539575d4bd0f))
+- _(core)_ Auto-add approved books to All Books library in approve_book transaction - ([9e14573](https://github.com/szinn/BookBoss/commit/9e14573058495d8dd5e70a7af66f8ce504dbb89a))
+- _(core)_ Add LibraryService trait, implementation, and CoreServices wiring - ([004c4ed](https://github.com/szinn/BookBoss/commit/004c4ed8f8532f334121a4654ae53d63ee374156))
+- _(core)_ Add BookService::remove_unused_genres/tags - ([bdaefb6](https://github.com/szinn/BookBoss/commit/bdaefb67902d85d05d47b27a41243427706cd575))
+- _(core,database)_ Add FilterRule::Library variant and library_condition builder - ([9ad5756](https://github.com/szinn/BookBoss/commit/9ad5756172e9f896e6f351a0902963f7c81f2b95))
+- _(core,database,frontend)_ Add library_id scoping to book listing methods - ([c5531ee](https://github.com/szinn/BookBoss/commit/c5531ee4ad4bec4397f16da3fb9afd4e3f52351d))
+- _(database)_ Add migration to drop shelves.visibility column and index - ([6a6deb2](https://github.com/szinn/BookBoss/commit/6a6deb2164da163a4dbbc5a816c7294284ee39fd))
+- _(database)_ Fix list_libraries sort order and add find_by_token comment - ([df2e6dd](https://github.com/szinn/BookBoss/commit/df2e6dd027e5768c9b9d174fd13db886e442c855))
+- _(database)_ Add SeaORM entities for library tables - ([77608c9](https://github.com/szinn/BookBoss/commit/77608c97c138db31dbe856b4cd761ae8911dfcbb))
+- _(database)_ Add virtual library schema migrations - ([5b17465](https://github.com/szinn/BookBoss/commit/5b17465925015e4977685cbb9239da01b551d017))
+- _(database)_ Add TagRepository::delete_unused_tags batch delete method - ([a2069e4](https://github.com/szinn/BookBoss/commit/a2069e46a87499bcd6f4104f3ffd703cc2ac3d5b))
+- _(database)_ Add GenreRepository::delete_unused_genres batch delete method - ([d3626b6](https://github.com/szinn/BookBoss/commit/d3626b66111e2dfb187b6ff6259bfeeba0cefb40))
+- _(frontend)_ Manage personal library from admin edit user modal - ([48ec42f](https://github.com/szinn/BookBoss/commit/48ec42f91f07a1e2cdfbc173a474f34a89bfbd75))
+- _(frontend)_ Home button resets active library to user's default - ([2a93c8b](https://github.com/szinn/BookBoss/commit/2a93c8b8635c76b73d6a61c466ff3f8f6103656b))
+- _(frontend)_ Add Libraries field to bulk edit modal and fix capability checks - ([26d9df0](https://github.com/szinn/BookBoss/commit/26d9df014099c3be5fcc9342ab1e577bee1db09c))
+- _(frontend)_ Replace LibraryPicker select with custom dropdown - ([0ebe5bc](https://github.com/szinn/BookBoss/commit/0ebe5bcab73d930981b3157756958e8bfa75cae2))
+- _(frontend)_ OPDS library-scoped feeds + drag-and-drop to Home/shelves - ([5c94b1a](https://github.com/szinn/BookBoss/commit/5c94b1a9c029489575add75d8777c4dbb5dcff76))
+- _(frontend)_ Add Library filter rule + profile default library picker - ([46cc4bb](https://github.com/szinn/BookBoss/commit/46cc4bb4b2c4aee630b11c6e5a78488a07fc1b52))
+- _(frontend)_ Add bulk 'Add to Library' action to selection bar - ([827dc9d](https://github.com/szinn/BookBoss/commit/827dc9d55b6a4d5495c9ac06305f9978b6d4fab1))
+- _(frontend)_ Add library picker to edit metadata / incoming review - ([62d189f](https://github.com/szinn/BookBoss/commit/62d189f20239fc6256ab62ce7a70fc4e22282036))
+- _(frontend)_ Add library assignment fields to Settings → Users forms - ([209dd03](https://github.com/szinn/BookBoss/commit/209dd034e55f95f3828014c5b3d0548d9acc3915))
+- _(frontend)_ Add Libraries section to Settings page - ([95ef804](https://github.com/szinn/BookBoss/commit/95ef804f09c9468493261930b15bca3d1084910a))
+- _(frontend)_ Scope book grid and search to ACTIVE_LIBRARY - ([fce7cd0](https://github.com/szinn/BookBoss/commit/fce7cd0cf0a956a91ab7353d8997ed4728b03d84))
+- _(frontend)_ Add ACTIVE_LIBRARY signal and library picker to NavBar - ([d5f7cd1](https://github.com/szinn/BookBoss/commit/d5f7cd1b71265c2c9b90f569a51ccebba06cfd06))
+- _(frontend)_ Add Remove unused button to Genre/Tags settings panels - ([8e91352](https://github.com/szinn/BookBoss/commit/8e913526949c2b3a8f47de1cdd60c4d39e4ef5b1))
+
+### Bug Fixes
+
+- _(core)_ Use user default library for device companion shelf - ([fbdd2e6](https://github.com/szinn/BookBoss/commit/fbdd2e649188582dcfa09241e3e8f811bd7c5092))
+- _(frontend)_ Prevent All Books flash on browser refresh - ([a4f8845](https://github.com/szinn/BookBoss/commit/a4f88459a2e9d5abe008c2110f3a1b9924412719))
+- _(frontend)_ Sort Libraries list — system first, then non-system, both alphabetical - ([6d1046a](https://github.com/szinn/BookBoss/commit/6d1046aacc820525d9425b6fdfc9597ea21f90cb))
+- _(frontend)_ Include new personal library in assignment and set as default - ([645b32b](https://github.com/szinn/BookBoss/commit/645b32b01d4ba4d4eaea7efda384d9bef876721c))
+- _(frontend)_ Fix Libraries table column alignment - ([d6a3ee7](https://github.com/szinn/BookBoss/commit/d6a3ee73172d8e5572e8c4110203f42b25a4047a))
+- _(frontend)_ Always show Create personal library in user edit form - ([d447db9](https://github.com/szinn/BookBoss/commit/d447db92bd7506da7d8bb090e9f6ee1d0198f11e))
+- _(frontend)_ Auto-fill personal library name when checkbox checked in edit mode - ([8b475de](https://github.com/szinn/BookBoss/commit/8b475de1214565ecec640753614c2476e88e0f62))
+- _(frontend)_ Allow saving SuperAdmin users in user admin settings - ([c24e8fc](https://github.com/szinn/BookBoss/commit/c24e8fccd2a9e6680bc1f8900102e40c043659b2))
+
+### Refactor
+
+- _(core)_ Remove ShelfVisibility — all shelves are owner-only - ([b87fd89](https://github.com/szinn/BookBoss/commit/b87fd8963cbd2d5908d3d190a85adff53d622814))
+- _(core)_ Rename LibraryService/Repository to CollectionService/Repository - ([f8d99af](https://github.com/szinn/BookBoss/commit/f8d99af3b674b2bb8e3a9b60986a83d3b9308dcc))
+- _(database)_ Remove ShelfVisibility from entity, adapter, and integration tests - ([dd4fdd7](https://github.com/szinn/BookBoss/commit/dd4fdd707cb0e73063121009b54df6c47b4fd59d))
+- _(database)_ Import ALL_BOOKS_LIBRARY_TOKEN from bb_core in migrations - ([4a9de2a](https://github.com/szinn/BookBoss/commit/4a9de2ab0a04d40375ad5797526cceb2bb2eeaed))
+- _(frontend)_ Remove ShelfVisibility from server fns and UI - ([7cf0b35](https://github.com/szinn/BookBoss/commit/7cf0b354b935a541dd97360e6c78580ca9a7b44f))
+
 ## [0.7.18](https://github.com/szinn/BookBoss/compare/v0.7.17..v0.7.18) - 2026-04-01
 
 ### Features
