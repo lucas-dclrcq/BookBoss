@@ -7,6 +7,7 @@ use crate::{
     format::{FormatService, MockFormatService},
     import::{ImportJobService, service::MockImportJobService},
     jobs::{JobService, service::MockJobService},
+    library::{LibraryService, MockLibraryService},
     message::{SystemMessageService, service::MockSystemMessageService},
     pipeline::{PipelineService, service::MockPipelineService},
     storage::{FileStoreService, MockFileStoreService},
@@ -34,6 +35,11 @@ pub fn nop_pipeline_service() -> Arc<dyn PipelineService> {
 #[must_use]
 pub fn nop_collection_service() -> Arc<dyn CollectionService> {
     Arc::new(MockCollectionService::new())
+}
+
+#[must_use]
+pub fn nop_library_service() -> Arc<dyn LibraryService> {
+    Arc::new(MockLibraryService::new())
 }
 
 /// Returns a `MockJobService` with no expectations set.

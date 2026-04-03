@@ -10,7 +10,7 @@ use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, ModelTrait, PaginatorTrait, QueryFilter, QueryOrder};
 
 use crate::{
-    entities::{libraries, library_books, prelude, shelves, user_libraries},
+    entities::{libraries, library_books, prelude, shelves, user_libraries, user_settings},
     error::handle_dberr,
     transaction::TransactionImpl,
 };
@@ -77,6 +77,16 @@ impl LibraryRepository for LibraryRepositoryAdapter {
 
         Ok(prelude::Libraries::find_by_id(id as i64)
             .one(transaction)
+            .await
+            .map_err(handle_dberr)?
+            .map(Into::into))
+    }
+
+    async fn find_by_name(&self, transaction: &dyn Transaction, name: &str) -> Result<Option<Library>, Error> {
+        let db = TransactionImpl::get_db_transaction(transaction)?;
+        Ok(prelude::Libraries::find()
+            .filter(libraries::Column::Name.eq(name))
+            .one(db)
             .await
             .map_err(handle_dberr)?
             .map(Into::into))
@@ -242,6 +252,40 @@ impl LibraryRepository for LibraryRepositoryAdapter {
             .count(transaction)
             .await
             .map_err(handle_dberr)?)
+    }
+
+    async fn reparent_shelves_for_user(
+        &self,
+        transaction: &dyn Transaction,
+        user_id: UserId,
+        from_library_id: LibraryId,
+        to_library_id: LibraryId,
+    ) -> Result<(), Error> {
+        use sea_orm::sea_query::Expr;
+        let db = TransactionImpl::get_db_transaction(transaction)?;
+
+        prelude::Shelves::update_many()
+            .col_expr(shelves::Column::LibraryId, Expr::value(to_library_id as i64))
+            .filter(shelves::Column::OwnerId.eq(user_id as i64))
+            .filter(shelves::Column::LibraryId.eq(from_library_id as i64))
+            .exec(db)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(())
+    }
+
+    async fn reset_default_library_for_users(&self, transaction: &dyn Transaction, old_token: &str, new_token: &str) -> Result<(), Error> {
+        use sea_orm::sea_query::Expr;
+        let db = TransactionImpl::get_db_transaction(transaction)?;
+        prelude::UserSettings::update_many()
+            .col_expr(user_settings::Column::Value, Expr::value(new_token))
+            .filter(user_settings::Column::Key.eq("default_library"))
+            .filter(user_settings::Column::Value.eq(old_token))
+            .exec(db)
+            .await
+            .map_err(handle_dberr)?;
+        Ok(())
     }
 
     async fn reparent_shelves(&self, transaction: &dyn Transaction, from_library_id: LibraryId, to_library_id: LibraryId) -> Result<(), Error> {

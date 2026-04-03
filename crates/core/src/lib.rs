@@ -46,6 +46,7 @@ use crate::{
     health::{HealthCheckSubsystem, HealthService, create_health_subsystem},
     import::{BookdropScanSubsystem, ImportJobService, create_bookdrop_scan_subsystem},
     jobs::{JobService, JobWorker, create_job_service},
+    library::{LibraryService, LibraryServiceImpl},
     message::{SystemMessageService, SystemMessageServiceImpl},
     metadata::{MetadataService, create_metadata_service},
     opds::{OpdsService, OpdsServiceImpl},
@@ -88,6 +89,7 @@ pub struct CoreServices {
     pub format_service: Arc<dyn FormatService>,
     pub metadata_service: Arc<dyn MetadataService>,
     pub collection_service: Arc<dyn CollectionService>,
+    pub library_service: Arc<dyn LibraryService>,
     pub pipeline_service: Arc<dyn PipelineService>,
     pub job_service: Arc<dyn JobService>,
     pub health_service: Arc<dyn HealthService>,
@@ -139,13 +141,16 @@ impl CoreServices {
             (svc, Some(subsystem))
         };
 
+        let user_setting_service: Arc<dyn UserSettingService> = Arc::new(UserSettingServiceImpl::new(repository_service.clone()));
+
         Self {
             repository_service: repository_service.clone(),
             auth_service: Arc::new(AuthServiceImpl::new(repository_service.clone())),
             user_service: Arc::new(UserServiceImpl::new(repository_service.clone())),
-            user_setting_service: Arc::new(UserSettingServiceImpl::new(repository_service.clone())),
+            user_setting_service: user_setting_service.clone(),
             book_service: Arc::new(BookServiceImpl::new(repository_service.clone(), job_service.clone())),
             import_job_service,
+            library_service: Arc::new(LibraryServiceImpl::new(repository_service.clone(), user_setting_service)),
             collection_service: Arc::new(CollectionServiceImpl::new(
                 repository_service.clone(),
                 file_store.clone(),
