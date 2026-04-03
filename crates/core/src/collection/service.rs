@@ -12,6 +12,7 @@ use crate::{
     format::{FormatService, handler::EnrichBookFilesPayload},
     import::{ImportJobToken, ImportStatus},
     jobs::{JobService, JobServiceExt},
+    library::ALL_BOOKS_LIBRARY_ID,
     repository::{RepositoryService, read_only_transaction, transaction},
     storage::{BookSidecar, FileStoreService, SidecarAuthor, SidecarFile, SidecarIdentifier, SidecarSeries},
 };
@@ -271,6 +272,7 @@ impl CollectionService for CollectionServiceImpl {
         let genre_repo = self.repository_service.genre_repository().clone();
         let tag_repo = self.repository_service.tag_repository().clone();
         let import_job_repo2 = self.repository_service.import_job_repository().clone();
+        let library_repo = self.repository_service.library_repository().clone();
         let job_id = job.id;
         let has_new_cover = cover_data.is_some();
         let edit_c = edit.clone();
@@ -384,6 +386,9 @@ impl CollectionService for CollectionServiceImpl {
                     };
                     book_repo2.add_book_tag(tx, book_id, tag.id).await?;
                 }
+
+                // Add book to the All Books virtual library
+                library_repo.add_book_to_library(tx, ALL_BOOKS_LIBRARY_ID, book_id).await?;
 
                 // Mark import job approved
                 import_job_repo2.approve_job(tx, job_id, reviewer_id).await?;
@@ -914,6 +919,7 @@ mod tests {
         },
         collection::MockCollectionRepository,
         import::{ImportJob, ImportJobId, ImportJobToken, ImportStatus, repository::import_job::MockImportJobRepository},
+        library::MockLibraryRepository,
         storage::store::MockFileStoreService,
         test_support::{nop_event_service, nop_format_service, nop_job_service},
     };
@@ -924,7 +930,18 @@ mod tests {
         book_repo: MockBookRepository,
         author_repo: MockAuthorRepository,
         job_repo: MockImportJobRepository,
-        library_repo: MockCollectionRepository,
+        collection_repo: MockCollectionRepository,
+        file_store: MockFileStoreService,
+    ) -> CollectionServiceImpl {
+        create_service_with_library_repo(book_repo, author_repo, job_repo, collection_repo, MockLibraryRepository::new(), file_store)
+    }
+
+    fn create_service_with_library_repo(
+        book_repo: MockBookRepository,
+        author_repo: MockAuthorRepository,
+        job_repo: MockImportJobRepository,
+        collection_repo: MockCollectionRepository,
+        library_repo: MockLibraryRepository,
         file_store: MockFileStoreService,
     ) -> CollectionServiceImpl {
         let repository_service = Arc::new(
@@ -932,7 +949,8 @@ mod tests {
                 .author_repository(Arc::new(author_repo))
                 .book_repository(Arc::new(book_repo))
                 .import_job_repository(Arc::new(job_repo))
-                .collection_repository(Arc::new(library_repo))
+                .collection_repository(Arc::new(collection_repo))
+                .library_repository(Arc::new(library_repo))
                 .build()
                 .expect("all fields provided"),
         );
@@ -1461,6 +1479,129 @@ mod tests {
         };
         let result = svc.approve_book(token, 1, edit, std::path::Path::new("/tmp")).await;
         assert!(matches!(result, Err(Error::Validation(_))));
+    }
+
+    #[tokio::test]
+    async fn approve_book_adds_book_to_all_books_library() {
+        use crate::{
+            book::repository::{genre::MockGenreRepository, publisher::MockPublisherRepository, series::MockSeriesRepository, tag::MockTagRepository},
+            collection::BookEdit,
+            format::MockFormatService,
+            jobs::service::MockJobService,
+            library::ALL_BOOKS_LIBRARY_ID,
+        };
+
+        let book_id: BookId = 7;
+        let job_id: ImportJobId = 11;
+        let book = crate::book::Book::fake(book_id, "My Book", BookStatus::Available);
+        let job_token = ImportJobToken::new(job_id);
+
+        // ── Import job: NeedsReview ──────────────────────────────────────────
+        let mut import_mock = MockImportJobRepository::new();
+        import_mock.expect_find_by_token().returning(move |_, _| {
+            let job = ImportJob {
+                id: job_id,
+                version: 1,
+                token: ImportJobToken::new(job_id),
+                file_path: "/watch/test.epub".to_owned(),
+                file_hash: "abc".to_owned(),
+                file_format: crate::book::FileFormat::Epub,
+                detected_at: chrono::Utc::now(),
+                status: ImportStatus::NeedsReview,
+                candidate_book_id: Some(book_id),
+                metadata_source: None,
+                error_message: None,
+                reviewed_by: None,
+                reviewed_at: None,
+                created_at: chrono::Utc::now(),
+                updated_at: chrono::Utc::now(),
+            };
+            Box::pin(async move { Ok(Some(job)) })
+        });
+        import_mock.expect_approve_job().returning(|_, _, _| Box::pin(async { Ok(()) }));
+
+        // ── Book repo ────────────────────────────────────────────────────────
+        let mut book_repo = MockBookRepository::new();
+        let b_for_id = book.clone();
+        book_repo.expect_find_by_id().returning(move |_, _| {
+            let b = b_for_id.clone();
+            Box::pin(async move { Ok(Some(b)) })
+        });
+        let b_for_token = book.clone();
+        book_repo.expect_find_by_token().returning(move |_, _| {
+            let b = b_for_token.clone();
+            Box::pin(async move { Ok(Some(b)) })
+        });
+        book_repo.expect_authors_for_book().returning(|_, _| Box::pin(async { Ok(vec![]) }));
+        book_repo.expect_update_book().returning(|_, b| Box::pin(async move { Ok(b) }));
+        book_repo.expect_delete_book_authors().returning(|_, _| Box::pin(async { Ok(()) }));
+        book_repo.expect_delete_book_identifiers().returning(|_, _| Box::pin(async { Ok(()) }));
+        book_repo.expect_delete_book_genres().returning(|_, _| Box::pin(async { Ok(()) }));
+        book_repo.expect_delete_book_tags().returning(|_, _| Box::pin(async { Ok(()) }));
+        book_repo.expect_files_for_book().returning(|_, _| Box::pin(async { Ok(vec![]) }));
+        book_repo.expect_update_enriched_paths().returning(|_, _, _, _| Box::pin(async { Ok(()) }));
+
+        // ── Library repo: verify add_book_to_library is called correctly ─────
+        let mut library_mock = MockLibraryRepository::new();
+        library_mock
+            .expect_add_book_to_library()
+            .withf(move |_, lib_id, bk_id| *lib_id == ALL_BOOKS_LIBRARY_ID && *bk_id == book_id)
+            .times(1)
+            .returning(|_, _, _| Box::pin(async { Ok(()) }));
+
+        // ── File store ───────────────────────────────────────────────────────
+        let mut store = MockFileStoreService::new();
+        store.expect_metadata_path().returning(|_| std::path::PathBuf::from("/tmp/meta.opf"));
+
+        // ── Format service ───────────────────────────────────────────────────
+        let mut format_svc = MockFormatService::new();
+        format_svc.expect_write_sidecar().returning(|_, _| Box::pin(async { Ok(()) }));
+
+        // ── Job service ──────────────────────────────────────────────────────
+        let mut job_svc = MockJobService::new();
+        job_svc.expect_enqueue_raw().once().returning(|_, _, _| Box::pin(async { Ok(()) }));
+
+        let repository_service = Arc::new(
+            crate::repository::testing::default_repository_service_builder()
+                .book_repository(Arc::new(book_repo))
+                .author_repository(Arc::new(MockAuthorRepository::new()))
+                .series_repository(Arc::new(MockSeriesRepository::new()))
+                .publisher_repository(Arc::new(MockPublisherRepository::new()))
+                .genre_repository(Arc::new(MockGenreRepository::new()))
+                .tag_repository(Arc::new(MockTagRepository::new()))
+                .import_job_repository(Arc::new(import_mock))
+                .library_repository(Arc::new(library_mock))
+                .build()
+                .expect("all fields provided"),
+        );
+
+        let svc = CollectionServiceImpl::new(
+            repository_service,
+            Arc::new(store),
+            Arc::new(format_svc),
+            Arc::new(job_svc),
+            nop_event_service(),
+        );
+
+        let edit = BookEdit {
+            title: "My Book".to_owned(),
+            description: None,
+            published_date: None,
+            language: None,
+            series_name: None,
+            series_number: None,
+            publisher_name: None,
+            page_count: None,
+            authors: vec![],
+            identifiers: vec![],
+            use_fetched_cover: false,
+            genres: vec![],
+            tags: vec![],
+        };
+
+        svc.approve_book(job_token, 1, edit, std::path::Path::new("/tmp")).await.unwrap();
+        // `.times(1)` on `add_book_to_library` verifies it was called when the
+        // mock is dropped
     }
 
     // ─── reject_book ──────────────────────────────────────────────────────────
