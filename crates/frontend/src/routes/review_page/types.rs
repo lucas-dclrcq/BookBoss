@@ -82,8 +82,8 @@ pub(crate) struct BulkEditFields {
     pub series_name: Option<String>,
     pub genres: Option<Vec<String>>,
     pub tags: Option<Vec<String>>,
-    /// Non-system library tokens to assign to all selected books. `None` = leave
-    /// memberships unchanged.
+    /// Non-system library tokens to assign to all selected books. `None` =
+    /// leave memberships unchanged.
     pub library_tokens: Option<Vec<String>>,
 }
 

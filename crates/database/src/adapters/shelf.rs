@@ -143,6 +143,18 @@ impl ShelfRepository for ShelfRepositoryAdapter {
         Ok(())
     }
 
+    async fn delete_shelves_for_user(&self, transaction: &dyn Transaction, owner_id: UserId) -> Result<(), Error> {
+        let db = TransactionImpl::get_db_transaction(transaction)?;
+
+        prelude::Shelves::delete_many()
+            .filter(shelves::Column::OwnerId.eq(owner_id as i64))
+            .exec(db)
+            .await
+            .map_err(handle_dberr)?;
+
+        Ok(())
+    }
+
     async fn find_by_id(&self, transaction: &dyn Transaction, id: ShelfId) -> Result<Option<Shelf>, Error> {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 

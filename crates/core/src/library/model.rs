@@ -19,6 +19,9 @@ pub struct Library {
     pub token: LibraryToken,
     pub name: String,
     pub is_system: bool,
+    /// The user who owns this library, if it is a personal library.
+    /// `None` for system libraries and admin-created shared libraries.
+    pub owner_id: Option<crate::user::UserId>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -26,6 +29,8 @@ pub struct Library {
 #[derive(Debug, Clone)]
 pub struct NewLibrary {
     pub name: String,
+    /// Set to `Some(user_id)` for personal libraries, `None` for shared ones.
+    pub owner_id: Option<crate::user::UserId>,
 }
 
 /// Returns the token for the "All Books" system library (id=1).

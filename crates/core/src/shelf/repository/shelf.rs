@@ -14,6 +14,8 @@ pub trait ShelfRepository: Send + Sync {
     async fn add_shelf(&self, transaction: &dyn Transaction, book_shelf: NewShelf) -> Result<Shelf, Error>;
     async fn update_shelf(&self, transaction: &dyn Transaction, book_shelf: Shelf) -> Result<Shelf, Error>;
     async fn delete_shelf(&self, transaction: &dyn Transaction, book_shelf: Shelf) -> Result<(), Error>;
+    /// Deletes all shelves owned by `owner_id` in a single operation.
+    async fn delete_shelves_for_user(&self, transaction: &dyn Transaction, owner_id: UserId) -> Result<(), Error>;
     async fn find_by_id(&self, transaction: &dyn Transaction, id: ShelfId) -> Result<Option<Shelf>, Error>;
     async fn find_by_token(&self, transaction: &dyn Transaction, token: ShelfToken) -> Result<Option<Shelf>, Error>;
     async fn list_for_user(&self, transaction: &dyn Transaction, owner_id: UserId) -> Result<Vec<Shelf>, Error>;

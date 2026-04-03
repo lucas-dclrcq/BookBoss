@@ -2,7 +2,11 @@ use dioxus::prelude::*;
 
 use crate::{
     Route,
-    routes::{book_detail_page::delete_library_book, books_page::BookSummary, shelf_page::remove_book_from_shelf},
+    routes::{
+        book_detail_page::delete_library_book,
+        books_page::{BookSummary, remove_book_from_library},
+        shelf_page::remove_book_from_shelf,
+    },
 };
 
 // ---------------------------------------------------------------------------
@@ -14,9 +18,13 @@ use crate::{
 /// page).
 #[derive(Clone, PartialEq, Debug)]
 pub(crate) enum BookGridContext {
-    /// All-books view: × deletes the book from the library (requires
-    /// capability).
-    AllBooks { can_delete: bool },
+    /// System library (All Books): × physically deletes the book. Requires
+    /// `DeleteBook` capability (`can_delete`).
+    SystemLibrary { can_delete: bool },
+    /// Non-system library (personal or shared). `can_remove` is true when the
+    /// user is the library owner OR holds `DeleteBook`. When true, × removes
+    /// the book from the library (not a physical delete).
+    NonSystemLibrary { library_token: String, can_remove: bool },
     /// Owner is viewing one of their own shelves: × removes the book from the
     /// shelf.
     OwnShelf { shelf_token: String },
@@ -95,11 +103,11 @@ fn BookCard(book: BookSummary) -> Element {
 
     let is_dragging = !in_selection_mode && dragged_token().as_deref() == Some(book.token.as_str());
 
-    // Whether the × button triggers a delete-with-confirm or a plain remove.
-    let is_library_delete = matches!(ctx, BookGridContext::AllBooks { can_delete: true });
+    // Whether the × triggers a physical delete (with confirmation).
+    let is_library_delete = matches!(ctx, BookGridContext::SystemLibrary { can_delete: true });
 
-    // Plain remove action (shelf only).
-    let remove_action: Option<Box<dyn Fn() + 'static>> = match ctx {
+    // Plain remove action (shelf or non-system library).
+    let remove_action: Option<Box<dyn Fn() + 'static>> = match &ctx {
         BookGridContext::OwnShelf { shelf_token } => {
             let stok = shelf_token.clone();
             let btok = book.token.clone();
@@ -108,6 +116,22 @@ fn BookCard(book: BookSummary) -> Element {
                 let b = btok.clone();
                 spawn(async move {
                     if remove_book_from_shelf(s, b).await.is_ok() {
+                        on_action.call(());
+                    }
+                });
+            }))
+        }
+        BookGridContext::NonSystemLibrary {
+            library_token,
+            can_remove: true,
+        } => {
+            let ltok = library_token.clone();
+            let btok = book.token.clone();
+            Some(Box::new(move || {
+                let l = ltok.clone();
+                let b = btok.clone();
+                spawn(async move {
+                    if remove_book_from_library(l, b).await.is_ok() {
                         on_action.call(());
                     }
                 });

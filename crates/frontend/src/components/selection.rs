@@ -240,7 +240,8 @@ async fn bulk_edit_single_book(
         .await
         .map_err(to_server_err)?;
 
-    // Library membership update (best-effort — skip on error to keep processing other books)
+    // Library membership update (best-effort — skip on error to keep processing
+    // other books)
     if let Some(desired_tokens) = &fields.library_tokens {
         let all_libraries = core_services.library_service.list_libraries().await.map_err(to_server_err)?;
         let non_system: Vec<_> = all_libraries.into_iter().filter(|e| !e.library.is_system).collect();
@@ -420,12 +421,7 @@ fn BulkEditModal(on_close: EventHandler<()>, on_saved: EventHandler<()>) -> Elem
     let authors_invalid = apply_authors() && authors.read().is_empty();
 
     // Non-system libraries for the Libraries row; empty = hide the row
-    let available_libraries: Vec<(String, String)> = non_system_libraries
-        .read()
-        .as_ref()
-        .and_then(|r| r.as_ref().ok())
-        .cloned()
-        .unwrap_or_default();
+    let available_libraries: Vec<(String, String)> = non_system_libraries.read().as_ref().and_then(|r| r.as_ref().ok()).cloned().unwrap_or_default();
 
     let label = if count == 1 {
         "Editing 1 book — checked fields will be applied".to_string()

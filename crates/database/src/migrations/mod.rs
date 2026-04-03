@@ -38,6 +38,7 @@ mod m20260403_000035_create_user_libraries_table;
 mod m20260403_000036_add_library_id_to_shelves;
 mod m20260403_000037_seed_default_library_user_setting;
 mod m20260403_000038_drop_shelf_visibility;
+mod m20260403_000039_add_owner_id_to_libraries;
 
 pub struct Migrator;
 
@@ -83,6 +84,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260403_000036_add_library_id_to_shelves::Migration),
             Box::new(m20260403_000037_seed_default_library_user_setting::Migration),
             Box::new(m20260403_000038_drop_shelf_visibility::Migration),
+            Box::new(m20260403_000039_add_owner_id_to_libraries::Migration),
         ]
     }
 }

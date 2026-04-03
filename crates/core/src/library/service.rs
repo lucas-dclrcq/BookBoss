@@ -61,6 +61,9 @@ pub trait LibraryService: Send + Sync {
     /// if not.
     async fn validate_user_library_access(&self, user_id: UserId, library_id: LibraryId) -> Result<(), Error>;
 
+    /// Looks up a library by token. Returns `None` if not found.
+    async fn find_library_by_token(&self, token: LibraryToken) -> Result<Option<Library>, Error>;
+
     /// Creates a personal library for a user.
     /// Steps: create library, assign to user as default, re-parent user's
     /// shelves from All Books to new library, copy books from All Books
@@ -115,7 +118,7 @@ impl LibraryService for LibraryServiceImpl {
             if library_repository.find_by_name(tx, &name).await?.is_some() {
                 return Err(Error::Validation("A library with this name already exists".into()));
             }
-            library_repository.create_library(tx, NewLibrary { name }).await
+            library_repository.create_library(tx, NewLibrary { name, owner_id: None }).await
         })
     }
 
@@ -223,6 +226,10 @@ impl LibraryService for LibraryServiceImpl {
         })
     }
 
+    async fn find_library_by_token(&self, token: LibraryToken) -> Result<Option<Library>, Error> {
+        with_read_only_transaction!(self, library_repository, |tx| library_repository.find_by_token(tx, token).await)
+    }
+
     async fn validate_user_library_access(&self, user_id: UserId, library_id: LibraryId) -> Result<(), Error> {
         let has = with_read_only_transaction!(self, library_repository, |tx| library_repository
             .user_has_library(tx, user_id, library_id)
@@ -236,7 +243,15 @@ impl LibraryService for LibraryServiceImpl {
     async fn create_personal_library_for_user(&self, user_id: UserId, library_name: String) -> Result<Library, Error> {
         let library = with_transaction!(self, library_repository, shelf_repository, user_book_metadata_repository, |tx| {
             // 1. Create library
-            let library = library_repository.create_library(tx, NewLibrary { name: library_name }).await?;
+            let library = library_repository
+                .create_library(
+                    tx,
+                    NewLibrary {
+                        name: library_name,
+                        owner_id: Some(user_id),
+                    },
+                )
+                .await?;
 
             // 2. Assign user
             library_repository.assign_user_to_library(tx, user_id, library.id).await?;

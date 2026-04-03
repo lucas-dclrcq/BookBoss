@@ -26,6 +26,8 @@ pub trait LibraryRepository: Send + Sync {
     async fn book_count_for_library(&self, transaction: &dyn Transaction, library_id: LibraryId) -> Result<u64, Error>;
     /// Find library by name (exact match, case-sensitive).
     async fn find_by_name(&self, transaction: &dyn Transaction, name: &str) -> Result<Option<Library>, Error>;
+    /// Returns the personal library owned by `user_id`, if any.
+    async fn find_by_owner(&self, transaction: &dyn Transaction, user_id: UserId) -> Result<Option<Library>, Error>;
     /// Resets any user's default_library setting from `old_token` to
     /// `new_token`. Used when a library is deleted to point stale
     /// references to All Books.

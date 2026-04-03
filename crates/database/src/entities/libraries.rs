@@ -9,6 +9,7 @@ pub struct Model {
     pub token: String,
     pub name: String,
     pub is_system: bool,
+    pub owner_id: Option<i64>,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
 }

@@ -7,6 +7,7 @@ mod library;
 mod pipeline;
 mod reading;
 mod shelf;
+mod user;
 
 #[cfg(feature = "postgres")]
 mod postgres;

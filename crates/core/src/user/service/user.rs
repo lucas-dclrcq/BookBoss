@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     Error, RepositoryError,
+    library::ALL_BOOKS_LIBRARY_TOKEN,
     repository::RepositoryService,
     user::{NewUser, User, UserId, UserToken},
     with_read_only_transaction, with_transaction,
@@ -43,11 +44,27 @@ impl UserService for UserServiceImpl {
     }
 
     async fn delete_user(&self, id: UserId) -> Result<User, Error> {
-        with_transaction!(self, user_repository, |tx| {
+        with_transaction!(self, user_repository, library_repository, shelf_repository, |tx| {
             let user = user_repository
                 .find_by_id(tx, id)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
+
+            // Delete all shelves owned by this user. Shelves belong to the user,
+            // so they are removed rather than re-parented.
+            shelf_repository.delete_shelves_for_user(tx, id).await?;
+
+            // Clean up the user's personal library before deleting the user.
+            // The DB FK is ON DELETE CASCADE (Postgres/MySQL) but we do this
+            // explicitly so that:
+            //   a) stale default_library settings are reset,
+            //   b) SQLite (test-only) is covered even without FK enforcement.
+            if let Some(lib) = library_repository.find_by_owner(tx, id).await? {
+                library_repository
+                    .reset_default_library_for_users(tx, &lib.token.to_string(), ALL_BOOKS_LIBRARY_TOKEN)
+                    .await?;
+                library_repository.delete_library(tx, lib.id).await?;
+            }
 
             user_repository.delete_user(tx, user).await
         })
@@ -74,15 +91,29 @@ mod tests {
     use super::{UserService, UserServiceImpl};
     use crate::{
         Error, RepositoryError,
+        library::repository::MockLibraryRepository,
+        shelf::repository::shelf::MockShelfRepository,
         user::{NewUser, User, UserToken, repository::user::MockUserRepository},
     };
 
-    // ─── Helper ──────────────────────────────────────────────────────────────
+    // ─── Helpers ─────────────────────────────────────────────────────────────
 
     fn create_service(user_repo: MockUserRepository) -> UserServiceImpl {
         let repository_service = Arc::new(
             crate::repository::testing::default_repository_service_builder()
                 .user_repository(Arc::new(user_repo))
+                .build()
+                .expect("all fields provided"),
+        );
+        UserServiceImpl::new(repository_service)
+    }
+
+    fn create_service_for_delete(user_repo: MockUserRepository, shelf_repo: MockShelfRepository, lib_repo: MockLibraryRepository) -> UserServiceImpl {
+        let repository_service = Arc::new(
+            crate::repository::testing::default_repository_service_builder()
+                .user_repository(Arc::new(user_repo))
+                .shelf_repository(Arc::new(shelf_repo))
+                .library_repository(Arc::new(lib_repo))
                 .build()
                 .expect("all fields provided"),
         );
@@ -209,12 +240,66 @@ mod tests {
             let deleted = deleted.clone();
             Box::pin(async move { Ok(deleted) })
         });
-        let svc = create_service(user_repo);
+        let mut shelf_repo = MockShelfRepository::new();
+        shelf_repo.expect_delete_shelves_for_user().returning(|_, _| Box::pin(async { Ok(()) }));
+        // No personal library for this user.
+        let mut lib_repo = MockLibraryRepository::new();
+        lib_repo.expect_find_by_owner().returning(|_, _| Box::pin(async { Ok(None) }));
+        let svc = create_service_for_delete(user_repo, shelf_repo, lib_repo);
 
         let result = svc.delete_user(1).await;
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap().id, 1);
+    }
+
+    #[tokio::test]
+    async fn test_delete_user_with_personal_library_deletes_library() {
+        use chrono::Utc;
+
+        use crate::library::{Library, LibraryToken};
+
+        let user = User::fake(1, "alice", "hash", "alice@example.com", HashSet::new());
+        let deleted = user.clone();
+        let lib = Library {
+            id: 42,
+            version: 1,
+            token: LibraryToken::new(42),
+            name: "Alice's Library".into(),
+            is_system: false,
+            owner_id: Some(1),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        let lib_token = lib.token.to_string();
+
+        let mut user_repo = MockUserRepository::new();
+        user_repo.expect_find_by_id().returning(move |_, _| {
+            let user = user.clone();
+            Box::pin(async move { Ok(Some(user)) })
+        });
+        user_repo.expect_delete_user().returning(move |_, _| {
+            let deleted = deleted.clone();
+            Box::pin(async move { Ok(deleted) })
+        });
+        let mut shelf_repo = MockShelfRepository::new();
+        shelf_repo.expect_delete_shelves_for_user().returning(|_, _| Box::pin(async { Ok(()) }));
+        let mut lib_repo = MockLibraryRepository::new();
+        lib_repo.expect_find_by_owner().returning(move |_, _| {
+            let lib = lib.clone();
+            Box::pin(async move { Ok(Some(lib)) })
+        });
+        lib_repo
+            .expect_reset_default_library_for_users()
+            .returning(|_, _, _| Box::pin(async { Ok(()) }));
+        lib_repo.expect_delete_library().returning(|_, _| Box::pin(async { Ok(()) }));
+
+        let svc = create_service_for_delete(user_repo, shelf_repo, lib_repo);
+
+        let result = svc.delete_user(1).await;
+
+        result.unwrap();
+        let _ = lib_token; // used by closure above
     }
 
     #[tokio::test]

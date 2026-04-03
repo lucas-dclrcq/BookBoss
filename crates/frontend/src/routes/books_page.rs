@@ -38,6 +38,15 @@ pub(crate) struct ListBooksResponse {
     pub can_delete_books: bool,
     /// Books with `Reading` status, sorted by `last_progress_at` desc.
     pub currently_reading: Vec<BookSummary>,
+    /// True when the active library is a system library (e.g. "All Books").
+    /// In this case delete = physical delete and requires `DeleteBook`.
+    pub library_is_system: bool,
+    /// True when the current user owns the active library (personal library).
+    /// Owner can remove books without `DeleteBook`.
+    pub user_is_library_owner: bool,
+    /// The active library token (for remove-from-library calls), or `None` for
+    /// system / All Books.
+    pub active_library_token: Option<String>,
 }
 
 #[cfg(feature = "server")]
@@ -53,10 +62,9 @@ use {
     bb_core::{
         CoreServices,
         book::{Author, AuthorId, Book, BookAuthor, BookHydrationData, BookId, BookQuery, Series, SeriesId},
-        library::{ALL_BOOKS_LIBRARY_TOKEN, LibraryId, LibraryToken},
+        library::{ALL_BOOKS_LIBRARY_TOKEN, LibraryToken},
         reading::ReadStatus,
         types::Capability,
-        user::UserId,
     },
     std::sync::Arc,
 };
@@ -152,37 +160,6 @@ pub(crate) async fn hydrate_books(
     Ok(summaries)
 }
 
-/// Resolves an optional library token string to a `LibraryId`, validating user
-/// access.
-///
-/// Returns `Ok(None)` when:
-/// - `library_token` is `None` (no filter → all books)
-/// - The token refers to the "All Books" system library (no filter needed)
-///
-/// Returns `Ok(Some(id))` for any other library the user has access to.
-/// Returns `Err` if the token is malformed, the library does not exist, or the
-/// user does not have access.
-#[cfg(feature = "server")]
-async fn resolve_library_id(core_services: &CoreServices, user_id: UserId, library_token: Option<String>) -> Result<Option<LibraryId>, ServerFnError> {
-    let Some(token_str) = library_token else {
-        return Ok(None);
-    };
-    // Fast path: All Books token → no library_id filter.
-    if token_str == ALL_BOOKS_LIBRARY_TOKEN {
-        return Ok(None);
-    }
-    let token = token_str.parse::<LibraryToken>().map_err(|_| ServerFnError::new("Invalid library token"))?;
-    // Decode the library ID directly from the token (token encodes the ID).
-    let library_id: LibraryId = token.id();
-    // Validate that the user has access to this library.
-    core_services
-        .library_service
-        .validate_user_library_access(user_id, library_id)
-        .await
-        .map_err(|_| ServerFnError::new("Access denied"))?;
-    Ok(Some(library_id))
-}
-
 #[post("/api/v1/books", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
 async fn list_books(sort: crate::components::SortOrder, library_token: Option<String>) -> Result<ListBooksResponse, ServerFnError> {
     use std::collections::HashMap;
@@ -195,7 +172,29 @@ async fn list_books(sort: crate::components::SortOrder, library_token: Option<St
         .validate(&current_user, &Method::POST, None)
         .await;
 
-    let library_id = resolve_library_id(&core_services, user_id, library_token).await?;
+    // Resolve the active library, distinguishing system from non-system.
+    let is_all_books = library_token.as_deref().is_none_or(|t| t == ALL_BOOKS_LIBRARY_TOKEN);
+    let (library_id, library_is_system, user_is_library_owner, active_library_token) = if is_all_books {
+        (None, true, false, None)
+    } else {
+        let token_str = library_token.as_deref().unwrap();
+        let token = token_str.parse::<LibraryToken>().map_err(|_| ServerFnError::new("Invalid library token"))?;
+        let lib_id = token.id();
+        core_services
+            .library_service
+            .validate_user_library_access(user_id, lib_id)
+            .await
+            .map_err(|_| ServerFnError::new("Access denied"))?;
+        // Fetch library to check is_system and owner_id.
+        let lib = core_services
+            .library_service
+            .find_library_by_token(token)
+            .await
+            .map_err(to_server_err)?
+            .ok_or_else(|| ServerFnError::new("Library not found"))?;
+        let is_owner = lib.owner_id == Some(user_id);
+        (Some(lib_id), lib.is_system, is_owner, Some(token_str.to_string()))
+    };
 
     let filter = BookQuery {
         sort: Some(to_core_sort(sort)),
@@ -239,7 +238,56 @@ async fn list_books(sort: crate::components::SortOrder, library_token: Option<St
         books: summaries,
         can_delete_books,
         currently_reading,
+        library_is_system,
+        user_is_library_owner,
+        active_library_token,
     })
+}
+
+/// Removes a book from a non-system library. The caller must be either the
+/// library owner or hold `DeleteBook` capability — enforced here so this
+/// endpoint cannot be abused directly.
+#[post(
+    "/api/v1/books/remove-from-library",
+    auth_session: axum::Extension<AuthSession>,
+    core_services: axum::Extension<Arc<CoreServices>>
+)]
+pub(crate) async fn remove_book_from_library(library_token: String, book_token: String) -> Result<(), ServerFnError> {
+    use crate::routes::server_helpers::to_server_err;
+
+    let current_user = authenticated_user(&auth_session)?;
+    let user_id = current_user.id();
+
+    let lib_token = library_token.parse::<LibraryToken>().map_err(|_| ServerFnError::new("Invalid library token"))?;
+    let lib = core_services
+        .library_service
+        .find_library_by_token(lib_token)
+        .await
+        .map_err(to_server_err)?
+        .ok_or_else(|| ServerFnError::new("Library not found"))?;
+
+    if lib.is_system {
+        return Err(ServerFnError::new("Cannot remove a book from a system library"));
+    }
+
+    let is_owner = lib.owner_id == Some(user_id);
+    let has_delete = Auth::<AuthUser, _, BackendSessionPool>::build([Method::POST], true)
+        .requires(Rights::any([Rights::permission(Capability::DeleteBook.as_str())]))
+        .validate(&current_user, &Method::POST, None)
+        .await;
+
+    if !is_owner && !has_delete {
+        return Err(ServerFnError::new("Forbidden"));
+    }
+
+    let bk_token = book_token
+        .parse::<bb_core::book::BookToken>()
+        .map_err(|_| ServerFnError::new("Invalid book token"))?;
+    core_services
+        .library_service
+        .remove_book_from_library(lib_token, bk_token)
+        .await
+        .map_err(to_server_err)
 }
 
 #[component]
@@ -267,12 +315,21 @@ pub(crate) fn BooksPage() -> Element {
                     "Failed to load books: {e}"
                 }
             },
-            Some(Ok(ListBooksResponse { books, can_delete_books, currently_reading })) => {
+            Some(Ok(ListBooksResponse { books, can_delete_books, currently_reading, library_is_system, user_is_library_owner, active_library_token })) => {
                 let query = crate::components::SEARCH_TEXT();
                 let filtered_books = filter_books_by_search(books, &query);
                 let filtered_reading = filter_books_by_search(currently_reading, &query);
                 let has_search = !query.trim().is_empty();
                 let book_tokens: Vec<String> = filtered_books.iter().map(|b| b.token.clone()).collect();
+                let grid_context = if library_is_system {
+                    BookGridContext::SystemLibrary { can_delete: can_delete_books }
+                } else {
+                    let can_remove = user_is_library_owner || can_delete_books;
+                    BookGridContext::NonSystemLibrary {
+                        library_token: active_library_token.unwrap_or_default(),
+                        can_remove,
+                    }
+                };
                 rsx! {
                     div { class: "flex-1 flex flex-col overflow-hidden",
                         ShelfBar {
@@ -290,7 +347,7 @@ pub(crate) fn BooksPage() -> Element {
                             } else {
                                 BookGrid {
                                     books: filtered_books,
-                                    context: BookGridContext::AllBooks { can_delete: can_delete_books },
+                                    context: grid_context,
                                     on_action: move |()| page_data.restart(),
                                 }
                             }

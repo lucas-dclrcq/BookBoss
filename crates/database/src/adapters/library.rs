@@ -26,6 +26,7 @@ impl From<libraries::Model> for Library {
             token: m.token.parse().expect("valid library token in DB"),
             name: m.name,
             is_system: m.is_system,
+            owner_id: m.owner_id.map(|id| id as u64),
             created_at: m.created_at.with_timezone(&Utc),
             updated_at: m.updated_at.with_timezone(&Utc),
         }
@@ -57,6 +58,7 @@ impl LibraryRepository for LibraryRepositoryAdapter {
             token: Set(token.to_string()),
             name: Set(library.name),
             is_system: Set(false),
+            owner_id: Set(library.owner_id.map(|id| id as i64)),
             created_at: Set(now.into()),
             updated_at: Set(now.into()),
         };
@@ -86,6 +88,16 @@ impl LibraryRepository for LibraryRepositoryAdapter {
         let db = TransactionImpl::get_db_transaction(transaction)?;
         Ok(prelude::Libraries::find()
             .filter(libraries::Column::Name.eq(name))
+            .one(db)
+            .await
+            .map_err(handle_dberr)?
+            .map(Into::into))
+    }
+
+    async fn find_by_owner(&self, transaction: &dyn Transaction, user_id: UserId) -> Result<Option<Library>, Error> {
+        let db = TransactionImpl::get_db_transaction(transaction)?;
+        Ok(prelude::Libraries::find()
+            .filter(libraries::Column::OwnerId.eq(user_id as i64))
             .one(db)
             .await
             .map_err(handle_dberr)?
