@@ -398,7 +398,7 @@ fn LibraryInit() -> Element {
     rsx! {}
 }
 
-/// Renders a `<select>` dropdown when the user has 2+ assigned libraries.
+/// Renders a custom dropdown when the user has 2+ assigned libraries.
 #[component]
 fn LibraryPicker() -> Element {
     let libs_res = use_server_future(get_user_libraries)?;
@@ -409,20 +409,56 @@ fn LibraryPicker() -> Element {
     }
 
     let active = ACTIVE_LIBRARY();
+    let mut open = use_signal(|| false);
+
+    let active_name = libs
+        .iter()
+        .find(|l| Some(l.token.as_str()) == active.as_deref())
+        .map(|l| l.name.clone())
+        .unwrap_or_else(|| "All Books".to_string());
 
     rsx! {
-        select {
-            class: "text-sm bg-indigo-600 text-white border border-indigo-400 rounded px-2 py-1 cursor-pointer hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-300",
-            value: active.as_deref().unwrap_or(""),
-            onchange: move |e| {
-                let val = e.value();
-                *ACTIVE_LIBRARY.write() = if val.is_empty() { None } else { Some(val) };
-            },
-            for lib in &libs {
-                option {
-                    value: "{lib.token}",
-                    selected: active.as_deref() == Some(&lib.token),
-                    "{lib.name}"
+        div { class: "relative",
+            button {
+                class: "flex items-center gap-1 text-sm text-white hover:text-indigo-200 cursor-pointer",
+                onclick: move |_| open.set(!open()),
+                "Library: {active_name}"
+                svg {
+                    class: "w-3.5 h-3.5",
+                    xmlns: "http://www.w3.org/2000/svg",
+                    fill: "none",
+                    view_box: "0 0 24 24",
+                    stroke_width: "2",
+                    stroke: "currentColor",
+                    path { stroke_linecap: "round", stroke_linejoin: "round", d: "m19.5 8.25-7.5 7.5-7.5-7.5" }
+                }
+            }
+            if open() {
+                div {
+                    class: "fixed inset-0 z-40",
+                    onclick: move |_| open.set(false),
+                }
+                div { class: "absolute left-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 z-50 py-1 min-w-[160px]",
+                    for lib in &libs {
+                        {
+                            let is_active = Some(lib.token.as_str()) == active.as_deref();
+                            let tok = lib.token.clone();
+                            rsx! {
+                                button {
+                                    class: if is_active {
+                                        "w-full text-left px-3 py-2 text-sm font-medium text-indigo-600 bg-indigo-50"
+                                    } else {
+                                        "w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                    },
+                                    onclick: move |_| {
+                                        *ACTIVE_LIBRARY.write() = Some(tok.clone());
+                                        open.set(false);
+                                    },
+                                    "{lib.name}"
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
