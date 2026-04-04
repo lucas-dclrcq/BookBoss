@@ -16,6 +16,7 @@ pub(crate) mod devices;
 pub(crate) mod genres;
 pub(crate) mod import_jobs;
 pub(crate) mod jobs;
+pub(crate) mod koreader_document_hashes;
 pub(crate) mod libraries;
 pub(crate) mod library_books;
 pub(crate) mod publishers;

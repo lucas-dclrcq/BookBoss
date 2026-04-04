@@ -13,7 +13,7 @@ use std::sync::Arc;
 use bb_core::{
     Error,
     auth::SessionRepository,
-    book::{AuthorRepository, BookId, BookRepository, GenreRepository, PublisherRepository, SeriesRepository, TagRepository},
+    book::{AuthorRepository, BookRepository, GenreRepository, PublisherRepository, SeriesRepository, TagRepository},
     collection::CollectionRepository,
     device::DeviceRepository,
     import::ImportJobRepository,
@@ -22,24 +22,10 @@ use bb_core::{
     library::LibraryRepository,
     message::SystemMessageRepository,
     reading::UserBookMetadataRepository,
-    repository::{Repository, RepositoryService, RepositoryServiceBuilder, Transaction},
+    repository::{Repository, RepositoryService, RepositoryServiceBuilder},
     shelf::ShelfRepository,
     user::{UserRepository, UserSettingRepository},
 };
-
-/// Placeholder adapter — will be replaced by the real implementation in Task 2.
-struct UnimplementedKoReaderDocumentHashRepository;
-
-#[async_trait::async_trait]
-impl KoReaderDocumentHashRepository for UnimplementedKoReaderDocumentHashRepository {
-    async fn insert_hashes(&self, _transaction: &dyn Transaction, _book_id: BookId, _hashes: Vec<String>) -> Result<(), Error> {
-        unimplemented!("KoReaderDocumentHashRepository not yet implemented")
-    }
-
-    async fn find_book_by_digest_prefix(&self, _transaction: &dyn Transaction, _prefix: &str) -> Result<Option<BookId>, Error> {
-        unimplemented!("KoReaderDocumentHashRepository not yet implemented")
-    }
-}
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 use sea_orm_migration::MigratorTrait;
 use serde::Deserialize;
@@ -59,10 +45,11 @@ mod transaction;
 use crate::{
     adapters::{
         author::AuthorRepositoryAdapter, book::BookRepositoryAdapter, collection::CollectionRepositoryAdapter, device::DeviceRepositoryAdapter,
-        genre::GenreRepositoryAdapter, import_job::ImportJobRepositoryAdapter, job::JobRepositoryAdapter, library::LibraryRepositoryAdapter,
-        publisher::PublisherRepositoryAdapter, series::SeriesRepositoryAdapter, session::SessionRepositoryAdapter, shelf::ShelfRepositoryAdapter,
-        system_message::SystemMessageRepositoryAdapter, tag::TagRepositoryAdapter, user::UserRepositoryAdapter,
-        user_book_metadata::UserBookMetadataRepositoryAdapter, user_settings::UserSettingRepositoryAdapter,
+        genre::GenreRepositoryAdapter, import_job::ImportJobRepositoryAdapter, job::JobRepositoryAdapter,
+        koreader_document_hash::KoReaderDocumentHashRepositoryAdapter, library::LibraryRepositoryAdapter, publisher::PublisherRepositoryAdapter,
+        series::SeriesRepositoryAdapter, session::SessionRepositoryAdapter, shelf::ShelfRepositoryAdapter, system_message::SystemMessageRepositoryAdapter,
+        tag::TagRepositoryAdapter, user::UserRepositoryAdapter, user_book_metadata::UserBookMetadataRepositoryAdapter,
+        user_settings::UserSettingRepositoryAdapter,
     },
     migrations::Migrator,
     repository::RepositoryImpl,
@@ -111,7 +98,7 @@ pub async fn create_repository_service(database: DatabaseConnection) -> Result<A
         .user_book_metadata_repository(Arc::new(UserBookMetadataRepositoryAdapter::new()) as Arc<dyn UserBookMetadataRepository>)
         .device_repository(Arc::new(DeviceRepositoryAdapter::new()) as Arc<dyn DeviceRepository>)
         .system_message_repository(Arc::new(SystemMessageRepositoryAdapter::new()) as Arc<dyn SystemMessageRepository>)
-        .koreader_document_hash_repository(Arc::new(UnimplementedKoReaderDocumentHashRepository) as Arc<dyn KoReaderDocumentHashRepository>)
+        .koreader_document_hash_repository(Arc::new(KoReaderDocumentHashRepositoryAdapter::new()) as Arc<dyn KoReaderDocumentHashRepository>)
         .build()
         .map_err(|e| Error::Infrastructure(e.to_string()))?;
 
