@@ -37,7 +37,7 @@ pub(crate) struct ShelfSummary {
     /// Serialized `BookFilter` JSON — present only for smart shelves owned by
     /// the current user.
     pub filter_json: Option<String>,
-    /// Matching book count — populated for own smart shelves only.
+    /// Matching book count — `Some(n)` when the shelf has books, `None` for empty shelves or count errors.
     pub count: Option<u64>,
     /// Token of the library this shelf belongs to. Present for own shelves.
     pub library_token: Option<String>,
@@ -85,28 +85,34 @@ pub(crate) async fn list_my_shelves() -> Result<Vec<ShelfSummary>, ServerFnError
 
     let shelves = core_services.shelf_service.list_shelves_for_user(user_id).await.map_err(to_server_err)?;
 
-    Ok(shelves
-        .iter()
-        .map(|s| {
-            let is_smart = s.shelf_type == ShelfType::Smart;
-            let filter_json = if is_smart {
-                s.filter_criteria.as_ref().and_then(|f| serde_json::to_string(f).ok())
-            } else {
-                None
-            };
-            ShelfSummary {
-                id: s.id as i64,
-                token: s.token.to_string(),
-                name: s.name.clone(),
-                is_own: true,
-                is_smart,
-                is_device_shelf: s.device_id.is_some(),
-                filter_json,
-                count: None,
-                library_token: Some(bb_core::library::LibraryToken::new(s.library_id).to_string()),
-            }
-        })
-        .collect())
+    let mut result = Vec::with_capacity(shelves.len());
+    for s in &shelves {
+        let is_smart = s.shelf_type == ShelfType::Smart;
+        let filter_json = if is_smart {
+            s.filter_criteria.as_ref().and_then(|f| serde_json::to_string(f).ok())
+        } else {
+            None
+        };
+        let count = core_services
+            .shelf_service
+            .count_for_filter(s.token, user_id)
+            .await
+            .inspect_err(|e| tracing::warn!(shelf_token = %s.token, error = %e, "count_for_filter failed"))
+            .ok()
+            .filter(|&n| n > 0);
+        result.push(ShelfSummary {
+            id: s.id as i64,
+            token: s.token.to_string(),
+            name: s.name.clone(),
+            is_own: true,
+            is_smart,
+            is_device_shelf: s.device_id.is_some(),
+            filter_json,
+            count,
+            library_token: Some(bb_core::library::LibraryToken::new(s.library_id).to_string()),
+        });
+    }
+    Ok(result)
 }
 
 /// Creates a new manual shelf and returns its token.
