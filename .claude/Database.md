@@ -8,9 +8,9 @@ an existing instance is required for database-related commands.
 - `PGUSER`, `PGPASSWORD`, `PGDATABASE` — used by `just create-database` and `just database`
 - `PGADMINUSER`, `PGADMINPASSWORD` — admin credentials for database creation
 - `BOOKBOSS__DATABASE__DATABASE_URL` — SeaORM connection string for migrations and entity generation
-    - Postgres: `postgres://user:password@host:port/database`
-    - MySQL: `mysql://user:password@host:port/database`
-    - SQLite: `sqlite::path`
+  - Postgres: `postgres://user:password@host:port/database`
+  - MySQL: `mysql://user:password@host:port/database`
+  - SQLite: `sqlite::path`
 
 ## SeaORM Adapter Patterns
 

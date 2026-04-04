@@ -25,6 +25,10 @@ impl BookIdSweep for EnsureEnrichmentsHandler {
         Self::JOB_TYPE
     }
 
+    fn continuation_delay(&self) -> chrono::Duration {
+        chrono::Duration::zero()
+    }
+
     async fn fetch_batch(&self, core: &CoreServices, after_id: Option<BookId>, batch_size: u64) -> Result<Vec<BookId>, Error> {
         let book_repo = core.repository_service.book_repository().clone();
         read_only_transaction(&**core.repository_service.repository(), |tx| {

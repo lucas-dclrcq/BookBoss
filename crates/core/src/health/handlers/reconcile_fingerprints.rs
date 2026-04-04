@@ -25,6 +25,10 @@ impl BookIdSweep for ReconcileFingerprintsHandler {
         Self::JOB_TYPE
     }
 
+    fn continuation_delay(&self) -> chrono::Duration {
+        chrono::Duration::zero()
+    }
+
     // Default `fetch_batch` — all available books, no SQL filtering.
 
     async fn process_batch(&self, core: &Arc<CoreServices>, ids: Vec<BookId>) -> Result<(), Error> {

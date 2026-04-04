@@ -235,7 +235,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         job_type: handler.job_type().into(),
         run_on_startup: true,
         interval_minutes: Some(120),
-        priority: PRIORITY_HEALTH,
+        priority: PRIORITY_SWEEP,
     });
     js.register(handler);
 
@@ -245,7 +245,7 @@ pub fn before_start(core: &Arc<CoreServices>) {
         job_type: handler.job_type().into(),
         run_on_startup: false,
         interval_minutes: None,
-        priority: PRIORITY_HEALTH,
+        priority: PRIORITY_SWEEP,
     });
     js.register(handler);
 
