@@ -14,6 +14,14 @@ pub(crate) static ACTIVE_LIBRARY: GlobalSignal<Option<String>> = Signal::global(
 /// mutated by navigation or the library picker. Used by the home button to snap
 /// back to the default.
 pub(crate) static DEFAULT_LIBRARY: GlobalSignal<Option<String>> = Signal::global(|| None);
+/// The full list of libraries accessible to the current user, loaded once by
+/// `LibraryInit` and never re-fetched. `LibraryPicker` reads this directly so
+/// it never calls `use_server_future` and never causes a re-paint flash.
+static USER_LIBRARIES: GlobalSignal<Vec<UserLibraryDto>> = Signal::global(Vec::new);
+/// Pending incoming-review count, written by `IncomingCountLoader` and read
+/// by `IncomingBadge`. Keeping them separate means the display component never
+/// suspends and therefore never causes the flash-to-empty artifact.
+static INCOMING_PENDING_COUNT: GlobalSignal<Option<u32>> = Signal::global(|| None);
 
 use crate::components::{IncomingRefresh, JobsRefresh};
 
@@ -153,69 +161,97 @@ async fn add_book_to_default_library(book_token: String) -> Result<(), ServerFnE
 // ── Badge / button sub-components
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Renders the Incoming nav link with its pending-count badge.
-///
-/// Isolated into its own component so that `use_server_future` can suspend
-/// with `?` here without affecting the rest of `NavBar`. `NavBar` wraps this
-/// in a `SuspenseBoundary` so the link simply stays hidden until the count
-/// resolves, rather than leaving it permanently absent after a page refresh.
+/// Fetches the pending incoming-review count and writes it to the
+/// `INCOMING_PENDING_COUNT` global signal. Isolated in its own component so
+/// that `use_server_future` (and the resulting suspension) never touches the
+/// display component `IncomingBadge`.
 #[component]
-fn IncomingBadge() -> Element {
-    let mut incoming_refresh = use_context::<IncomingRefresh>();
+fn IncomingCountLoader() -> Element {
+    let incoming_refresh = use_context::<IncomingRefresh>();
     let pending_count = use_server_future(move || {
         let _rev = (incoming_refresh.0)();
         get_pending_count()
     })?;
-    let mut scanning = use_signal(|| false);
-    let route = use_route::<Route>();
 
-    let count_opt = pending_count().and_then(|r: Result<Option<u32>, ServerFnError>| r.ok()).flatten();
+    use_effect(move || {
+        if let Some(Ok(val)) = pending_count() {
+            if *INCOMING_PENDING_COUNT.peek() != val {
+                *INCOMING_PENDING_COUNT.write() = val;
+            }
+        }
+    });
+
+    rsx! {}
+}
+
+/// Renders the Incoming nav link with its pending-count badge.
+///
+/// Reads only from `INCOMING_PENDING_COUNT` (a global signal populated by
+/// `IncomingCountLoader`). Makes no async calls, never suspends, and therefore
+/// never causes the flash-to-empty artifact on navigation.
+#[component]
+fn IncomingBadge() -> Element {
+    let count_opt = INCOMING_PENDING_COUNT();
 
     rsx! {
-        {count_opt.map(|count| {
-            let on_incoming_page = route == Route::IncomingPage {};
-            rsx! {
-                div { class: "flex items-center gap-2",
-                    Link { to: Route::IncomingPage {}, class: "relative text-sm hover:text-indigo-200 flex items-center gap-1.5",
-                        "Incoming"
-                        if count > 0 {
-                            span {
-                                class: "inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[0.6rem] font-bold leading-none",
-                                "{count}"
-                            }
-                        }
-                    }
-                    if on_incoming_page {
-                        button {
-                            class: "flex items-center text-indigo-200 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer",
-                            title: "Scan bookdrop now",
-                            disabled: scanning(),
-                            onclick: move |_| {
-                                spawn(async move {
-                                    scanning.set(true);
-                                    let _ = trigger_bookdrop_scan().await;
-                                    *incoming_refresh.0.write() += 1;
-                                    scanning.set(false);
-                                });
-                            },
-                            svg {
-                                class: if scanning() { "w-3.5 h-3.5 animate-spin" } else { "w-3.5 h-3.5" },
-                                xmlns: "http://www.w3.org/2000/svg",
-                                fill: "none",
-                                view_box: "0 0 24 24",
-                                stroke_width: "2",
-                                stroke: "currentColor",
-                                path {
-                                    stroke_linecap: "round",
-                                    stroke_linejoin: "round",
-                                    d: "M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99",
-                                }
-                            }
+        {count_opt.map(|count| rsx! {
+            div { class: "flex items-center gap-2",
+                Link { to: Route::IncomingPage {}, class: "relative text-sm hover:text-indigo-200 flex items-center gap-1.5",
+                    "Incoming"
+                    if count > 0 {
+                        span {
+                            class: "inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[0.6rem] font-bold leading-none",
+                            "{count}"
                         }
                     }
                 }
+                IncomingScanButton {}
             }
         })}
+    }
+}
+
+/// Renders the "scan bookdrop now" button only when on the IncomingPage.
+/// Isolated into its own component so that the `use_route` subscription
+/// (which changes on every navigation) is scoped here and never causes
+/// `IncomingBadge` — and its wrapping `SuspenseBoundary` — to re-render.
+#[component]
+fn IncomingScanButton() -> Element {
+    let mut incoming_refresh = use_context::<IncomingRefresh>();
+    let route = use_route::<Route>();
+    let mut scanning = use_signal(|| false);
+
+    if !matches!(route, Route::IncomingPage) {
+        return rsx! {};
+    }
+
+    rsx! {
+        button {
+            class: "flex items-center text-indigo-200 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer",
+            title: "Scan bookdrop now",
+            disabled: scanning(),
+            onclick: move |_| {
+                spawn(async move {
+                    scanning.set(true);
+                    let _ = trigger_bookdrop_scan().await;
+                    *incoming_refresh.0.write() += 1;
+                    scanning.set(false);
+                });
+            },
+            svg {
+                class: if scanning() { "w-3.5 h-3.5 animate-spin" } else { "w-3.5 h-3.5" },
+                xmlns: "http://www.w3.org/2000/svg",
+                fill: "none",
+                view_box: "0 0 24 24",
+                stroke_width: "2",
+                stroke: "currentColor",
+                path {
+                    stroke_linecap: "round",
+                    stroke_linejoin: "round",
+                    d: "M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99",
+                }
+            }
+        }
     }
 }
 
@@ -390,11 +426,13 @@ fn AboutStatRow(label: &'static str, value: Option<String>) -> Element {
 // ── Library picker
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Initialises `ACTIVE_LIBRARY` from the user's default library setting.
-/// Isolated so that suspension doesn't affect the rest of the NavBar.
+/// Loads library data once and populates the global signals used by
+/// `LibraryPicker`. Isolated in a `SuspenseBoundary` so that suspension
+/// never affects the rest of the NavBar.
 #[component]
 fn LibraryInit() -> Element {
     let default_token = use_server_future(get_default_library_token_for_user)?;
+    let user_libs = use_server_future(get_user_libraries)?;
     use_effect(move || {
         if let Some(Ok(token)) = default_token() {
             *DEFAULT_LIBRARY.write() = Some(token.clone());
@@ -402,41 +440,31 @@ fn LibraryInit() -> Element {
                 *ACTIVE_LIBRARY.write() = Some(token);
             }
         }
+        if let Some(Ok(libs)) = user_libs() {
+            *USER_LIBRARIES.write() = libs;
+        }
     });
     rsx! {}
 }
 
 /// Renders a custom dropdown when the user has 2+ assigned libraries.
+///
+/// Reads only from global signals (`USER_LIBRARIES`, `ACTIVE_LIBRARY`,
+/// `DEFAULT_LIBRARY`) populated by `LibraryInit`. Makes no async calls,
+/// never suspends, and never causes a two-paint flash on re-render.
 #[component]
 fn LibraryPicker() -> Element {
-    let libs_res = use_server_future(get_user_libraries)?;
-    let default_res = use_server_future(get_default_library_token_for_user)?;
-    let libs: Vec<UserLibraryDto> = libs_res().and_then(|r: Result<Vec<UserLibraryDto>, ServerFnError>| r.ok()).unwrap_or_default();
-    let default_token: String = default_res().and_then(|r: Result<String, ServerFnError>| r.ok()).unwrap_or_default();
-
+    let libs = USER_LIBRARIES();
     if libs.len() < 2 {
         return rsx! {};
     }
 
-    // Initialise ACTIVE_LIBRARY / DEFAULT_LIBRARY from the server-resolved
-    // default for the 2+-library case. `use_effect` only runs on the client —
-    // the server already has the correct value in `default_token` which is used
-    // directly below for the initial render, eliminating the "All Books" flash.
-    use_effect(move || {
-        if let Some(Ok(tok)) = default_res() {
-            *DEFAULT_LIBRARY.write() = Some(tok.clone());
-            if ACTIVE_LIBRARY.peek().is_none() {
-                *ACTIVE_LIBRARY.write() = Some(tok);
-            }
-        }
-    });
-
     let active = ACTIVE_LIBRARY();
+    let default_token = DEFAULT_LIBRARY().unwrap_or_default();
     let mut open = use_signal(|| false);
 
-    // When ACTIVE_LIBRARY hasn't been initialised yet (initial SSR render or the
-    // brief moment before the client effect runs), fall back to the
-    // server-resolved default so the label is correct from the very first paint.
+    // When ACTIVE_LIBRARY hasn't been initialised yet, fall back to the
+    // default token so the label is correct from the very first paint.
     let resolved_active: Option<&str> = active.as_deref().or(if default_token.is_empty() { None } else { Some(default_token.as_str()) });
 
     let active_name = libs
@@ -492,14 +520,14 @@ fn LibraryPicker() -> Element {
     }
 }
 
-// ── NavBar
+// ── SearchBar
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// The centred search input, isolated into its own component so that
+/// subscriptions to `use_route` and `SEARCH_TEXT` don't cause `NavBar` to
+/// re-render (and repaint) on every navigation.
 #[component]
-pub(crate) fn NavBar() -> Element {
-    let navigator = use_navigator();
-    let mut user_menu_open = use_signal(|| false);
-    let mut show_about = use_signal(|| false);
+fn SearchBar() -> Element {
     let route = use_route::<Route>();
 
     let mut focused = use_signal(|| false);
@@ -552,6 +580,205 @@ pub(crate) fn NavBar() -> Element {
         }
     };
 
+    rsx! {
+        div { class: "absolute left-1/2 -translate-x-1/2 w-full max-w-md px-4",
+            if search_active {
+                div { class: "flex items-center gap-2",
+                    // Input column — flex-1 takes all space; relative for hint strip positioning
+                    div { class: "relative flex-1",
+                        // ── Input container ──────────────────────────────────────────
+                        div { class: "relative w-full bg-white/90 focus-within:bg-white rounded focus-within:ring-2 focus-within:ring-indigo-300",
+                            // Search icon
+                            svg {
+                                class: "absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none",
+                                xmlns: "http://www.w3.org/2000/svg",
+                                fill: "none",
+                                view_box: "0 0 24 24",
+                                stroke_width: "2",
+                                stroke: "currentColor",
+                                path {
+                                    stroke_linecap: "round",
+                                    stroke_linejoin: "round",
+                                    d: "m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z",
+                                }
+                            }
+                            if !completion().is_empty() {
+                                span {
+                                    class: "absolute inset-0 flex items-center pl-9 pr-8 text-sm pointer-events-none overflow-hidden select-none",
+                                    "aria-hidden": "true",
+                                    span {
+                                        style: "color: transparent; white-space: pre;",
+                                        "{SEARCH_TEXT()}"
+                                    }
+                                    span {
+                                        class: "text-gray-400",
+                                        style: "white-space: pre;",
+                                        "{completion()}"
+                                    }
+                                }
+                            }
+                            input {
+                                class: "relative w-full pl-9 pr-8 py-1.5 text-sm text-gray-900 bg-transparent placeholder-gray-400 outline-none",
+                                r#type: "text",
+                                placeholder: "{search_placeholder}",
+                                value: SEARCH_TEXT(),
+                                onfocus: move |_| {
+                                    focused.set(true);
+                                },
+                                onblur: move |_| {
+                                    focused.set(false);
+                                    help_open.set(false);
+                                    if !hint_seen() {
+                                        hint_seen.set(true);
+                                        spawn(async move {
+                                            let _ = document::eval(
+                                                "window.localStorage.setItem('search_hint_seen','1')",
+                                            )
+                                            .await;
+                                        });
+                                    }
+                                },
+                                oninput: move |e| {
+                                    let val = e.value();
+                                    let new_completion = compute_completion(&val, 0);
+                                    *SEARCH_TEXT.write() = val;
+                                    help_open.set(false);
+                                    if !hint_seen() {
+                                        hint_seen.set(true);
+                                        spawn(async move {
+                                            let _ = document::eval(
+                                                "window.localStorage.setItem('search_hint_seen','1')",
+                                            )
+                                            .await;
+                                        });
+                                    }
+                                    // Recompute completion from scratch on every input change
+                                    cycle_prefix.set(String::new());
+                                    cycle_idx.set(0);
+                                    completion.set(new_completion);
+                                },
+                                onkeydown: move |e: KeyboardEvent| {
+                                    match e.key() {
+                                        Key::Tab => {
+                                            let current_completion = completion();
+                                            if !cycle_prefix().is_empty() && !current_completion.is_empty() {
+                                                // Already cycling (e.g. status:r → status:read) and a ghost
+                                                // suffix is showing — apply it without resetting the cycle
+                                                // origin, then advance the counter.
+                                                e.prevent_default();
+                                                let applied = apply_completion(&SEARCH_TEXT(), &current_completion);
+                                                (*SEARCH_TEXT.write()).clone_from(&applied);
+                                                let new_idx = cycle_idx() + 1;
+                                                cycle_idx.set(new_idx);
+                                                completion.set(String::new());
+                                            } else if !current_completion.is_empty() {
+                                                // First Tab: apply completion and enter cycling mode.
+                                                e.prevent_default();
+                                                let current_input = SEARCH_TEXT();
+                                                // Capture the token being completed as the cycle origin.
+                                                let prefix = current_input
+                                                    .split_whitespace()
+                                                    .last()
+                                                    .unwrap_or("")
+                                                    .to_string();
+                                                let applied = apply_completion(&current_input, &current_completion);
+                                                (*SEARCH_TEXT.write()).clone_from(&applied);
+                                                cycle_prefix.set(prefix);
+                                                let new_idx = cycle_idx() + 1;
+                                                cycle_idx.set(new_idx);
+                                                completion.set(String::new());
+                                            } else if !cycle_prefix().is_empty() {
+                                                // Subsequent Tab with no ghost (current text is an exact
+                                                // match for one candidate) — cycle to the next match.
+                                                e.prevent_default();
+                                                let prefix = cycle_prefix();
+                                                let current_idx = cycle_idx();
+                                                let new_idx = current_idx + 1;
+                                                cycle_idx.set(new_idx);
+                                                // Pass current_idx (pre-increment): next_cycle_input
+                                                // selects the slot to transition *into*.
+                                                if let Some(cycled) = next_cycle_input(&SEARCH_TEXT(), &prefix, current_idx) {
+                                                    *SEARCH_TEXT.write() = cycled;
+                                                    completion.set(String::new());
+                                                }
+                                            }
+                                        }
+                                        Key::Escape => {
+                                            if !completion().is_empty() || !cycle_prefix().is_empty() {
+                                                completion.set(String::new());
+                                                cycle_prefix.set(String::new());
+                                                cycle_idx.set(0);
+                                            } else {
+                                                *SEARCH_TEXT.write() = String::new();
+                                            }
+                                        }
+                                        _ => {
+                                            // Any key other than Tab resets completion cycling
+                                            if !completion().is_empty() || !cycle_prefix().is_empty() {
+                                                completion.set(String::new());
+                                                cycle_prefix.set(String::new());
+                                                cycle_idx.set(0);
+                                            }
+                                        }
+                                    }
+                                },
+                            }
+                            // Clear button
+                            if !SEARCH_TEXT().is_empty() {
+                                button {
+                                    class: "absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer",
+                                    onclick: move |_| *SEARCH_TEXT.write() = String::new(),
+                                    svg {
+                                        class: "w-4 h-4",
+                                        xmlns: "http://www.w3.org/2000/svg",
+                                        fill: "none",
+                                        view_box: "0 0 24 24",
+                                        stroke_width: "2",
+                                        stroke: "currentColor",
+                                        path {
+                                            stroke_linecap: "round",
+                                            stroke_linejoin: "round",
+                                            d: "M6 18 18 6M6 6l12 12",
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        // ── Hint strip (absolute dropdown below the input) ────────────
+                        if show_hint() {
+                            div {
+                                class: "absolute top-full left-0 right-0 mt-1 bg-blue-50 border border-blue-200 rounded-md px-3 py-2 text-xs text-blue-700 z-50 shadow-sm leading-relaxed",
+                                span { class: "font-semibold", "field:value" }
+                                " to narrow results — "
+                                for field in ["author:", "series:", "genre:", "tag:", "status:", "title:"] {
+                                    code { class: "inline-block bg-blue-100 rounded px-1 mr-1 font-mono", "{field}" }
+                                }
+                                " · Quote multi-word values: "
+                                code { class: "bg-blue-100 rounded px-1 font-mono", "author:\"Brad Thor\"" }
+                            }
+                        }
+                    }
+                    // ── ? button ──────────────────────────────────────────────────────
+                    button {
+                        class: "shrink-0 text-xs px-2 py-0.5 rounded-full bg-indigo-500 hover:bg-indigo-400 text-white font-medium cursor-pointer leading-tight",
+                        title: "Search help",
+                        onclick: move |_| help_open.set(!help_open()),
+                        "?"
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── NavBar
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[component]
+pub(crate) fn NavBar() -> Element {
+    let navigator = use_navigator();
+    let mut user_menu_open = use_signal(|| false);
+    let mut show_about = use_signal(|| false);
     let on_logout = move |_| {
         user_menu_open.set(false);
         *ACTIVE_LIBRARY.write() = None;
@@ -590,7 +817,10 @@ pub(crate) fn NavBar() -> Element {
                             title: "Home",
                             onclick: move |_| {
                                 *SEARCH_TEXT.write() = String::new();
-                                *ACTIVE_LIBRARY.write() = DEFAULT_LIBRARY();
+                                let default = DEFAULT_LIBRARY();
+                                if *ACTIVE_LIBRARY.peek() != default {
+                                    *ACTIVE_LIBRARY.write() = default;
+                                }
                                 navigator.push(Route::BooksPage {});
                             },
                             ondragover: move |e: DragEvent| {
@@ -623,11 +853,9 @@ pub(crate) fn NavBar() -> Element {
                         }
                     }
                 }
-                // Library picker — only shown when user has 2+ libraries
-                SuspenseBoundary {
-                    fallback: |_| rsx! {},
-                    LibraryPicker {}
-                }
+                // Library picker — only shown when user has 2+ libraries.
+                // No SuspenseBoundary needed: LibraryPicker never suspends.
+                LibraryPicker {}
                 Link { to: Route::AuthorsPage {}, class: "text-sm hover:text-indigo-200",
                     onclick: move |_| *SEARCH_TEXT.write() = String::new(),
                     "Authors"
@@ -636,10 +864,13 @@ pub(crate) fn NavBar() -> Element {
                     onclick: move |_| *SEARCH_TEXT.write() = String::new(),
                     "Series"
                 }
+                // IncomingCountLoader fetches the count in the background;
+                // IncomingBadge reads the result from a GlobalSignal and never suspends.
                 SuspenseBoundary {
                     fallback: |_| rsx! {},
-                    IncomingBadge {}
+                    IncomingCountLoader {}
                 }
+                IncomingBadge {}
                 SuspenseBoundary {
                     fallback: |_| rsx! {},
                     JobQueueBadge {}
@@ -650,193 +881,7 @@ pub(crate) fn NavBar() -> Element {
                 fallback: |_| rsx! {},
                 LibraryInit {}
             }
-            div { class: "absolute left-1/2 -translate-x-1/2 w-full max-w-md px-4",
-                if search_active {
-                    div { class: "flex items-center gap-2",
-                        // Input column — flex-1 takes all space; relative for hint strip positioning
-                        div { class: "relative flex-1",
-                            // ── Input container ──────────────────────────────────────────
-                            div { class: "relative w-full bg-white/90 focus-within:bg-white rounded focus-within:ring-2 focus-within:ring-indigo-300",
-                                // Search icon
-                                svg {
-                                    class: "absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none",
-                                    xmlns: "http://www.w3.org/2000/svg",
-                                    fill: "none",
-                                    view_box: "0 0 24 24",
-                                    stroke_width: "2",
-                                    stroke: "currentColor",
-                                    path {
-                                        stroke_linecap: "round",
-                                        stroke_linejoin: "round",
-                                        d: "m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z",
-                                    }
-                                }
-                                if !completion().is_empty() {
-                                    span {
-                                        class: "absolute inset-0 flex items-center pl-9 pr-8 text-sm pointer-events-none overflow-hidden select-none",
-                                        "aria-hidden": "true",
-                                        span {
-                                            style: "color: transparent; white-space: pre;",
-                                            "{SEARCH_TEXT()}"
-                                        }
-                                        span {
-                                            class: "text-gray-400",
-                                            style: "white-space: pre;",
-                                            "{completion()}"
-                                        }
-                                    }
-                                }
-                                input {
-                                    class: "relative w-full pl-9 pr-8 py-1.5 text-sm text-gray-900 bg-transparent placeholder-gray-400 outline-none",
-                                    r#type: "text",
-                                    placeholder: "{search_placeholder}",
-                                    value: SEARCH_TEXT(),
-                                    onfocus: move |_| {
-                                        focused.set(true);
-                                    },
-                                    onblur: move |_| {
-                                        focused.set(false);
-                                        help_open.set(false);
-                                        if !hint_seen() {
-                                            hint_seen.set(true);
-                                            spawn(async move {
-                                                let _ = document::eval(
-                                                    "window.localStorage.setItem('search_hint_seen','1')",
-                                                )
-                                                .await;
-                                            });
-                                        }
-                                    },
-                                    oninput: move |e| {
-                                        let val = e.value();
-                                        let new_completion = compute_completion(&val, 0);
-                                        *SEARCH_TEXT.write() = val;
-                                        help_open.set(false);
-                                        if !hint_seen() {
-                                            hint_seen.set(true);
-                                            spawn(async move {
-                                                let _ = document::eval(
-                                                    "window.localStorage.setItem('search_hint_seen','1')",
-                                                )
-                                                .await;
-                                            });
-                                        }
-                                        // Recompute completion from scratch on every input change
-                                        cycle_prefix.set(String::new());
-                                        cycle_idx.set(0);
-                                        completion.set(new_completion);
-                                    },
-                                    onkeydown: move |e: KeyboardEvent| {
-                                        match e.key() {
-                                            Key::Tab => {
-                                                let current_completion = completion();
-                                                if !cycle_prefix().is_empty() && !current_completion.is_empty() {
-                                                    // Already cycling (e.g. status:r → status:read) and a ghost
-                                                    // suffix is showing — apply it without resetting the cycle
-                                                    // origin, then advance the counter.
-                                                    e.prevent_default();
-                                                    let applied = apply_completion(&SEARCH_TEXT(), &current_completion);
-                                                    (*SEARCH_TEXT.write()).clone_from(&applied);
-                                                    let new_idx = cycle_idx() + 1;
-                                                    cycle_idx.set(new_idx);
-                                                    completion.set(String::new());
-                                                } else if !current_completion.is_empty() {
-                                                    // First Tab: apply completion and enter cycling mode.
-                                                    e.prevent_default();
-                                                    let current_input = SEARCH_TEXT();
-                                                    // Capture the token being completed as the cycle origin.
-                                                    let prefix = current_input
-                                                        .split_whitespace()
-                                                        .last()
-                                                        .unwrap_or("")
-                                                        .to_string();
-                                                    let applied = apply_completion(&current_input, &current_completion);
-                                                    (*SEARCH_TEXT.write()).clone_from(&applied);
-                                                    cycle_prefix.set(prefix);
-                                                    let new_idx = cycle_idx() + 1;
-                                                    cycle_idx.set(new_idx);
-                                                    completion.set(String::new());
-                                                } else if !cycle_prefix().is_empty() {
-                                                    // Subsequent Tab with no ghost (current text is an exact
-                                                    // match for one candidate) — cycle to the next match.
-                                                    e.prevent_default();
-                                                    let prefix = cycle_prefix();
-                                                    let current_idx = cycle_idx();
-                                                    let new_idx = current_idx + 1;
-                                                    cycle_idx.set(new_idx);
-                                                    // Pass current_idx (pre-increment): next_cycle_input
-                                                    // selects the slot to transition *into*.
-                                                    if let Some(cycled) = next_cycle_input(&SEARCH_TEXT(), &prefix, current_idx) {
-                                                        *SEARCH_TEXT.write() = cycled;
-                                                        completion.set(String::new());
-                                                    }
-                                                }
-                                            }
-                                            Key::Escape => {
-                                                if !completion().is_empty() || !cycle_prefix().is_empty() {
-                                                    completion.set(String::new());
-                                                    cycle_prefix.set(String::new());
-                                                    cycle_idx.set(0);
-                                                } else {
-                                                    *SEARCH_TEXT.write() = String::new();
-                                                }
-                                            }
-                                            _ => {
-                                                // Any key other than Tab resets completion cycling
-                                                if !completion().is_empty() || !cycle_prefix().is_empty() {
-                                                    completion.set(String::new());
-                                                    cycle_prefix.set(String::new());
-                                                    cycle_idx.set(0);
-                                                }
-                                            }
-                                        }
-                                    },
-                                }
-                                // Clear button
-                                if !SEARCH_TEXT().is_empty() {
-                                    button {
-                                        class: "absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer",
-                                        onclick: move |_| *SEARCH_TEXT.write() = String::new(),
-                                        svg {
-                                            class: "w-4 h-4",
-                                            xmlns: "http://www.w3.org/2000/svg",
-                                            fill: "none",
-                                            view_box: "0 0 24 24",
-                                            stroke_width: "2",
-                                            stroke: "currentColor",
-                                            path {
-                                                stroke_linecap: "round",
-                                                stroke_linejoin: "round",
-                                                d: "M6 18 18 6M6 6l12 12",
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            // ── Hint strip (absolute dropdown below the input) ────────────
-                            if show_hint() {
-                                div {
-                                    class: "absolute top-full left-0 right-0 mt-1 bg-blue-50 border border-blue-200 rounded-md px-3 py-2 text-xs text-blue-700 z-50 shadow-sm leading-relaxed",
-                                    span { class: "font-semibold", "field:value" }
-                                    " to narrow results — "
-                                    for field in ["author:", "series:", "genre:", "tag:", "status:", "title:"] {
-                                        code { class: "inline-block bg-blue-100 rounded px-1 mr-1 font-mono", "{field}" }
-                                    }
-                                    " · Quote multi-word values: "
-                                    code { class: "bg-blue-100 rounded px-1 font-mono", "author:\"Brad Thor\"" }
-                                }
-                            }
-                        }
-                        // ── ? button ──────────────────────────────────────────────────────
-                        button {
-                            class: "shrink-0 text-xs px-2 py-0.5 rounded-full bg-indigo-500 hover:bg-indigo-400 text-white font-medium cursor-pointer leading-tight",
-                            title: "Search help",
-                            onclick: move |_| help_open.set(!help_open()),
-                            "?"
-                        }
-                    }
-                }
-            }
+            SearchBar {}
             div { class: "flex items-center gap-4 shrink-0 ml-auto",
                 SuspenseBoundary {
                     fallback: |_| rsx! {},
