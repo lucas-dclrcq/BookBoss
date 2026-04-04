@@ -42,4 +42,4 @@ Library/
 .superpowers/
 
 # Tokensave
-.tokensave/*.db*
+.tokensave/
