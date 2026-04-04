@@ -36,12 +36,8 @@ impl MigrationTrait for Migration {
         Ok(())
     }
 
-    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        manager
-            .drop_index(Index::drop().name("system_messages_created_at").table(SystemMessages::Table).to_owned())
-            .await?;
-
-        manager.drop_table(Table::drop().table(SystemMessages::Table).to_owned()).await
+    async fn down(&self, _manager: &SchemaManager) -> Result<(), DbErr> {
+        Ok(())
     }
 }
 

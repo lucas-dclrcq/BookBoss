@@ -21,10 +21,8 @@ impl MigrationTrait for Migration {
             .await
     }
 
-    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        manager
-            .alter_table(Table::alter().table(BookFiles::Table).drop_column(BookFiles::CreatedAt).to_owned())
-            .await
+    async fn down(&self, _manager: &SchemaManager) -> Result<(), DbErr> {
+        Ok(())
     }
 }
 

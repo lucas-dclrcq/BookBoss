@@ -16,10 +16,8 @@ impl MigrationTrait for Migration {
             .await
     }
 
-    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        manager
-            .alter_table(Table::alter().table(Books::Table).drop_column(Books::SidecarFingerprint).to_owned())
-            .await
+    async fn down(&self, _manager: &SchemaManager) -> Result<(), DbErr> {
+        Ok(())
     }
 }
 

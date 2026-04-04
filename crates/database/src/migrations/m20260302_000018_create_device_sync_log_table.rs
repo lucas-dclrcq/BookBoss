@@ -43,9 +43,8 @@ impl MigrationTrait for Migration {
             .await
     }
 
-    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        manager.drop_index(Index::drop().name("idx_device_sync_log_device_id").to_owned()).await?;
-        manager.drop_table(Table::drop().table(DeviceSyncLog::Table).to_owned()).await
+    async fn down(&self, _manager: &SchemaManager) -> Result<(), DbErr> {
+        Ok(())
     }
 }
 

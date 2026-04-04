@@ -33,15 +33,8 @@ impl MigrationTrait for Migration {
         Ok(())
     }
 
-    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        if manager.get_database_backend() != sea_orm::DatabaseBackend::Sqlite {
-            manager
-                .drop_foreign_key(ForeignKey::drop().name("fk_shelves_library_id").table(Shelves::Table).to_owned())
-                .await?;
-        }
-        manager
-            .alter_table(Table::alter().table(Shelves::Table).drop_column(Shelves::LibraryId).to_owned())
-            .await
+    async fn down(&self, _manager: &SchemaManager) -> Result<(), DbErr> {
+        Ok(())
     }
 }
 

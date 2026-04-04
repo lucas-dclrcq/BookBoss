@@ -56,10 +56,8 @@ impl MigrationTrait for Migration {
         Ok(())
     }
 
-    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        manager.drop_index(Index::drop().name("jobs_claim").table(Jobs::Table).to_owned()).await?;
-
-        manager.drop_table(Table::drop().table(Jobs::Table).to_owned()).await
+    async fn down(&self, _manager: &SchemaManager) -> Result<(), DbErr> {
+        Ok(())
     }
 }
 

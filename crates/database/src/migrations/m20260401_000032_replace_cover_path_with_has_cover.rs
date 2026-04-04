@@ -30,28 +30,7 @@ impl MigrationTrait for Migration {
         Ok(())
     }
 
-    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        // 1. Re-add cover_path as nullable text.
-        manager
-            .alter_table(
-                Table::alter()
-                    .table(Books::Table)
-                    .add_column(ColumnDef::new(Books::CoverPath).text().null())
-                    .to_owned(),
-            )
-            .await?;
-
-        // 2. Restore the value where has_cover is true.
-        manager
-            .get_connection()
-            .execute_unprepared("UPDATE books SET cover_path = 'cover.jpg' WHERE has_cover = TRUE")
-            .await?;
-
-        // 3. Drop has_cover.
-        manager
-            .alter_table(Table::alter().table(Books::Table).drop_column(Books::HasCover).to_owned())
-            .await?;
-
+    async fn down(&self, _manager: &SchemaManager) -> Result<(), DbErr> {
         Ok(())
     }
 }

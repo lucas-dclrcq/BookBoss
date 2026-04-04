@@ -11,15 +11,8 @@ impl MigrationTrait for Migration {
             .await
     }
 
-    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        manager
-            .alter_table(
-                Table::alter()
-                    .table(Devices::Table)
-                    .add_column(ColumnDef::new(Devices::PreferredFormat).string().null())
-                    .to_owned(),
-            )
-            .await
+    async fn down(&self, _manager: &SchemaManager) -> Result<(), DbErr> {
+        Ok(())
     }
 }
 

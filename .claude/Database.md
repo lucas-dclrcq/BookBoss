@@ -8,11 +8,14 @@ an existing instance is required for database-related commands.
 - `PGUSER`, `PGPASSWORD`, `PGDATABASE` — used by `just create-database` and `just database`
 - `PGADMINUSER`, `PGADMINPASSWORD` — admin credentials for database creation
 - `BOOKBOSS__DATABASE__DATABASE_URL` — SeaORM connection string for migrations and entity generation
-  - Postgres: `postgres://user:password@host:port/database`
-  - MySQL: `mysql://user:password@host:port/database`
-  - SQLite: `sqlite::path`
+    - Postgres: `postgres://user:password@host:port/database`
+    - MySQL: `mysql://user:password@host:port/database`
+    - SQLite: `sqlite::path`
 
 ## SeaORM Adapter Patterns
+
+**Migrations:** Only `up()` migrations need to be implemented. The `down()` method can just
+be empty.
 
 **Enum storage:** All domain enums stored as plain `String` columns (no DB CHECK constraints).
 Conversion functions are module-private (`book_status_to_str` / `str_to_book_status`).
