@@ -49,6 +49,7 @@ struct OpdsInfo {
     has_access: bool,
     password: String,
     opds_url: String,
+    koreader_url: String,
     username: String,
 }
 
@@ -87,6 +88,7 @@ async fn get_opds_info() -> Result<OpdsInfo, ServerFnError> {
             has_access: false,
             password: String::new(),
             opds_url: String::new(),
+            koreader_url: String::new(),
             username: String::new(),
         });
     }
@@ -95,11 +97,13 @@ async fn get_opds_info() -> Result<OpdsInfo, ServerFnError> {
 
     let base = frontend_config.base_url.trim_end_matches('/');
     let opds_url = format!("{base}/opds/");
+    let koreader_url = format!("{base}/koreader");
 
     Ok(OpdsInfo {
         has_access: true,
         password,
         opds_url,
+        koreader_url,
         username: user.username.clone(),
     })
 }
@@ -757,7 +761,7 @@ fn OpdsSectionContent() -> Element {
 
     rsx! {
         section {
-            h2 { class: "text-lg font-semibold text-gray-900 mb-4", "OPDS" }
+            h2 { class: "text-lg font-semibold text-gray-900 mb-4", "OPDS / KOReader" }
             div { class: "rounded-lg border border-gray-200 bg-white px-4 py-4 flex flex-col gap-3",
                 p { class: "text-sm text-gray-600",
                     "Use these credentials to connect your e-reader app (KOReader, Moon+ Reader, etc.) to your BookBoss library."
@@ -768,6 +772,15 @@ fn OpdsSectionContent() -> Element {
                     div { class: "flex items-center gap-2",
                         code { class: "flex-1 text-sm bg-gray-50 rounded px-3 py-1.5 border border-gray-200 text-gray-900 select-all",
                             "{info.opds_url}"
+                        }
+                    }
+                }
+
+                div {
+                    span { class: "block text-sm font-medium text-gray-700 mb-1", "KOReader Sync URL" }
+                    div { class: "flex items-center gap-2",
+                        code { class: "flex-1 text-sm bg-gray-50 rounded px-3 py-1.5 border border-gray-200 text-gray-900 select-all",
+                            "{info.koreader_url}"
                         }
                     }
                 }

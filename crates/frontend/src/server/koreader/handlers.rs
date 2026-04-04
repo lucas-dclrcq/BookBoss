@@ -92,7 +92,8 @@ pub async fn syncs_progress_push(
     };
 
     // 4. Persist via sync_device_state. progress_bps is 0–10000 (basis points of
-    //    100%).
+    //    100%). Capture timestamp once so the stored value and the response agree.
+    let now = Utc::now();
     #[allow(clippy::cast_sign_loss)] // value is clamped to [0.0, 1.0] * 10_000.0 → always non-negative
     let progress_bps = (body.percentage.clamp(0.0, 1.0) * 10_000.0).round() as u16;
     match core_services
@@ -106,7 +107,7 @@ pub async fn syncs_progress_push(
             Some(body.progress.clone()),
             None,
             None,
-            Some(Utc::now()),
+            Some(now),
         )
         .await
     {
@@ -119,7 +120,7 @@ pub async fn syncs_progress_push(
         progress: body.progress,
         percentage: body.percentage,
         device: body.device.unwrap_or_default(),
-        timestamp: Utc::now().timestamp(),
+        timestamp: now.timestamp(),
     })
     .into_response()
 }
