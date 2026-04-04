@@ -23,7 +23,7 @@ impl From<libraries::Model> for Library {
         Self {
             id: m.id as u64,
             version: m.version as u64,
-            token: m.token.parse().expect("valid library token in DB"),
+            token: LibraryToken::new(m.id as u64),
             name: m.name,
             is_system: m.is_system,
             owner_id: m.owner_id.map(|id| id as u64),
