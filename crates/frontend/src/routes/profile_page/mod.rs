@@ -96,7 +96,7 @@ async fn get_opds_info() -> Result<OpdsInfo, ServerFnError> {
     let password = core_services.opds_service.get_or_create_password(&user).await.map_err(to_server_err)?;
 
     let base = frontend_config.base_url.trim_end_matches('/');
-    let opds_url = format!("{base}/opds/");
+    let opds_url = format!("{base}/opds");
     let koreader_url = format!("{base}/koreader");
 
     Ok(OpdsInfo {
@@ -438,7 +438,7 @@ pub(crate) fn ProfilePage() -> Element {
 
     rsx! {
         div { class: "flex-1 overflow-auto p-8",
-            div { class: "max-w-xl mx-auto flex flex-col gap-10",
+            div { class: "max-w-lg mx-auto flex flex-col gap-10",
 
                 // ── Profile ──────────────────────────────────────────────
                 section {
@@ -797,8 +797,28 @@ fn OpdsSectionContent() -> Element {
                     div {
                         span { class: "block text-sm font-medium text-gray-700 mb-1", "Password" }
                         div { class: "flex items-center gap-2",
-                            code { class: "text-sm bg-gray-50 rounded px-3 py-1.5 border border-gray-200 text-gray-900 font-mono",
-                                if show_password() { "{password}" } else { "••••••••••••" }
+                            button {
+                                class: "text-sm bg-gray-50 rounded px-3 py-1.5 border border-gray-200 text-gray-900 font-mono cursor-pointer hover:bg-gray-100 transition-colors w-[calc(12ch+1.5rem)] text-center",
+                                title: "Click to copy password",
+                                onclick: move |_| {
+                                    let pw_val = password();
+                                    spawn(async move {
+                                        document::eval(&format!(
+                                            "var t=document.createElement('textarea');\
+                                             t.value='{pw_val}';\
+                                             t.style.cssText='position:fixed;opacity:0';\
+                                             document.body.appendChild(t);\
+                                             t.select();\
+                                             document.execCommand('copy');\
+                                             document.body.removeChild(t);"
+                                        ));
+                                        copied.set(true);
+                                        let mut timer = document::eval("setTimeout(() => dioxus.send(true), 1500)");
+                                        let _ = timer.recv::<bool>().await;
+                                        copied.set(false);
+                                    });
+                                },
+                                if copied() { "Copied!" } else if show_password() { "{password}" } else { "••••••••••••" }
                             }
                         button {
                             class: "px-2 py-1.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-gray-700",
@@ -833,21 +853,6 @@ fn OpdsSectionContent() -> Element {
                                     circle { cx: "12", cy: "12", r: "3" }
                                 }
                             }
-                        }
-                        button {
-                            class: "px-2 py-1.5 text-xs font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50",
-                            onclick: move |_| {
-                                let pw_val = password();
-                                spawn(async move {
-                                    if let Ok(eval) = document::eval(&format!(
-                                        "navigator.clipboard.writeText('{pw_val}')"
-                                    )).await {
-                                        let _ = eval;
-                                        copied.set(true);
-                                    }
-                                });
-                            },
-                            if copied() { "Copied!" } else { "Copy" }
                         }
                         button {
                             class: "px-2 py-1.5 text-xs font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50",

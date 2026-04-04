@@ -266,17 +266,19 @@ fn DeviceCard(device: DeviceRow, on_edit: EventHandler<()>, on_delete: EventHand
                             }
                         }
                     }
-                    button {
-                        class: "p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded",
-                        title: "Edit",
-                        onclick: move |_| on_edit(()),
-                        "✎"
-                    }
-                    button {
-                        class: "p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded",
-                        title: "Delete",
-                        onclick: move |_| on_delete(()),
-                        "✕"
+                    div { class: "flex items-center",
+                        button {
+                            class: "p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded",
+                            title: "Edit",
+                            onclick: move |_| on_edit(()),
+                            "✎"
+                        }
+                        button {
+                            class: "p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded",
+                            title: "Delete",
+                            onclick: move |_| on_delete(()),
+                            "✕"
+                        }
                     }
                 }
             }
