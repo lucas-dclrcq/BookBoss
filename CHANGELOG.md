@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2](https://github.com/szinn/BookBoss/compare/v0.8.1..v0.8.2) - 2026-04-04
+
+### Features
+
+- _(core)_ Add KoReaderService and document hash domain - ([93d8e15](https://github.com/szinn/BookBoss/commit/93d8e15570e017ff777d23036a3b0a983b13c3bd))
+- _(database)_ Add koreader_document_hashes migration and adapter - ([002c7f1](https://github.com/szinn/BookBoss/commit/002c7f10916328bfed6db961e10515dba983fc38))
+- _(frontend)_ Polish profile page OPDS and devices UI - ([951b54f](https://github.com/szinn/BookBoss/commit/951b54f8b7f75b0afa256a65f5b9f2471bf12529))
+- _(frontend)_ Hide OPDS password by default with toggle - ([13796af](https://github.com/szinn/BookBoss/commit/13796af26c1e48f47a88a0fc0fa89eb78fb7ef23))
+- _(frontend)_ Update profile OPDS section for KOReader - ([e205d75](https://github.com/szinn/BookBoss/commit/e205d758503dded6055cb2c570e5ae06d3e736c0))
+- _(frontend)_ Register KOReader document hashes at download time - ([ef7b893](https://github.com/szinn/BookBoss/commit/ef7b893d84058e9c1cd52fad1effc6c33eb8dab9))
+- _(frontend)_ Add KOReader sync endpoints under /koreader/ - ([e043705](https://github.com/szinn/BookBoss/commit/e043705587813f9bbc0e65371437891f007f4600))
+
+### Bug Fixes
+
+- _(frontend)_ Fix OPDS kepub exclusion and cover URL differentiation - ([d1fcb25](https://github.com/szinn/BookBoss/commit/d1fcb25601de07d9f395714c93d8946ff4689da5))
+
+### Documentation
+
+- _(libraries)_ All Books is an assignable library - ([1daa386](https://github.com/szinn/BookBoss/commit/1daa3863dee57e58fe43236b290a54709440443d))
+- Add KOReader sync user guide - ([f2c3712](https://github.com/szinn/BookBoss/commit/f2c37120a23ef1873ae850bbd981d34fe2ec2b5d))
+
+### Miscellaneous Tasks
+
+- _(bookboss)_ Don't log dioxus_server::server messages - ([10bbef6](https://github.com/szinn/BookBoss/commit/10bbef6bbfb65f3653af830e2a05da44a276ec87))
+
 ## [0.8.1](https://github.com/szinn/BookBoss/compare/v0.8.0..v0.8.1) - 2026-04-04
 
 ### Features

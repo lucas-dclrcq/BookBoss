@@ -23,11 +23,11 @@ On your **Profile** page, under the **OPDS / KOReader** section:
 
 In KOReader, go to **Tools → KOReader Sync** (or the Progress Sync plugin) and enter:
 
-| Field    | Value                                      |
-| -------- | ------------------------------------------ |
-| Server   | Your KOReader Sync URL from the profile    |
-| Username | Your BookBoss username                     |
-| Password | The password shown on your profile page    |
+| Field    | Value                                   |
+| -------- | --------------------------------------- |
+| Server   | Your KOReader Sync URL from the profile |
+| Username | Your BookBoss username                  |
+| Password | The password shown on your profile page |
 
 Tap **Login / Sync** to verify the connection. KOReader will report a successful login if
 the credentials are correct.
@@ -54,11 +54,11 @@ per book and returns it on pull.
 
 BookBoss automatically updates your reading state based on progress pushed from KOReader:
 
-| Condition                              | Effect                               |
-| -------------------------------------- | ------------------------------------ |
-| Progress > 0% and status is *Unread*   | Status changes to **Reading**        |
-| Progress reaches 100%                  | Status changes to **Read**; finish date recorded |
-| All other cases                        | Status unchanged                     |
+| Condition                            | Effect                                           |
+| ------------------------------------ | ------------------------------------------------ |
+| Progress > 0% and status is _Unread_ | Status changes to **Reading**                    |
+| Progress reaches 100%                | Status changes to **Read**; finish date recorded |
+| All other cases                      | Status unchanged                                 |
 
 Progress of 0% does not change your reading state, since this can occur when a book is
 first opened or re-read.
@@ -73,15 +73,18 @@ both modes are supported.
 ## Troubleshooting
 
 **Login fails in KOReader**
+
 - Confirm the sync URL ends with `/koreader` (no trailing slash)
 - Confirm the username and password match exactly what is shown on the profile page
 - Ensure your BookBoss instance is reachable from the device's network
 
 **Position does not sync**
+
 - The book must have been downloaded through BookBoss (via OPDS or the web UI) so that
   its hash is registered. Books sideloaded from other sources cannot be matched.
 - Check that KOReader's Progress Sync plugin is enabled and configured
 
 **Progress shows but reading state did not change**
+
 - Reading state transitions only fire on a push (position sent from KOReader to BookBoss).
   Pull-only sessions do not trigger transitions.
