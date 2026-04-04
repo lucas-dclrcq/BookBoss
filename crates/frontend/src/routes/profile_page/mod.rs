@@ -438,7 +438,7 @@ pub(crate) fn ProfilePage() -> Element {
 
     rsx! {
         div { class: "flex-1 overflow-auto p-8",
-            div { class: "max-w-lg mx-auto flex flex-col gap-10",
+            div { class: "max-w-xl mx-auto flex flex-col gap-10",
 
                 // ── Profile ──────────────────────────────────────────────
                 section {
@@ -741,6 +741,7 @@ fn OpdsSectionContent() -> Element {
     let mut password = use_signal(String::new);
     let mut regenerating = use_signal(|| false);
     let mut copied = use_signal(|| false);
+    let mut show_password = use_signal(|| false);
     let mut error_msg: Signal<Option<String>> = use_signal(|| None);
 
     use_effect(move || {
@@ -796,9 +797,43 @@ fn OpdsSectionContent() -> Element {
                     div {
                         span { class: "block text-sm font-medium text-gray-700 mb-1", "Password" }
                         div { class: "flex items-center gap-2",
-                            code { class: "text-sm bg-gray-50 rounded px-3 py-1.5 border border-gray-200 text-gray-900 select-all font-mono",
-                                "{password}"
+                            code { class: "text-sm bg-gray-50 rounded px-3 py-1.5 border border-gray-200 text-gray-900 font-mono",
+                                if show_password() { "{password}" } else { "••••••••••••" }
                             }
+                        button {
+                            class: "px-2 py-1.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-gray-700",
+                            title: if show_password() { "Hide password" } else { "Show password" },
+                            onclick: move |_| show_password.set(!show_password()),
+                            if show_password() {
+                                // Eye-slash icon
+                                svg {
+                                    xmlns: "http://www.w3.org/2000/svg",
+                                    class: "w-4 h-4",
+                                    view_box: "0 0 24 24",
+                                    fill: "none",
+                                    stroke: "currentColor",
+                                    stroke_width: "2",
+                                    stroke_linecap: "round",
+                                    stroke_linejoin: "round",
+                                    path { d: "M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" }
+                                    line { x1: "1", y1: "1", x2: "23", y2: "23" }
+                                }
+                            } else {
+                                // Eye icon
+                                svg {
+                                    xmlns: "http://www.w3.org/2000/svg",
+                                    class: "w-4 h-4",
+                                    view_box: "0 0 24 24",
+                                    fill: "none",
+                                    stroke: "currentColor",
+                                    stroke_width: "2",
+                                    stroke_linecap: "round",
+                                    stroke_linejoin: "round",
+                                    path { d: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" }
+                                    circle { cx: "12", cy: "12", r: "3" }
+                                }
+                            }
+                        }
                         button {
                             class: "px-2 py-1.5 text-xs font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50",
                             onclick: move |_| {
