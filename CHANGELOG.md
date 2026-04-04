@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.4](https://github.com/szinn/BookBoss/compare/v0.8.3..v0.8.4) - 2026-04-04
+
+### Bug Fixes
+
+- _(frontend)_ Fix incoming queue cap — navbar badge and page list were both capped at 50 - ([00cf7a1](https://github.com/szinn/BookBoss/commit/00cf7a13742f8ca7689a76b98af79f9ebdff4c14))
+
 ## [0.8.3](https://github.com/szinn/BookBoss/compare/v0.8.2..v0.8.3) - 2026-04-04
 
 ### Bug Fixes
