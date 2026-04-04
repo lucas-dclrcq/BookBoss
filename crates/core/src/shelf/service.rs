@@ -75,9 +75,10 @@ pub trait ShelfService: Send + Sync {
         sort: Option<crate::book::BookSortOrder>,
     ) -> Result<Vec<Book>, Error>;
 
-    /// Returns the total number of books matching this smart shelf's filter.
+    /// Returns the number of books on this shelf for the given user.
     ///
-    /// Only callable for smart shelves the caller can access.
+    /// Works for both smart shelves (using their stored filter) and manual
+    /// shelves. Returns an error if the caller is not the owner.
     async fn count_for_filter(&self, token: ShelfToken, user_id: UserId) -> Result<u64, Error>;
 
     /// Creates a private smart shelf linked to a device, with a default filter
@@ -402,6 +403,8 @@ impl ShelfService for ShelfServiceImpl {
     }
 
     async fn count_for_filter(&self, token: ShelfToken, user_id: UserId) -> Result<u64, Error> {
+        use crate::filter::{BookFilter, EntityRef, FilterRule, SetOp};
+
         with_read_only_transaction!(self, shelf_repository, collection_repository, |tx| {
             let target_shelf = shelf_repository
                 .find_by_token(tx, token)
@@ -412,13 +415,19 @@ impl ShelfService for ShelfServiceImpl {
                 return Err(Error::Validation("only the owner may access this shelf".to_string()));
             }
 
-            if target_shelf.shelf_type != ShelfType::Smart {
-                return Err(Error::Validation("count_for_filter only works on smart shelves".to_string()));
-            }
-
-            let filter = target_shelf
-                .filter_criteria
-                .ok_or_else(|| Error::Validation("smart shelf has no filter criteria".to_string()))?;
+            let filter = match target_shelf.shelf_type {
+                // System shelves are always filter-based (like Smart), so they use stored filter_criteria.
+                ShelfType::Smart | ShelfType::System => target_shelf
+                    .filter_criteria
+                    .ok_or_else(|| Error::Validation("smart shelf has no filter criteria".to_string()))?,
+                ShelfType::Manual => BookFilter::Rule(FilterRule::Shelf {
+                    op: SetOp::IncludesAny,
+                    values: vec![EntityRef {
+                        id: target_shelf.id as i64,
+                        label: target_shelf.name.clone(),
+                    }],
+                }),
+            };
 
             collection_repository.count_for_filter(tx, &filter, user_id, None).await
         })
@@ -468,6 +477,7 @@ mod tests {
     use crate::{
         Error, RepositoryError,
         book::{Book, BookStatus, BookToken, repository::book::MockBookRepository},
+        collection::MockCollectionRepository,
         library::MockLibraryRepository,
         shelf::{BookShelf, Shelf, ShelfToken, ShelfType, repository::shelf::MockShelfRepository},
         user::{UserId, repository::user_settings::MockUserSettingRepository},
@@ -480,6 +490,17 @@ mod tests {
             crate::repository::testing::default_repository_service_builder()
                 .book_repository(Arc::new(book_repo))
                 .shelf_repository(Arc::new(shelf_repo))
+                .build()
+                .expect("all fields provided"),
+        );
+        ShelfServiceImpl::new(repository_service)
+    }
+
+    fn create_service_with_collection_repo(shelf_repo: MockShelfRepository, collection_repo: MockCollectionRepository) -> ShelfServiceImpl {
+        let repository_service = Arc::new(
+            crate::repository::testing::default_repository_service_builder()
+                .shelf_repository(Arc::new(shelf_repo))
+                .collection_repository(Arc::new(collection_repo))
                 .build()
                 .expect("all fields provided"),
         );
@@ -1219,6 +1240,66 @@ mod tests {
         let svc = create_service(shelf_repo, MockBookRepository::new());
 
         let result = svc.update_shelf_filter(token, simple_filter(), 1).await;
+
+        assert!(matches!(result, Err(Error::Validation(_))));
+    }
+
+    // ─── count_for_filter ─────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_count_for_filter_manual_shelf_returns_count() {
+        let shelf = fake_shelf(1); // ShelfType::Manual, id=1, name="My Shelf", owner_id=1
+        let token = shelf.token;
+        let mut shelf_repo = MockShelfRepository::new();
+        shelf_repo.expect_find_by_token().returning(move |_, _| {
+            let s = shelf.clone();
+            Box::pin(async move { Ok(Some(s)) })
+        });
+        let mut collection_repo = MockCollectionRepository::new();
+        collection_repo
+            .expect_count_for_filter()
+            .times(1)
+            .returning(|_, _, _, _| Box::pin(async { Ok(7) }));
+        let svc = create_service_with_collection_repo(shelf_repo, collection_repo);
+
+        let result = svc.count_for_filter(token, 1).await;
+
+        assert_eq!(result.unwrap(), 7);
+    }
+
+    #[tokio::test]
+    async fn test_count_for_filter_smart_shelf_returns_count() {
+        let shelf = fake_smart_shelf(1); // ShelfType::Smart with filter_criteria
+        let token = shelf.token;
+        let mut shelf_repo = MockShelfRepository::new();
+        shelf_repo.expect_find_by_token().returning(move |_, _| {
+            let s = shelf.clone();
+            Box::pin(async move { Ok(Some(s)) })
+        });
+        let mut collection_repo = MockCollectionRepository::new();
+        collection_repo
+            .expect_count_for_filter()
+            .times(1)
+            .returning(|_, _, _, _| Box::pin(async { Ok(3) }));
+        let svc = create_service_with_collection_repo(shelf_repo, collection_repo);
+
+        let result = svc.count_for_filter(token, 1).await;
+
+        assert_eq!(result.unwrap(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_count_for_filter_wrong_owner_returns_error() {
+        let shelf = fake_shelf(1); // owned by user 1
+        let token = shelf.token;
+        let mut shelf_repo = MockShelfRepository::new();
+        shelf_repo.expect_find_by_token().returning(move |_, _| {
+            let s = shelf.clone();
+            Box::pin(async move { Ok(Some(s)) })
+        });
+        let svc = create_service_with_collection_repo(shelf_repo, MockCollectionRepository::new());
+
+        let result = svc.count_for_filter(token, 2).await; // user 2
 
         assert!(matches!(result, Err(Error::Validation(_))));
     }
