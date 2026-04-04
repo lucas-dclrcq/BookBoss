@@ -13,6 +13,7 @@ pub fn init_logging() -> Result<()> {
         .add_directive("sqlx::query=off".parse()?)
         .add_directive("sea_orm=off".parse()?)
         .add_directive("dioxus_core=off".parse()?)
+        .add_directive("dioxus_server::server=off".parse()?)
         .add_directive("dioxus_signals::signal=off".parse()?)
         .add_directive("dioxus_hooks::use_resource=off".parse()?)
         .add_directive("warnings::warnings=off".parse()?)
