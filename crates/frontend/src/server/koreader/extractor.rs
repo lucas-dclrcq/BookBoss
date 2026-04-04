@@ -72,8 +72,11 @@ impl<S: Send + Sync> FromRequestParts<S> for KoReaderUser {
 
         // 6. Compute md5(opds_password) and compare to x-auth-key.
         let expected_key = {
-            let hash = Md5::digest(opds_password.as_bytes());
-            format!("{hash:x}")
+            use std::fmt::Write;
+            Md5::digest(opds_password.as_bytes()).iter().fold(String::with_capacity(32), |mut s, b| {
+                let _ = write!(s, "{b:02x}");
+                s
+            })
         };
 
         if auth_key != expected_key {

@@ -28,7 +28,11 @@ impl KoReaderServiceImpl {
 
 fn md5_hex(data: &[u8]) -> String {
     let hash = Md5::digest(data);
-    format!("{hash:x}")
+    hash.iter().fold(String::with_capacity(32), |mut s, b| {
+        use std::fmt::Write;
+        let _ = write!(s, "{b:02x}");
+        s
+    })
 }
 
 #[async_trait::async_trait]
