@@ -12,6 +12,7 @@
 - [Libraries](user/libraries.md)
 - [OPDS Catalog](user/opds.md)
 - [Kobo Device Sync](user/kobo.md)
+- [KOReader Sync](user/koreader.md)
 - [Configuration Reference](user/configuration.md)
 
 # Contributing
