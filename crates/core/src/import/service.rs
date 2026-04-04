@@ -32,6 +32,8 @@ pub enum FileQueueStatus {
 pub trait ImportJobService: Send + Sync {
     async fn list_pending(&self, start_id: Option<ImportJobId>, page_size: Option<u64>) -> Result<Vec<ImportJob>, Error>;
     async fn list_needs_review(&self, start_id: Option<ImportJobId>, page_size: Option<u64>) -> Result<Vec<ImportJob>, Error>;
+    async fn list_all_needs_review(&self) -> Result<Vec<ImportJob>, Error>;
+    async fn count_needs_review(&self) -> Result<u64, Error>;
     async fn find_by_token(&self, token: ImportJobToken) -> Result<Option<ImportJob>, Error>;
     async fn find_by_id(&self, id: ImportJobId) -> Result<Option<ImportJob>, Error>;
     async fn approve_job(&self, job: ImportJob, reviewer_id: UserId) -> Result<ImportJob, Error>;
@@ -81,6 +83,18 @@ impl ImportJobService for ImportJobServiceImpl {
     async fn list_needs_review(&self, start_id: Option<ImportJobId>, page_size: Option<u64>) -> Result<Vec<ImportJob>, Error> {
         with_read_only_transaction!(self, import_job_repository, |tx| {
             import_job_repository.list_by_status(tx, ImportStatus::NeedsReview, start_id, page_size).await
+        })
+    }
+
+    async fn list_all_needs_review(&self) -> Result<Vec<ImportJob>, Error> {
+        with_read_only_transaction!(self, import_job_repository, |tx| {
+            import_job_repository.list_all_by_status(tx, ImportStatus::NeedsReview).await
+        })
+    }
+
+    async fn count_needs_review(&self) -> Result<u64, Error> {
+        with_read_only_transaction!(self, import_job_repository, |tx| {
+            import_job_repository.count_by_status(tx, ImportStatus::NeedsReview).await
         })
     }
 

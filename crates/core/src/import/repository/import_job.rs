@@ -44,4 +44,11 @@ pub trait ImportJobRepository: Send + Sync {
     /// (Pending/Extracting/Identifying/NeedsReview) that were last updated
     /// before the cutoff.
     async fn find_stale_non_terminal_jobs(&self, transaction: &dyn Transaction, cutoff: DateTime<Utc>) -> Result<Vec<ImportJob>, Error>;
+
+    /// Returns the total count of jobs with the given status (no pagination).
+    async fn count_by_status(&self, transaction: &dyn Transaction, status: ImportStatus) -> Result<u64, Error>;
+
+    /// Returns all jobs with the given status, ordered by id ascending (no
+    /// pagination).
+    async fn list_all_by_status(&self, transaction: &dyn Transaction, status: ImportStatus) -> Result<Vec<ImportJob>, Error>;
 }

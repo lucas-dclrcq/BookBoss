@@ -5,7 +5,9 @@ use bb_core::{
     repository::Transaction,
 };
 use chrono::{DateTime, Utc};
-use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, ExprTrait, ModelTrait, QueryFilter, QueryOrder, QuerySelect, sea_query::Expr};
+use sea_orm::{
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, ExprTrait, ModelTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, sea_query::Expr,
+};
 
 use crate::{
     entities::{import_jobs, prelude},
@@ -175,6 +177,27 @@ impl ImportJobRepository for ImportJobRepositoryAdapter {
 
         let rows = query.all(transaction).await.map_err(handle_dberr)?;
         Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn list_all_by_status(&self, transaction: &dyn Transaction, status: ImportStatus) -> Result<Vec<ImportJob>, Error> {
+        let db_tx = TransactionImpl::get_db_transaction(transaction)?;
+        let rows = prelude::ImportJobs::find()
+            .filter(import_jobs::Column::Status.eq(status.as_str()))
+            .order_by_asc(import_jobs::Column::Id)
+            .all(db_tx)
+            .await
+            .map_err(handle_dberr)?;
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn count_by_status(&self, transaction: &dyn Transaction, status: ImportStatus) -> Result<u64, Error> {
+        let db_tx = TransactionImpl::get_db_transaction(transaction)?;
+        let count = prelude::ImportJobs::find()
+            .filter(import_jobs::Column::Status.eq(status.as_str()))
+            .count(db_tx)
+            .await
+            .map_err(handle_dberr)?;
+        Ok(count)
     }
 
     async fn reset_in_progress_to_pending(&self, transaction: &dyn Transaction) -> Result<u64, Error> {

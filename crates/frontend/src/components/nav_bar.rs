@@ -48,10 +48,9 @@ async fn get_pending_count() -> Result<Option<u32>, ServerFnError> {
     if !has_permission {
         return Ok(None);
     }
-    let jobs = core_services.import_job_service.list_needs_review(None, None).await.map_err(to_server_err)?;
+    let count = core_services.import_job_service.count_needs_review().await.map_err(to_server_err)?;
     #[expect(clippy::cast_possible_truncation, reason = "pending review count; will never approach u32::MAX")]
-    let count = jobs.len() as u32;
-    Ok(Some(count))
+    Ok(Some(count as u32))
 }
 
 #[get("/api/v1/jobs/queue_count", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]

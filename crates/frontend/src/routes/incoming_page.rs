@@ -42,7 +42,7 @@ async fn list_incoming_books() -> Result<Vec<IncomingBookSummary>, ServerFnError
     let import_service = &core_services.import_job_service;
     let book_service = &core_services.book_service;
 
-    let jobs = import_service.list_needs_review(None, None).await.map_err(to_server_err)?;
+    let jobs = import_service.list_all_needs_review().await.map_err(to_server_err)?;
 
     let mut summaries = Vec::with_capacity(jobs.len());
     for job in jobs {
