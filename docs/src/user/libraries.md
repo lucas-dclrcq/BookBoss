@@ -58,7 +58,7 @@ the edit-metadata form.
 When you create or edit a user, the modal includes a library management section:
 
 **Library checkboxes** — tick each library the user should have access to. Users can only
-browse libraries they are assigned to. All Books is always available and cannot be unassigned.
+browse libraries they are assigned to.
 
 **Default library** — a picker (shown once the user is assigned to two or more libraries)
 sets which library loads when the user first logs in or clicks the Home button.
