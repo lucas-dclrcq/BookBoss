@@ -46,8 +46,9 @@ async fn get_pending_count() -> Result<Option<u32>, ServerFnError> {
     Ok(Some(count))
 }
 
-#[get("/api/v1/jobs/queue_count", core_services: axum::Extension<Arc<CoreServices>>)]
+#[get("/api/v1/jobs/queue_count", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
 async fn get_job_queue_count() -> Result<u64, ServerFnError> {
+    authenticated_user(&auth_session)?;
     core_services.job_service.count_all_pending().await.map_err(to_server_err)
 }
 
