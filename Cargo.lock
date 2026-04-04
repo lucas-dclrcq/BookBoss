@@ -870,6 +870,7 @@ dependencies = [
  "clap",
  "dioxus",
  "dioxus-server",
+ "md-5",
  "quick-xml",
  "rand 0.10.0",
  "reqwest 0.13.2",

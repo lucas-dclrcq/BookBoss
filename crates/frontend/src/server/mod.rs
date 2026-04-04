@@ -24,6 +24,7 @@ pub(crate) mod covers;
 pub(crate) mod downloads;
 pub(crate) mod events;
 pub(crate) mod kobo;
+pub(crate) mod koreader;
 pub(crate) mod opds;
 pub(crate) mod session_pool;
 
@@ -76,6 +77,7 @@ impl IntoSubsystem<anyhow::Error> for FrontendSubsystem {
 
         let frontend_config = Arc::new(self.config.clone());
         let kobo = kobo::kobo_router(&self.config.base_url, core_services.clone());
+        let koreader = koreader::koreader_router();
         let opds = opds::opds_router();
 
         let app_router = axum::Router::new()
@@ -84,6 +86,7 @@ impl IntoSubsystem<anyhow::Error> for FrontendSubsystem {
             .route("/api/v1/events", axum::routing::get(events::event_stream))
             .serve_dioxus_application(dioxus_server::ServeConfig::new(), BookBossFrontend)
             .merge(kobo)
+            .merge(koreader)
             .merge(opds)
             .layer(Extension(core_services.health_service.clone()))
             .layer(Extension(core_services))

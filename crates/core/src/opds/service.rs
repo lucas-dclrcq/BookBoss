@@ -16,6 +16,11 @@ const OPDS_PASSWORD_CHARSET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrst
 
 #[async_trait::async_trait]
 pub trait OpdsService: Send + Sync {
+    /// Returns the plaintext OPDS password for a user if one exists, or `None`
+    /// if no password has been set up yet. This is a read-only operation and
+    /// never creates a password.
+    async fn get_password(&self, user: &User) -> Result<Option<String>, Error>;
+
     /// Returns the plaintext OPDS password for a user, generating one if none
     /// exists. Always returns the plaintext password (decrypted from storage).
     async fn get_or_create_password(&self, user: &User) -> Result<String, Error>;
@@ -79,6 +84,22 @@ fn decrypt_password(cipher: &Aes256Gcm, stored: &str) -> Result<String, Error> {
 
 #[async_trait::async_trait]
 impl OpdsService for OpdsServiceImpl {
+    async fn get_password(&self, user: &User) -> Result<Option<String>, Error> {
+        if !user.has_capability(Capability::OpdsAccess) {
+            return Err(Error::Validation("User does not have OPDS access".to_string()));
+        }
+
+        let user_id = user.id;
+        let existing = with_read_only_transaction!(self, user_setting_repository, |tx| user_setting_repository
+            .get(tx, user_id, OPDS_PASSWORD_KEY)
+            .await)?;
+
+        match existing {
+            Some(setting) => decrypt_password(&self.cipher, &setting.value).map(Some),
+            None => Ok(None),
+        }
+    }
+
     async fn get_or_create_password(&self, user: &User) -> Result<String, Error> {
         if !user.has_capability(Capability::OpdsAccess) {
             return Err(Error::Validation("User does not have OPDS access".to_string()));
