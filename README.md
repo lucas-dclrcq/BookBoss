@@ -11,14 +11,17 @@ by a flexible database layer that supports PostgreSQL, MySQL, MariaDB, and SQLit
 ### Library
 
 - Browse your book library with cover art, title, author, series, and publisher
-- View book detail pages with full metadata (description, genres, tags, language, publication date, identifiers)
+- View book detail pages with full metadata (description, genres, tags, language, publication date, page count, identifiers)
+- Browse all authors with a dedicated authors listing page
 - View author detail pages listing all their books
+- Browse all series with a visual series listing page (fanned cover art, book count)
 - View series detail pages listing all books in a series
 - Sort books by date added, title, and author
 - Search bar with support for `author:`, `title:`, `series:`, `genre:`, `tag:` refinements
 - Edit book metadata (title, author, series, publisher, genres, tags, description, identifiers, cover)
 - Bulk edit metadata across multiple selected books
 - Delete books from the library
+- Download book files directly from the book detail page
 - Keyboard shortcuts for common operations
 - Real-time UI updates via Server-Sent Events (SSE)
 
@@ -39,7 +42,8 @@ by a flexible database layer that supports PostgreSQL, MySQL, MariaDB, and SQLit
 
 ### Reading State
 
-- Track reading status per book (Not Started, Reading, Finished)
+- Track reading status per book (Unread, Reading, Paused, Rereading, Read, Abandoned)
+- Record reading progress percentage, personal rating, times read, and notes per book
 - Per-user — each user has their own reading state and progress
 - Set reading status individually or in bulk across selected books
 
@@ -67,10 +71,15 @@ by a flexible database layer that supports PostgreSQL, MySQL, MariaDB, and SQLit
 
 - User registration and login
 - Admin first-run setup
-- Multi-user support (each user has their own reading state, shelves, devices)
+- Multi-user support — each user has their own reading state, shelves, and devices
+- Virtual libraries — each user can maintain their own subset of books independent of other users
 - Capability-based permissions (Approve Imports, Edit Book, Delete Book, OPDS Access)
 - Settings page with library stats (total books, authors)
+- Genre and tag management with per-entry book counts
+- Library management (admin)
 - User management (admin)
+- System messages log for background task diagnostics (admin)
+- Health task dashboard showing scheduled task status with manual trigger support (admin)
 
 ## Getting Started
 
