@@ -229,18 +229,24 @@ async fn list_books(sort: crate::components::SortOrder, library_token: Option<St
 
     let summaries = hydrate_books(&books, &core_services, Some(&reading_map)).await?;
 
-    // Build the "Currently Reading" list: Reading books sorted by last_progress_at
-    // desc.
-    let book_id_to_idx: HashMap<u64, usize> = books.iter().enumerate().map(|(i, b)| (b.id, i)).collect();
-    let mut reading_now: Vec<_> = reading_metas
-        .iter()
-        .filter(|m| matches!(m.read_status, ReadStatus::Reading | ReadStatus::Rereading | ReadStatus::Paused))
-        .collect();
-    reading_now.sort_by_key(|b| std::cmp::Reverse(b.last_progress_at));
-    let currently_reading: Vec<BookSummary> = reading_now
-        .iter()
-        .filter_map(|m| book_id_to_idx.get(&m.book_id).map(|&idx| summaries[idx].clone()))
-        .collect();
+    // Build the "Currently Reading" list only for libraries the user owns or
+    // system libraries (e.g. "All Books").  When browsing another user's
+    // library we deliberately omit it — reading state is personal and has no
+    // relevance to a library you don't own.
+    let currently_reading: Vec<BookSummary> = if library_is_system || user_is_library_owner {
+        let book_id_to_idx: HashMap<u64, usize> = books.iter().enumerate().map(|(i, b)| (b.id, i)).collect();
+        let mut reading_now: Vec<_> = reading_metas
+            .iter()
+            .filter(|m| matches!(m.read_status, ReadStatus::Reading | ReadStatus::Rereading | ReadStatus::Paused))
+            .collect();
+        reading_now.sort_by_key(|b| std::cmp::Reverse(b.last_progress_at));
+        reading_now
+            .iter()
+            .filter_map(|m| book_id_to_idx.get(&m.book_id).map(|&idx| summaries[idx].clone()))
+            .collect()
+    } else {
+        vec![]
+    };
 
     Ok(ListBooksResponse {
         books: summaries,

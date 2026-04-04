@@ -37,7 +37,8 @@ pub(crate) struct ShelfSummary {
     /// Serialized `BookFilter` JSON — present only for smart shelves owned by
     /// the current user.
     pub filter_json: Option<String>,
-    /// Matching book count — `Some(n)` when the shelf has books, `None` for empty shelves or count errors.
+    /// Matching book count — `Some(n)` when the shelf has books, `None` for
+    /// empty shelves or count errors.
     pub count: Option<u64>,
     /// Token of the library this shelf belongs to. Present for own shelves.
     pub library_token: Option<String>,
