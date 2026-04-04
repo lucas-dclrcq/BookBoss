@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1](https://github.com/szinn/BookBoss/compare/v0.8.0..v0.8.1) - 2026-04-04
+
+### Features
+
+- _(core)_ Extend count_for_filter to support manual shelves - ([d70e491](https://github.com/szinn/BookBoss/commit/d70e49154feaa4e55804096eef14761886f6264f))
+- _(frontend)_ Populate book counts for all shelf bar pills - ([0a94d29](https://github.com/szinn/BookBoss/commit/0a94d2994e5f9f09815d283f7a79b3cdbe971d52))
+
+### Bug Fixes
+
+- _(frontend)_ Eliminate NavBar repaint flash on client-side navigation - ([77d0b54](https://github.com/szinn/BookBoss/commit/77d0b548aa1435e44afd18f7e2f4afcbf0f29372))
+- _(frontend)_ Require authentication for job queue count endpoint - ([d89dafc](https://github.com/szinn/BookBoss/commit/d89dafcbb26284e086e88186c14934f5f1268130))
+- _(frontend)_ Hide Currently Reading when browsing unowned libraries - ([660b291](https://github.com/szinn/BookBoss/commit/660b2916f9a7038e816b585d7d56f92dac9809d0))
+- _(frontend)_ Fix two clippy warnings in nav_bar - ([36f7ec1](https://github.com/szinn/BookBoss/commit/36f7ec1ea9fa29acd98bb9c3c1addd0d1ac9b172))
+
+### Refactor
+
+- _(database)_ Make all migration down() impls no-ops - ([85f7860](https://github.com/szinn/BookBoss/commit/85f786009f49e44fdf5eb757342c4d3c1b123bec))
+- _(database)_ Derive LibraryToken from id in From impl - ([c66c695](https://github.com/szinn/BookBoss/commit/c66c695e1e1bbf57899718a08e5d285823503b56))
+
+### Documentation
+
+- Document virtual libraries feature - ([54bb1cc](https://github.com/szinn/BookBoss/commit/54bb1cc073536cf776c6076e0b20d8c6639deda0))
+
+### Performance
+
+- _(core)_ Align sweep job priority and continuation delay - ([e86c8c0](https://github.com/szinn/BookBoss/commit/e86c8c0249215ab8c46922b3f58bf333b822d53e))
+- _(core)_ Optimize backfill_thumbnails sweep scheduling - ([f1a4b11](https://github.com/szinn/BookBoss/commit/f1a4b116530c7c30e9591db330d2a2ee3e215771))
+
 ## [0.8.0](https://github.com/szinn/BookBoss/compare/v0.7.18..v0.8.0) - 2026-04-03
 
 ### Features
