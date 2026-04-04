@@ -280,24 +280,19 @@ fn format_all_url(start: Option<u64>) -> String {
 }
 
 /// Adds acquisition links for available book files.
+///
+/// Only EPUB files are included — KEPUB is a Kobo-specific container and
+/// not suitable for generic OPDS clients. Enriched files take priority
+/// over originals.
 pub(crate) fn add_file_links(mut entry: AtomEntry, book_token: &str, files: &[bb_core::book::BookFile]) -> AtomEntry {
-    // Group by format, prefer enriched over original.
-    let mut seen_formats: Vec<String> = Vec::new();
-    // Enriched files first.
-    for file in files.iter().filter(|f| f.file_role == FileRole::Enriched) {
-        let ext = file.format.extension().to_string();
-        if !seen_formats.contains(&ext) {
-            seen_formats.push(ext.clone());
-            entry = entry.with_link(AtomLink::new(rel::ACQUISITION, format!("/opds/download/{book_token}/{ext}")).with_type(file.format.content_type()));
-        }
-    }
-    // Then originals for formats not yet covered.
-    for file in files.iter().filter(|f| f.file_role == FileRole::Original) {
-        let ext = file.format.extension().to_string();
-        if !seen_formats.contains(&ext) {
-            seen_formats.push(ext.clone());
-            entry = entry.with_link(AtomLink::new(rel::ACQUISITION, format!("/opds/download/{book_token}/{ext}")).with_type(file.format.content_type()));
-        }
+    let epub_ext = FileFormat::Epub.extension();
+    let epub_type = FileFormat::Epub.content_type();
+
+    let enriched = files.iter().find(|f| f.format == FileFormat::Epub && f.file_role == FileRole::Enriched);
+    let original = files.iter().find(|f| f.format == FileFormat::Epub && f.file_role == FileRole::Original);
+
+    if enriched.or(original).is_some() {
+        entry = entry.with_link(AtomLink::new(rel::ACQUISITION, format!("/opds/download/{book_token}/{epub_ext}")).with_type(epub_type));
     }
     entry
 }
@@ -305,10 +300,11 @@ pub(crate) fn add_file_links(mut entry: AtomEntry, book_token: &str, files: &[bb
 /// Adds cover image link if the book has a cover.
 pub(crate) fn add_cover_link(mut entry: AtomEntry, book_token: &str, has_cover: bool) -> AtomEntry {
     if has_cover {
-        let cover_url = format!("/opds/covers/{book_token}");
+        let full_cover_url = format!("/opds/covers/{book_token}?full=true");
+        let thumbnail_url = format!("/opds/covers/{book_token}");
         entry = entry
-            .with_link(AtomLink::new(rel::IMAGE, &cover_url).with_type("image/jpeg"))
-            .with_link(AtomLink::new(rel::THUMBNAIL, &cover_url).with_type("image/jpeg"));
+            .with_link(AtomLink::new(rel::IMAGE, &full_cover_url).with_type("image/jpeg"))
+            .with_link(AtomLink::new(rel::THUMBNAIL, &thumbnail_url).with_type("image/jpeg"));
     }
     entry
 }
@@ -676,8 +672,21 @@ async fn book_to_entry(book: &Book, core_services: &Arc<CoreServices>) -> AtomEn
 
 static BLANK_COVER: &[u8] = include_bytes!("../../../assets/BlankCover.png");
 
+#[derive(Deserialize)]
+pub struct CoverParams {
+    pub full: Option<bool>,
+}
+
 /// `GET /opds/covers/{book_token}` — Serve a book's cover image.
-pub async fn serve_cover(Path(book_token_str): Path<String>, _opds_user: OpdsUser, Extension(core_services): Extension<Arc<CoreServices>>) -> Response {
+///
+/// Without query params (or `?full=false`) returns the thumbnail. Pass
+/// `?full=true` to get the full-resolution cover.
+pub async fn serve_cover(
+    Path(book_token_str): Path<String>,
+    Query(params): Query<CoverParams>,
+    _opds_user: OpdsUser,
+    Extension(core_services): Extension<Arc<CoreServices>>,
+) -> Response {
     let token: BookToken = match book_token_str.parse() {
         Ok(t) => t,
         Err(_) => return error_response(StatusCode::BAD_REQUEST),
@@ -698,7 +707,11 @@ pub async fn serve_cover(Path(book_token_str): Path<String>, _opds_user: OpdsUse
             .unwrap();
     }
 
-    let path = core_services.file_store.cover_path(token);
+    let path = if params.full.unwrap_or(false) {
+        core_services.file_store.cover_path(token)
+    } else {
+        core_services.file_store.thumbnail_path(token)
+    };
 
     match tokio::fs::read(&path).await {
         Ok(data) => {
