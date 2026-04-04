@@ -803,6 +803,7 @@ dependencies = [
  "bb-utils",
  "chrono",
  "derive_builder",
+ "md-5",
  "mockall",
  "rand 0.10.0",
  "rust_decimal",

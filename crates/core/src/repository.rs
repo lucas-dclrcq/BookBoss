@@ -10,6 +10,7 @@ use crate::{
     device::DeviceRepository,
     import::ImportJobRepository,
     jobs::JobRepository,
+    koreader::KoReaderDocumentHashRepository,
     library::LibraryRepository,
     message::SystemMessageRepository,
     reading::UserBookMetadataRepository,
@@ -38,6 +39,7 @@ pub struct RepositoryService {
     user_book_metadata_repository: Arc<dyn UserBookMetadataRepository>,
     device_repository: Arc<dyn DeviceRepository>,
     system_message_repository: Arc<dyn SystemMessageRepository>,
+    koreader_document_hash_repository: Arc<dyn KoReaderDocumentHashRepository>,
 }
 
 impl RepositoryService {
@@ -147,6 +149,12 @@ impl RepositoryService {
     #[must_use]
     pub fn system_message_repository(&self) -> &Arc<dyn SystemMessageRepository> {
         &self.system_message_repository
+    }
+
+    /// Returns a reference to the KOReader document hash repository.
+    #[must_use]
+    pub fn koreader_document_hash_repository(&self) -> &Arc<dyn KoReaderDocumentHashRepository> {
+        &self.koreader_document_hash_repository
     }
 }
 
@@ -288,6 +296,7 @@ pub(crate) mod testing {
         device::repository::device::MockDeviceRepository,
         import::repository::import_job::MockImportJobRepository,
         jobs::repository::MockJobRepository,
+        koreader::repository::MockKoReaderDocumentHashRepository,
         library::MockLibraryRepository,
         message::repository::MockSystemMessageRepository,
         reading::repository::user_book_metadata::MockUserBookMetadataRepository,
@@ -347,5 +356,6 @@ pub(crate) mod testing {
             .user_book_metadata_repository(Arc::new(MockUserBookMetadataRepository::new()))
             .device_repository(Arc::new(MockDeviceRepository::new()))
             .system_message_repository(Arc::new(MockSystemMessageRepository::new()))
+            .koreader_document_hash_repository(Arc::new(MockKoReaderDocumentHashRepository::new()))
     }
 }

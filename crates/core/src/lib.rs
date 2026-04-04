@@ -9,6 +9,7 @@ pub mod format;
 pub mod health;
 pub mod import;
 pub mod jobs;
+pub mod koreader;
 pub mod library;
 pub mod message;
 pub mod metadata;
@@ -46,6 +47,7 @@ use crate::{
     health::{HealthCheckSubsystem, HealthService, create_health_subsystem},
     import::{BookdropScanSubsystem, ImportJobService, create_bookdrop_scan_subsystem},
     jobs::{JobService, JobWorker, create_job_service},
+    koreader::{KoReaderService, KoReaderServiceImpl},
     library::{LibraryService, LibraryServiceImpl},
     message::{SystemMessageService, SystemMessageServiceImpl},
     metadata::{MetadataService, create_metadata_service},
@@ -99,6 +101,7 @@ pub struct CoreServices {
     pub opds_service: Arc<dyn OpdsService>,
     pub event_service: Arc<dyn EventService>,
     pub system_message_service: Arc<dyn SystemMessageService>,
+    pub koreader_service: Arc<dyn KoReaderService>,
     /// Internal: holds the bookdrop scan subsystem until `CoreSubsystem` takes
     /// it.
     bookdrop_scan_subsystem: Mutex<Option<BookdropScanSubsystem>>,
@@ -170,6 +173,7 @@ impl CoreServices {
             opds_service: Arc::new(OpdsServiceImpl::new(repository_service.clone(), encryption_secret)),
             system_message_service,
             event_service,
+            koreader_service: Arc::new(KoReaderServiceImpl::new(repository_service.clone())),
             bookdrop_scan_subsystem: Mutex::new(bookdrop_scan_subsystem),
             health_subsystem: Mutex::new(Some(health_subsystem)),
         }

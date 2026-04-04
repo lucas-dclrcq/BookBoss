@@ -13,18 +13,33 @@ use std::sync::Arc;
 use bb_core::{
     Error,
     auth::SessionRepository,
-    book::{AuthorRepository, BookRepository, GenreRepository, PublisherRepository, SeriesRepository, TagRepository},
+    book::{AuthorRepository, BookId, BookRepository, GenreRepository, PublisherRepository, SeriesRepository, TagRepository},
     collection::CollectionRepository,
     device::DeviceRepository,
     import::ImportJobRepository,
     jobs::JobRepository,
+    koreader::KoReaderDocumentHashRepository,
     library::LibraryRepository,
     message::SystemMessageRepository,
     reading::UserBookMetadataRepository,
-    repository::{Repository, RepositoryService, RepositoryServiceBuilder},
+    repository::{Repository, RepositoryService, RepositoryServiceBuilder, Transaction},
     shelf::ShelfRepository,
     user::{UserRepository, UserSettingRepository},
 };
+
+/// Placeholder adapter — will be replaced by the real implementation in Task 2.
+struct UnimplementedKoReaderDocumentHashRepository;
+
+#[async_trait::async_trait]
+impl KoReaderDocumentHashRepository for UnimplementedKoReaderDocumentHashRepository {
+    async fn insert_hashes(&self, _transaction: &dyn Transaction, _book_id: BookId, _hashes: Vec<String>) -> Result<(), Error> {
+        unimplemented!("KoReaderDocumentHashRepository not yet implemented")
+    }
+
+    async fn find_book_by_digest_prefix(&self, _transaction: &dyn Transaction, _prefix: &str) -> Result<Option<BookId>, Error> {
+        unimplemented!("KoReaderDocumentHashRepository not yet implemented")
+    }
+}
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 use sea_orm_migration::MigratorTrait;
 use serde::Deserialize;
@@ -96,6 +111,7 @@ pub async fn create_repository_service(database: DatabaseConnection) -> Result<A
         .user_book_metadata_repository(Arc::new(UserBookMetadataRepositoryAdapter::new()) as Arc<dyn UserBookMetadataRepository>)
         .device_repository(Arc::new(DeviceRepositoryAdapter::new()) as Arc<dyn DeviceRepository>)
         .system_message_repository(Arc::new(SystemMessageRepositoryAdapter::new()) as Arc<dyn SystemMessageRepository>)
+        .koreader_document_hash_repository(Arc::new(UnimplementedKoReaderDocumentHashRepository) as Arc<dyn KoReaderDocumentHashRepository>)
         .build()
         .map_err(|e| Error::Infrastructure(e.to_string()))?;
 
