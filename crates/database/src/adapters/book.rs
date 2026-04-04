@@ -166,6 +166,20 @@ impl BookRepository for BookRepositoryAdapter {
         self.find_by_id(transaction, token.id()).await
     }
 
+    async fn find_by_ids(&self, transaction: &dyn Transaction, ids: &[BookId]) -> Result<Vec<Book>, Error> {
+        if ids.is_empty() {
+            return Ok(vec![]);
+        }
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+        let ids: Vec<i64> = ids.iter().map(|&id| id as i64).collect();
+        let rows = prelude::Books::find()
+            .filter(books::Column::Id.is_in(ids))
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
     async fn list_books(
         &self,
         transaction: &dyn Transaction,

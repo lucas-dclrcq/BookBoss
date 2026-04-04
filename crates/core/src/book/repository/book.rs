@@ -15,6 +15,9 @@ pub trait BookRepository: Send + Sync {
     async fn update_book(&self, transaction: &dyn Transaction, book: Book) -> Result<Book, Error>;
     async fn find_by_id(&self, transaction: &dyn Transaction, id: BookId) -> Result<Option<Book>, Error>;
     async fn find_by_token(&self, transaction: &dyn Transaction, token: BookToken) -> Result<Option<Book>, Error>;
+    /// Fetches all books whose IDs are in `ids` in one query.
+    /// Returns an empty vec immediately if `ids` is empty.
+    async fn find_by_ids(&self, transaction: &dyn Transaction, ids: &[BookId]) -> Result<Vec<Book>, Error>;
     async fn list_books(
         &self,
         transaction: &dyn Transaction,

@@ -19,12 +19,8 @@ use {
     crate::routes::server_helpers::{require_capability, to_server_err},
     crate::server::AuthSession,
     axum::http::Method,
-    bb_core::{
-        CoreServices,
-        book::{AuthorToken, BookToken},
-        import::ImportJobToken,
-        types::Capability,
-    },
+    bb_core::{CoreServices, book::BookId, import::ImportJobToken, types::Capability},
+    std::collections::HashMap,
     std::sync::Arc,
 };
 
@@ -44,42 +40,54 @@ async fn list_incoming_books() -> Result<Vec<IncomingBookSummary>, ServerFnError
 
     let jobs = import_service.list_all_needs_review().await.map_err(to_server_err)?;
 
-    let mut summaries = Vec::with_capacity(jobs.len());
-    for job in jobs {
-        let (title, author_names, has_cover) = if let Some(book_id) = job.candidate_book_id {
-            match book_service.find_book_by_token(BookToken::new(book_id)).await.map_err(to_server_err)? {
-                Some(book) => {
-                    let book_authors = book_service.authors_for_book(book.id).await.map_err(to_server_err)?;
-                    let mut names = Vec::new();
-                    for ba in &book_authors {
-                        if let Some(author) = book_service.find_author_by_token(AuthorToken::new(ba.author_id)).await.map_err(to_server_err)? {
-                            names.push(author.name);
-                        }
-                    }
-                    (Some(book.title), names, book.has_cover)
-                }
-                None => (None, vec![], false),
-            }
-        } else {
-            (None, vec![], false)
-        };
+    // Collect all candidate book IDs, then fetch books and hydration data in bulk.
+    let book_ids: Vec<BookId> = jobs.iter().filter_map(|j| j.candidate_book_id).collect();
 
-        let filename = std::path::Path::new(&job.file_path)
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or(&job.file_path)
-            .to_owned();
+    let books = book_service.find_books_by_ids(&book_ids).await.map_err(to_server_err)?;
+    let hydration = book_service.fetch_hydration_data(&book_ids, &[]).await.map_err(to_server_err)?;
 
-        summaries.push(IncomingBookSummary {
-            job_token: job.token.to_string(),
-            file_path: filename,
-            file_format: job.file_format.as_str().to_owned(),
-            detected_at: job.detected_at.to_rfc3339(),
-            title,
-            author_names,
-            has_cover,
-        });
+    let book_map: HashMap<BookId, _> = books.iter().map(|b| (b.id, b)).collect();
+
+    let mut book_authors_map: HashMap<BookId, Vec<_>> = HashMap::new();
+    for ba in &hydration.book_authors {
+        book_authors_map.entry(ba.book_id).or_default().push(ba);
     }
+
+    let author_map: HashMap<_, _> = hydration.authors.iter().map(|a| (a.id, a)).collect();
+
+    let mut summaries: Vec<IncomingBookSummary> = jobs
+        .iter()
+        .map(|job| {
+            let (title, author_names, has_cover) = if let Some(book_id) = job.candidate_book_id {
+                if let Some(book) = book_map.get(&book_id) {
+                    let mut bas = book_authors_map.get(&book_id).cloned().unwrap_or_default();
+                    bas.sort_by_key(|ba| ba.sort_order);
+                    let names = bas.iter().filter_map(|ba| author_map.get(&ba.author_id).map(|a| a.name.clone())).collect();
+                    (Some(book.title.clone()), names, book.has_cover)
+                } else {
+                    (None, vec![], false)
+                }
+            } else {
+                (None, vec![], false)
+            };
+
+            let filename = std::path::Path::new(&job.file_path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(&job.file_path)
+                .to_owned();
+
+            IncomingBookSummary {
+                job_token: job.token.to_string(),
+                file_path: filename,
+                file_format: job.file_format.as_str().to_owned(),
+                detected_at: job.detected_at.to_rfc3339(),
+                title,
+                author_names,
+                has_cover,
+            }
+        })
+        .collect();
 
     summaries.sort_by(|a, b| match (&a.title, &b.title) {
         (Some(a), Some(b)) => a.to_lowercase().cmp(&b.to_lowercase()),

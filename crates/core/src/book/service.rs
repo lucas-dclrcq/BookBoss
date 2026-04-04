@@ -22,6 +22,7 @@ pub trait BookService: Send + Sync {
         page_size: Option<u64>,
     ) -> Result<Vec<Book>, Error>;
     async fn find_book_by_token(&self, token: BookToken) -> Result<Option<Book>, Error>;
+    async fn find_books_by_ids(&self, ids: &[BookId]) -> Result<Vec<Book>, Error>;
     async fn authors_for_book(&self, book_id: BookId) -> Result<Vec<BookAuthor>, Error>;
     async fn files_for_book(&self, book_id: BookId) -> Result<Vec<BookFile>, Error>;
     async fn identifiers_for_book(&self, book_id: BookId) -> Result<Vec<BookIdentifier>, Error>;
@@ -98,6 +99,11 @@ impl BookService for BookServiceImpl {
 
     async fn find_book_by_token(&self, token: BookToken) -> Result<Option<Book>, Error> {
         with_read_only_transaction!(self, book_repository, |tx| book_repository.find_by_token(tx, token).await)
+    }
+
+    async fn find_books_by_ids(&self, ids: &[BookId]) -> Result<Vec<Book>, Error> {
+        let ids = ids.to_vec();
+        with_read_only_transaction!(self, book_repository, |tx| book_repository.find_by_ids(tx, &ids).await)
     }
 
     async fn authors_for_book(&self, book_id: BookId) -> Result<Vec<BookAuthor>, Error> {
