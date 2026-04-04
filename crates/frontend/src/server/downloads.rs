@@ -111,6 +111,19 @@ pub(crate) async fn serve_book_file(
     let download_name = format!("{}.{ext}", sanitize_filename(&book.title));
     let content_disposition = format!("attachment; filename=\"{download_name}\"");
 
+    // Fire-and-forget hash registration for KOReader sync.
+    {
+        let svc = core_services.koreader_service.clone();
+        let book_id = book.id;
+        let filename = download_name.clone();
+        let bytes = data.clone();
+        tokio::spawn(async move {
+            if let Err(e) = svc.register_hashes(book_id, &filename, &bytes).await {
+                tracing::warn!("KOReader hash registration failed for book {book_id}: {e}");
+            }
+        })
+    };
+
     Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, HeaderValue::from_static(format.content_type()))
