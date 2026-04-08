@@ -47,10 +47,13 @@
       "WebFetch(domain:www.mobileread.com)",
       "WebFetch(domain:www.w3.org)",
       "WebFetch(domain:zensical.org)",
-      "WebSearch"
+      "WebSearch",
+      "mcp__issueboss__create_issue",
+      "mcp__issueboss__list_issues",
+      "mcp__issueboss__update_issue"
     ]
   },
-  "enabledMcpjsonServers": ["github", "mermaid"],
+  "enabledMcpjsonServers": ["github", "issueboss", "mermaid"],
   "hooks": {
     "SessionStart": [
       {

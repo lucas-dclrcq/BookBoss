@@ -1,0 +1,5 @@
+{
+  "project_slug": "bb",
+  "server": "http://localhost:8090",
+  "thoughts_dir": "thoughts/"
+}
