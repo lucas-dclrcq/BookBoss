@@ -28,7 +28,7 @@
       "Bash(ls:*)",
       "Bash(mise trust:*)",
       "Bash(sed -n '*,*p' *)",
-      "WebFetch(domain:booklore.org)",
+      "Edit(./**)",
       "WebFetch(domain:crates.io)",
       "WebFetch(domain:dioxuslabs.com)",
       "WebFetch(domain:docs.hardcover.app)",
@@ -48,8 +48,12 @@
       "WebFetch(domain:www.w3.org)",
       "WebFetch(domain:zensical.org)",
       "WebSearch",
+      "mcp__issueboss__add_artifact",
       "mcp__issueboss__create_issue",
+      "mcp__issueboss__list_artifacts",
       "mcp__issueboss__list_issues",
+      "mcp__issueboss__move_artifact",
+      "mcp__issueboss__transition_issue",
       "mcp__issueboss__update_issue"
     ]
   },
