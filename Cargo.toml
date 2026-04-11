@@ -12,6 +12,8 @@ repository = "https://github.com/szinn/BookBoss"
 license = "MIT"
 
 [workspace.dependencies]
+
+# Internal crates
 bb-api = { path = "crates/api" }
 bb-core = { path = "crates/core" }
 bb-database = { path = "crates/database" }
@@ -21,95 +23,107 @@ bb-metadata = { path = "crates/metadata" }
 bb-storage = { path = "crates/storage" }
 bb-utils = { path = "crates/utils" }
 
-testcontainers = "0.27.2"
+# Test support
 mockall = "0.14.0"
+testcontainers = "0.27.2"
+testcontainers-modules = { version = "0.15.0", features = [
+    "postgres",
+    "mariadb",
+    "mysql",
+] }
+wiremock = "0.6.5"
 
+# Error handling
 anyhow = "1.0.102"
-md-5 = "0.11.0"
-image = "0.25.10"
-mimalloc = "0.1.48"
-base64 = "0.22.1"
-async-trait = "0.1.89"
-axum = "0.8.8"
-config = "0.15.22"
-derive_builder = "0.20.2"
-log = "0.4.29"
-prost = "0.14.3"
-prost-types = "0.14.3"
-quick-xml = "0.39.2"
-async-stream = "0.3.6"
-rand = "0.10.0"
-serde_json = "1.0.149"
-aes-gcm = "0.10.3"
-sha2 = "0.11.0"
-tempfile = "3.27.0"
-sqlx = "0.8.6"
 thiserror = "2.0.18"
+
+# Crypto
+aes-gcm = "0.10.3"
+argon2 = { version = "0.5.3", features = ["std"] }
+base64 = "0.22.1"
+md-5 = "0.11.0"
+rand = "0.10.0"
+sha2 = "0.11.0"
+
+# Image management
+image = "0.25.10"
+
+# Memory management
+mimalloc = "0.1.48"
+
+# Async
+async-stream = "0.3.6"
+async-trait = "0.1.89"
+tokio = { version = "1.51.1", default-features = false, features = ["full"] }
 tokio-graceful-shutdown = "0.19.3"
 tokio-stream = "0.1.18"
+tokio-util = { version = "0.7.18", default-features = false, features = ["rt"] }
+
+# Web
+axum = "0.8.8"
+axum_session = { version = "0.19.0", default-features = false }
+axum_session_auth = { version = "0.19.0", default-features = false }
+dioxus = { version = "0.7.5", features = ["fullstack", "router"] }
+dioxus-server = { version = "0.7.5", features = ["router"] }
+hyper = { version = "1.9.0", features = ["full"] }
+hyper-util = { version = "0.1.20", features = [
+    "tokio",
+    "server-auto",
+    "http1",
+] }
+reqwest = { version = "0.13.2", default-features = false, features = [
+    "json",
+    "rustls",
+    "gzip",
+] }
+tower = "0.5.3"
+tower-http = { version = "0.6.8", features = [
+    "compression-full",
+    "limit",
+    "request-id",
+    "trace",
+] }
+
+# Config
+config = "0.15.22"
+
+# Utility
+chrono = { version = "0.4.44", features = ["serde"] }
+derive_builder = "0.20.2"
+rust_decimal = { version = "1.41.0", features = ["serde-str"] }
+rust_decimal_macros = "1.40.0"
+tempfile = "3.27.0"
+
+# Logging
+log = "0.4.29"
+tracing = { version = "0.1.44", features = ["log"] }
+tracing-log = "0.2.0"
+tracing-subscriber = { version = "0.3.23", features = [
+    "std",
+    "fmt",
+    "registry",
+    "env-filter",
+    "json",
+] }
+
+# gRPC
+prost = "0.14.3"
+prost-types = "0.14.3"
+tonic = { version = "0.14.5", features = ["tls-native-roots", "tls-ring"] }
 tonic-prost = "0.14.5"
 tonic-prost-build = "0.14.5"
 tonic-reflection = "0.14.5"
-tower = "0.5.3"
-tracing-log = "0.2.0"
-wiremock = "0.6.5"
+
+# Format utilities
+quick-xml = "0.39.2"
 zip = "8.5.1"
 
-[workspace.dependencies.argon2]
-version = "0.5.3"
-features = ["std"]
+# Serialization
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
 
-[workspace.dependencies.axum_session]
-version = "0.19.0"
-default-features = false
-
-[workspace.dependencies.axum_session_auth]
-version = "0.19.0"
-default-features = false
-
-[workspace.dependencies.chrono]
-version = "0.4.44"
-features = ["serde"]
-
-[workspace.dependencies.clap]
-version = "4.6.0"
-features = ["cargo", "derive", "env"]
-
-[workspace.dependencies.dioxus-server]
-version = "0.7.5"
-features = ["router"]
-
-[workspace.dependencies.dioxus]
-version = "0.7.5"
-features = ["fullstack", "router"]
-
-[workspace.dependencies.hyper]
-version = "1.9.0"
-features = ["full"]
-
-[workspace.dependencies.hyper-util]
-version = "0.1.20"
-features = ["tokio", "server-auto", "http1"]
-
-[workspace.dependencies.insta]
-version = "1.47.2"
-features = ["filters"]
-
-[workspace.dependencies.reqwest]
-version = "0.13.2"
-default-features = false
-features = ["json", "rustls", "gzip"]
-
-[workspace.dependencies.rust_decimal]
-version = "1.41.0"
-features = ["serde-str"]
-
-[workspace.dependencies.rust_decimal_macros]
-version = "1.40.0"
-
-[workspace.dependencies.sea-orm]
-version = "2.0.0-rc.38"
-features = [
+# Database
+sea-orm = { version = "2.0.0-rc.38", features = [
     "debug-print",
     "postgres-array",
     "runtime-tokio-rustls",
@@ -120,11 +134,8 @@ features = [
     "with-json",
     "with-rust_decimal",
     "with-uuid",
-]
-
-[workspace.dependencies.sea-orm-migration]
-version = "2.0.0-rc.38"
-features = [
+] }
+sea-orm-migration = { version = "2.0.0-rc.38", features = [
     "sqlx-postgres",
     "sqlx-sqlite",
     "sqlx-mysql",
@@ -133,41 +144,14 @@ features = [
     "with-json",
     "with-rust_decimal",
     "with-uuid",
-]
+] }
+sqlx = "0.8.6"
 
-[workspace.dependencies.serde]
-version = "1.0.228"
-features = ["derive"]
+# CLI
+clap = { version = "4.6.0", features = ["cargo", "derive", "env"] }
 
-[workspace.dependencies.tokio]
-version = "1.51.1"
-default-features = false
-features = ["full"]
-
-[workspace.dependencies.tokio-util]
-version = "0.7.18"
-default-features = false
-features = ["rt"]
-
-[workspace.dependencies.tonic]
-version = "0.14.5"
-features = ["tls-native-roots", "tls-ring"]
-
-[workspace.dependencies.tower-http]
-version = "0.6.8"
-features = ["compression-full", "limit", "request-id", "trace"]
-
-[workspace.dependencies.tracing]
-version = "0.1.44"
-features = ["log"]
-
-[workspace.dependencies.testcontainers-modules]
-version = "0.15.0"
-features = ["postgres", "mariadb", "mysql"]
-
-[workspace.dependencies.tracing-subscriber]
-version = "0.3.23"
-features = ["std", "fmt", "registry", "env-filter", "json"]
+# Testing
+insta = { version = "1.47.2", features = ["filters"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
