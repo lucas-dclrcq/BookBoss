@@ -427,7 +427,7 @@ pub(crate) fn GenreTagsSection() -> Element {
                                 }
                             },
                             on_click_name: move |name: String| {
-                                *crate::components::SEARCH_TEXT.write() = format!("genre:{name}");
+                                *crate::components::SEARCH_TEXT.write() = format!("genre:\"{name}\"");
                                 navigator.push(crate::Route::BooksPage {});
                             },
                             on_remove_unused: move |()| {
@@ -460,7 +460,7 @@ pub(crate) fn GenreTagsSection() -> Element {
                                 }
                             },
                             on_click_name: move |name: String| {
-                                *crate::components::SEARCH_TEXT.write() = format!("tag:{name}");
+                                *crate::components::SEARCH_TEXT.write() = format!("tag:\"{name}\"");
                                 navigator.push(crate::Route::BooksPage {});
                             },
                             on_remove_unused: move |()| {
