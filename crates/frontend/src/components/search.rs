@@ -25,7 +25,8 @@ enum SearchToken {
     /// Bare word — matches if it appears in at least one field.
     Any(String),
     /// Field-directed — matches only the specified field.
-    Field(SearchField, String),
+    /// `exact` is `true` when the value was quoted (e.g. `genre:"Business"`).
+    Field(SearchField, String, bool),
 }
 
 // ---------------------------------------------------------------------------
@@ -36,8 +37,8 @@ enum SearchToken {
 ///
 /// Supports:
 /// - Bare words: `thor` → `Any("thor")`
-/// - Field-directed: `author:thor` → `Field(Author, "thor")`
-/// - Quoted values: `author:"Brad Thor"` → `Field(Author, "brad thor")`
+/// - Field-directed: `author:thor` → `Field(Author, "thor", false)`
+/// - Quoted values: `author:"Brad Thor"` → `Field(Author, "brad thor", true)`
 ///
 /// All values are lowercased for case-insensitive matching.
 ///
@@ -69,9 +70,9 @@ fn parse_search_query(query: &str) -> Vec<SearchToken> {
             if c == ':' && !word.is_empty() {
                 if let Some(field) = parse_field_prefix(&word) {
                     chars.next(); // consume ':'
-                    let value = collect_value(&mut chars);
+                    let (value, exact) = collect_value(&mut chars);
                     if !value.is_empty() {
-                        tokens.push(SearchToken::Field(field, value.to_lowercase()));
+                        tokens.push(SearchToken::Field(field, value.to_lowercase(), exact));
                     }
                     word.clear();
                     break;
@@ -231,7 +232,8 @@ pub(crate) fn next_cycle_input(current_input: &str, cycle_prefix: &str, cycle_id
 
 /// Collects the value after a field prefix colon.
 /// Handles quoted values (`"Brad Thor"`) and unquoted single words.
-fn collect_value(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> String {
+/// Returns `(value, exact)` where `exact` is `true` when the value was quoted.
+fn collect_value(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> (String, bool) {
     // Skip leading whitespace.
     while chars.peek().is_some_and(|c| c.is_whitespace()) {
         chars.next();
@@ -246,7 +248,7 @@ fn collect_value(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> String
             }
             value.push(c);
         }
-        value
+        (value, true)
     } else {
         let mut value = String::new();
         while let Some(&c) = chars.peek() {
@@ -256,7 +258,7 @@ fn collect_value(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> String
             value.push(c);
             chars.next();
         }
-        value
+        (value, false)
     }
 }
 
@@ -292,12 +294,24 @@ fn book_matches(book: &BookSummary, tokens: &[SearchToken]) -> bool {
                 || genres_combined.contains(word.as_str())
                 || tags_combined.contains(word.as_str())
         }
-        SearchToken::Field(field, value) => match field {
+        SearchToken::Field(field, value, exact) => match field {
             SearchField::Title => title.contains(value.as_str()),
             SearchField::Author => authors_combined.contains(value.as_str()),
             SearchField::Series => series.as_ref().is_some_and(|s| s.contains(value.as_str())),
-            SearchField::Genre => genres_combined.contains(value.as_str()),
-            SearchField::Tag => tags_combined.contains(value.as_str()),
+            SearchField::Genre => {
+                if *exact {
+                    book.genres.iter().any(|g| g.to_lowercase() == value.as_str())
+                } else {
+                    genres_combined.contains(value.as_str())
+                }
+            }
+            SearchField::Tag => {
+                if *exact {
+                    book.tags.iter().any(|t| t.to_lowercase() == value.as_str())
+                } else {
+                    tags_combined.contains(value.as_str())
+                }
+            }
             SearchField::Status => {
                 let book_status = book.reading_state.as_ref().map_or_else(|| "unread".to_string(), |s| s.status.to_lowercase());
                 book_status == value.as_str()
@@ -355,13 +369,13 @@ mod tests {
     #[test]
     fn parse_field_directed() {
         let tokens = parse_search_query("author:thor");
-        assert_eq!(tokens, vec![SearchToken::Field(SearchField::Author, "thor".into())]);
+        assert_eq!(tokens, vec![SearchToken::Field(SearchField::Author, "thor".into(), false)]);
     }
 
     #[test]
     fn parse_field_quoted() {
         let tokens = parse_search_query("author:\"Brad Thor\"");
-        assert_eq!(tokens, vec![SearchToken::Field(SearchField::Author, "brad thor".into())]);
+        assert_eq!(tokens, vec![SearchToken::Field(SearchField::Author, "brad thor".into(), true)]);
     }
 
     #[test]
@@ -369,7 +383,10 @@ mod tests {
         let tokens = parse_search_query("author:thor backlash");
         assert_eq!(
             tokens,
-            vec![SearchToken::Field(SearchField::Author, "thor".into()), SearchToken::Any("backlash".into())]
+            vec![
+                SearchToken::Field(SearchField::Author, "thor".into(), false),
+                SearchToken::Any("backlash".into())
+            ]
         );
     }
 
@@ -384,7 +401,7 @@ mod tests {
             ("status", SearchField::Status),
         ] {
             let tokens = parse_search_query(&format!("{prefix}:test"));
-            assert_eq!(tokens, vec![SearchToken::Field(expected, "test".into())]);
+            assert_eq!(tokens, vec![SearchToken::Field(expected, "test".into(), false)]);
         }
     }
 
@@ -397,7 +414,7 @@ mod tests {
     #[test]
     fn parse_case_insensitive() {
         let tokens = parse_search_query("Author:Thor");
-        assert_eq!(tokens, vec![SearchToken::Field(SearchField::Author, "thor".into())]);
+        assert_eq!(tokens, vec![SearchToken::Field(SearchField::Author, "thor".into(), false)]);
     }
 
     #[test]
@@ -766,5 +783,49 @@ mod tests {
     fn next_cycle_input_non_status_field_value_returns_none() {
         // Value cycling only applies to status; other fields return None
         assert_eq!(next_cycle_input("author:brad", "author:b", 1), None);
+    }
+
+    #[test]
+    fn parse_unquoted_field_sets_exact_false() {
+        let tokens = parse_search_query("genre:business");
+        assert_eq!(tokens, vec![SearchToken::Field(SearchField::Genre, "business".into(), false)]);
+    }
+
+    #[test]
+    fn parse_quoted_field_sets_exact_true() {
+        let tokens = parse_search_query("genre:\"Business & Economics\"");
+        assert_eq!(tokens, vec![SearchToken::Field(SearchField::Genre, "business & economics".into(), true)]);
+    }
+
+    #[test]
+    fn genre_unquoted_is_fuzzy() {
+        let books = vec![
+            make_book("Book A", &["Author"], None, &["Business & Economics"], &[]),
+            make_book("Book B", &["Author"], None, &["Business"], &[]),
+        ];
+        let result = filter_books_by_search(books, "genre:business");
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn genre_quoted_is_exact() {
+        let books = vec![
+            make_book("Book A", &["Author"], None, &["Business & Economics"], &[]),
+            make_book("Book B", &["Author"], None, &["Business"], &[]),
+        ];
+        let result = filter_books_by_search(books, "genre:\"Business\"");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].title, "Book B");
+    }
+
+    #[test]
+    fn tag_quoted_is_exact() {
+        let books = vec![
+            make_book("Book A", &["Author"], None, &[], &["Funny"]),
+            make_book("Book B", &["Author"], None, &[], &["Fun"]),
+        ];
+        let result = filter_books_by_search(books, "tag:\"Fun\"");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].title, "Book B");
     }
 }
