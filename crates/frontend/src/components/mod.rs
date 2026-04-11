@@ -20,7 +20,7 @@ pub(crate) use filter_builder::{BookFilter, FilterBuilder, FilterEntityOptions, 
 pub(crate) use login_form::LoginForm;
 pub(crate) use nav_bar::{ACTIVE_LIBRARY, NavBar, get_default_library_token_for_user, get_is_admin, get_user_libraries};
 pub(crate) use register_admin_form::RegisterAdminForm;
-pub(crate) use search::{SEARCH_TEXT, filter_books_by_search};
+pub(crate) use search::{PENDING_SEARCH, SEARCH_TEXT, filter_books_by_search};
 pub(crate) use selection::{LANGUAGE_CODES, SelectionActionBar, SelectionToggle};
 pub(crate) use series_tile::{SeriesTile, SeriesTileData};
 pub(crate) use shelf_bar::ShelfBar;

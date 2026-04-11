@@ -344,6 +344,17 @@ pub(crate) fn BooksPage() -> Element {
         }
     });
 
+    // Apply any pending search set by external navigation (e.g. genre/tag links).
+    // Ordering guarantee: this effect runs once on first render, which happens in
+    // a separate render pass *after* AppLayout's route-change effect has already
+    // cleared SEARCH_TEXT. BooksPage is a fresh mount on navigation — it cannot
+    // render before AppLayout has processed the route change that caused the mount.
+    use_effect(move || {
+        if let Some(search) = crate::components::PENDING_SEARCH.write().take() {
+            *crate::components::SEARCH_TEXT.write() = search;
+        }
+    });
+
     let mut page_data = use_server_future(move || {
         let sort = crate::components::SORT_ORDER();
         let library_token = explicit_library();

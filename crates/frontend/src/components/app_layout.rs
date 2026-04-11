@@ -91,6 +91,11 @@ pub(crate) fn AppLayout() -> Element {
             exit_selection_mode();
         }
         *SEARCH_TEXT.write() = String::new();
+        // Discard any pending search when navigating away from BooksPage so a
+        // stale PENDING_SEARCH can't be applied on a future unrelated visit.
+        if !matches!(route, Route::BooksPage) {
+            *crate::components::PENDING_SEARCH.write() = None;
+        }
     });
 
     rsx! {

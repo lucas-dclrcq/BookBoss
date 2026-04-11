@@ -6,6 +6,11 @@ use crate::routes::books_page::BookSummary;
 /// component mounting/unmounting (survives fullstack re-hydration).
 pub(crate) static SEARCH_TEXT: GlobalSignal<String> = Signal::global(String::new);
 
+/// One-shot pending search set by external navigation (e.g. genre/tag links in
+/// Settings). `BooksPage` consumes this on mount after the route-change effect
+/// has cleared `SEARCH_TEXT`, then resets it to `None`.
+pub(crate) static PENDING_SEARCH: GlobalSignal<Option<String>> = Signal::global(|| None);
+
 // ---------------------------------------------------------------------------
 // Search token types
 // ---------------------------------------------------------------------------
