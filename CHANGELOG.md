@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.5](https://github.com/szinn/BookBoss/compare/v0.8.4..v0.8.5) - 2026-04-11
+
+### Bug Fixes
+
+- _(core)_ Fix md5 hex formatting for digest 0.11 Array type - ([aa14557](https://github.com/szinn/BookBoss/commit/aa14557fe4a6fc902ddc9030cb493911426289eb))
+- _(frontend)_ Genre/tag links navigate with quoted exact search - ([1620203](https://github.com/szinn/BookBoss/commit/1620203f99ede6de3e2b8258a5b0a6a16414ba66))
+- _(frontend)_ Quoted genre:/tag: field tokens use exact matching - ([cc128b8](https://github.com/szinn/BookBoss/commit/cc128b860c1e9cef203ad27a5b96473377a308d8))
+
 ## [0.8.4](https://github.com/szinn/BookBoss/compare/v0.8.3..v0.8.4) - 2026-04-04
 
 ### Bug Fixes
