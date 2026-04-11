@@ -19,12 +19,14 @@
     {
       matchManagers: ["github-actions"],
       matchUpdateTypes: ["minor", "patch", "digest"],
-      addLabels: ["ci"]
+      addLabels: ["ci"],
+      automerge: false
     },
     {
       matchManagers: ["github-actions"],
       addLabels: ["ci"],
-      semanticCommitScope: "deps"
+      semanticCommitScope: "deps",
+      automerge: false
     },
     {
       matchManagers: ["cargo"],
