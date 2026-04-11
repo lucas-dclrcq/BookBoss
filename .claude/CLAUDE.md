@@ -109,7 +109,6 @@ These **MUST** be run as separate Bash commands. Do **NOT** join them into a sin
 2. `just clippy` — lint (run separately from fmt, not chained)
 3. `just component-tests` — verify tests pass
 4. `jj desc -m "type(scope): description\n\nbody"` — update working copy description
-5. Update backlog if working on a task that came from the backlog.
 
 ### Workspaces
 
