@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.8](https://github.com/szinn/BookBoss/compare/v0.8.7..v0.8.8) - 2026-04-12
+
+### Bug Fixes
+
+- _(api)_ Don't error on koreader get position if book is unread - ([88c28a1](https://github.com/szinn/BookBoss/commit/88c28a170ad0528177d04480b1c713d7968d8802))
+
 ## [0.8.7](https://github.com/szinn/BookBoss/compare/v0.8.6..v0.8.7) - 2026-04-12
 
 ### Bug Fixes
