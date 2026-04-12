@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.7](https://github.com/szinn/BookBoss/compare/v0.8.6..v0.8.7) - 2026-04-12
+
+### Bug Fixes
+
+- _(core)_ Register KOReader partial MD5 hash for OPDS-downloaded books - ([17dfd69](https://github.com/szinn/BookBoss/commit/17dfd694dd1d3b93c67e7403924b7e3f19f3efe4))
+
 ## [0.8.6](https://github.com/szinn/BookBoss/compare/v0.8.5..v0.8.6) - 2026-04-11
 
 ### Bug Fixes
