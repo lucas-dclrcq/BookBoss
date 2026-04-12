@@ -35,16 +35,49 @@ fn md5_hex(data: &[u8]) -> String {
     })
 }
 
+/// Replicates KOReader's `util.partialMD5` sampling strategy so that the
+/// hash we store matches the document digest KOReader sends during sync.
+///
+/// The Lua formula is `lshift(1024, 2*i)` for i in -1..=10, using LuaJIT's
+/// 32-bit integer arithmetic (equivalent to Java's `1024L << (2*i)` with
+/// 64-bit wrapping). For i=-1 the shift count wraps to 62, causing 1024<<62
+/// to overflow to 0, so the first chunk is always read from offset 0.
+/// Subsequent offsets grow by 4× each step: 1024, 4096, 16384, 65536, …
+///
+/// The loop breaks on the first offset that meets or exceeds the file length —
+/// unlike a skip-and-continue approach. All chunks are fed into a single
+/// running MD5 accumulator (not concatenated then hashed).
+fn partial_md5_hex(data: &[u8]) -> String {
+    const CHUNK: usize = 1024;
+    let mut md5 = Md5::new();
+    for i in -1_i32..=10 {
+        // (2*i).rem_euclid(64): maps -2 → 62, matching the LuaJIT/Java
+        // signed-shift overflow that makes i=-1 land at offset 0.
+        let shift = (2 * i).rem_euclid(64) as u32;
+        let offset = (1024_u64).wrapping_shl(shift) as usize;
+        if offset >= data.len() {
+            break;
+        }
+        let end = (offset + CHUNK).min(data.len());
+        md5.update(&data[offset..end]);
+    }
+    let hash = md5.finalize();
+    hash.iter().fold(String::with_capacity(32), |mut s, b| {
+        use std::fmt::Write;
+        let _ = write!(s, "{b:02x}");
+        s
+    })
+}
+
 #[async_trait::async_trait]
 impl KoReaderService for KoReaderServiceImpl {
     async fn register_hashes(&self, book_id: BookId, filename: &str, contents: &[u8]) -> Result<(), Error> {
         let filename_hash = md5_hex(filename.as_bytes());
         let contents_hash = md5_hex(contents);
-        let hashes = if filename_hash == contents_hash {
-            vec![filename_hash]
-        } else {
-            vec![filename_hash, contents_hash]
-        };
+        let partial_hash = partial_md5_hex(contents);
+        let mut hashes = vec![filename_hash, contents_hash, partial_hash];
+        hashes.sort_unstable();
+        hashes.dedup();
         with_transaction!(self, koreader_document_hash_repository, |tx| {
             koreader_document_hash_repository.insert_hashes(tx, book_id, hashes).await
         })
@@ -74,8 +107,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn register_hashes_calls_insert_with_two_hashes_for_distinct_filename_and_contents() {
+    async fn register_hashes_stores_filename_and_content_hashes() {
         let mut mock = MockKoReaderDocumentHashRepository::new();
+        // "epub-bytes" is 10 bytes. partial_md5 reads from offset 0 (entire file),
+        // so partial_hash == contents_hash. After dedup: filename_hash + contents_hash
+        // = 2 distinct entries.
         mock.expect_insert_hashes()
             .withf(|_, book_id, hashes| *book_id == 1 && hashes.len() == 2)
             .returning(|_, _, _| Box::pin(async { Ok(()) }));
@@ -86,6 +122,9 @@ mod tests {
     #[tokio::test]
     async fn register_hashes_deduplicates_when_filename_and_content_hashes_match() {
         let mut mock = MockKoReaderDocumentHashRepository::new();
+        // filename and contents are identical bytes → filename_hash == contents_hash
+        // == partial_hash (file < 1024 bytes, partial reads full file). All three
+        // collapse to 1 entry after dedup.
         mock.expect_insert_hashes()
             .withf(|_, _, hashes| hashes.len() == 1)
             .returning(|_, _, _| Box::pin(async { Ok(()) }));
