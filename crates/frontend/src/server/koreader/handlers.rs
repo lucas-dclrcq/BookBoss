@@ -68,15 +68,31 @@ pub async fn syncs_progress_push(
 
     // 1. Resolve document digest → BookId.
     let book_id = match core_services.koreader_service.find_book_by_digest(&body.document).await {
-        Ok(Some(id)) => id,
-        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
-        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        Ok(Some(id)) => {
+            tracing::debug!(document = %body.document, book_id = id, "KOReader push: resolved document hash");
+            id
+        }
+        Ok(None) => {
+            tracing::debug!(document = %body.document, user_id = ?user_id, "KOReader push: document hash not found");
+            return StatusCode::NOT_FOUND.into_response();
+        }
+        Err(e) => {
+            tracing::error!(document = %body.document, error = %e, "KOReader push: hash lookup error");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
     };
 
     // 2. Load current reading state to determine status transitions.
     let current_status = match core_services.reading_service.get_reading_state(user_id, book_id).await {
-        Ok(state) => state.map_or(ReadStatus::Unread, |s| s.read_status),
-        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        Ok(state) => {
+            let status = state.map_or(ReadStatus::Unread, |s| s.read_status);
+            tracing::debug!(book_id, ?status, "KOReader push: current reading status");
+            status
+        }
+        Err(e) => {
+            tracing::error!(document = %body.document, book_id, error = %e, "KOReader push: reading state lookup error");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
     };
 
     // 3. Determine target ReadStatus:
@@ -135,27 +151,46 @@ pub async fn syncs_progress_pull(
 
     // 1. Resolve document digest → BookId.
     let book_id = match core_services.koreader_service.find_book_by_digest(&document).await {
-        Ok(Some(id)) => id,
-        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
-        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        Ok(Some(id)) => {
+            tracing::debug!(document = %document, book_id = id, "KOReader pull: resolved document hash");
+            id
+        }
+        Ok(None) => {
+            tracing::debug!(document = %document, "KOReader pull: document hash not found");
+            return StatusCode::NOT_FOUND.into_response();
+        }
+        Err(e) => {
+            tracing::error!(document = %document, error = %e, "KOReader pull: hash lookup error");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
     };
 
-    // 2. Load UserBookMetadata.
+    // 2. Load UserBookMetadata. If no reading state exists yet, return unread
+    //    defaults (percentage 0, empty progress token) rather than 404 — the book
+    //    is known to BookBoss, just not yet started.
     let metadata = match core_services.reading_service.get_reading_state(koreader_user.user.id, book_id).await {
-        Ok(Some(m)) => m,
-        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
-        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        Ok(m) => {
+            tracing::debug!(book_id, has_state = m.is_some(), "KOReader pull: reading state");
+            m
+        }
+        Err(e) => {
+            tracing::error!(document = %document, book_id, error = %e, "KOReader pull: reading state lookup error");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
     };
 
-    let progress = metadata.position_token.unwrap_or_default();
-    let percentage = f64::from(metadata.progress_percentage.unwrap_or(0)) / 10_000.0;
+    let (progress, percentage, timestamp) = metadata.map_or((String::new(), 0.0, 0), |m| {
+        let pct = f64::from(m.progress_percentage.unwrap_or(0)) / 10_000.0;
+        let ts = m.last_progress_at.map_or(0, |t| t.timestamp());
+        (m.position_token.unwrap_or_default(), pct, ts)
+    });
 
     Json(ProgressResponse {
         document,
         progress,
         percentage,
         device: String::new(),
-        timestamp: metadata.last_progress_at.map_or(0, |t| t.timestamp()),
+        timestamp,
     })
     .into_response()
 }
