@@ -105,10 +105,9 @@ step, run the end-of-task routine below.
 
 These **MUST** be run as separate Bash commands. Do **NOT** join them into a single one with `&&`.
 
-1. `just fmt` — format code
-2. `just clippy` — lint (run separately from fmt, not chained)
-3. `just component-tests` — verify tests pass
-4. `jj desc -m "type(scope): description\n\nbody"` — update working copy description
+1. `just fmt-lint` — format code
+2. `just component-tests` — verify tests pass
+3. `jj desc -m "type(scope): description\n\nbody"` — update working copy description
 
 ### Workspaces
 
