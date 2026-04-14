@@ -430,8 +430,15 @@ pub(crate) async fn books_for_shelf(
         });
     }
 
-    // Load per-user reading state so book cards show progress and status.
-    let reading_metas = core_services.reading_service.list_for_user(user_id, None).await.map_err(to_server_err)?;
+    // Load per-user reading state for the displayed books only.
+    // list_for_user has a pagination cap; list_for_user_and_books is ID-scoped with
+    // no cap.
+    let book_ids: Vec<bb_core::book::BookId> = books.iter().map(|b| b.id).collect();
+    let reading_metas = core_services
+        .reading_service
+        .list_for_user_and_books(user_id, &book_ids)
+        .await
+        .map_err(to_server_err)?;
     let reading_map: std::collections::HashMap<u64, ReadingStateDto> = reading_metas
         .iter()
         .filter(|m| m.read_status != ReadStatus::Unread)
