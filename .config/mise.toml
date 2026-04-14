@@ -1,9 +1,5 @@
-[settings]
-pipx.uvx = true
-
 [tools]
-"aqua:astral-sh/uv" = "latest"
-"cargo-binstall" = "1.17.4"
+"buf" = "1.67.0"
 "cargo:cargo-audit" = "0.22.1"
 "cargo:cargo-deny" = "0.19.0"
 "cargo:cargo-insta" = "1.43.1"
@@ -12,8 +8,6 @@ pipx.uvx = true
 "cargo:mdbook" = "0.5.2"
 "colima" = "0.10.0"
 "git-cliff" = "2.12.0"
-"node" = "24"
-"npm:renovate" = "latest"
 "npm:tailwindcss" = "4.2.2"
 "prettier" = "3.8.2"
 "protobuf" = "33.5"

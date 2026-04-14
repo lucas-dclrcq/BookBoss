@@ -20,6 +20,11 @@ config:
     nvim config.sops.env
     sops -e -i config.sops.env
 
+[doc('Format and lint')]
+fmt-lint:
+    just fmt
+    just lint
+
 [doc('Format code and documentation')]
 fmt:
     cargo +nightly fmt --all
@@ -53,9 +58,18 @@ run-bundle:
 release VERSION:
     ./scripts/release.sh {{ VERSION }}
 
+[doc('Run lint checks')]
+lint:
+    just clippy
+    #just buf
+
 [doc('Run Clippy on codebase for linting')]
 clippy:
     cargo +nightly clippy --workspace --all-targets --all-features --target-dir target/clippy
+
+[doc('Run proto lint')]
+buf:
+    buf lint crates/ib-api
 
 [doc('Update rust crate dependencies')]
 deps:
