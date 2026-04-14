@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.9](https://github.com/szinn/BookBoss/compare/v0.8.8..v0.8.9) - 2026-04-14
+
+### Bug Fixes
+
+- _(frontend)_ Make NavBar responsive with two-row layout below sm breakpoint - ([7c62498](https://github.com/szinn/BookBoss/commit/7c624984a942dc8ec846275490a3d503f04289f7))
+- _(frontend)_ Scope reading state query to displayed book IDs on shelf and author pages - ([68c61a9](https://github.com/szinn/BookBoss/commit/68c61a90e0f69f52c1e9d793a2b0cd92a81358fe))
+
 ## [0.8.8](https://github.com/szinn/BookBoss/compare/v0.8.7..v0.8.8) - 2026-04-12
 
 ### Bug Fixes
