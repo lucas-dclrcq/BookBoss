@@ -936,6 +936,12 @@ pub(crate) fn SelectionActionBar(
     let can_delete_resource = use_server_future(check_delete_book_capability);
     let can_delete = can_delete_resource.ok().and_then(|r| r()).and_then(std::result::Result::ok).unwrap_or(false);
 
+    let has_user_libraries = available_libraries
+        .read()
+        .as_ref()
+        .and_then(|r| r.as_ref().ok())
+        .is_some_and(|libs| !libs.is_empty());
+
     if !mode {
         return rsx! {};
     }
@@ -1033,8 +1039,8 @@ pub(crate) fn SelectionActionBar(
                 }
             }
 
-            // Add to Library (only shown if user has EditBook capability)
-            if can_edit {
+            // Add to Library (only shown if user has EditBook capability and user libraries exist)
+            if can_edit && has_user_libraries {
                 div { class: "relative",
                     button {
                         class: "px-4 py-2 text-sm font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer disabled:opacity-40",
