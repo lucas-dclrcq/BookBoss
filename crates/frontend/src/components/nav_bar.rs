@@ -195,8 +195,23 @@ fn IncomingBadge() -> Element {
     rsx! {
         {count_opt.map(|count| rsx! {
             div { class: "flex items-center gap-2",
-                Link { to: Route::IncomingPage {}, class: "relative text-sm hover:text-indigo-200 flex items-center gap-1.5",
-                    "Incoming"
+                Link { to: Route::IncomingPage {}, class: "relative hover:text-indigo-200 flex items-center gap-1.5", title: "Incoming",
+                    // Inbox-arrow-down icon — visible only below sm
+                    svg {
+                        class: "w-5 h-5 sm:hidden",
+                        xmlns: "http://www.w3.org/2000/svg",
+                        fill: "none",
+                        view_box: "0 0 24 24",
+                        stroke_width: "1.5",
+                        stroke: "currentColor",
+                        path {
+                            stroke_linecap: "round",
+                            stroke_linejoin: "round",
+                            d: "M9 3.75H6.912a2.25 2.25 0 0 0-2.15 1.588L2.35 13.177a2.25 2.25 0 0 0-.1.661V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 0 0-2.15-1.588H15M2.25 13.5h3.86a2.25 2.25 0 0 1 2.012 1.244l.256.512a2.25 2.25 0 0 0 2.013 1.244h3.218a2.25 2.25 0 0 0 2.013-1.244l.256-.512a2.25 2.25 0 0 1 2.013-1.244h3.859M12 3v8.25m0 0-3-3m3 3 3-3",
+                        }
+                    }
+                    // Text label — hidden on narrow, visible on sm+
+                    span { class: "hidden sm:inline text-sm", "Incoming" }
                     if count > 0 {
                         span {
                             class: "inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[0.6rem] font-bold leading-none",
@@ -476,7 +491,7 @@ fn LibraryPicker() -> Element {
             button {
                 class: "flex items-center gap-1 text-sm text-white hover:text-indigo-200 cursor-pointer",
                 onclick: move |_| open.set(!open()),
-                "Library: {active_name}"
+                "{active_name}"
                 svg {
                     class: "w-3.5 h-3.5",
                     xmlns: "http://www.w3.org/2000/svg",
@@ -580,7 +595,7 @@ fn SearchBar() -> Element {
     };
 
     rsx! {
-        div { class: "absolute left-1/2 -translate-x-1/2 w-full max-w-md px-4",
+        div { class: "w-full px-4 pt-2 pb-3 sm:pt-0 sm:pb-0 sm:absolute sm:left-1/2 sm:-translate-x-1/2 sm:max-w-md",
             if search_active {
                 div { class: "flex items-center gap-2",
                     // Input column — flex-1 takes all space; relative for hint strip positioning
@@ -788,10 +803,10 @@ pub(crate) fn NavBar() -> Element {
     };
 
     rsx! {
-        nav { class: "relative bg-indigo-700 text-white px-6 py-3 flex items-center shadow-sm",
-            div { class: "flex items-center gap-6 shrink-0",
+        nav { class: "relative bg-indigo-700 text-white px-3 sm:px-6 py-3 flex flex-wrap items-center shadow-sm",
+            div { class: "flex items-center gap-3 sm:gap-6 shrink-0",
                 button {
-                    class: "flex items-center cursor-pointer hover:opacity-80",
+                    class: "hidden sm:flex items-center cursor-pointer hover:opacity-80",
                     title: "About",
                     onclick: move |_| show_about.set(true),
                     img {
@@ -855,13 +870,49 @@ pub(crate) fn NavBar() -> Element {
                 // Library picker — only shown when user has 2+ libraries.
                 // No SuspenseBoundary needed: LibraryPicker never suspends.
                 LibraryPicker {}
-                Link { to: Route::AuthorsPage {}, class: "text-sm hover:text-indigo-200",
+                Link {
+                    to: Route::AuthorsPage {},
+                    class: "hover:text-indigo-200 flex items-center",
+                    title: "Authors",
                     onclick: move |_| *SEARCH_TEXT.write() = String::new(),
-                    "Authors"
+                    // Academic-cap icon — visible only below sm
+                    svg {
+                        class: "w-5 h-5 sm:hidden",
+                        xmlns: "http://www.w3.org/2000/svg",
+                        fill: "none",
+                        view_box: "0 0 24 24",
+                        stroke_width: "1.5",
+                        stroke: "currentColor",
+                        path {
+                            stroke_linecap: "round",
+                            stroke_linejoin: "round",
+                            d: "M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.627 48.627 0 0 1 12 20.904a48.627 48.627 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.57 50.57 0 0 0-2.658-.813A59.905 59.905 0 0 1 12 3.493a59.902 59.902 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342M6.75 15a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 0v-3.675A55.378 55.378 0 0 1 12 8.443m-7.007 11.55A5.981 5.981 0 0 0 6.75 15.75v-1.5",
+                        }
+                    }
+                    // Text label — hidden on narrow, visible on sm+
+                    span { class: "hidden sm:inline text-sm", "Authors" }
                 }
-                Link { to: Route::SeriesPage {}, class: "text-sm hover:text-indigo-200",
+                Link {
+                    to: Route::SeriesPage {},
+                    class: "hover:text-indigo-200 flex items-center",
+                    title: "Series",
                     onclick: move |_| *SEARCH_TEXT.write() = String::new(),
-                    "Series"
+                    // Rectangle-stack icon — visible only below sm
+                    svg {
+                        class: "w-5 h-5 sm:hidden",
+                        xmlns: "http://www.w3.org/2000/svg",
+                        fill: "none",
+                        view_box: "0 0 24 24",
+                        stroke_width: "1.5",
+                        stroke: "currentColor",
+                        path {
+                            stroke_linecap: "round",
+                            stroke_linejoin: "round",
+                            d: "M6 6.878V6a2.25 2.25 0 0 1 2.25-2.25h7.5A2.25 2.25 0 0 1 18 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 0 0 3.75 9v.878m14.25-3A2.25 2.25 0 0 1 20.25 9v.878m0 0a2.246 2.246 0 0 0-.75-.128H4.5a2.246 2.246 0 0 0-.75.128m16.5 0A2.25 2.25 0 0 1 22.5 12v6a2.25 2.25 0 0 1-2.25 2.25H3.75A2.25 2.25 0 0 1 1.5 18v-6c0-.98.626-1.813 1.5-2.122",
+                        }
+                    }
+                    // Text label — hidden on narrow, visible on sm+
+                    span { class: "hidden sm:inline text-sm", "Series" }
                 }
                 // IncomingCountLoader fetches the count in the background;
                 // IncomingBadge reads the result from a GlobalSignal and never suspends.
@@ -880,7 +931,6 @@ pub(crate) fn NavBar() -> Element {
                 fallback: |_| rsx! {},
                 LibraryInit {}
             }
-            SearchBar {}
             div { class: "flex items-center gap-4 shrink-0 ml-auto",
                 SuspenseBoundary {
                     fallback: |_| rsx! {},
@@ -927,6 +977,7 @@ pub(crate) fn NavBar() -> Element {
                     }
                 }
             }
+            SearchBar {}
         }
         if show_about() {
             AboutModal { on_close: move |()| show_about.set(false) }
