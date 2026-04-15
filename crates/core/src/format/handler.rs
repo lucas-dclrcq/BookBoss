@@ -237,6 +237,13 @@ impl EnrichBookFilesHandler {
         .await?;
 
         tracing::info!(book_id, "book file enrichment complete (EPUB + KEPUB)");
+
+        // ── 10. Enqueue MOBI conversion if enabled ───────────────────────────
+        if self.core.app_setting_service.mobi_enabled().await? {
+            use crate::{format::mobi_handler::ConvertMobiPayload, jobs::JobServiceExt};
+            self.core.job_service.enqueue(&ConvertMobiPayload { book_id }).await?;
+        }
+
         Ok(())
     }
 }
