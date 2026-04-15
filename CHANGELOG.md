@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.11](https://github.com/szinn/BookBoss/compare/v0.8.10..v0.8.11) - 2026-04-15
+
+### Features
+
+- _(core)_ Extend EnsureEnrichmentsHandler with MOBI backfill sweep - ([8625c2f](https://github.com/szinn/BookBoss/commit/8625c2f7618b7a937d1f2467ac5386f7cf387562))
+- _(core)_ Enqueue MOBI conversion after book file enrichment - ([b2a3044](https://github.com/szinn/BookBoss/commit/b2a3044a278b80fe55a99e3877cc05e6b9602e4b))
+- _(core)_ Add ConvertMobiHandler job handler - ([2282a8a](https://github.com/szinn/BookBoss/commit/2282a8afffc692055caac041099ae92c3394f8cc))
+- _(core)_ Add app_setting domain - ([0f883c3](https://github.com/szinn/BookBoss/commit/0f883c3e1c47cab78135802f17d14a3ebd91957d))
+- _(database)_ Add find_book_ids_needing_mobi_conversion query - ([56d8a8e](https://github.com/szinn/BookBoss/commit/56d8a8e3b4830ceec0075ea77032d5e20083c3f3))
+- _(database)_ Implement AppSettingRepository SeaORM adapter - ([94558e0](https://github.com/szinn/BookBoss/commit/94558e006152f5af311a34ba7cc824310468d0eb))
+- _(database)_ Add app_settings migration - ([ac9eb6a](https://github.com/szinn/BookBoss/commit/ac9eb6a34a632013acf4b248c4a1122751339aba))
+- _(formats)_ Implement MOBI6 chapter anchor navigation - ([86c6be3](https://github.com/szinn/BookBoss/commit/86c6be3bd91017f32299f526b420a8e56b9ba085))
+- _(formats)_ Add MOBI output branch to FormatService - ([c1ff040](https://github.com/szinn/BookBoss/commit/c1ff040a3a1fd5614a645f42caba7ca012e07f8d))
+- _(formats)_ Add MOBI6 writer - ([c0c7b80](https://github.com/szinn/BookBoss/commit/c0c7b80cff0ecfdace0c9ae9b566ec16db82cbd3))
+- _(frontend)_ Admin settings UI with MOBI toggle - ([06f7ea6](https://github.com/szinn/BookBoss/commit/06f7ea64582e97d9520b4b1162745f3ce1e1c21f))
+
+### Bug Fixes
+
+- _(core)_ Keep existing MOBI files up to date regardless of mobi_enabled flag - ([5d8ef61](https://github.com/szinn/BookBoss/commit/5d8ef61903913646f00c7abc20c37ac1865da522))
+- _(formats)_ Collapse if guard into match arm pattern in NCX parser - ([ddd30ca](https://github.com/szinn/BookBoss/commit/ddd30ca355a50a8195744805c1572405ad7e7d87))
+- _(formats)_ Use encode_number_as_hex for MOBI INDX entry keys - ([417956e](https://github.com/szinn/BookBoss/commit/417956eb24d0939754165dff47b7230ffc441241))
+- _(frontend)_ Add cache-busting version param to download links - ([bfae035](https://github.com/szinn/BookBoss/commit/bfae035fbfb9b237c692212e4eb104cb6c159626))
+- _(frontend)_ Reorder settings page nav sections - ([a007942](https://github.com/szinn/BookBoss/commit/a007942fa8bba098e95dacc90c0fb4f8bd389c4c))
+
 ## [0.8.10](https://github.com/szinn/BookBoss/compare/v0.8.9..v0.8.10) - 2026-04-15
 
 ### Features
