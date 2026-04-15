@@ -14,12 +14,27 @@ pub(crate) struct IncomingBookSummary {
     pub has_cover: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) enum UploadOutcome {
+    Queued,
+    AlreadyImported,
+    InvalidFile,
+    Error(String),
+}
+
 #[cfg(feature = "server")]
 use {
     crate::routes::server_helpers::{require_capability, to_server_err},
     crate::server::AuthSession,
     axum::http::Method,
-    bb_core::{CoreServices, book::BookId, import::ImportJobToken, types::Capability},
+    base64::prelude::*,
+    bb_core::{
+        CoreServices,
+        book::BookId,
+        error::ErrorKind,
+        import::{ImportJobToken, service::FileQueueStatus},
+        types::Capability,
+    },
     std::collections::HashMap,
     std::sync::Arc,
 };
@@ -108,6 +123,26 @@ async fn reject_incoming_book(job_token: String) -> Result<(), ServerFnError> {
     core_services.collection_service.reject_book(token).await.map_err(to_server_err)?;
 
     Ok(())
+}
+
+#[post("/api/v1/incoming/upload", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
+async fn upload_incoming_epub(filename: String, data_base64: String) -> Result<UploadOutcome, ServerFnError> {
+    require_capability(&auth_session, Capability::ApproveImports, Method::POST).await?;
+
+    let bytes = BASE64_STANDARD
+        .decode(data_base64.as_bytes())
+        .map_err(|_| ServerFnError::new("Invalid base64"))?;
+
+    if bytes.len() > 50 * 1024 * 1024 {
+        return Ok(UploadOutcome::Error("File exceeds 50 MB limit".into()));
+    }
+
+    match core_services.import_job_service.queue_bytes_if_new(filename, bytes).await {
+        Ok(FileQueueStatus::Queued) => Ok(UploadOutcome::Queued),
+        Ok(_) => Ok(UploadOutcome::AlreadyImported),
+        Err(e) if e.kind() == ErrorKind::InvalidInput => Ok(UploadOutcome::InvalidFile),
+        Err(e) => Ok(UploadOutcome::Error(e.to_string())),
+    }
 }
 
 /// Renders an ISO 8601 timestamp, reformatting it to the browser's local
