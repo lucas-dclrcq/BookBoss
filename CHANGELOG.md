@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.10](https://github.com/szinn/BookBoss/compare/v0.8.9..v0.8.10) - 2026-04-15
+
+### Features
+
+- _(core)_ Implement queue_bytes_if_new - ([f4cd2c7](https://github.com/szinn/BookBoss/commit/f4cd2c7b9e83aaca11d0b5d92f0d205ad2025d4d))
+- _(core)_ Add bookdrop_path to ImportJobServiceImpl - ([b000f07](https://github.com/szinn/BookBoss/commit/b000f07b69388f63cefc2727e754c64b84422ce1))
+- _(frontend)_ Drag-and-drop EPUB upload on incoming page - ([a858bbc](https://github.com/szinn/BookBoss/commit/a858bbc5b50dca77c0b09fa2815f58e89098c664))
+- _(frontend)_ Add upload_incoming_epub server function - ([167ad94](https://github.com/szinn/BookBoss/commit/167ad943e597616229798f5a6978d366b5690084))
+- _(utils)_ Add hash_bytes function - ([8906fa3](https://github.com/szinn/BookBoss/commit/8906fa33a6622315ac7384dcf4e6190bb5dbae15))
+
+### Bug Fixes
+
+- _(frontend)_ Hide Add to Library button when no user libraries exist - ([b0ae006](https://github.com/szinn/BookBoss/commit/b0ae006a0400282d2f582f4b7bf49a158167c393))
+
 ## [0.8.9](https://github.com/szinn/BookBoss/compare/v0.8.8..v0.8.9) - 2026-04-14
 
 ### Bug Fixes
