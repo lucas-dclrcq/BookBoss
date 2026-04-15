@@ -205,7 +205,7 @@ pub fn create_services(external: ExternalServices, encryption_secret: &str) -> R
 /// Called once after `CoreServices` is built — before the subsystem event loop
 /// starts. Each crate that owns handlers exposes a similar function.
 pub fn before_start(core: &Arc<CoreServices>) {
-    use format::handler::EnrichBookFilesHandler;
+    use format::{handler::EnrichBookFilesHandler, mobi_handler::ConvertMobiHandler};
     use health::{
         HealthTaskConfig,
         handlers::{
@@ -225,6 +225,9 @@ pub fn before_start(core: &Arc<CoreServices>) {
 
     // Format enrichment handler
     js.register(EnrichBookFilesHandler::new(core.clone()));
+
+    // MOBI conversion handler
+    js.register(ConvertMobiHandler::new(core.clone()));
 
     // Health check handlers + their scheduled tasks
     let handler = recover_enrichments::RecoverEnrichmentsHandler::new(core.clone());

@@ -9,6 +9,7 @@ use crate::{
 
 const MOBI_ENABLED_KEY: &str = "enrichment.mobi_enabled";
 
+#[cfg_attr(any(test, feature = "test-support"), mockall::automock)]
 #[async_trait::async_trait]
 pub trait AppSettingService: Send + Sync {
     async fn get(&self, key: &str) -> Result<Option<AppSetting>, Error>;

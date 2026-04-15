@@ -1,4 +1,5 @@
 pub mod handler;
+pub mod mobi_handler;
 mod model;
 mod service;
 

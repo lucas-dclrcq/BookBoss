@@ -6,3 +6,5 @@ pub use model::{AppSetting, NewAppSetting};
 pub use repository::AppSettingRepository;
 pub use service::AppSettingService;
 pub(crate) use service::AppSettingServiceImpl;
+#[cfg(any(test, feature = "test-support"))]
+pub use service::MockAppSettingService;
