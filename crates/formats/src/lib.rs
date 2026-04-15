@@ -3,6 +3,7 @@ pub(crate) mod epub_enrich;
 mod error;
 mod format_service;
 pub(crate) mod kepub_convert;
+pub(crate) mod mobi_convert;
 pub(crate) mod opf;
 
 pub use error::Error;
