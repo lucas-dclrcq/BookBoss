@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::{
     CoreServices, Error,
     book::BookId,
-    format::handler::EnrichBookFilesPayload,
+    format::{handler::EnrichBookFilesPayload, mobi_handler::ConvertMobiPayload},
     jobs::{BookIdSweep, BookSweepPayload, JobHandler, JobRepositoryExt, run_book_id_sweep},
     repository::{read_only_transaction, transaction},
 };
@@ -53,6 +53,34 @@ impl BookIdSweep for EnsureEnrichmentsHandler {
         .await?;
 
         tracing::info!(count, "enqueued enrichment jobs (missing + stale)");
+
+        // MOBI sweep: enqueue ConvertMobiPayload for books that have an enriched
+        // EPUB but no enriched MOBI, when MOBI conversion is enabled.
+        if core.app_setting_service.mobi_enabled().await? {
+            let batch_size = BookSweepPayload::default().batch_size;
+            let book_repo = core.repository_service.book_repository().clone();
+            let mobi_ids = read_only_transaction(&**core.repository_service.repository(), |tx| {
+                Box::pin(async move { book_repo.find_book_ids_needing_mobi_conversion(tx, None, batch_size).await })
+            })
+            .await?;
+
+            let mobi_count = mobi_ids.len();
+            let job_repo = core.repository_service.job_repository().clone();
+            transaction(&**core.repository_service.repository(), |tx| {
+                let job_repo = job_repo.clone();
+                let mobi_ids = mobi_ids.clone();
+                Box::pin(async move {
+                    for book_id in mobi_ids {
+                        job_repo.enqueue(tx, &ConvertMobiPayload { book_id }).await?;
+                    }
+                    Ok(())
+                })
+            })
+            .await?;
+
+            tracing::info!(mobi_count, "enqueued MOBI conversion jobs");
+        }
+
         Ok(())
     }
 }
@@ -71,9 +99,31 @@ impl JobHandler for EnsureEnrichmentsHandler {
 mod tests {
     use super::*;
     use crate::{
-        book::repository::book::MockBookRepository, jobs::repository::MockJobRepository, repository::testing::default_repository_service_builder,
-        test_support::*,
+        app_setting::repository::MockAppSettingRepository, book::repository::book::MockBookRepository, jobs::repository::MockJobRepository,
+        repository::testing::default_repository_service_builder, test_support::*,
     };
+
+    /// Returns a `MockAppSettingRepository` that reports MOBI disabled (returns
+    /// `None`).
+    fn mobi_disabled_app_setting_repo() -> MockAppSettingRepository {
+        let mut repo = MockAppSettingRepository::new();
+        repo.expect_get().returning(|_, _| Box::pin(std::future::ready(Ok(None))));
+        repo
+    }
+
+    /// Returns a `MockAppSettingRepository` that reports MOBI enabled.
+    fn mobi_enabled_app_setting_repo() -> MockAppSettingRepository {
+        use crate::app_setting::AppSetting;
+        let mut repo = MockAppSettingRepository::new();
+        repo.expect_get().returning(|_, _| {
+            let setting = AppSetting {
+                key: "enrichment.mobi_enabled".into(),
+                value: "true".into(),
+            };
+            Box::pin(std::future::ready(Ok(Some(setting))))
+        });
+        repo
+    }
 
     fn fake_job() -> crate::jobs::Job {
         crate::jobs::Job {
@@ -105,6 +155,7 @@ mod tests {
             .returning(|_, _, _| Box::pin(std::future::ready(Ok(vec![1, 5]))));
 
         // Expect exactly two enqueue calls (one per book), no delayed enqueue.
+        // mobi_enabled = false, so no MOBI jobs enqueued.
         job_repo
             .expect_enqueue_raw()
             .times(2)
@@ -112,6 +163,7 @@ mod tests {
 
         let repo_service = Arc::new(
             default_repository_service_builder()
+                .app_setting_repository(Arc::new(mobi_disabled_app_setting_repo()))
                 .book_repository(Arc::new(book_repo))
                 .job_repository(Arc::new(job_repo))
                 .build()
@@ -129,14 +181,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn noop_when_all_enriched() {
+    async fn noop_when_no_epub_enrichment_needed() {
         let mut book_repo = MockBookRepository::new();
 
         book_repo
             .expect_find_book_ids_needing_any_enrichment()
             .returning(|_, _, _| Box::pin(std::future::ready(Ok(vec![]))));
 
-        let repo_service = Arc::new(default_repository_service_builder().book_repository(Arc::new(book_repo)).build().unwrap());
+        let repo_service = Arc::new(
+            default_repository_service_builder()
+                .app_setting_repository(Arc::new(mobi_disabled_app_setting_repo()))
+                .book_repository(Arc::new(book_repo))
+                .build()
+                .unwrap(),
+        );
 
         let core = crate::create_services(
             default_external_services_builder().repository_service(repo_service).build().unwrap(),
@@ -191,6 +249,7 @@ mod tests {
             .returning(move |_, _, _| Box::pin(std::future::ready(Ok(ids.clone()))));
 
         // Expect one enqueue per book, plus one delayed enqueue for the continuation.
+        // mobi_enabled = false, so no MOBI jobs enqueued.
         job_repo
             .expect_enqueue_raw()
             .returning(|_, _, _, _| Box::pin(std::future::ready(Ok(fake_job()))));
@@ -201,6 +260,131 @@ mod tests {
 
         let repo_service = Arc::new(
             default_repository_service_builder()
+                .app_setting_repository(Arc::new(mobi_disabled_app_setting_repo()))
+                .book_repository(Arc::new(book_repo))
+                .job_repository(Arc::new(job_repo))
+                .build()
+                .unwrap(),
+        );
+
+        let core = crate::create_services(
+            default_external_services_builder().repository_service(repo_service).build().unwrap(),
+            "test-secret",
+        )
+        .unwrap();
+
+        let handler = EnsureEnrichmentsHandler::new(core);
+        handler.handle(BookSweepPayload::default()).await.unwrap();
+    }
+
+    /// When mobi_enabled is true and books need MOBI conversion, enqueues
+    /// `ConvertMobiPayload` jobs in addition to EPUB enrichment jobs.
+    #[tokio::test]
+    async fn mobi_enabled_enqueues_mobi_jobs() {
+        let mut book_repo = MockBookRepository::new();
+        let mut job_repo = MockJobRepository::new();
+
+        // Two books need EPUB enrichment.
+        book_repo
+            .expect_find_book_ids_needing_any_enrichment()
+            .returning(|_, _, _| Box::pin(std::future::ready(Ok(vec![1, 2]))));
+
+        // One book needs MOBI conversion.
+        book_repo
+            .expect_find_book_ids_needing_mobi_conversion()
+            .returning(|_, _, _| Box::pin(std::future::ready(Ok(vec![3]))));
+
+        // 2 EPUB enqueue_raw + 1 MOBI enqueue_raw = 3 total.
+        job_repo
+            .expect_enqueue_raw()
+            .times(3)
+            .returning(|_, _, _, _| Box::pin(std::future::ready(Ok(fake_job()))));
+
+        let repo_service = Arc::new(
+            default_repository_service_builder()
+                .app_setting_repository(Arc::new(mobi_enabled_app_setting_repo()))
+                .book_repository(Arc::new(book_repo))
+                .job_repository(Arc::new(job_repo))
+                .build()
+                .unwrap(),
+        );
+
+        let core = crate::create_services(
+            default_external_services_builder().repository_service(repo_service).build().unwrap(),
+            "test-secret",
+        )
+        .unwrap();
+
+        let handler = EnsureEnrichmentsHandler::new(core);
+        handler.handle(BookSweepPayload::default()).await.unwrap();
+    }
+
+    /// When mobi_enabled is false, no MOBI jobs are enqueued even if books
+    /// would otherwise need conversion.
+    #[tokio::test]
+    async fn mobi_disabled_does_not_enqueue_mobi_jobs() {
+        let mut book_repo = MockBookRepository::new();
+        let mut job_repo = MockJobRepository::new();
+
+        // Two books need EPUB enrichment.
+        book_repo
+            .expect_find_book_ids_needing_any_enrichment()
+            .returning(|_, _, _| Box::pin(std::future::ready(Ok(vec![1, 2]))));
+
+        // find_book_ids_needing_mobi_conversion must NOT be called.
+
+        // Only 2 EPUB enqueue_raw calls; mobi_disabled so no MOBI enqueue.
+        job_repo
+            .expect_enqueue_raw()
+            .times(2)
+            .returning(|_, _, _, _| Box::pin(std::future::ready(Ok(fake_job()))));
+
+        let repo_service = Arc::new(
+            default_repository_service_builder()
+                .app_setting_repository(Arc::new(mobi_disabled_app_setting_repo()))
+                .book_repository(Arc::new(book_repo))
+                .job_repository(Arc::new(job_repo))
+                .build()
+                .unwrap(),
+        );
+
+        let core = crate::create_services(
+            default_external_services_builder().repository_service(repo_service).build().unwrap(),
+            "test-secret",
+        )
+        .unwrap();
+
+        let handler = EnsureEnrichmentsHandler::new(core);
+        handler.handle(BookSweepPayload::default()).await.unwrap();
+    }
+
+    /// When mobi_enabled is true but `find_book_ids_needing_mobi_conversion`
+    /// returns an empty list, only EPUB enrichment jobs are enqueued — no
+    /// MOBI enqueue calls are made.
+    #[tokio::test]
+    async fn mobi_enabled_empty_mobi_result_enqueues_only_epub_jobs() {
+        let mut book_repo = MockBookRepository::new();
+        let mut job_repo = MockJobRepository::new();
+
+        // Two books need EPUB enrichment.
+        book_repo
+            .expect_find_book_ids_needing_any_enrichment()
+            .returning(|_, _, _| Box::pin(std::future::ready(Ok(vec![1, 2]))));
+
+        // No books need MOBI conversion.
+        book_repo
+            .expect_find_book_ids_needing_mobi_conversion()
+            .returning(|_, _, _| Box::pin(std::future::ready(Ok(vec![]))));
+
+        // Only 2 EPUB enqueue_raw calls; MOBI list is empty so no MOBI enqueue.
+        job_repo
+            .expect_enqueue_raw()
+            .times(2)
+            .returning(|_, _, _, _| Box::pin(std::future::ready(Ok(fake_job()))));
+
+        let repo_service = Arc::new(
+            default_repository_service_builder()
+                .app_setting_repository(Arc::new(mobi_enabled_app_setting_repo()))
                 .book_repository(Arc::new(book_repo))
                 .job_repository(Arc::new(job_repo))
                 .build()
