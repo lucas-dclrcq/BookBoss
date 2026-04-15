@@ -722,12 +722,10 @@ fn parse_ncx(ncx: &[u8], ncx_dir: &str, spine_prefix_map: &HashMap<String, Strin
                     }
                 }
             }
-            Ok(Event::Text(ref e)) => {
-                if in_text {
-                    if let Some(top) = stack.last_mut() {
-                        if let Ok(text) = std::str::from_utf8(e.as_ref()) {
-                            top.label.push_str(text);
-                        }
+            Ok(Event::Text(ref e)) if in_text => {
+                if let Some(top) = stack.last_mut() {
+                    if let Ok(text) = std::str::from_utf8(e.as_ref()) {
+                        top.label.push_str(text);
                     }
                 }
             }
