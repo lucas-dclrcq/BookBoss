@@ -48,6 +48,10 @@ pub trait ImportJobService: Send + Sync {
         file_format: FileFormat,
         detected_at: DateTime<Utc>,
     ) -> Result<FileQueueStatus, Error>;
+    /// Validates, hashes, writes to the bookdrop folder, and enqueues the bytes
+    /// as a new import job. Returns the queue status.
+    async fn queue_bytes_if_new(&self, filename: String, bytes: Vec<u8>) -> Result<FileQueueStatus, Error>;
+
     /// On startup crash-recovery: resets any `Extracting`/`Identifying` jobs
     /// back to `Pending`, then re-enqueues every `Pending` job so none are
     /// lost if the queue lost its entries.
@@ -175,6 +179,32 @@ impl ImportJobService for ImportJobServiceImpl {
             tracing::info!(token = %job.token, "queued import job");
             Ok(FileQueueStatus::Queued)
         })
+    }
+
+    async fn queue_bytes_if_new(&self, filename: String, bytes: Vec<u8>) -> Result<FileQueueStatus, Error> {
+        // Reject filenames that could escape the bookdrop directory.
+        if filename.contains('/') || filename.contains('\\') || filename.contains("..") {
+            return Err(Error::Validation("Filename contains invalid characters".into()));
+        }
+
+        // Validate EPUB magic bytes (ZIP: PK\x03\x04)
+        if bytes.len() < 4 || &bytes[..4] != b"PK\x03\x04" {
+            return Err(Error::Validation("Not a valid EPUB file".into()));
+        }
+
+        let bookdrop_path = self
+            .bookdrop_path
+            .as_ref()
+            .ok_or_else(|| Error::Infrastructure("bookdrop_path not configured".into()))?;
+
+        let file_hash = bb_utils::hash::hash_bytes(&bytes);
+        let dest = bookdrop_path.join(&filename);
+        tokio::fs::write(&dest, &bytes)
+            .await
+            .map_err(|e| Error::Infrastructure(format!("Failed to write to bookdrop: {e}")))?;
+
+        self.queue_file_if_new(dest.to_string_lossy().to_string(), file_hash, FileFormat::Epub, Utc::now())
+            .await
     }
 
     fn trigger_scan(&self) {
@@ -774,5 +804,87 @@ mod tests {
         let result = svc.reject_job(job, 1).await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::Conflict))));
+    }
+
+    // ─── queue_bytes_if_new ───────────────────────────────────────────────────
+
+    fn create_service_with_bookdrop_all_repos(
+        import_mock: MockImportJobRepository,
+        book_mock: MockBookRepository,
+        job_mock: MockJobRepository,
+        dir: &tempfile::TempDir,
+    ) -> ImportJobServiceImpl {
+        let repository_service = Arc::new(
+            crate::repository::testing::default_repository_service_builder()
+                .import_job_repository(Arc::new(import_mock))
+                .book_repository(Arc::new(book_mock))
+                .job_repository(Arc::new(job_mock))
+                .build()
+                .expect("all fields provided"),
+        );
+        ImportJobServiceImpl::new(repository_service, None, Some(dir.path().to_path_buf()))
+    }
+
+    #[tokio::test]
+    async fn test_queue_bytes_if_new_invalid_magic_bytes() {
+        let mock = MockImportJobRepository::new();
+        let repo = create_service(mock);
+        let result = repo.queue_bytes_if_new("test.epub".into(), vec![0, 1, 2, 3]).await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), crate::ErrorKind::InvalidInput);
+    }
+
+    #[tokio::test]
+    async fn test_queue_bytes_if_new_no_bookdrop_path_returns_infrastructure_error() {
+        let mock = MockImportJobRepository::new();
+        let svc = create_service(mock);
+        // Valid ZIP magic bytes but no bookdrop_path configured
+        let bytes = b"PK\x03\x04valid epub content".to_vec();
+        let result = svc.queue_bytes_if_new("test.epub".into(), bytes).await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), crate::ErrorKind::Internal);
+    }
+
+    #[tokio::test]
+    async fn test_queue_bytes_if_new_queues_valid_epub() {
+        let dir = tempfile::tempdir().unwrap();
+        let job = fake_job(ImportStatus::Pending);
+        let mut import_mock = MockImportJobRepository::new();
+        import_mock.expect_find_active_by_hash().returning(|_, _| Box::pin(async { Ok(None) }));
+        import_mock.expect_add_job().returning(move |_, _| {
+            let j = job.clone();
+            Box::pin(async move { Ok(j) })
+        });
+        let mut book_mock = MockBookRepository::new();
+        book_mock.expect_find_file_by_hash().returning(|_, _| Box::pin(async { Ok(None) }));
+        let mut job_mock = MockJobRepository::new();
+        job_mock.expect_enqueue_raw().returning(|_, _, _, _| {
+            Box::pin(async {
+                Ok(crate::jobs::model::Job {
+                    id: 1,
+                    job_type: "process_import".into(),
+                    payload: serde_json::Value::Null,
+                    status: crate::jobs::JobStatus::Pending,
+                    priority: 1,
+                    attempt: 0,
+                    max_attempts: 3,
+                    version: 1,
+                    scheduled_at: Utc::now(),
+                    started_at: None,
+                    completed_at: None,
+                    error_message: None,
+                    created_at: Utc::now(),
+                    updated_at: Utc::now(),
+                })
+            })
+        });
+        let svc = create_service_with_bookdrop_all_repos(import_mock, book_mock, job_mock, &dir);
+
+        let bytes = b"PK\x03\x04fake epub content".to_vec();
+        let result = svc.queue_bytes_if_new("test.epub".into(), bytes).await.unwrap();
+
+        assert_eq!(result, FileQueueStatus::Queued);
+        // Verify the file was written to the bookdrop directory
+        assert!(dir.path().join("test.epub").exists());
     }
 }
