@@ -28,6 +28,15 @@ use quick_xml::{Reader, events::Event};
 
 use crate::Error;
 
+/// A chapter entry parsed from the EPUB NCX navigation document.
+struct NavPoint {
+    /// Human-readable chapter label (e.g. "Chapter 7").
+    label: String,
+    /// Anchor name in the merged HTML (e.g. "AlongCameASpid_chap_7"), matching
+    /// the `<a name="...">` injected by `clean_html`.
+    anchor: String,
+}
+
 // ── Public entry point
 // ────────────────────────────────────────────────────────
 
@@ -63,8 +72,9 @@ pub fn convert_to_mobi(source_epub: &Path, dest: &Path, sidecar: &BookSidecar, c
         buf
     };
 
-    // Parse manifest (id → href) and spine (ordered idrefs).
-    let (manifest, spine_idrefs) = parse_opf_manifest_and_spine(&opf_bytes)?;
+    // Parse manifest (id → href), spine (ordered idrefs), NCX href, and guide toc
+    // href.
+    let (manifest, spine_idrefs, ncx_href, guide_toc_href) = parse_opf_manifest_and_spine(&opf_bytes)?;
 
     // Build ordered list of HTML hrefs from the spine.
     let mut spine_hrefs: Vec<String> = Vec::new();
@@ -162,14 +172,30 @@ pub fn convert_to_mobi(source_epub: &Path, dest: &Path, sidecar: &BookSidecar, c
         merged.extend_from_slice(part);
     }
     merged.extend_from_slice(b"</body>");
-    // Add <guide> cover reference so Kindle firmware can locate the cover image.
-    if cover_bytes.is_some() {
-        merged.extend_from_slice(b"<guide><reference type=\"cover\" title=\"Cover\" href=\"kindle:embed:0001?mime=image/jpeg\"/></guide>");
+    // Build <guide> element with cover and/or ToC references.
+    // The ToC href uses fragment syntax so apply_filepos_links converts it to
+    // filepos=NNNNNNNNNN, which is how Kindle locates the HTML ToC page.
+    let toc_anchor: Option<String> = guide_toc_href.as_ref().and_then(|href| {
+        let file_part = href.split('#').next().unwrap_or(href.as_str());
+        let zip_path = resolve_zip_path(&opf_dir, file_part);
+        spine_prefix_map.get(&zip_path).cloned()
+    });
+    let has_guide = cover_bytes.is_some() || toc_anchor.is_some();
+    if has_guide {
+        merged.extend_from_slice(b"<guide>");
+        if cover_bytes.is_some() {
+            merged.extend_from_slice(b"<reference type=\"cover\" title=\"Cover\" href=\"kindle:embed:0001?mime=image/jpeg\"/>");
+        }
+        if let Some(ref anchor) = toc_anchor {
+            write!(merged, "<reference type=\"toc\" title=\"Table of Contents\" href=\"#{anchor}\"/>")?;
+        }
+        merged.extend_from_slice(b"</guide>");
     }
     merged.extend_from_slice(b"</html>");
 
     // 1b. Convert href="#anchor" → filepos=NNNNNNNNNN for Kindle MOBI6 navigation.
-    let merged = apply_filepos_links(merged);
+    // Also returns the anchor→bytepos map used to build the NCX INDX record.
+    let (merged, id_to_pos) = apply_filepos_links(&merged);
 
     // 2. Collect images.
     let mut images: Vec<Vec<u8>> = Vec::new();
@@ -185,8 +211,24 @@ pub fn convert_to_mobi(source_epub: &Path, dest: &Path, sidecar: &BookSidecar, c
         }
     }
 
-    // 3. Write PalmDB.
-    write_palmdb(dest, sidecar, &merged, &images, cover_bytes.is_some())
+    // 3. Parse NCX navigation document (if present) to build the Kindle ToC.
+    let nav_points: Vec<NavPoint> = if let Some(ref nhref) = ncx_href {
+        let ncx_zip_path = resolve_zip_path(&opf_dir, nhref);
+        if let Some(&idx) = name_to_idx.get(&ncx_zip_path) {
+            let mut f = archive.by_index(idx)?;
+            let mut buf = Vec::new();
+            f.read_to_end(&mut buf)?;
+            let ncx_dir = ncx_zip_path.rfind('/').map(|p| ncx_zip_path[..p].to_string()).unwrap_or_default();
+            parse_ncx(&buf, &ncx_dir, &spine_prefix_map)
+        } else {
+            Vec::new()
+        }
+    } else {
+        Vec::new()
+    };
+
+    // 4. Write PalmDB.
+    write_palmdb(dest, sidecar, &merged, &images, cover_bytes.is_some(), &nav_points, &id_to_pos)
 }
 
 // ── HTML helpers
@@ -508,7 +550,7 @@ fn img_src_to_kindle_embed(e: &quick_xml::events::BytesStart<'_>, src_to_record:
 ///    `filepos=0000000000` (fixed width so later positions stay stable).
 /// 3. Re-scan the rebuilt HTML to find final anchor positions, then fill in the
 ///    actual 10-digit values.
-fn apply_filepos_links(html: Vec<u8>) -> Vec<u8> {
+fn apply_filepos_links(html: &[u8]) -> (Vec<u8>, HashMap<String, usize>) {
     const ID_PAT: &[u8] = b" id=\"";
     const HREF_FRAG_PAT: &[u8] = b"href=\"#";
     const FILEPOS_PLACEHOLDER: &[u8] = b"filepos=0000000000";
@@ -569,7 +611,7 @@ fn apply_filepos_links(html: Vec<u8>) -> Vec<u8> {
         out[digits_pos..digits_pos + 10].copy_from_slice(digits.as_bytes());
     }
 
-    out
+    (out, id_to_pos)
 }
 
 /// Rewrite an `href` value for the merged MOBI document.
@@ -587,8 +629,7 @@ fn rewrite_href(href: &str, current_prefix: &str, html_zip_dir: &str, spine_pref
         return href.to_string();
     }
     // Same-file fragment: #X → #{prefix}_X
-    if href.starts_with('#') {
-        let fragment = &href[1..];
+    if let Some(fragment) = href.strip_prefix('#') {
         return format!("#{current_prefix}_{fragment}");
     }
     // Cross-document with fragment: file.xhtml#anchor → #{target_prefix}_anchor
@@ -618,11 +659,328 @@ fn spine_prefix_for(zip_path: &str) -> String {
     stem.chars().map(|c| if c.is_alphanumeric() { c } else { '_' }).collect()
 }
 
+// ── NCX / ToC helpers
+// ────────────────────────────────────────────────────────────────
+
+/// Parse an EPUB2 NCX file and return navPoints in playOrder.
+///
+/// Each navPoint's `content src` is resolved to the corresponding anchor name
+/// in the merged MOBI HTML using the spine prefix map.
+fn parse_ncx(ncx: &[u8], ncx_dir: &str, spine_prefix_map: &HashMap<String, String>) -> Vec<NavPoint> {
+    let mut reader = Reader::from_reader(ncx);
+    reader.config_mut().trim_text(true);
+    reader.config_mut().check_end_names = false;
+    let mut buf = Vec::new();
+
+    struct Pending {
+        play_order: u32,
+        label: String,
+        src: String,
+    }
+    let mut stack: Vec<Pending> = Vec::new();
+    let mut result: Vec<(u32, String, String)> = Vec::new(); // (play_order, label, src)
+    let mut in_nav_label = false;
+    let mut in_text = false;
+
+    loop {
+        buf.clear();
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) => {
+                let local = local_name_lower(e.name().as_ref());
+                match local.as_str() {
+                    "navpoint" => {
+                        let mut play_order = 0u32;
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref().eq_ignore_ascii_case(b"playorder") {
+                                if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
+                                    play_order = v.trim().parse().unwrap_or(0);
+                                }
+                            }
+                        }
+                        stack.push(Pending {
+                            play_order,
+                            label: String::new(),
+                            src: String::new(),
+                        });
+                    }
+                    "navlabel" => in_nav_label = true,
+                    "text" if in_nav_label => in_text = true,
+                    _ => {}
+                }
+            }
+            Ok(Event::Empty(ref e)) => {
+                let local = local_name_lower(e.name().as_ref());
+                if local == "content" {
+                    if let Some(top) = stack.last_mut() {
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == b"src" {
+                                if let Ok(v) = std::str::from_utf8(attr.value.as_ref()) {
+                                    top.src = v.to_string();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Ok(Event::Text(ref e)) => {
+                if in_text {
+                    if let Some(top) = stack.last_mut() {
+                        if let Ok(text) = std::str::from_utf8(e.as_ref()) {
+                            top.label.push_str(text);
+                        }
+                    }
+                }
+            }
+            Ok(Event::End(ref e)) => {
+                let local = local_name_lower(e.name().as_ref());
+                match local.as_str() {
+                    "navpoint" => {
+                        if let Some(p) = stack.pop() {
+                            let label = p.label.trim().to_string();
+                            if !label.is_empty() && !p.src.is_empty() {
+                                result.push((p.play_order, label, p.src));
+                            }
+                        }
+                    }
+                    "navlabel" => in_nav_label = false,
+                    "text" => in_text = false,
+                    _ => {}
+                }
+            }
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+
+    result.sort_by_key(|(order, _, _)| *order);
+    result
+        .into_iter()
+        .map(|(_, label, src)| {
+            let anchor = resolve_ncx_src(&src, ncx_dir, spine_prefix_map);
+            NavPoint { label, anchor }
+        })
+        .collect()
+}
+
+/// Resolve a navPoint `content src` to an anchor name in the merged MOBI HTML.
+///
+/// * `chapter.html`          → prefix of that spine item (bare chapter anchor)
+/// * `chapter.html#section`  → `{prefix}_{section}`
+fn resolve_ncx_src(src: &str, ncx_dir: &str, spine_prefix_map: &HashMap<String, String>) -> String {
+    let (file_part, fragment) = if let Some(pos) = src.find('#') {
+        (&src[..pos], Some(&src[pos + 1..]))
+    } else {
+        (src, None)
+    };
+    let zip_path = resolve_zip_path(ncx_dir, file_part);
+    if let Some(prefix) = spine_prefix_map.get(&zip_path) {
+        match fragment {
+            Some(frag) => format!("{prefix}_{frag}"),
+            None => prefix.clone(),
+        }
+    } else {
+        match fragment {
+            Some(frag) => frag.to_string(),
+            None => spine_prefix_for(file_part),
+        }
+    }
+}
+
+/// Encode an integer as a hex string with a length prefix byte, matching
+/// Calibre's `encode_number_as_hex`.  The hex string is always an even number
+/// of ASCII hex digits (upper-case).  Used as INDX entry keys.
+///
+/// Examples: 0 → [2, '0', '0'], 1 → [2, '0', '1'], 101 → [2, '6', '5'],
+/// 256 → [4, '0', '1', '0', '0'].
+fn encode_number_as_hex(num: usize) -> Vec<u8> {
+    let hex = format!("{num:X}");
+    let hex = if hex.len() % 2 != 0 { format!("0{hex}") } else { hex };
+    let mut out = Vec::with_capacity(1 + hex.len());
+    out.push(hex.len() as u8);
+    out.extend_from_slice(hex.as_bytes());
+    out
+}
+
+/// Encode a value as a MOBI variable-length integer (big-endian, MSB=1 means
+/// more bytes follow).
+fn write_varlen(buf: &mut Vec<u8>, mut value: usize) {
+    let mut bytes = [0u8; 5];
+    let mut n = 0;
+    loop {
+        bytes[n] = (value & 0x7F) as u8;
+        n += 1;
+        value >>= 7;
+        if value == 0 {
+            break;
+        }
+    }
+    // MOBI VarLen: write bytes MSB-first; the LAST byte carries the stop bit
+    // (0x80), all preceding bytes have MSB=0 (continuation).  This is the
+    // reverse of standard protobuf VarInt and matches what Kindle/Calibre uses.
+    for i in (0..n).rev() {
+        let b = bytes[i];
+        buf.push(if i == 0 { b | 0x80 } else { b });
+    }
+}
+
+/// Build the CNCX record: a packed sequence of VarLen(length) + UTF-8 label
+/// bytes for each navPoint.  Returns the raw record bytes and the byte offset
+/// of each label within that record (needed for INDX tag-3 values).
+fn build_cncx(nav_points: &[NavPoint]) -> (Vec<u8>, Vec<usize>) {
+    let mut bytes = Vec::new();
+    let mut offsets = Vec::with_capacity(nav_points.len());
+    for np in nav_points {
+        offsets.push(bytes.len());
+        let label = np.label.as_bytes();
+        write_varlen(&mut bytes, label.len());
+        bytes.extend_from_slice(label);
+    }
+    (bytes, offsets)
+}
+
+/// Build the NCX INDX records for the Kindle Table of Contents.
+///
+/// Returns `(header_indx, leaf_indx)`.  Kindle expects a two-level B-tree:
+///   ncxRecord+0 = header INDX (indexType=0): TAGX + routing entry + IDXT.
+///   ncxRecord+1 = leaf  INDX (indexType=1): actual navpoint entries + IDXT.
+///   ncxRecord+2 = CNCX: packed label strings (located by Kindle at ncxRecord+2
+///                 by convention; cncxRecord=0 in both INDX headers).
+///
+/// Tags (matching Calibre):
+///   1 = pos   (filepos byte offset in the uncompressed text)
+///   2 = size  (byte length of this navpoint's section)
+///   3 = noff  (byte offset of this entry's label in the CNCX record)
+///   4 = depth (always 1 for a flat ToC)
+///
+/// `total_text_len` is used to compute the section size of the last navpoint.
+fn build_indx(nav_points: &[NavPoint], cncx_offsets: &[usize], id_to_pos: &HashMap<String, usize>, total_text_len: usize) -> (Vec<u8>, Vec<u8>) {
+    // TAGX — lives in the header INDX; the leaf INDX references it implicitly.
+    const TAGX: &[u8] = &[
+        b'T', b'A', b'G', b'X', 0, 0, 0, 32, // tagx_len = 32 bytes total
+        0, 0, 0, 1, // control_byte_count = 1
+        1, 1, 0x01, 0, // tag 1 = pos,   bitmask bit 0
+        2, 1, 0x02, 0, // tag 2 = size,  bitmask bit 1
+        3, 1, 0x04, 0, // tag 3 = noff,  bitmask bit 2
+        4, 1, 0x08, 0, // tag 4 = depth, bitmask bit 3
+        0, 0, 0x00, 1, // terminator
+    ];
+
+    // ── Filepos list ─────────────────────────────────────────────────────────
+    let filepos_list: Vec<usize> = nav_points.iter().map(|np| id_to_pos.get(&np.anchor).copied().unwrap_or(0)).collect();
+
+    // ── Build leaf entries ───────────────────────────────────────────────────
+    // Each entry key uses encode_number_as_hex (matching Calibre and all
+    // working Kindle MOBIs): a length-prefixed even-digit hex string.
+    // e.g. 0→[2,'0','0'], 101→[2,'6','5'], 256→[4,'0','1','0','0'].
+    let leaf_entries_start: usize = 192;
+    let mut leaf_entries: Vec<Vec<u8>> = Vec::new();
+    for (i, (_np, &cncx_off)) in nav_points.iter().zip(cncx_offsets.iter()).enumerate() {
+        let key = encode_number_as_hex(i);
+        let filepos = filepos_list[i];
+        let next_pos = filepos_list.get(i + 1).copied().unwrap_or(total_text_len);
+        let section_size = next_pos.saturating_sub(filepos);
+
+        let mut entry = key;
+        entry.push(0x0F); // control byte: all 4 tags present
+        write_varlen(&mut entry, filepos); // tag 1 (pos)
+        write_varlen(&mut entry, section_size); // tag 2 (size)
+        write_varlen(&mut entry, cncx_off); // tag 3 (noff)
+        write_varlen(&mut entry, 0); // tag 4 (depth = 0, top-level)
+        leaf_entries.push(entry);
+    }
+
+    // Leaf IDXT: entry offsets from start of leaf record.
+    let mut leaf_entry_offsets: Vec<u16> = Vec::new();
+    let mut leaf_pos = leaf_entries_start;
+    for entry in &leaf_entries {
+        leaf_entry_offsets.push(leaf_pos as u16);
+        leaf_pos += entry.len();
+    }
+    let leaf_idxt_offset = leaf_pos as u32;
+
+    // ── Header INDX routing entry ────────────────────────────────────────────
+    // Calibre format (verified against working Kindle MOBIs):
+    //   encode_number_as_hex(last_index) + u16(entry_count) + padding to 4-byte
+    // boundary. The entry area always starts at offset 192+32=224.  Padding
+    // aligns the IDXT to a 4-byte boundary; for up to 65535 entries this is
+    // always at 232.
+    let last_index = nav_points.len().saturating_sub(1);
+    let last_key = encode_number_as_hex(last_index);
+    let count_bytes = (nav_points.len() as u16).to_be_bytes();
+    let entry_payload: Vec<u8> = last_key.iter().copied().chain(count_bytes).collect();
+    let entry_area_start: u32 = 192 + TAGX.len() as u32; // = 224
+    let raw_end = entry_area_start as usize + entry_payload.len();
+    let pad = (4usize.wrapping_sub(raw_end % 4)) % 4;
+    let hdr_idxt_offset: u32 = raw_end as u32 + pad as u32;
+    let hdr_entry_offset: u16 = entry_area_start as u16; // IDXT points here (start of routing entry)
+
+    // ── Assemble header INDX ─────────────────────────────────────────────────
+    let mut hdr_header = vec![0u8; 192];
+    hdr_header[0x00..0x04].copy_from_slice(b"INDX");
+    hdr_header[0x04..0x08].copy_from_slice(&192u32.to_be_bytes()); // headerLength
+    // indexType at 0x10 = 2 (inflection), matching Calibre header INDX
+    hdr_header[0x10..0x14].copy_from_slice(&2u32.to_be_bytes());
+    hdr_header[0x14..0x18].copy_from_slice(&hdr_idxt_offset.to_be_bytes()); // idxtOffset
+    hdr_header[0x18..0x1C].copy_from_slice(&1u32.to_be_bytes()); // numRecords = 1 leaf
+    hdr_header[0x1C..0x20].copy_from_slice(&65001u32.to_be_bytes()); // encoding UTF-8
+    hdr_header[0x20..0x24].copy_from_slice(&0xFFFF_FFFFu32.to_be_bytes()); // index_language sentinel
+    hdr_header[0x24..0x28].copy_from_slice(&(nav_points.len() as u32).to_be_bytes()); // totalEntries
+    hdr_header[0x34..0x38].copy_from_slice(&1u32.to_be_bytes()); // cncxCount = 1 CNCX record
+    // tagxOffset at 0xB4: TAGX starts right after the 192-byte header.
+    hdr_header[0xB4..0xB8].copy_from_slice(&192u32.to_be_bytes());
+
+    let mut hdr_idxt = Vec::new();
+    hdr_idxt.extend_from_slice(b"IDXT");
+    hdr_idxt.extend_from_slice(&hdr_entry_offset.to_be_bytes());
+    hdr_idxt.extend_from_slice(&[0u8]); // 1 byte padding (Calibre convention)
+
+    let mut header_indx = hdr_header;
+    header_indx.extend_from_slice(TAGX);
+    header_indx.extend_from_slice(&entry_payload);
+    header_indx.extend_from_slice(&vec![0u8; pad]); // alignment padding
+    header_indx.extend_from_slice(&hdr_idxt);
+
+    // ── Assemble leaf INDX ───────────────────────────────────────────────────
+    let mut leaf_header = vec![0u8; 192];
+    leaf_header[0x00..0x04].copy_from_slice(b"INDX");
+    leaf_header[0x04..0x08].copy_from_slice(&192u32.to_be_bytes()); // headerLength
+    leaf_header[0x0C..0x10].copy_from_slice(&1u32.to_be_bytes()); // indexType = 1 (leaf node)
+    leaf_header[0x14..0x18].copy_from_slice(&leaf_idxt_offset.to_be_bytes()); // idxtOffset
+    leaf_header[0x18..0x1C].copy_from_slice(&(nav_points.len() as u32).to_be_bytes()); // numEntries
+    // Leaf INDX: encoding and language fields are sentinels (Calibre convention)
+    leaf_header[0x1C..0x20].copy_from_slice(&0xFFFF_FFFFu32.to_be_bytes()); // encoding (sentinel)
+    leaf_header[0x20..0x24].copy_from_slice(&0xFFFF_FFFFu32.to_be_bytes()); // language (sentinel)
+    // tagxOffset = 0: leaf uses the header INDX's TAGX
+    // cncxRecord = 0: Kindle locates CNCX at ncxRecord+2 by convention
+
+    let mut leaf_idxt = Vec::new();
+    leaf_idxt.extend_from_slice(b"IDXT");
+    for off in &leaf_entry_offsets {
+        leaf_idxt.extend_from_slice(&off.to_be_bytes());
+    }
+    // Pad to 4-byte boundary (align_block convention from Calibre).
+    let idxt_pad = (4usize.wrapping_sub(leaf_idxt.len() % 4)) % 4;
+    leaf_idxt.extend_from_slice(&vec![0u8; idxt_pad]);
+
+    let mut leaf_indx = leaf_header;
+    for entry in &leaf_entries {
+        leaf_indx.extend_from_slice(entry);
+    }
+    leaf_indx.extend_from_slice(&leaf_idxt);
+
+    (header_indx, leaf_indx)
+}
+
 // ── OPF parsing
 // ───────────────────────────────────────────────────────────────
 
-/// Parse an OPF document and return (manifest id→href map, spine idref list).
-fn parse_opf_manifest_and_spine(opf: &[u8]) -> Result<(HashMap<String, String>, Vec<String>), Error> {
+/// Parse an OPF document and return:
+/// - manifest: id → href map
+/// - spine: ordered idref list
+/// - ncx_href: optional href of the NCX navigation document
+/// - guide_toc_href: optional href of the `<reference type="toc">` guide entry
+#[allow(clippy::type_complexity)]
+fn parse_opf_manifest_and_spine(opf: &[u8]) -> Result<(HashMap<String, String>, Vec<String>, Option<String>, Option<String>), Error> {
     let mut reader = Reader::from_reader(opf);
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
@@ -631,6 +989,13 @@ fn parse_opf_manifest_and_spine(opf: &[u8]) -> Result<(HashMap<String, String>, 
     let mut spine: Vec<String> = Vec::new();
     let mut in_manifest = false;
     let mut in_spine = false;
+    let mut in_guide = false;
+    // href of the NCX item (set when we see media-type="application/x-dtbncx+xml").
+    let mut ncx_href: Option<String> = None;
+    // Fallback: spine toc="..." attribute lets us look up the NCX id in manifest.
+    let mut spine_toc_id: Option<String> = None;
+    // href of the OPF guide's type="toc" reference (HTML ToC page).
+    let mut guide_toc_href: Option<String> = None;
 
     loop {
         buf.clear();
@@ -639,18 +1004,32 @@ fn parse_opf_manifest_and_spine(opf: &[u8]) -> Result<(HashMap<String, String>, 
                 let local = local_name_lower(e.name().as_ref());
                 match local.as_str() {
                     "manifest" => in_manifest = true,
-                    "spine" => in_spine = true,
+                    "guide" => in_guide = true,
+                    "spine" => {
+                        in_spine = true;
+                        // <spine toc="ncx-id"> — fallback if media-type lookup fails.
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == b"toc" {
+                                spine_toc_id = std::str::from_utf8(attr.value.as_ref()).ok().map(String::from);
+                            }
+                        }
+                    }
                     "item" if in_manifest => {
                         let mut id = None;
                         let mut href = None;
+                        let mut media_type = None;
                         for attr in e.attributes().flatten() {
                             match attr.key.as_ref() {
                                 b"id" => id = std::str::from_utf8(attr.value.as_ref()).ok().map(String::from),
                                 b"href" => href = std::str::from_utf8(attr.value.as_ref()).ok().map(String::from),
+                                b"media-type" => media_type = std::str::from_utf8(attr.value.as_ref()).ok().map(String::from),
                                 _ => {}
                             }
                         }
                         if let (Some(id), Some(href)) = (id, href) {
+                            if media_type.as_deref() == Some("application/x-dtbncx+xml") {
+                                ncx_href = Some(href.clone());
+                            }
                             manifest.insert(id, href);
                         }
                     }
@@ -661,6 +1040,20 @@ fn parse_opf_manifest_and_spine(opf: &[u8]) -> Result<(HashMap<String, String>, 
                                     spine.push(v.to_string());
                                 }
                             }
+                        }
+                    }
+                    "reference" if in_guide => {
+                        let mut ref_type = None;
+                        let mut ref_href = None;
+                        for attr in e.attributes().flatten() {
+                            match attr.key.as_ref() {
+                                b"type" => ref_type = std::str::from_utf8(attr.value.as_ref()).ok().map(String::from),
+                                b"href" => ref_href = std::str::from_utf8(attr.value.as_ref()).ok().map(String::from),
+                                _ => {}
+                            }
+                        }
+                        if ref_type.as_deref() == Some("toc") {
+                            guide_toc_href = ref_href;
                         }
                     }
                     _ => {}
@@ -672,15 +1065,29 @@ fn parse_opf_manifest_and_spine(opf: &[u8]) -> Result<(HashMap<String, String>, 
                     "item" if in_manifest => {
                         let mut id = None;
                         let mut href = None;
+                        let mut media_type = None;
                         for attr in e.attributes().flatten() {
                             match attr.key.as_ref() {
                                 b"id" => id = std::str::from_utf8(attr.value.as_ref()).ok().map(String::from),
                                 b"href" => href = std::str::from_utf8(attr.value.as_ref()).ok().map(String::from),
+                                b"media-type" => media_type = std::str::from_utf8(attr.value.as_ref()).ok().map(String::from),
                                 _ => {}
                             }
                         }
                         if let (Some(id), Some(href)) = (id, href) {
+                            if media_type.as_deref() == Some("application/x-dtbncx+xml") {
+                                ncx_href = Some(href.clone());
+                            }
                             manifest.insert(id, href);
+                        }
+                    }
+                    "spine" => {
+                        // Self-closing <spine toc="..."/> (unusual but possible).
+                        in_spine = true;
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == b"toc" {
+                                spine_toc_id = std::str::from_utf8(attr.value.as_ref()).ok().map(String::from);
+                            }
                         }
                     }
                     "itemref" if in_spine => {
@@ -692,6 +1099,20 @@ fn parse_opf_manifest_and_spine(opf: &[u8]) -> Result<(HashMap<String, String>, 
                             }
                         }
                     }
+                    "reference" if in_guide => {
+                        let mut ref_type = None;
+                        let mut ref_href = None;
+                        for attr in e.attributes().flatten() {
+                            match attr.key.as_ref() {
+                                b"type" => ref_type = std::str::from_utf8(attr.value.as_ref()).ok().map(String::from),
+                                b"href" => ref_href = std::str::from_utf8(attr.value.as_ref()).ok().map(String::from),
+                                _ => {}
+                            }
+                        }
+                        if ref_type.as_deref() == Some("toc") {
+                            guide_toc_href = ref_href;
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -700,6 +1121,7 @@ fn parse_opf_manifest_and_spine(opf: &[u8]) -> Result<(HashMap<String, String>, 
                 match local.as_str() {
                     "manifest" => in_manifest = false,
                     "spine" => in_spine = false,
+                    "guide" => in_guide = false,
                     _ => {}
                 }
             }
@@ -709,14 +1131,30 @@ fn parse_opf_manifest_and_spine(opf: &[u8]) -> Result<(HashMap<String, String>, 
         }
     }
 
-    Ok((manifest, spine))
+    // Fallback: resolve NCX href via spine toc= attribute if media-type lookup
+    // missed it.
+    if ncx_href.is_none() {
+        if let Some(ref toc_id) = spine_toc_id {
+            ncx_href = manifest.get(toc_id).cloned();
+        }
+    }
+
+    Ok((manifest, spine, ncx_href, guide_toc_href))
 }
 
 // ── PalmDB writer
 // ─────────────────────────────────────────────────────────────
 
 /// Write a minimal MOBI6 / PalmDB file to `dest`.
-fn write_palmdb(dest: &Path, sidecar: &BookSidecar, html: &[u8], images: &[Vec<u8>], has_cover: bool) -> Result<(), Error> {
+fn write_palmdb(
+    dest: &Path,
+    sidecar: &BookSidecar,
+    html: &[u8],
+    images: &[Vec<u8>],
+    has_cover: bool,
+    nav_points: &[NavPoint],
+    id_to_pos: &HashMap<String, usize>,
+) -> Result<(), Error> {
     // Chunk HTML into records of at most 4096 bytes.
     const MAX_TEXT_RECORD: usize = 4096;
     let text_chunks: Vec<&[u8]> = html.chunks(MAX_TEXT_RECORD).collect();
@@ -727,7 +1165,20 @@ fn write_palmdb(dest: &Path, sidecar: &BookSidecar, html: &[u8], images: &[Vec<u
     let first_image_index = image_record_start as u32;
     let cover_record_index = if has_cover { image_record_start as u32 } else { 0xFFFF_FFFF };
 
-    let total_records = 1 + text_record_count + images.len();
+    // Build NCX INDX (header + leaf) + CNCX records (only when nav_points are
+    // available). Record layout: ncxRecord+0 = header INDX, ncxRecord+1 = leaf
+    // INDX, ncxRecord+2 = CNCX.
+    let (header_indx_record, leaf_indx_record, cncx_record, ncx_record_index) = if nav_points.is_empty() {
+        (None, None, None, 0xFFFF_FFFFu32)
+    } else {
+        let ncx_idx = (1 + text_record_count + images.len()) as u32;
+        let (cncx_bytes, cncx_offsets) = build_cncx(nav_points);
+        let (header_indx_bytes, leaf_indx_bytes) = build_indx(nav_points, &cncx_offsets, id_to_pos, total_text_len as usize);
+        (Some(header_indx_bytes), Some(leaf_indx_bytes), Some(cncx_bytes), ncx_idx)
+    };
+
+    let ncx_extra = if header_indx_record.is_some() { 3 } else { 0 }; // header INDX + leaf INDX + CNCX
+    let total_records = 1 + text_record_count + images.len() + ncx_extra;
 
     // Build EXTH block first (we need its size for record 0 layout).
     let exth_bytes = build_exth(sidecar, cover_record_index, has_cover);
@@ -744,6 +1195,7 @@ fn write_palmdb(dest: &Path, sidecar: &BookSidecar, html: &[u8], images: &[Vec<u
         &exth_bytes,
         text_record_count as u32,
         image_record_start as u32,
+        ncx_record_index,
     );
 
     // Compute record offsets.
@@ -772,6 +1224,19 @@ fn write_palmdb(dest: &Path, sidecar: &BookSidecar, html: &[u8], images: &[Vec<u
         offsets.push(current);
         current += img.len() as u32;
     }
+    if let Some(ref indx) = header_indx_record {
+        offsets.push(current);
+        current += indx.len() as u32;
+    }
+    if let Some(ref indx) = leaf_indx_record {
+        offsets.push(current);
+        current += indx.len() as u32;
+    }
+    if let Some(ref cncx) = cncx_record {
+        offsets.push(current);
+        current += cncx.len() as u32;
+    }
+    let _ = current; // final value not needed
 
     // Now write the file.
     let mut f = std::fs::File::create(dest)?;
@@ -821,6 +1286,15 @@ fn write_palmdb(dest: &Path, sidecar: &BookSidecar, html: &[u8], images: &[Vec<u
     for img in images {
         f.write_all(img)?;
     }
+    if let Some(ref indx) = header_indx_record {
+        f.write_all(indx)?;
+    }
+    if let Some(ref indx) = leaf_indx_record {
+        f.write_all(indx)?;
+    }
+    if let Some(ref cncx) = cncx_record {
+        f.write_all(cncx)?;
+    }
 
     f.flush()?;
     Ok(())
@@ -835,6 +1309,7 @@ fn build_record0(
     exth_bytes: &[u8],
     last_text_record: u32, // = text_record_count (1-based last index)
     _image_record_start: u32,
+    ncx_record: u32, // record index of INDX record, or 0xFFFFFFFF if no NCX
 ) -> Vec<u8> {
     let mut rec = Vec::new();
 
@@ -853,7 +1328,7 @@ fn build_record0(
     let full_name_offset: u32 = 16 + 232 + exth_bytes.len() as u32;
     let full_name_length: u32 = title_bytes.len() as u32;
     let first_non_book_index: u32 = last_text_record + 1;
-    let exth_flags: u32 = if exth_bytes.is_empty() { 0 } else { 0x40 };
+    let exth_flags: u32 = if exth_bytes.is_empty() { 0 } else { 0x50 };
 
     let mobi_start = rec.len();
     rec.extend_from_slice(b"MOBI"); //  0 identifier
@@ -862,7 +1337,10 @@ fn build_record0(
     rec.extend_from_slice(&65001u32.to_be_bytes()); // 12 textEncoding (UTF-8)
     rec.extend_from_slice(&0u32.to_be_bytes()); // 16 uniqueID
     rec.extend_from_slice(&6u32.to_be_bytes()); // 20 fileVersion
-    rec.extend_from_slice(&[0u8; 40]); // 24 reserved1
+    // 24-64: 10 × 0xFFFFFFFF sentinel values for absent index records
+    for _ in 0..10 {
+        rec.extend_from_slice(&0xFFFF_FFFFu32.to_be_bytes());
+    }
     rec.extend_from_slice(&first_non_book_index.to_be_bytes()); // 64 firstNonBookIndex
     rec.extend_from_slice(&full_name_offset.to_be_bytes()); // 68 fullNameOffset
     rec.extend_from_slice(&full_name_length.to_be_bytes()); // 72 fullNameLength
@@ -881,15 +1359,21 @@ fn build_record0(
     rec.extend_from_slice(&0xFFFF_FFFFu32.to_be_bytes()); // 152 drmCount
     rec.extend_from_slice(&0u32.to_be_bytes()); // 156 drmSize
     rec.extend_from_slice(&0u32.to_be_bytes()); // 160 drmFlags
-    rec.extend_from_slice(&[0u8; 8]); // 164 reserved3
-    rec.extend_from_slice(&1u16.to_be_bytes()); // 172 firstContentRecordNumber
-    rec.extend_from_slice(&(last_text_record as u16).to_be_bytes()); // 174 lastContentRecordNumber
-    rec.extend_from_slice(&1u32.to_be_bytes()); // 176 unknown1
-    rec.extend_from_slice(&0xFFFF_FFFFu32.to_be_bytes()); // 180 fcisRecord
-    rec.extend_from_slice(&1u32.to_be_bytes()); // 184 unknown2
-    rec.extend_from_slice(&0xFFFF_FFFFu32.to_be_bytes()); // 188 flisRecord
-    rec.extend_from_slice(&[0u8; 16]); // 192 unknown3
-    rec.extend_from_slice(&0u16.to_be_bytes()); // 208 extraDataFlags
+    rec.extend_from_slice(&[0u8; 12]); // 164 reserved3
+    rec.extend_from_slice(&1u16.to_be_bytes()); // 176 firstContentRecordNumber
+    rec.extend_from_slice(&(last_text_record as u16).to_be_bytes()); // 178 lastContentRecordNumber
+    rec.extend_from_slice(&1u32.to_be_bytes()); // 180 unknown constant
+    rec.extend_from_slice(&0xFFFF_FFFFu32.to_be_bytes()); // 184 fcisRecord (absent)
+    rec.extend_from_slice(&0u32.to_be_bytes()); // 188 fcisCount
+    rec.extend_from_slice(&0xFFFF_FFFFu32.to_be_bytes()); // 192 flisRecord (absent)
+    rec.extend_from_slice(&0u32.to_be_bytes()); // 196 flisCount
+    rec.extend_from_slice(&[0u8; 8]); // 200 unknown3
+    rec.extend_from_slice(&0xFFFF_FFFFu32.to_be_bytes()); // 208 unknown sentinel
+    rec.extend_from_slice(&0u32.to_be_bytes()); // 212 unknown
+    rec.extend_from_slice(&0xFFFF_FFFFu32.to_be_bytes()); // 216 unknown sentinel
+    rec.extend_from_slice(&0xFFFF_FFFFu32.to_be_bytes()); // 220 unknown sentinel
+    rec.extend_from_slice(&0u32.to_be_bytes()); // 224 extraDataFlags (u32)
+    rec.extend_from_slice(&ncx_record.to_be_bytes()); // 228 primary_index_record_idx (NCX)
 
     // Pad MOBI header to exactly 232 bytes from mobi_start.
     let mobi_written = rec.len() - mobi_start;
@@ -1190,5 +1674,207 @@ mod tests {
         let series_bytes = b"Foundation Series";
         let found = out.windows(series_bytes.len()).any(|w| w == series_bytes);
         assert!(found, "series name should appear in MOBI output");
+    }
+
+    // ── Test 5: NCX-equipped EPUB produces INDX + CNCX records ───────────
+
+    const CONTENT_OPF_WITH_NCX: &[u8] = br#"<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>NCX Test Book</dc:title>
+    <dc:creator>NCX Author</dc:creator>
+  </metadata>
+  <manifest>
+    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ch2" href="chapter2.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine toc="ncx">
+    <itemref idref="ch1"/>
+    <itemref idref="ch2"/>
+  </spine>
+</package>"#;
+
+    const TOC_NCX: &[u8] = br#"<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE ncx PUBLIC "-//NISO//DTD ncx 2005-1//EN" "http://www.daisy.org/z3986/2005/ncx-2005-1.dtd">
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+  <navMap>
+    <navPoint id="np1" playOrder="1">
+      <navLabel><text>Chapter One</text></navLabel>
+      <content src="chapter1.xhtml"/>
+    </navPoint>
+    <navPoint id="np2" playOrder="2">
+      <navLabel><text>Chapter Two</text></navLabel>
+      <content src="chapter2.xhtml"/>
+    </navPoint>
+  </navMap>
+</ncx>"#;
+
+    fn build_test_epub_with_ncx() -> Vec<u8> {
+        let stored = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        let cursor = std::io::Cursor::new(Vec::new());
+        let mut zip = zip::ZipWriter::new(cursor);
+
+        zip.start_file("mimetype", stored).unwrap();
+        zip.write_all(b"application/epub+zip").unwrap();
+
+        zip.start_file("META-INF/container.xml", stored).unwrap();
+        zip.write_all(CONTAINER_XML).unwrap();
+
+        zip.start_file("OEBPS/content.opf", stored).unwrap();
+        zip.write_all(CONTENT_OPF_WITH_NCX).unwrap();
+
+        zip.start_file("OEBPS/toc.ncx", stored).unwrap();
+        zip.write_all(TOC_NCX).unwrap();
+
+        zip.start_file("OEBPS/chapter1.xhtml", stored).unwrap();
+        zip.write_all(b"<html><body><p>Chapter one body.</p></body></html>").unwrap();
+
+        zip.start_file("OEBPS/chapter2.xhtml", stored).unwrap();
+        zip.write_all(b"<html><body><p>Chapter two body.</p></body></html>").unwrap();
+
+        zip.finish().unwrap().into_inner()
+    }
+
+    #[test]
+    fn test_ncx_epub_produces_indx_and_cncx_records() {
+        let dir = tempdir().unwrap();
+        let epub_path = dir.path().join("ncx_test.epub");
+        let mobi_path = dir.path().join("ncx_test.mobi");
+
+        std::fs::write(&epub_path, build_test_epub_with_ncx()).unwrap();
+        let sidecar = make_sidecar("NCX Test Book", "NCX Author");
+
+        convert_to_mobi(&epub_path, &mobi_path, &sidecar, None).expect("convert_to_mobi with NCX failed");
+
+        let out = std::fs::read(&mobi_path).unwrap();
+
+        // INDX magic must appear somewhere after the text records.
+        let indx_magic = b"INDX";
+        assert!(out.windows(4).any(|w| w == indx_magic), "INDX record should be present in NCX MOBI output");
+
+        // TAGX magic must appear (it's embedded in the INDX record).
+        let tagx_magic = b"TAGX";
+        assert!(out.windows(4).any(|w| w == tagx_magic), "TAGX section should be present in INDX record");
+
+        // Chapter label "Chapter One" must appear in the CNCX record.
+        let label = b"Chapter One";
+        assert!(
+            out.windows(label.len()).any(|w| w == label),
+            "chapter label 'Chapter One' should appear in CNCX record"
+        );
+
+        // The MOBI header ncxRecord field (at byte offset 16+228 = 244 from record 0
+        // start) must not be 0xFFFFFFFF — it should point to the INDX record.
+        // Record 0 starts at offset data_start in the file.  For a 2-record text body +
+        // no images, ncxRecord = 3 (records 1,2 = text; record 3 = INDX).
+        // We verify only that the field is not the "no NCX" sentinel.
+        let num_records = u16::from_be_bytes([out[76], out[77]]) as usize;
+        let record_list_start = 78usize;
+        let record0_offset = u32::from_be_bytes([
+            out[record_list_start],
+            out[record_list_start + 1],
+            out[record_list_start + 2],
+            out[record_list_start + 3],
+        ]) as usize;
+        let _ = num_records;
+        // ncxRecord is at MOBI-header offset 228 (last 4 bytes), MOBI header starts at
+        // record0+16.
+        let ncx_record_field_pos = record0_offset + 16 + 228;
+        let ncx_record_val = u32::from_be_bytes([
+            out[ncx_record_field_pos],
+            out[ncx_record_field_pos + 1],
+            out[ncx_record_field_pos + 2],
+            out[ncx_record_field_pos + 3],
+        ]);
+        assert_ne!(ncx_record_val, 0xFFFF_FFFF, "ncxRecord field should not be the 'no NCX' sentinel");
+
+        // Locate the header INDX record (at ncxRecord) and verify its indexType=0.
+        let indx_record_num = ncx_record_val as usize;
+        let hdr_indx_offset = u32::from_be_bytes([
+            out[record_list_start + indx_record_num * 8],
+            out[record_list_start + indx_record_num * 8 + 1],
+            out[record_list_start + indx_record_num * 8 + 2],
+            out[record_list_start + indx_record_num * 8 + 3],
+        ]) as usize;
+        assert_eq!(&out[hdr_indx_offset..hdr_indx_offset + 4], b"INDX", "header INDX magic");
+        let hdr_index_type = u32::from_be_bytes([
+            out[hdr_indx_offset + 0x0C],
+            out[hdr_indx_offset + 0x0D],
+            out[hdr_indx_offset + 0x0E],
+            out[hdr_indx_offset + 0x0F],
+        ]);
+        assert_eq!(hdr_index_type, 0, "header INDX indexType should be 0 (interior/root)");
+
+        // Leaf INDX is at ncxRecord+1 with indexType=1.
+        let leaf_record_num = indx_record_num + 1;
+        let leaf_indx_offset = u32::from_be_bytes([
+            out[record_list_start + leaf_record_num * 8],
+            out[record_list_start + leaf_record_num * 8 + 1],
+            out[record_list_start + leaf_record_num * 8 + 2],
+            out[record_list_start + leaf_record_num * 8 + 3],
+        ]) as usize;
+        assert_eq!(&out[leaf_indx_offset..leaf_indx_offset + 4], b"INDX", "leaf INDX magic");
+        let leaf_index_type = u32::from_be_bytes([
+            out[leaf_indx_offset + 0x0C],
+            out[leaf_indx_offset + 0x0D],
+            out[leaf_indx_offset + 0x0E],
+            out[leaf_indx_offset + 0x0F],
+        ]);
+        assert_eq!(leaf_index_type, 1, "leaf INDX indexType should be 1 (leaf)");
+
+        // CNCX is at ncxRecord+2. Verify chapter label is present in it.
+        let cncx_record_num = indx_record_num + 2;
+        let cncx_record_offset = u32::from_be_bytes([
+            out[record_list_start + cncx_record_num * 8],
+            out[record_list_start + cncx_record_num * 8 + 1],
+            out[record_list_start + cncx_record_num * 8 + 2],
+            out[record_list_start + cncx_record_num * 8 + 3],
+        ]) as usize;
+        let cncx_next_offset = if cncx_record_num + 1 < num_records {
+            u32::from_be_bytes([
+                out[record_list_start + (cncx_record_num + 1) * 8],
+                out[record_list_start + (cncx_record_num + 1) * 8 + 1],
+                out[record_list_start + (cncx_record_num + 1) * 8 + 2],
+                out[record_list_start + (cncx_record_num + 1) * 8 + 3],
+            ]) as usize
+        } else {
+            out.len()
+        };
+        let cncx_data = &out[cncx_record_offset..cncx_next_offset];
+        assert!(
+            cncx_data.windows(label.len()).any(|w| w == label),
+            "CNCX record at ncxRecord+2 should contain chapter label"
+        );
+    }
+
+    #[test]
+    fn test_no_ncx_epub_sets_ncx_record_sentinel() {
+        let dir = tempdir().unwrap();
+        let epub_path = dir.path().join("no_ncx.epub");
+        let mobi_path = dir.path().join("no_ncx.mobi");
+
+        std::fs::write(&epub_path, build_test_epub()).unwrap();
+        let sidecar = make_sidecar("No NCX Book", "Plain Author");
+
+        convert_to_mobi(&epub_path, &mobi_path, &sidecar, None).expect("convert_to_mobi failed");
+
+        let out = std::fs::read(&mobi_path).unwrap();
+
+        let record_list_start = 78usize;
+        let record0_offset = u32::from_be_bytes([
+            out[record_list_start],
+            out[record_list_start + 1],
+            out[record_list_start + 2],
+            out[record_list_start + 3],
+        ]) as usize;
+        let ncx_record_field_pos = record0_offset + 16 + 228;
+        let ncx_record_val = u32::from_be_bytes([
+            out[ncx_record_field_pos],
+            out[ncx_record_field_pos + 1],
+            out[ncx_record_field_pos + 2],
+            out[ncx_record_field_pos + 3],
+        ]);
+        assert_eq!(ncx_record_val, 0xFFFF_FFFF, "ncxRecord field should be 0xFFFFFFFF when no NCX");
     }
 }

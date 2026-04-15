@@ -191,13 +191,6 @@ pub(crate) fn SettingsPage() -> Element {
                             "Messages"
                         }
                     }
-                    li {
-                        button {
-                            class: nav_button_class(Section::Application),
-                            onclick: move |_| active_section.set(Section::Application),
-                            "Application"
-                        }
-                    }
                 }
             }
             // ----------------------------------------------------------------
