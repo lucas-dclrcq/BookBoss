@@ -2,6 +2,7 @@
 
 pub(crate) mod prelude;
 
+pub(crate) mod app_settings;
 pub(crate) mod authors;
 pub(crate) mod book_authors;
 pub(crate) mod book_files;
