@@ -44,12 +44,14 @@ impl JobHandler for ResetStaleImportJobsHandler {
         // Pre-check file existence for stuck in-progress jobs so we can move
         // missing-file jobs to Error rather than endlessly resetting them.
         let mut missing_file_jobs: Vec<(String, String)> = Vec::new();
+        let mut reset_to_pending_count: usize = 0;
         let mut jobs_to_update = stale_jobs.clone();
         for job in &mut jobs_to_update {
             if matches!(job.status, ImportStatus::Extracting | ImportStatus::Identifying) {
                 if std::path::Path::new(&job.file_path).exists() {
                     job.status = ImportStatus::Pending;
                     job.error_message = Some("Reset by health check: stuck in processing state".to_string());
+                    reset_to_pending_count += 1;
                 } else {
                     let file_name = std::path::Path::new(&job.file_path)
                         .file_name()
@@ -58,13 +60,11 @@ impl JobHandler for ResetStaleImportJobsHandler {
                     job.status = ImportStatus::Error;
                     job.error_message = Some(format!("file no longer exists at {}", job.file_path));
                 }
-            } else if matches!(job.status, ImportStatus::Pending | ImportStatus::NeedsReview) {
-                // These are "stale" by age but not stuck — log but don't change status.
-                job.error_message = Some("Flagged by health check: stale for >24h".to_string());
             }
+            // Pending / NeedsReview jobs are stale by age but not stuck — no
+            // status change.
         }
 
-        let count = jobs_to_update.len();
         let import_repo = self.core.repository_service.import_job_repository().clone();
 
         transaction(&**self.core.repository_service.repository(), |tx| {
@@ -92,15 +92,14 @@ impl JobHandler for ResetStaleImportJobsHandler {
                 .await?;
         }
 
-        tracing::warn!(count, "processed stale import jobs");
-
-        if count > missing_file_jobs.len() {
+        if reset_to_pending_count > 0 {
+            tracing::warn!(reset_to_pending_count, "reset stuck import jobs to Pending");
             self.core
                 .system_message_service
                 .add_message(NewSystemMessage {
                     source_task: Self::JOB_TYPE.to_string(),
                     severity: MessageSeverity::Warning,
-                    message: format!("Found {count} stale import job(s) — reset stuck jobs to Pending"),
+                    message: format!("Reset {reset_to_pending_count} stuck import job(s) to Pending"),
                 })
                 .await?;
         }
