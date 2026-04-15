@@ -291,7 +291,11 @@ pub(crate) fn create_bookdrop_scan_subsystem(
     scan_interval: Duration,
 ) -> (Arc<dyn ImportJobService>, BookdropScanSubsystem) {
     let (trigger, scan_rx) = create_scan_channel();
-    let import_job_service: Arc<dyn ImportJobService> = Arc::new(ImportJobServiceImpl::new(repository_service, Some(trigger.clone())));
+    let import_job_service: Arc<dyn ImportJobService> = Arc::new(ImportJobServiceImpl::new(
+        repository_service,
+        Some(trigger.clone()),
+        Some(bookdrop_path.clone()),
+    ));
     let scan_worker = ScanWorker {
         bookdrop_path,
         scan_rx,

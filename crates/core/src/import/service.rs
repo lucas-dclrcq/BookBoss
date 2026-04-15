@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use chrono::{DateTime, Utc};
 
@@ -61,13 +61,15 @@ pub trait ImportJobService: Send + Sync {
 pub(crate) struct ImportJobServiceImpl {
     repository_service: Arc<RepositoryService>,
     scan_trigger: Option<ScanTrigger>,
+    pub(super) bookdrop_path: Option<PathBuf>,
 }
 
 impl ImportJobServiceImpl {
-    pub(super) fn new(repository_service: Arc<RepositoryService>, scan_trigger: Option<ScanTrigger>) -> Self {
+    pub(super) fn new(repository_service: Arc<RepositoryService>, scan_trigger: Option<ScanTrigger>, bookdrop_path: Option<PathBuf>) -> Self {
         Self {
             repository_service,
             scan_trigger,
+            bookdrop_path,
         }
     }
 }
@@ -264,7 +266,7 @@ mod tests {
                 .build()
                 .expect("all fields provided"),
         );
-        ImportJobServiceImpl::new(repository_service, None)
+        ImportJobServiceImpl::new(repository_service, None, None)
     }
 
     fn create_service_with_all_repos(import_mock: MockImportJobRepository, book_mock: MockBookRepository, job_mock: MockJobRepository) -> ImportJobServiceImpl {
@@ -276,7 +278,7 @@ mod tests {
                 .build()
                 .expect("all fields provided"),
         );
-        ImportJobServiceImpl::new(repository_service, None)
+        ImportJobServiceImpl::new(repository_service, None, None)
     }
 
     fn create_service_with_author_repos(
@@ -294,7 +296,7 @@ mod tests {
                 .build()
                 .expect("all fields provided"),
         );
-        ImportJobServiceImpl::new(repository_service, None)
+        ImportJobServiceImpl::new(repository_service, None, None)
     }
 
     fn fake_job(status: ImportStatus) -> ImportJob {
