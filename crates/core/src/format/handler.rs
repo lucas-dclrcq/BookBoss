@@ -238,8 +238,11 @@ impl EnrichBookFilesHandler {
 
         tracing::info!(book_id, "book file enrichment complete (EPUB + KEPUB)");
 
-        // ── 10. Enqueue MOBI conversion if enabled ───────────────────────────
-        if self.core.app_setting_service.mobi_enabled().await? {
+        // ── 10. Enqueue MOBI conversion if needed ────────────────────────────
+        // Enqueue when mobi_enabled (new conversion) OR an enriched MOBI
+        // already exists (keep existing file up to date after metadata changes).
+        let mobi_exists = files.iter().any(|f| f.file_role == FileRole::Enriched && f.format == FileFormat::Mobi);
+        if mobi_exists || self.core.app_setting_service.mobi_enabled().await? {
             use crate::{format::mobi_handler::ConvertMobiPayload, jobs::JobServiceExt};
             self.core.job_service.enqueue(&ConvertMobiPayload { book_id }).await?;
         }

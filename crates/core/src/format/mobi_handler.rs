@@ -37,10 +37,7 @@ impl ConvertMobiHandler {
 impl ConvertMobiHandler {
     async fn run(&self, book_id: BookId) -> Result<(), Error> {
         // ── 1. Check mobi_enabled setting ─────────────────────────────────────
-        if !self.core.app_setting_service.mobi_enabled().await? {
-            tracing::debug!(book_id, "MOBI conversion skipped: mobi_enabled is false");
-            return Ok(());
-        }
+        let mobi_enabled = self.core.app_setting_service.mobi_enabled().await?;
 
         // ── 2. Load all book data in a single read transaction ────────────────
         let repo = self.core.repository_service.clone();
@@ -87,6 +84,15 @@ impl ConvertMobiHandler {
                 })
             })
             .await?;
+
+        // ── 2b. Bail if mobi disabled and no existing MOBI file ───────────────
+        // When mobi_enabled is false we still re-convert if the book already has
+        // a MOBI file, keeping it in sync with any metadata changes.
+        let mobi_exists = files.iter().any(|f| f.file_role == FileRole::Enriched && f.format == FileFormat::Mobi);
+        if !mobi_enabled && !mobi_exists {
+            tracing::debug!(book_id, "MOBI conversion skipped: mobi_enabled is false and no existing MOBI file");
+            return Ok(());
+        }
 
         // ── 3. Find the enriched EPUB file ────────────────────────────────────
         let Some(enriched_file) = files.iter().find(|f| f.file_role == FileRole::Enriched && f.format == FileFormat::Epub) else {
@@ -229,21 +235,34 @@ impl JobHandler for ConvertMobiHandler {
 mod tests {
     use super::*;
     use crate::{
-        app_setting::repository::MockAppSettingRepository, book::repository::book::MockBookRepository, message::repository::MockSystemMessageRepository,
-        repository::testing::default_repository_service_builder, test_support::*,
+        app_setting::repository::MockAppSettingRepository,
+        book::{Book, BookStatus, repository::book::MockBookRepository},
+        message::repository::MockSystemMessageRepository,
+        repository::testing::default_repository_service_builder,
+        test_support::*,
     };
 
-    /// Builds a `CoreServices` with `mobi_enabled` returning `false` (no
-    /// setting row in the DB) and a book_repo that panics on any call —
-    /// verifies that the handler exits before touching the database.
+    /// Builds a `CoreServices` with `mobi_enabled` returning `false` and no
+    /// existing MOBI file for the book — verifies that the handler exits after
+    /// loading files without attempting conversion.
     #[tokio::test]
-    async fn skips_when_mobi_disabled() {
+    async fn skips_when_mobi_disabled_and_no_existing_mobi() {
         // mobi_enabled() calls AppSettingRepository::get — return None → false
         let mut app_setting_repo = MockAppSettingRepository::new();
         app_setting_repo.expect_get().returning(|_, _| Box::pin(std::future::ready(Ok(None))));
 
-        // book_repo should never be called — we return before any DB access
-        let book_repo = MockBookRepository::new();
+        // Book exists but has no MOBI file — handler should skip conversion
+        let mut book_repo = MockBookRepository::new();
+        book_repo
+            .expect_find_by_id()
+            .returning(|_, _| Box::pin(std::future::ready(Ok(Some(Book::fake(42, "Test Book", BookStatus::Available))))));
+        book_repo.expect_files_for_book().returning(|_, _| Box::pin(std::future::ready(Ok(vec![]))));
+        book_repo.expect_authors_for_book().returning(|_, _| Box::pin(std::future::ready(Ok(vec![]))));
+        book_repo
+            .expect_identifiers_for_book()
+            .returning(|_, _| Box::pin(std::future::ready(Ok(vec![]))));
+        book_repo.expect_genres_for_book().returning(|_, _| Box::pin(std::future::ready(Ok(vec![]))));
+        book_repo.expect_tags_for_book().returning(|_, _| Box::pin(std::future::ready(Ok(vec![]))));
 
         let repo_service = Arc::new(
             default_repository_service_builder()
@@ -261,7 +280,7 @@ mod tests {
 
         let handler = ConvertMobiHandler::new(core);
         let result = handler.handle(ConvertMobiPayload { book_id: 42 }).await;
-        assert!(result.is_ok(), "handler should return Ok when mobi_enabled is false");
+        assert!(result.is_ok(), "handler should return Ok when mobi_enabled is false and no MOBI exists");
     }
 
     /// When `mobi_enabled` is true but the book is not found, the handler
