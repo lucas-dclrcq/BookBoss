@@ -12,6 +12,7 @@ use std::sync::Arc;
 
 use bb_core::{
     Error,
+    app_setting::AppSettingRepository,
     auth::SessionRepository,
     book::{AuthorRepository, BookRepository, GenreRepository, PublisherRepository, SeriesRepository, TagRepository},
     collection::CollectionRepository,
@@ -44,8 +45,8 @@ mod transaction;
 
 use crate::{
     adapters::{
-        author::AuthorRepositoryAdapter, book::BookRepositoryAdapter, collection::CollectionRepositoryAdapter, device::DeviceRepositoryAdapter,
-        genre::GenreRepositoryAdapter, import_job::ImportJobRepositoryAdapter, job::JobRepositoryAdapter,
+        app_setting::AppSettingRepositoryAdapter, author::AuthorRepositoryAdapter, book::BookRepositoryAdapter, collection::CollectionRepositoryAdapter,
+        device::DeviceRepositoryAdapter, genre::GenreRepositoryAdapter, import_job::ImportJobRepositoryAdapter, job::JobRepositoryAdapter,
         koreader_document_hash::KoReaderDocumentHashRepositoryAdapter, library::LibraryRepositoryAdapter, publisher::PublisherRepositoryAdapter,
         series::SeriesRepositoryAdapter, session::SessionRepositoryAdapter, shelf::ShelfRepositoryAdapter, system_message::SystemMessageRepositoryAdapter,
         tag::TagRepositoryAdapter, user::UserRepositoryAdapter, user_book_metadata::UserBookMetadataRepositoryAdapter,
@@ -99,6 +100,7 @@ pub async fn create_repository_service(database: DatabaseConnection) -> Result<A
         .device_repository(Arc::new(DeviceRepositoryAdapter::new()) as Arc<dyn DeviceRepository>)
         .system_message_repository(Arc::new(SystemMessageRepositoryAdapter::new()) as Arc<dyn SystemMessageRepository>)
         .koreader_document_hash_repository(Arc::new(KoReaderDocumentHashRepositoryAdapter::new()) as Arc<dyn KoReaderDocumentHashRepository>)
+        .app_setting_repository(Arc::new(AppSettingRepositoryAdapter::new()) as Arc<dyn AppSettingRepository>)
         .build()
         .map_err(|e| Error::Infrastructure(e.to_string()))?;
 

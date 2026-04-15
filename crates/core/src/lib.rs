@@ -1,3 +1,4 @@
+pub mod app_setting;
 pub mod auth;
 pub mod book;
 pub mod collection;
@@ -38,6 +39,7 @@ use tokio_graceful_shutdown::{
 };
 
 use crate::{
+    app_setting::{AppSettingService, AppSettingServiceImpl},
     auth::{AuthService, AuthServiceImpl},
     book::{BookService, BookServiceImpl},
     collection::{CollectionService, CollectionServiceImpl},
@@ -102,6 +104,7 @@ pub struct CoreServices {
     pub event_service: Arc<dyn EventService>,
     pub system_message_service: Arc<dyn SystemMessageService>,
     pub koreader_service: Arc<dyn KoReaderService>,
+    pub app_setting_service: Arc<dyn AppSettingService>,
     /// Internal: holds the bookdrop scan subsystem until `CoreSubsystem` takes
     /// it.
     bookdrop_scan_subsystem: Mutex<Option<BookdropScanSubsystem>>,
@@ -174,6 +177,7 @@ impl CoreServices {
             system_message_service,
             event_service,
             koreader_service: Arc::new(KoReaderServiceImpl::new(repository_service.clone())),
+            app_setting_service: Arc::new(AppSettingServiceImpl::new(repository_service.clone())),
             bookdrop_scan_subsystem: Mutex::new(bookdrop_scan_subsystem),
             health_subsystem: Mutex::new(Some(health_subsystem)),
         }

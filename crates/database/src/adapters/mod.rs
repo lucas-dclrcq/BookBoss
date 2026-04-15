@@ -1,3 +1,4 @@
+pub(crate) mod app_setting;
 pub(crate) mod author;
 pub(crate) mod book;
 pub(crate) mod collection;

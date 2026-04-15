@@ -4,6 +4,7 @@ use derive_builder::Builder;
 
 use crate::{
     Error,
+    app_setting::AppSettingRepository,
     auth::SessionRepository,
     book::{AuthorRepository, BookRepository, GenreRepository, PublisherRepository, SeriesRepository, TagRepository},
     collection::CollectionRepository,
@@ -40,6 +41,7 @@ pub struct RepositoryService {
     device_repository: Arc<dyn DeviceRepository>,
     system_message_repository: Arc<dyn SystemMessageRepository>,
     koreader_document_hash_repository: Arc<dyn KoReaderDocumentHashRepository>,
+    app_setting_repository: Arc<dyn AppSettingRepository>,
 }
 
 impl RepositoryService {
@@ -155,6 +157,12 @@ impl RepositoryService {
     #[must_use]
     pub fn koreader_document_hash_repository(&self) -> &Arc<dyn KoReaderDocumentHashRepository> {
         &self.koreader_document_hash_repository
+    }
+
+    /// Returns a reference to the app setting repository.
+    #[must_use]
+    pub fn app_setting_repository(&self) -> &Arc<dyn AppSettingRepository> {
+        &self.app_setting_repository
     }
 }
 
@@ -287,6 +295,7 @@ pub(crate) mod testing {
     use super::{MockRepository, RepositoryServiceBuilder, Transaction};
     use crate::{
         Error,
+        app_setting::repository::MockAppSettingRepository,
         auth::repository::MockSessionRepository,
         book::repository::{
             author::MockAuthorRepository, book::MockBookRepository, genre::MockGenreRepository, publisher::MockPublisherRepository,
@@ -357,5 +366,6 @@ pub(crate) mod testing {
             .device_repository(Arc::new(MockDeviceRepository::new()))
             .system_message_repository(Arc::new(MockSystemMessageRepository::new()))
             .koreader_document_hash_repository(Arc::new(MockKoReaderDocumentHashRepository::new()))
+            .app_setting_repository(Arc::new(MockAppSettingRepository::new()))
     }
 }
