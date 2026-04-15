@@ -1,4 +1,5 @@
-use dioxus::prelude::*;
+use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
+use dioxus::{html::HasFileData, prelude::*};
 use serde::{Deserialize, Serialize};
 
 use crate::{Route, components::IncomingRefresh};
@@ -183,11 +184,142 @@ pub(crate) fn IncomingPage() -> Element {
         list_incoming_books()
     })?;
     let mut rejecting: Signal<Option<String>> = use_signal(|| None);
+    let mut drag_active: Signal<bool> = use_signal(|| false);
+    let mut drag_depth: Signal<i32> = use_signal(|| 0);
+    let mut uploading: Signal<bool> = use_signal(|| false);
+    let mut upload_results: Signal<Vec<(String, UploadOutcome)>> = use_signal(Vec::new);
 
     rsx! {
-        div { class: "flex-1 flex flex-col overflow-hidden",
+        div {
+            class: "flex-1 flex flex-col overflow-hidden relative",
+            ondragenter: move |evt: DragEvent| {
+                evt.prevent_default();
+                *drag_depth.write() += 1;
+                drag_active.set(true);
+            },
+            ondragover: move |evt: DragEvent| {
+                evt.prevent_default();
+            },
+            ondragleave: move |_| {
+                let depth = {
+                    let mut d = drag_depth.write();
+                    *d -= 1;
+                    *d
+                };
+                if depth <= 0 {
+                    drag_depth.set(0);
+                    drag_active.set(false);
+                }
+            },
+            ondrop: move |evt: DragEvent| {
+                evt.prevent_default();
+                drag_depth.set(0);
+                drag_active.set(false);
+                let files: Vec<_> = evt.files().into_iter().collect();
+                spawn(async move {
+                    uploading.set(true);
+                    upload_results.set(Vec::new());
+                    let mut results: Vec<(String, UploadOutcome)> = Vec::new();
+                    for file in files {
+                        let name = file.name();
+                        let lower = name.to_lowercase();
+                        if !lower.ends_with(".epub") {
+                            results.push((name, UploadOutcome::InvalidFile));
+                            continue;
+                        }
+                        if file.size() > 50 * 1024 * 1024 {
+                            results.push((name, UploadOutcome::Error("File exceeds 50 MB limit".into())));
+                            continue;
+                        }
+                        let Ok(bytes_obj) = file.read_bytes().await else {
+                            results.push((name, UploadOutcome::Error("Failed to read file".into())));
+                            continue;
+                        };
+                        let encoded = B64.encode(bytes_obj.as_ref());
+                        let outcome = upload_incoming_epub(name.clone(), encoded)
+                            .await
+                            .unwrap_or(UploadOutcome::Error("Network error".into()));
+                        results.push((name, outcome));
+                    }
+                    uploading.set(false);
+                    upload_results.set(results);
+                    *incoming_refresh.0.write() += 1;
+                    // Auto-dismiss toasts after 4 seconds
+                    let mut timer = document::eval("setTimeout(() => dioxus.send(true), 4000)");
+                    let _ = timer.recv::<bool>().await;
+                    upload_results.set(Vec::new());
+                });
+            },
+            if drag_active() {
+                div {
+                    class: "absolute inset-0 bg-indigo-500/60 flex flex-col items-center justify-center z-50 pointer-events-none",
+                    svg {
+                        class: "w-16 h-16 text-white mb-4",
+                        xmlns: "http://www.w3.org/2000/svg",
+                        fill: "none",
+                        "viewBox": "0 0 24 24",
+                        "stroke-width": "1.5",
+                        stroke: "currentColor",
+                        path {
+                            "stroke-linecap": "round",
+                            "stroke-linejoin": "round",
+                            d: "M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 5.99 2.257M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.042h.774a8.967 8.967 0 015.999 2.253M15 13.5a3 3 0 11-6 0 3 3 0 016 0z"
+                        }
+                    }
+                    span { class: "text-white text-2xl font-semibold", "Drop EPUBs to import" }
+                }
+            }
             div { class: "px-6 py-4 border-b border-gray-200",
                 h1 { class: "text-xl font-semibold text-gray-900", "Incoming" }
+            }
+            if uploading() {
+                div { class: "px-6 py-2 bg-indigo-50 text-indigo-700 text-sm border-b border-indigo-100",
+                    "Uploading…"
+                }
+            }
+            {
+                let results = upload_results();
+                if results.is_empty() {
+                    rsx! {}
+                } else {
+                    let total = results.len();
+                    rsx! {
+                        if total <= 3 {
+                            div { class: "px-6 py-2 flex flex-col gap-1",
+                                for (name, outcome) in &results {
+                                    {
+                                        let (bg, msg) = match outcome {
+                                            UploadOutcome::Queued => ("bg-green-50 text-green-800", format!("Added: {name}")),
+                                            UploadOutcome::AlreadyImported => ("bg-gray-50 text-gray-600", format!("Already in your library: {name}")),
+                                            UploadOutcome::InvalidFile => ("bg-orange-50 text-orange-800", format!("Not a valid EPUB: {name}")),
+                                            UploadOutcome::Error(e) => ("bg-red-50 text-red-800", format!("Failed: {name} — {e}")),
+                                        };
+                                        rsx! {
+                                            div { class: "px-3 py-2 rounded text-sm {bg}", "{msg}" }
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            {
+                                let added = results.iter().filter(|(_, o)| matches!(o, UploadOutcome::Queued)).count();
+                                let failed = results.iter().filter(|(_, o)| matches!(o, UploadOutcome::Error(_))).count();
+                                let skipped = total - added - failed;
+                                let summary = match (skipped, failed) {
+                                    (0, 0) => format!("{added} added"),
+                                    (s, 0) => format!("{added} added, {s} skipped"),
+                                    (0, f) => format!("{added} added, {f} failed"),
+                                    (s, f) => format!("{added} added, {s} skipped, {f} failed"),
+                                };
+                                rsx! {
+                                    div { class: "px-6 py-2 bg-gray-50 text-gray-700 text-sm border-b border-gray-100",
+                                        "{summary}"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
             match jobs() {
                 None => rsx! {
