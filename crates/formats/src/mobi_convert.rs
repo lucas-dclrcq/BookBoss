@@ -82,6 +82,17 @@ pub fn convert_to_mobi(source_epub: &Path, dest: &Path, sidecar: &BookSidecar, c
     // Build a lookup: zip path → index.
     let name_to_idx: HashMap<String, usize> = entry_names.iter().enumerate().map(|(i, n)| (n.clone(), i)).collect();
 
+    // Build prefix map: zip_path → anchor prefix (used for id/href rewriting).
+    // e.g. "OEBPS/Text/chapter2.xhtml" → "chapter2"
+    let spine_prefix_map: HashMap<String, String> = spine_hrefs
+        .iter()
+        .map(|href| {
+            let zp = resolve_zip_path(&opf_dir, href);
+            let prefix = spine_prefix_for(&zp);
+            (zp, prefix)
+        })
+        .collect();
+
     // Read spine HTML documents and merge them.
     let mut merged_html_parts: Vec<Vec<u8>> = Vec::new();
     // Track image hrefs in body-reference order (relative to OPF dir).
@@ -100,6 +111,13 @@ pub fn convert_to_mobi(source_epub: &Path, dest: &Path, sidecar: &BookSidecar, c
         } else {
             continue;
         };
+
+        // Directory of this HTML file within the zip (for resolving relative hrefs).
+        let html_zip_dir = match zip_path.rfind('/') {
+            Some(pos) => zip_path[..pos].to_string(),
+            None => String::new(),
+        };
+        let current_prefix = spine_prefix_map.get(&zip_path).cloned().unwrap_or_default();
 
         // Collect img srefs from this document (relative to its directory).
         let html_dir = match href.rfind('/') {
@@ -127,14 +145,20 @@ pub fn convert_to_mobi(source_epub: &Path, dest: &Path, sidecar: &BookSidecar, c
             }
         }
 
-        let cleaned = clean_html(&html_bytes, &src_to_record)?;
+        let cleaned = clean_html(&html_bytes, &src_to_record, &current_prefix, &html_zip_dir, &spine_prefix_map)?;
         merged_html_parts.push(cleaned);
     }
 
     // Build the merged body: wrap parts in a minimal HTML document.
+    // Each part already begins with an <a name="PREFIX"> anchor injected by
+    // clean_html as the very first body element, so filepos targets land on a
+    // proper named anchor rather than an invisible-but-broken tag.
     let mut merged = Vec::new();
     merged.extend_from_slice(b"<html><head><meta charset=\"utf-8\"/></head><body>");
-    for part in &merged_html_parts {
+    for (i, part) in merged_html_parts.iter().enumerate() {
+        if i > 0 {
+            merged.extend_from_slice(b"<mbp:pagebreak/>");
+        }
         merged.extend_from_slice(part);
     }
     merged.extend_from_slice(b"</body>");
@@ -143,6 +167,9 @@ pub fn convert_to_mobi(source_epub: &Path, dest: &Path, sidecar: &BookSidecar, c
         merged.extend_from_slice(b"<guide><reference type=\"cover\" title=\"Cover\" href=\"kindle:embed:0001?mime=image/jpeg\"/></guide>");
     }
     merged.extend_from_slice(b"</html>");
+
+    // 1b. Convert href="#anchor" → filepos=NNNNNNNNNN for Kindle MOBI6 navigation.
+    let merged = apply_filepos_links(merged);
 
     // 2. Collect images.
     let mut images: Vec<Vec<u8>> = Vec::new();
@@ -198,15 +225,25 @@ fn collect_img_srcs(html: &[u8]) -> Vec<String> {
 /// - Extracts only `<body>` content (strips head, html wrappers).
 /// - Rewrites `<img src="...">` to `kindle:embed:XXXX?mime=image/jpeg`.
 /// - Strips `<style>` block elements and `<link rel="stylesheet">`.
-/// - Rewrites cross-document `href` links to `#anchor` format (strips file
-///   part).
-fn clean_html(html: &[u8], src_to_record: &HashMap<String, u32>) -> Result<Vec<u8>, Error> {
+/// - Rewrites `id` attributes by prefixing them with `current_prefix` to avoid
+///   collisions when multiple spine documents are merged.
+/// - Rewrites `href` links: same-file fragments become `#{prefix}_{fragment}`,
+///   cross-document links become `#{target_prefix}_{fragment}` or
+///   `#{target_prefix}` for bare filenames.
+fn clean_html(
+    html: &[u8],
+    src_to_record: &HashMap<String, u32>,
+    current_prefix: &str,
+    html_zip_dir: &str,
+    spine_prefix_map: &HashMap<String, String>,
+) -> Result<Vec<u8>, Error> {
     let mut reader = Reader::from_reader(html);
     reader.config_mut().check_end_names = false;
     let mut buf = Vec::new();
     let mut out = Vec::with_capacity(html.len());
 
     let mut in_body = false;
+    let mut anchor_emitted = false; // true once we've emitted <a name="PREFIX"> for this chapter
     let mut skip_style_depth: u32 = 0; // >0 means we are inside a <style> block to skip
 
     loop {
@@ -251,26 +288,70 @@ fn clean_html(html: &[u8], src_to_record: &HashMap<String, u32>) -> Result<Vec<u
                     }
                 }
 
-                // Rewrite <img src="..."> and <a href="...">
+                // Rewrite <img src="...">
                 if local == "img" {
+                    if !anchor_emitted {
+                        write!(out, "<a name=\"{current_prefix}\"></a>")?;
+                        anchor_emitted = true;
+                    }
                     let new_src = img_src_to_kindle_embed(e, src_to_record);
                     write!(out, "<img src=\"{new_src}\"/>")?;
                     continue;
                 }
+
+                // Rewrite <a> — preserve all attributes, rewrite href and id.
                 if local == "a" {
-                    let new_href = rewrite_anchor_href(e);
-                    write!(out, "<a href=\"{new_href}\">")?;
+                    if !anchor_emitted {
+                        write!(out, "<a name=\"{current_prefix}\"></a>")?;
+                        anchor_emitted = true;
+                    }
+                    out.extend_from_slice(b"<a");
+                    for attr in e.attributes().flatten() {
+                        out.extend_from_slice(b" ");
+                        out.extend_from_slice(attr.key.as_ref());
+                        out.extend_from_slice(b"=\"");
+                        if attr.key.as_ref() == b"href" {
+                            if let Ok(href) = std::str::from_utf8(attr.value.as_ref()) {
+                                let new_href = rewrite_href(href, current_prefix, html_zip_dir, spine_prefix_map);
+                                write!(out, "{new_href}")?;
+                            } else {
+                                out.extend_from_slice(attr.value.as_ref());
+                            }
+                        } else if attr.key.as_ref() == b"id" {
+                            if let Ok(id_val) = std::str::from_utf8(attr.value.as_ref()) {
+                                write!(out, "{current_prefix}_{id_val}")?;
+                            } else {
+                                out.extend_from_slice(attr.value.as_ref());
+                            }
+                        } else {
+                            out.extend_from_slice(attr.value.as_ref());
+                        }
+                        out.extend_from_slice(b"\"");
+                    }
+                    out.extend_from_slice(b">");
                     continue;
                 }
 
-                // Passthrough.
+                // Passthrough — rewrite id attributes to avoid collisions.
+                if !anchor_emitted {
+                    write!(out, "<a name=\"{current_prefix}\"></a>")?;
+                    anchor_emitted = true;
+                }
                 out.extend_from_slice(b"<");
                 out.extend_from_slice(e.name().as_ref());
                 for attr in e.attributes().flatten() {
                     out.extend_from_slice(b" ");
                     out.extend_from_slice(attr.key.as_ref());
                     out.extend_from_slice(b"=\"");
-                    out.extend_from_slice(attr.value.as_ref());
+                    if attr.key.as_ref() == b"id" {
+                        if let Ok(id_val) = std::str::from_utf8(attr.value.as_ref()) {
+                            write!(out, "{current_prefix}_{id_val}")?;
+                        } else {
+                            out.extend_from_slice(attr.value.as_ref());
+                        }
+                    } else {
+                        out.extend_from_slice(attr.value.as_ref());
+                    }
                     out.extend_from_slice(b"\"");
                 }
                 out.extend_from_slice(b">");
@@ -303,19 +384,61 @@ fn clean_html(html: &[u8], src_to_record: &HashMap<String, u32>) -> Result<Vec<u
                 }
 
                 if local == "img" {
+                    if !anchor_emitted {
+                        write!(out, "<a name=\"{current_prefix}\"></a>")?;
+                        anchor_emitted = true;
+                    }
                     let new_src = img_src_to_kindle_embed(e, src_to_record);
                     write!(out, "<img src=\"{new_src}\"/>")?;
                     continue;
                 }
 
-                // Self-closing passthrough.
+                // Self-closing <a/> (anchor target with id, no href).
+                if local == "a" {
+                    if !anchor_emitted {
+                        write!(out, "<a name=\"{current_prefix}\"></a>")?;
+                        anchor_emitted = true;
+                    }
+                    out.extend_from_slice(b"<a");
+                    for attr in e.attributes().flatten() {
+                        out.extend_from_slice(b" ");
+                        out.extend_from_slice(attr.key.as_ref());
+                        out.extend_from_slice(b"=\"");
+                        if attr.key.as_ref() == b"id" {
+                            if let Ok(id_val) = std::str::from_utf8(attr.value.as_ref()) {
+                                write!(out, "{current_prefix}_{id_val}")?;
+                            } else {
+                                out.extend_from_slice(attr.value.as_ref());
+                            }
+                        } else {
+                            out.extend_from_slice(attr.value.as_ref());
+                        }
+                        out.extend_from_slice(b"\"");
+                    }
+                    out.extend_from_slice(b"/>");
+                    continue;
+                }
+
+                // Self-closing passthrough — rewrite id attributes.
+                if !anchor_emitted {
+                    write!(out, "<a name=\"{current_prefix}\"></a>")?;
+                    anchor_emitted = true;
+                }
                 out.extend_from_slice(b"<");
                 out.extend_from_slice(e.name().as_ref());
                 for attr in e.attributes().flatten() {
                     out.extend_from_slice(b" ");
                     out.extend_from_slice(attr.key.as_ref());
                     out.extend_from_slice(b"=\"");
-                    out.extend_from_slice(attr.value.as_ref());
+                    if attr.key.as_ref() == b"id" {
+                        if let Ok(id_val) = std::str::from_utf8(attr.value.as_ref()) {
+                            write!(out, "{current_prefix}_{id_val}")?;
+                        } else {
+                            out.extend_from_slice(attr.value.as_ref());
+                        }
+                    } else {
+                        out.extend_from_slice(attr.value.as_ref());
+                    }
                     out.extend_from_slice(b"\"");
                 }
                 out.extend_from_slice(b"/>");
@@ -373,24 +496,126 @@ fn img_src_to_kindle_embed(e: &quick_xml::events::BytesStart<'_>, src_to_record:
     "kindle:embed:0001?mime=image/jpeg".to_string()
 }
 
-/// Rewrite `href` on an `<a>` element: strip the file part, keeping only
-/// the fragment (e.g. `chapter2.xhtml#anchor` → `#anchor`).
-fn rewrite_anchor_href(e: &quick_xml::events::BytesStart<'_>) -> String {
-    for attr in e.attributes().flatten() {
-        if attr.key.as_ref() == b"href" {
-            if let Ok(href) = std::str::from_utf8(attr.value.as_ref()) {
-                if href.starts_with('#') {
-                    return href.to_string();
-                }
-                if let Some(pos) = href.rfind('#') {
-                    return href[pos..].to_string();
-                }
-                // External links: keep as-is.
-                return href.to_string();
+/// Post-process the merged HTML for MOBI6 navigation.
+///
+/// MOBI6 / Kindle does not navigate via `href="#fragment"` — it uses
+/// `filepos=NNNNNNNNNN` (10-digit zero-padded byte offset into the HTML
+/// text stream).  This function performs a three-pass transform:
+///
+/// 1. Scan the HTML for every `id="NAME"` and record the byte offset of the
+///    opening `<` of the enclosing tag.
+/// 2. Rebuild the HTML, replacing each `href="#NAME"` with the placeholder
+///    `filepos=0000000000` (fixed width so later positions stay stable).
+/// 3. Re-scan the rebuilt HTML to find final anchor positions, then fill in the
+///    actual 10-digit values.
+fn apply_filepos_links(html: Vec<u8>) -> Vec<u8> {
+    const ID_PAT: &[u8] = b" id=\"";
+    const HREF_FRAG_PAT: &[u8] = b"href=\"#";
+    const FILEPOS_PLACEHOLDER: &[u8] = b"filepos=0000000000";
+
+    // ── Pass 2: rebuild HTML, replacing href="#NAME" → filepos=0000000000.
+    // Record (position_of_digits_in_out, fragment_name) for fixup later.
+    let mut out: Vec<u8> = Vec::with_capacity(html.len());
+    let mut fixups: Vec<(usize, String)> = Vec::new();
+    let mut i = 0;
+    while i < html.len() {
+        if html[i..].starts_with(HREF_FRAG_PAT) {
+            let frag_start = i + HREF_FRAG_PAT.len();
+            if let Some(rel_end) = html[frag_start..].iter().position(|&b| b == b'"') {
+                let frag = std::str::from_utf8(&html[frag_start..frag_start + rel_end]).unwrap_or("").to_string();
+                let digits_pos = out.len() + b"filepos=".len();
+                out.extend_from_slice(FILEPOS_PLACEHOLDER);
+                fixups.push((digits_pos, frag));
+                i = frag_start + rel_end + 1; // skip past closing "
+                continue;
             }
         }
+        out.push(html[i]);
+        i += 1;
     }
-    "#".to_string()
+
+    // ── Pass 3: find byte offset of every anchor in the rebuilt HTML.
+    // Recognises both ` id="NAME"` (elements, mbp:pagebreak) and
+    // ` name="NAME"` (<a name> first-item anchors).
+    let mut id_to_pos: HashMap<String, usize> = HashMap::new();
+    const NAME_PAT: &[u8] = b" name=\"";
+    let mut pos = 0;
+    while pos < out.len() {
+        let (pat_len, val_start) = if out[pos..].starts_with(ID_PAT) {
+            (ID_PAT.len(), pos + ID_PAT.len())
+        } else if out[pos..].starts_with(NAME_PAT) {
+            (NAME_PAT.len(), pos + NAME_PAT.len())
+        } else {
+            pos += 1;
+            continue;
+        };
+        let _ = pat_len; // used above
+        if let Some(rel_end) = out[val_start..].iter().position(|&b| b == b'"') {
+            let anchor_val = std::str::from_utf8(&out[val_start..val_start + rel_end]).unwrap_or("").to_string();
+            // Backtrack to the opening '<' of the enclosing tag.
+            let tag_start = out[..pos].iter().rposition(|&b| b == b'<').unwrap_or(0);
+            // id= takes precedence over name= so only insert if not already present.
+            id_to_pos.entry(anchor_val).or_insert(tag_start);
+            pos = val_start + rel_end + 1;
+            continue;
+        }
+        pos += 1;
+    }
+
+    // ── Pass 4: fill placeholders with real positions.
+    for (digits_pos, frag) in fixups {
+        let target = id_to_pos.get(&frag).copied().unwrap_or(0);
+        let digits = format!("{target:010}");
+        out[digits_pos..digits_pos + 10].copy_from_slice(digits.as_bytes());
+    }
+
+    out
+}
+
+/// Rewrite an `href` value for the merged MOBI document.
+///
+/// * `#X`           → `#{prefix}_X`          same-file fragment
+/// * `file.xhtml#X` → `#{file_prefix}_X`     cross-document with fragment
+/// * `file.xhtml`   → `#{file_prefix}`        cross-document top-of-chapter
+/// * external       → unchanged
+fn rewrite_href(href: &str, current_prefix: &str, html_zip_dir: &str, spine_prefix_map: &HashMap<String, String>) -> String {
+    if href.is_empty() || href == "#" {
+        return "#".to_string();
+    }
+    // External links.
+    if href.starts_with("http://") || href.starts_with("https://") || href.starts_with("mailto:") {
+        return href.to_string();
+    }
+    // Same-file fragment: #X → #{prefix}_X
+    if href.starts_with('#') {
+        let fragment = &href[1..];
+        return format!("#{current_prefix}_{fragment}");
+    }
+    // Cross-document with fragment: file.xhtml#anchor → #{target_prefix}_anchor
+    if let Some(hash_pos) = href.find('#') {
+        let file_part = &href[..hash_pos];
+        let fragment = &href[hash_pos + 1..];
+        let zip_path = resolve_zip_path(html_zip_dir, file_part);
+        if let Some(prefix) = spine_prefix_map.get(&zip_path) {
+            return format!("#{prefix}_{fragment}");
+        }
+        return format!("#{fragment}");
+    }
+    // Bare filename: file.xhtml → #{target_prefix}
+    let zip_path = resolve_zip_path(html_zip_dir, href);
+    if let Some(prefix) = spine_prefix_map.get(&zip_path) {
+        return format!("#{prefix}");
+    }
+    // Unresolvable — keep as-is.
+    href.to_string()
+}
+
+/// Derive a stable anchor prefix from a zip path.
+/// `OEBPS/Text/chapter2.xhtml` → `chapter2`
+fn spine_prefix_for(zip_path: &str) -> String {
+    let basename = zip_path.rsplit('/').next().unwrap_or(zip_path);
+    let stem = if let Some(pos) = basename.rfind('.') { &basename[..pos] } else { basename };
+    stem.chars().map(|c| if c.is_alphanumeric() { c } else { '_' }).collect()
 }
 
 // ── OPF parsing
