@@ -90,6 +90,34 @@ impl FormatService for FormatServiceImpl {
                 .map_err(|e| Error::Infrastructure(e.to_string()))?;
         }
 
+        // Step 3: Convert to MOBI if requested.
+        let mobi_output = request.outputs.iter().find(|o| o.format == FileFormat::Mobi);
+        if let Some(mobi_out) = mobi_output {
+            if request.source.format != FileFormat::Epub {
+                return Err(Error::Infrastructure("MOBI output requires an EPUB source".to_string()));
+            }
+            // Use the enriched EPUB as source if available, otherwise use the original
+            // source.
+            let source = if has_epub_output {
+                request
+                    .outputs
+                    .iter()
+                    .find(|o| o.format == FileFormat::Epub)
+                    .expect("checked above")
+                    .path
+                    .clone()
+            } else {
+                request.source.path.clone()
+            };
+            let dest = mobi_out.path.clone();
+            let sidecar = request.sidecar.clone();
+            let cover_bytes = read_cover_bytes(request.cover_path.as_ref()).await?;
+            tokio::task::spawn_blocking(move || crate::mobi_convert::convert_to_mobi(&source, &dest, &sidecar, cover_bytes.as_deref()))
+                .await
+                .map_err(|e| Error::Infrastructure(format!("mobi conversion task panicked: {e}")))?
+                .map_err(|e| Error::Infrastructure(e.to_string()))?;
+        }
+
         Ok(())
     }
 
@@ -349,5 +377,100 @@ mod tests {
         let svc = FormatServiceImpl;
         let result = svc.extract_metadata(std::path::Path::new("/tmp/nonexistent_bookboss_test.epub")).await;
         result.unwrap_err();
+    }
+
+    #[tokio::test]
+    async fn enrich_mobi_only_from_source() {
+        let epub_bytes = build_test_epub();
+        let source_path = std::env::temp_dir().join("format_svc_enrich_mobi_only_source.epub");
+        std::fs::write(&source_path, &epub_bytes).unwrap();
+
+        let mobi_dest = std::env::temp_dir().join("format_svc_enrich_mobi_only.mobi");
+
+        let svc = FormatServiceImpl;
+        let request = EnrichmentRequest {
+            source: EBookFile {
+                format: FileFormat::Epub,
+                path: source_path.clone(),
+            },
+            sidecar: make_sidecar("Test Book"),
+            cover_path: None,
+            outputs: vec![EBookFile {
+                format: FileFormat::Mobi,
+                path: mobi_dest.clone(),
+            }],
+        };
+
+        svc.enrich(&request).await.unwrap();
+        assert!(mobi_dest.exists(), "mobi should be written from source");
+
+        // Verify it's not a ZIP (MOBI is binary PalmDB format, not a ZIP archive)
+        let mobi_bytes = std::fs::read(&mobi_dest).unwrap();
+        assert!(!mobi_bytes.starts_with(b"PK"), "MOBI should not be a ZIP file");
+
+        let _ = std::fs::remove_file(&source_path);
+        let _ = std::fs::remove_file(&mobi_dest);
+    }
+
+    #[tokio::test]
+    async fn enrich_epub_and_mobi() {
+        let epub_bytes = build_test_epub();
+        let source_path = std::env::temp_dir().join("format_svc_enrich_em_source.epub");
+        std::fs::write(&source_path, &epub_bytes).unwrap();
+
+        let epub_dest = std::env::temp_dir().join("format_svc_enrich_em_epub.epub");
+        let mobi_dest = std::env::temp_dir().join("format_svc_enrich_em.mobi");
+
+        let svc = FormatServiceImpl;
+        let request = EnrichmentRequest {
+            source: EBookFile {
+                format: FileFormat::Epub,
+                path: source_path.clone(),
+            },
+            sidecar: make_sidecar("Test Book"),
+            cover_path: None,
+            outputs: vec![
+                EBookFile {
+                    format: FileFormat::Epub,
+                    path: epub_dest.clone(),
+                },
+                EBookFile {
+                    format: FileFormat::Mobi,
+                    path: mobi_dest.clone(),
+                },
+            ],
+        };
+
+        svc.enrich(&request).await.unwrap();
+        assert!(epub_dest.exists(), "enriched epub should be written");
+        assert!(mobi_dest.exists(), "mobi should be written from enriched epub");
+
+        // Verify MOBI is not a ZIP
+        let mobi_bytes = std::fs::read(&mobi_dest).unwrap();
+        assert!(!mobi_bytes.starts_with(b"PK"), "MOBI should not be a ZIP file");
+
+        let _ = std::fs::remove_file(&source_path);
+        let _ = std::fs::remove_file(&epub_dest);
+        let _ = std::fs::remove_file(&mobi_dest);
+    }
+
+    #[tokio::test]
+    async fn enrich_rejects_mobi_without_epub_source() {
+        let svc = FormatServiceImpl;
+        let request = EnrichmentRequest {
+            source: EBookFile {
+                format: FileFormat::Pdf,
+                path: "/tmp/book.pdf".into(),
+            },
+            sidecar: make_sidecar("Test Book"),
+            cover_path: None,
+            outputs: vec![EBookFile {
+                format: FileFormat::Mobi,
+                path: "/tmp/out.mobi".into(),
+            }],
+        };
+
+        let err = svc.enrich(&request).await.unwrap_err();
+        assert!(err.to_string().contains("MOBI output requires an EPUB source"));
     }
 }
