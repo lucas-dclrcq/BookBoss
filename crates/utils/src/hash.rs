@@ -37,13 +37,25 @@ pub async fn hash_file(path: &Path) -> Result<String, HashError> {
     .await?
 }
 
+/// Computes a lowercase SHA-256 hex digest of the given bytes.
+pub fn hash_bytes(bytes: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    let hash = hasher.finalize();
+    hash.iter().fold(String::with_capacity(64), |mut s, b| {
+        use std::fmt::Write;
+        write!(s, "{b:02x}").unwrap();
+        s
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::Write;
 
     use tempfile::NamedTempFile;
 
-    use super::hash_file;
+    use super::{hash_bytes, hash_file};
 
     #[tokio::test]
     async fn known_digest() {
@@ -61,5 +73,12 @@ mod tests {
         let h1 = hash_file(f.path()).await.unwrap();
         let h2 = hash_file(f.path()).await.unwrap();
         assert_eq!(h1, h2);
+    }
+
+    #[test]
+    fn hash_bytes_matches_known_digest() {
+        // echo -n "hello" | sha256sum
+        let digest = hash_bytes(b"hello");
+        assert_eq!(digest, "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824");
     }
 }
