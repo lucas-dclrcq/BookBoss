@@ -1,9 +1,11 @@
+mod application_section;
 mod genre_tags_section;
 mod libraries_section;
 mod messages_section;
 mod tasks_section;
 mod users_section;
 
+use application_section::ApplicationSection;
 use dioxus::prelude::*;
 use genre_tags_section::GenreTagsSection;
 use libraries_section::LibrariesSection;
@@ -56,6 +58,7 @@ enum Section {
     Tasks,
     Messages,
     GenreTags,
+    Application,
 }
 
 impl Section {
@@ -65,6 +68,7 @@ impl Section {
             "tasks" => Self::Tasks,
             "messages" => Self::Messages,
             "genre-tags" => Self::GenreTags,
+            "application" => Self::Application,
             _ => Self::Users,
         }
     }
@@ -76,6 +80,7 @@ impl Section {
             Self::Tasks => "#tasks",
             Self::Messages => "#messages",
             Self::GenreTags => "#genre-tags",
+            Self::Application => "#application",
         }
     }
 }
@@ -186,6 +191,13 @@ pub(crate) fn SettingsPage() -> Element {
                             "Messages"
                         }
                     }
+                    li {
+                        button {
+                            class: nav_button_class(Section::Application),
+                            onclick: move |_| active_section.set(Section::Application),
+                            "Application"
+                        }
+                    }
                 }
             }
             // ----------------------------------------------------------------
@@ -210,6 +222,9 @@ pub(crate) fn SettingsPage() -> Element {
                     },
                     Section::GenreTags => rsx! {
                         GenreTagsSection {}
+                    },
+                    Section::Application => rsx! {
+                        ApplicationSection {}
                     },
                 }
             }
