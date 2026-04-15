@@ -137,4 +137,17 @@ pub trait BookRepository: Send + Sync {
     /// Used by the `BackfillThumbnailsHandler` cursor sweep to identify books
     /// that need a `thumb.jpg` generated.
     async fn find_book_ids_with_cover_for_sweep(&self, transaction: &dyn Transaction, after_id: Option<BookId>, batch_size: u64) -> Result<Vec<BookId>, Error>;
+
+    /// Returns up to `batch_size` IDs of Available books that have an enriched
+    /// EPUB `book_files` record but no enriched MOBI `book_files` record, with
+    /// `id > after_id`, ordered by id ASC.
+    ///
+    /// Used by the `EnsureEnrichmentsHandler` MOBI sweep to backfill MOBI
+    /// conversion for existing library books.
+    async fn find_book_ids_needing_mobi_conversion(
+        &self,
+        transaction: &dyn Transaction,
+        after_id: Option<BookId>,
+        batch_size: u64,
+    ) -> Result<Vec<BookId>, Error>;
 }

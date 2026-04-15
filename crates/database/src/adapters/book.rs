@@ -941,6 +941,53 @@ impl BookRepository for BookRepositoryAdapter {
         Ok(rows.into_iter().map(|r| r.book_id as u64).collect())
     }
 
+    async fn find_book_ids_needing_mobi_conversion(
+        &self,
+        transaction: &dyn Transaction,
+        after_id: Option<BookId>,
+        batch_size: u64,
+    ) -> Result<Vec<BookId>, Error> {
+        use sea_orm::sea_query::Query;
+
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        // Books that have an Enriched EPUB but no Enriched MOBI.
+        // Only consider Available books — Incoming books still in review must not be
+        // converted.
+        let mobi_subq = {
+            let mut q = Query::select();
+            q.column(book_files::Column::BookId)
+                .from(book_files::Entity)
+                .and_where(book_files::Column::Format.eq("mobi"))
+                .and_where(book_files::Column::FileRole.eq("enriched"));
+            q
+        };
+
+        let available_subq = {
+            let mut q = Query::select();
+            q.column(books::Column::Id).from(books::Entity).and_where(books::Column::Status.eq("available"));
+            q
+        };
+
+        let mut query = prelude::BookFiles::find()
+            .select_only()
+            .column(book_files::Column::BookId)
+            .filter(book_files::Column::Format.eq("epub"))
+            .filter(book_files::Column::FileRole.eq("enriched"))
+            .filter(book_files::Column::BookId.not_in_subquery(mobi_subq))
+            .filter(book_files::Column::BookId.in_subquery(available_subq))
+            .order_by_asc(book_files::Column::BookId)
+            .limit(batch_size);
+
+        if let Some(id) = after_id {
+            query = query.filter(book_files::Column::BookId.gt(id as i64));
+        }
+
+        let rows = query.into_model::<BookIdOnly>().all(transaction).await.map_err(handle_dberr)?;
+
+        Ok(rows.into_iter().map(|r| r.book_id as u64).collect())
+    }
+
     async fn book_authors_for_books(&self, transaction: &dyn Transaction, book_ids: &[BookId]) -> Result<Vec<BookAuthor>, Error> {
         if book_ids.is_empty() {
             return Ok(vec![]);

@@ -148,6 +148,36 @@ mod tests {
         handler.handle(BookSweepPayload::default()).await.unwrap();
     }
 
+    /// Verifies that
+    /// `MockBookRepository::expect_find_book_ids_needing_mobi_conversion`
+    /// compiles and behaves correctly — the real DB query is covered by
+    /// integration tests.
+    #[tokio::test]
+    async fn mock_find_book_ids_needing_mobi_conversion_returns_expected_ids() {
+        let mut book_repo = MockBookRepository::new();
+
+        book_repo
+            .expect_find_book_ids_needing_mobi_conversion()
+            .returning(|_, _, _| Box::pin(std::future::ready(Ok(vec![3, 7]))));
+
+        let repo_service = Arc::new(default_repository_service_builder().book_repository(Arc::new(book_repo)).build().unwrap());
+
+        let core = crate::create_services(
+            default_external_services_builder().repository_service(repo_service).build().unwrap(),
+            "test-secret",
+        )
+        .unwrap();
+
+        let book_repo = core.repository_service.book_repository().clone();
+        let result = crate::repository::read_only_transaction(&**core.repository_service.repository(), |tx| {
+            Box::pin(async move { book_repo.find_book_ids_needing_mobi_conversion(tx, None, 50).await })
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(result, vec![3, 7]);
+    }
+
     #[tokio::test]
     async fn full_batch_re_enqueues_continuation() {
         let mut book_repo = MockBookRepository::new();
