@@ -14,6 +14,9 @@ pub(crate) struct AuthorDetail {
 pub(crate) struct FileDetail {
     pub format: String,
     pub file_size: i64,
+    /// First 8 hex chars of the file hash, used as a cache-busting query
+    /// parameter.
+    pub version: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -146,15 +149,20 @@ async fn get_book(token: String) -> Result<BookDetail, ServerFnError> {
 
     // Deduplicate by format: Enriched takes priority over Original for display.
     // This ensures one download badge per format even when both roles exist.
-    let mut format_map: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
+    let mut format_map: std::collections::HashMap<String, (i64, String)> = std::collections::HashMap::new();
     for f in &book_files {
         let fmt_str = f.format.display_name().to_string();
-        let entry = format_map.entry(fmt_str).or_insert(f.file_size);
+        let entry = format_map
+            .entry(fmt_str)
+            .or_insert_with(|| (f.file_size, f.file_hash[..8.min(f.file_hash.len())].to_string()));
         if f.file_role == FileRole::Enriched {
-            *entry = f.file_size;
+            *entry = (f.file_size, f.file_hash[..8.min(f.file_hash.len())].to_string());
         }
     }
-    let mut files: Vec<FileDetail> = format_map.into_iter().map(|(format, file_size)| FileDetail { format, file_size }).collect();
+    let mut files: Vec<FileDetail> = format_map
+        .into_iter()
+        .map(|(format, (file_size, version))| FileDetail { format, file_size, version })
+        .collect();
     files.sort_by(|a, b| a.format.cmp(&b.format));
 
     let identifiers: Vec<IdentifierDetail> = book_identifiers
@@ -589,7 +597,7 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                                     {
                                         let size_str = format_file_size(file.file_size);
                                         let fmt_lower = file.format.to_lowercase();
-                                        let href = format!("/api/v1/books/{}/download/{fmt_lower}", book.token);
+                                        let href = format!("/api/v1/books/{}/download/{fmt_lower}?v={}", book.token, file.version);
                                         rsx! {
                                             a {
                                                 href,

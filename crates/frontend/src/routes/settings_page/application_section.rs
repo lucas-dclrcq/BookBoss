@@ -86,8 +86,8 @@ pub(crate) fn ApplicationSection() -> Element {
 
             div { class: "rounded-lg border border-gray-200 bg-white px-6",
                 // MOBI toggle row
-                div { class: "flex items-center justify-between py-4 border-b border-gray-100",
-                    div {
+                div { class: "flex items-center gap-6 py-4 border-b border-gray-100",
+                    div { class: "flex-1 min-w-0",
                         p { class: "text-sm font-medium text-gray-900", "Generate MOBI files for Kindle" }
                         p { class: "text-sm text-gray-500 mt-0.5",
                             "Generates a MOBI file for each book so Kindle devices can read them directly. MOBI files are created after each book's EPUB enrichment completes."
@@ -95,9 +95,9 @@ pub(crate) fn ApplicationSection() -> Element {
                     }
                     button {
                         class: if mobi_enabled() {
-                            "relative inline-flex h-6 w-11 items-center rounded-full bg-indigo-600 transition-colors"
+                            "relative inline-flex shrink-0 h-6 w-11 items-center rounded-full bg-indigo-600 transition-colors"
                         } else {
-                            "relative inline-flex h-6 w-11 items-center rounded-full bg-gray-200 transition-colors"
+                            "relative inline-flex shrink-0 h-6 w-11 items-center rounded-full bg-gray-200 transition-colors"
                         },
                         disabled: loading(),
                         onclick: move |_| {
