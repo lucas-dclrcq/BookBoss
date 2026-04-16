@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.12](https://github.com/szinn/BookBoss/compare/v0.8.11..v0.8.12) - 2026-04-16
+
+### Bug Fixes
+
+- _(api)_ Move system.proto to canonical buf layout and rename package to v1 - ([f9cca2c](https://github.com/szinn/BookBoss/commit/f9cca2c7778c57b69368f1c7d2f32d53baab1258))
+- _(core)_ Accurately count and report reset import jobs in health check - ([8db5d77](https://github.com/szinn/BookBoss/commit/8db5d7720bd1eb48d3e3d0209edd183e42a7820e))
+- _(database)_ Fix MySQL compatibility in migrations 37 and 38 - ([b16823c](https://github.com/szinn/BookBoss/commit/b16823cecb2aa12ba4d1dfaba2d02f8bdb7f6e99))
+
 ## [0.8.11](https://github.com/szinn/BookBoss/compare/v0.8.10..v0.8.11) - 2026-04-15
 
 ### Features
