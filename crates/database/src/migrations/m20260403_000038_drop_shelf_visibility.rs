@@ -6,8 +6,11 @@ pub struct Migration;
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        // Drop index first, then the column
-        manager.drop_index(Index::drop().name("idx_shelves_visibility").to_owned()).await?;
+        // Drop index first, then the column.
+        // MySQL requires an explicit ON <table> clause for DROP INDEX.
+        manager
+            .drop_index(Index::drop().name("idx_shelves_visibility").table(Shelves::Table).to_owned())
+            .await?;
 
         manager
             .alter_table(Table::alter().table(Shelves::Table).drop_column(Shelves::Visibility).to_owned())
