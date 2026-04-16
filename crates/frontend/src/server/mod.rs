@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use axum::{
     Extension,
+    extract::DefaultBodyLimit,
     http::{HeaderName, Request},
 };
 use axum_session::{SessionConfig, SessionLayer, SessionStore};
@@ -57,6 +58,7 @@ impl IntoSubsystem<anyhow::Error> for FrontendSubsystem {
 
         let middleware = ServiceBuilder::new()
             .layer(CompressionLayer::new())
+            .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_SIZE))
             .layer(RequestBodyLimitLayer::new(MAX_REQUEST_BODY_SIZE))
             .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
             .layer(TraceLayer::new_for_http().make_span_with(|request: &Request<_>| {
