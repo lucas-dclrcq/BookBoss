@@ -10,7 +10,7 @@ mod error;
 pub mod system;
 
 pub(crate) mod system_proto {
-    tonic::include_proto!("bookboss.system");
+    tonic::include_proto!("bookboss.system.v1");
     pub(crate) const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("system_descriptor");
 }
 

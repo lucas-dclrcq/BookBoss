@@ -1,5 +1,5 @@
 syntax = "proto3";
-package bookboss.system;
+package bookboss.system.v1;
 
 message StatusRequest {
 }
