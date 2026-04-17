@@ -105,11 +105,14 @@ async fn list_incoming_books() -> Result<Vec<IncomingBookSummary>, ServerFnError
         })
         .collect();
 
-    summaries.sort_by(|a, b| match (&a.title, &b.title) {
-        (Some(a), Some(b)) => a.to_lowercase().cmp(&b.to_lowercase()),
-        (Some(_), None) => std::cmp::Ordering::Less,
-        (None, Some(_)) => std::cmp::Ordering::Greater,
-        (None, None) => std::cmp::Ordering::Equal,
+    summaries.sort_by(|a, b| {
+        let a_author = a.author_names.first().map(|s| s.to_lowercase());
+        let b_author = b.author_names.first().map(|s| s.to_lowercase());
+        a_author.cmp(&b_author).then_with(|| {
+            let a_title = a.title.as_deref().map(str::to_lowercase);
+            let b_title = b.title.as_deref().map(str::to_lowercase);
+            a_title.cmp(&b_title)
+        })
     });
 
     Ok(summaries)
