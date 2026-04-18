@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.16](https://github.com/szinn/BookBoss/compare/v0.8.15..v0.8.16) - 2026-04-18
+
+### Bug Fixes
+
+- _(core)_ Reset import job to Error when pipeline fails mid-flight - ([c7dd8fc](https://github.com/szinn/BookBoss/commit/c7dd8fc4a147d3f945dac37bfa17c183190f6381))
+- _(core)_ Case-insensitive username lookup on login - ([0cd26ca](https://github.com/szinn/BookBoss/commit/0cd26ca53078dcbc19ea9f5bd45e0a0c4104a654))
+- _(frontend)_ Refresh job queue badge after drag-and-drop upload - ([9bd3b02](https://github.com/szinn/BookBoss/commit/9bd3b0227523627b1c11381438c466edd36f312c))
+
 ## [0.8.15](https://github.com/szinn/BookBoss/compare/v0.8.14..v0.8.15) - 2026-04-17
 
 ### Bug Fixes
