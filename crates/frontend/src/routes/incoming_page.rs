@@ -2,7 +2,10 @@ use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
 use dioxus::{html::HasFileData, prelude::*};
 use serde::{Deserialize, Serialize};
 
-use crate::{Route, components::IncomingRefresh};
+use crate::{
+    Route,
+    components::{IncomingRefresh, JobsRefresh},
+};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct IncomingBookSummary {
@@ -173,6 +176,7 @@ fn LocalTime(iso: String) -> Element {
 #[component]
 pub(crate) fn IncomingPage() -> Element {
     let mut incoming_refresh = use_context::<IncomingRefresh>();
+    let mut jobs_refresh = use_context::<JobsRefresh>();
 
     // Trigger a bookdrop scan automatically when the page is entered
     use_effect(move || {
@@ -247,6 +251,7 @@ pub(crate) fn IncomingPage() -> Element {
                     uploading.set(false);
                     upload_results.set(results);
                     *incoming_refresh.0.write() += 1;
+                    *jobs_refresh.0.write() += 1;
                     // Auto-dismiss toasts after 4 seconds
                     let mut timer = document::eval("setTimeout(() => dioxus.send(true), 4000)");
                     let _ = timer.recv::<bool>().await;
