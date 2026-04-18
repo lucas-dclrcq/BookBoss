@@ -74,12 +74,12 @@ by a flexible database layer that supports PostgreSQL, MySQL, MariaDB, and SQLit
 - Multi-user support — each user has their own reading state, shelves, and devices
 - Virtual libraries — each user can maintain their own subset of books independent of other users
 - Capability-based permissions (Approve Imports, Edit Book, Delete Book, OPDS Access)
-- Settings page with library stats (total books, authors)
 - Genre and tag management with per-entry book counts
 - Library management (admin)
 - User management (admin)
 - System messages log for background task diagnostics (admin)
 - Health task dashboard showing scheduled task status with manual trigger support (admin)
+- Admin setting to also create MOBI-format files
 
 ## Getting Started
 
