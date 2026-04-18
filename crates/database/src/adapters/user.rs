@@ -176,7 +176,7 @@ impl UserRepository for UserRepositoryAdapter {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
 
         Ok(prelude::Users::find()
-            .filter(users::Column::Username.eq(username))
+            .filter(super::lower_name_eq(users::Column::Username, username))
             .one(transaction)
             .await
             .map_err(handle_dberr)?
@@ -366,6 +366,48 @@ mod tests {
         let user = result.unwrap().unwrap();
         assert_eq!(user.username, "alice");
         assert_eq!(user.email_address.as_str(), "alice@example.com");
+    }
+
+    #[tokio::test]
+    async fn test_find_by_username_case_insensitive_stored_lower() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        svc.user_repository()
+            .add_user(
+                &*tx,
+                NewUser::new("alice", "hash", "alice@example.com", HashSet::new(), "Alice", false).unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Username stored as "alice", login attempt with "Alice"
+        let result = svc.user_repository().find_by_username(&*tx, "Alice").await;
+
+        assert!(result.is_ok());
+        let user = result.unwrap().unwrap();
+        assert_eq!(user.username, "alice");
+    }
+
+    #[tokio::test]
+    async fn test_find_by_username_case_insensitive_stored_mixed() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        svc.user_repository()
+            .add_user(
+                &*tx,
+                NewUser::new("Scotte", "hash", "scotte@example.com", HashSet::new(), "Scotte Zinn", false).unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Username stored as "Scotte", login attempt with "scotte"
+        let result = svc.user_repository().find_by_username(&*tx, "scotte").await;
+
+        assert!(result.is_ok());
+        let user = result.unwrap().unwrap();
+        assert_eq!(user.username, "Scotte");
     }
 
     #[tokio::test]

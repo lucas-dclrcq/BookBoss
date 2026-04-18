@@ -386,6 +386,25 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_is_valid_login_case_insensitive_username() {
+        let hash = crate::user::User::encrypt_password("correct-password").unwrap();
+        let user = crate::user::User::fake(1, "alice", hash, "alice@example.com", HashSet::new());
+        let mut user_repo = MockUserRepository::new();
+        user_repo.expect_find_by_username().returning(move |_, _| {
+            let user = user.clone();
+            Box::pin(async move { Ok(Some(user)) })
+        });
+        let svc = create_login_service(user_repo);
+
+        // Login with "Alice" should resolve to the "alice" user
+        let result = svc.is_valid_login("Alice", "correct-password").await;
+
+        assert!(result.is_ok());
+        let found = result.unwrap().unwrap();
+        assert_eq!(found.username, "alice");
+    }
+
+    #[tokio::test]
     async fn test_is_valid_login_wrong_password() {
         let hash = crate::user::User::encrypt_password("correct-password").unwrap();
         let user = crate::user::User::fake(1, "alice", hash, "alice@example.com", HashSet::new());
