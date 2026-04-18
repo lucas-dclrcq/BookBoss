@@ -10,7 +10,7 @@ use crate::{
     book::{AuthorRole, BookStatus, FileRole, IdentifierType, MetadataSource, NewAuthor, NewBook, NewGenre, NewPublisher, NewSeries, NewTag, book_slug},
     event::EventService,
     format::FormatService,
-    import::{ImportJob, ImportSource, ImportStatus},
+    import::{ImportJob, ImportJobId, ImportSource, ImportStatus},
     metadata::MetadataService,
     pipeline::ProviderBook,
     repository::{RepositoryService, read_only_transaction, transaction},
@@ -151,7 +151,7 @@ fn provider_priority(name: &str) -> u8 {
 
 #[async_trait::async_trait]
 impl PipelineService for PipelineServiceImpl {
-    async fn process_job(&self, mut job: ImportJob) -> Result<ImportJob, Error> {
+    async fn process_job(&self, job: ImportJob) -> Result<ImportJob, Error> {
         // Guard: only process jobs in Pending state. A duplicate queue entry
         // (e.g. from startup re-enqueue racing with a reset job) must not
         // overwrite a job that is already mid-flight or complete.
@@ -160,6 +160,27 @@ impl PipelineService for PipelineServiceImpl {
             return Ok(job);
         }
 
+        let job_id = job.id;
+        match self.process_job_inner(job).await {
+            Ok(job) => Ok(job),
+            Err(e) => {
+                // Best-effort: reset the import job to Error so it is not left
+                // permanently stuck in Extracting or Identifying. Any secondary
+                // failure here is logged and swallowed — we still return the
+                // original error to the caller.
+                self.try_mark_import_job_error(job_id, e.to_string()).await;
+                Err(e)
+            }
+        }
+    }
+
+    fn list_provider_names(&self) -> Vec<&'static str> {
+        self.metadata_service.list_provider_names()
+    }
+}
+
+impl PipelineServiceImpl {
+    async fn process_job_inner(&self, mut job: ImportJob) -> Result<ImportJob, Error> {
         // ── 1. Hash dedup: reject if file is already in the library ───────────
         {
             let book_repo = self.repository_service.book_repository().clone();
@@ -596,8 +617,31 @@ impl PipelineService for PipelineServiceImpl {
         Ok(updated_job)
     }
 
-    fn list_provider_names(&self) -> Vec<&'static str> {
-        self.metadata_service.list_provider_names()
+    /// Best-effort: if `process_job_inner` returned an error and the import job
+    /// is still stuck in an intermediate state, reset it to `Error` so it does
+    /// not appear as permanently in-progress. Any failure here is logged and
+    /// swallowed — the caller's original error is still returned.
+    async fn try_mark_import_job_error(&self, job_id: ImportJobId, message: String) {
+        let import_job_repo = self.repository_service.import_job_repository().clone();
+        let outcome = transaction(&**self.repository_service.repository(), |tx| {
+            let import_job_repo = import_job_repo.clone();
+            let message = message.clone();
+            Box::pin(async move {
+                let Ok(Some(mut job)) = import_job_repo.find_by_id(tx, job_id).await else {
+                    return Ok(());
+                };
+                if matches!(job.status, ImportStatus::Extracting | ImportStatus::Identifying) {
+                    job.status = ImportStatus::Error;
+                    job.error_message = Some(message);
+                    import_job_repo.update_job(tx, job).await?;
+                }
+                Ok::<(), Error>(())
+            })
+        })
+        .await;
+        if let Err(e) = outcome {
+            tracing::warn!(import_job_id = job_id, error = %e, "failed to reset stuck import job to Error");
+        }
     }
 }
 
