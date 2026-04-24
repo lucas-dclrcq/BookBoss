@@ -317,7 +317,9 @@ impl DeviceService for DeviceServiceImpl {
 
             // 2. Load all shelf books with no page limit, then sort by book_id for
             //    deterministic keyset pagination
-            let mut shelf_books = collection_repository.books_for_filter(tx, filter, owner_id, None, None, None, None).await?;
+            let mut shelf_books = collection_repository
+                .books_for_filter(tx, filter, owner_id, Some(companion_shelf.library_id), None, None, None)
+                .await?;
             shelf_books.sort_by_key(|b| b.id);
 
             // 3. Load all DeviceBook records for quick lookup
@@ -1029,6 +1031,7 @@ mod tests {
         let mut collection_repo = MockCollectionRepository::new();
         collection_repo
             .expect_books_for_filter()
+            .withf(|_, _, _, library_id, _, _, _| *library_id == Some(crate::library::ALL_BOOKS_LIBRARY_ID))
             .returning(|_, _, _, _, _, _, _| Box::pin(async { Ok(vec![]) }));
         let svc = create_sync_service(device_repo, shelf_repo, collection_repo, MockBookRepository::new());
 
@@ -1065,10 +1068,13 @@ mod tests {
             Box::pin(async move { Ok(Some(s)) })
         });
         let mut collection_repo = MockCollectionRepository::new();
-        collection_repo.expect_books_for_filter().returning(move |_, _, _, _, _, _, _| {
-            let b = book.clone();
-            Box::pin(async move { Ok(vec![b]) })
-        });
+        collection_repo
+            .expect_books_for_filter()
+            .withf(|_, _, _, library_id, _, _, _| *library_id == Some(crate::library::ALL_BOOKS_LIBRARY_ID))
+            .returning(move |_, _, _, _, _, _, _| {
+                let b = book.clone();
+                Box::pin(async move { Ok(vec![b]) })
+            });
         // no files configured → returns empty
         let book_repo = book_repo_with_files(std::collections::HashMap::new());
         let svc = create_sync_service(device_repo, shelf_repo, collection_repo, book_repo);
@@ -1094,10 +1100,13 @@ mod tests {
             Box::pin(async move { Ok(Some(s)) })
         });
         let mut collection_repo = MockCollectionRepository::new();
-        collection_repo.expect_books_for_filter().returning(move |_, _, _, _, _, _, _| {
-            let b = books.clone();
-            Box::pin(async move { Ok(b) })
-        });
+        collection_repo
+            .expect_books_for_filter()
+            .withf(|_, _, _, library_id, _, _, _| *library_id == Some(crate::library::ALL_BOOKS_LIBRARY_ID))
+            .returning(move |_, _, _, _, _, _, _| {
+                let b = books.clone();
+                Box::pin(async move { Ok(b) })
+            });
         let file_map = [
             (1u64, vec![fake_book_file(1, FileFormat::Epub, FileRole::Original)]),
             (2u64, vec![fake_book_file(2, FileFormat::Epub, FileRole::Original)]),
@@ -1129,10 +1138,13 @@ mod tests {
         });
         let mut collection_repo = MockCollectionRepository::new();
 
-        collection_repo.expect_books_for_filter().returning(move |_, _, _, _, _, _, _| {
-            let b = book.clone();
-            Box::pin(async move { Ok(vec![b]) })
-        });
+        collection_repo
+            .expect_books_for_filter()
+            .withf(|_, _, _, library_id, _, _, _| *library_id == Some(crate::library::ALL_BOOKS_LIBRARY_ID))
+            .returning(move |_, _, _, _, _, _, _| {
+                let b = book.clone();
+                Box::pin(async move { Ok(vec![b]) })
+            });
         let file_map = [(
             1u64,
             vec![
@@ -1169,10 +1181,13 @@ mod tests {
         });
         let mut collection_repo = MockCollectionRepository::new();
 
-        collection_repo.expect_books_for_filter().returning(move |_, _, _, _, _, _, _| {
-            let b = book.clone();
-            Box::pin(async move { Ok(vec![b]) })
-        });
+        collection_repo
+            .expect_books_for_filter()
+            .withf(|_, _, _, library_id, _, _, _| *library_id == Some(crate::library::ALL_BOOKS_LIBRARY_ID))
+            .returning(move |_, _, _, _, _, _, _| {
+                let b = book.clone();
+                Box::pin(async move { Ok(vec![b]) })
+            });
         let file_map = [(
             1u64,
             vec![
@@ -1213,10 +1228,13 @@ mod tests {
         });
         let mut collection_repo = MockCollectionRepository::new();
 
-        collection_repo.expect_books_for_filter().returning(move |_, _, _, _, _, _, _| {
-            let b = book.clone();
-            Box::pin(async move { Ok(vec![b]) })
-        });
+        collection_repo
+            .expect_books_for_filter()
+            .withf(|_, _, _, library_id, _, _, _| *library_id == Some(crate::library::ALL_BOOKS_LIBRARY_ID))
+            .returning(move |_, _, _, _, _, _, _| {
+                let b = book.clone();
+                Box::pin(async move { Ok(vec![b]) })
+            });
         let file_map = [(1u64, vec![fake_book_file(1, FileFormat::Epub, FileRole::Original)])].into_iter().collect();
         let svc = create_sync_service(device_repo, shelf_repo, collection_repo, book_repo_with_files(file_map));
 
@@ -1248,10 +1266,13 @@ mod tests {
         });
         let mut collection_repo = MockCollectionRepository::new();
 
-        collection_repo.expect_books_for_filter().returning(move |_, _, _, _, _, _, _| {
-            let b = book.clone();
-            Box::pin(async move { Ok(vec![b]) })
-        });
+        collection_repo
+            .expect_books_for_filter()
+            .withf(|_, _, _, library_id, _, _, _| *library_id == Some(crate::library::ALL_BOOKS_LIBRARY_ID))
+            .returning(move |_, _, _, _, _, _, _| {
+                let b = book.clone();
+                Box::pin(async move { Ok(vec![b]) })
+            });
         let file_map = [(1u64, vec![fake_book_file(1, FileFormat::Epub, FileRole::Original)])].into_iter().collect();
         let svc = create_sync_service(device_repo, shelf_repo, collection_repo, book_repo_with_files(file_map));
 
@@ -1277,10 +1298,13 @@ mod tests {
         });
         let mut collection_repo = MockCollectionRepository::new();
 
-        collection_repo.expect_books_for_filter().returning(move |_, _, _, _, _, _, _| {
-            let b = book.clone();
-            Box::pin(async move { Ok(vec![b]) })
-        });
+        collection_repo
+            .expect_books_for_filter()
+            .withf(|_, _, _, library_id, _, _, _| *library_id == Some(crate::library::ALL_BOOKS_LIBRARY_ID))
+            .returning(move |_, _, _, _, _, _, _| {
+                let b = book.clone();
+                Box::pin(async move { Ok(vec![b]) })
+            });
         let file_map = [(1u64, vec![fake_book_file(1, FileFormat::Epub, FileRole::Original)])].into_iter().collect();
         let svc = create_sync_service(device_repo, shelf_repo, collection_repo, book_repo_with_files(file_map));
 
@@ -1309,10 +1333,13 @@ mod tests {
         });
         let mut collection_repo = MockCollectionRepository::new();
 
-        collection_repo.expect_books_for_filter().returning(move |_, _, _, _, _, _, _| {
-            let b = books.clone();
-            Box::pin(async move { Ok(b) })
-        });
+        collection_repo
+            .expect_books_for_filter()
+            .withf(|_, _, _, library_id, _, _, _| *library_id == Some(crate::library::ALL_BOOKS_LIBRARY_ID))
+            .returning(move |_, _, _, _, _, _, _| {
+                let b = books.clone();
+                Box::pin(async move { Ok(b) })
+            });
         let svc = create_sync_service(device_repo, shelf_repo, collection_repo, book_repo_with_files(file_map));
 
         // First page

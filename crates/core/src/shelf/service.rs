@@ -403,7 +403,7 @@ impl ShelfService for ShelfServiceImpl {
                 .ok_or_else(|| Error::Validation("smart shelf has no filter criteria".to_string()))?;
 
             collection_repository
-                .books_for_filter(tx, &filter, user_id, None, offset, page_size, sort)
+                .books_for_filter(tx, &filter, user_id, Some(target_shelf.library_id), offset, page_size, sort)
                 .await
         })
     }
@@ -435,7 +435,9 @@ impl ShelfService for ShelfServiceImpl {
                 }),
             };
 
-            collection_repository.count_for_filter(tx, &filter, user_id, None).await
+            collection_repository
+                .count_for_filter(tx, &filter, user_id, Some(target_shelf.library_id))
+                .await
         })
     }
 
@@ -1278,6 +1280,7 @@ mod tests {
         collection_repo
             .expect_count_for_filter()
             .times(1)
+            .withf(|_, _, _, library_id| *library_id == Some(crate::library::ALL_BOOKS_LIBRARY_ID))
             .returning(|_, _, _, _| Box::pin(async { Ok(7) }));
         let svc = create_service_with_collection_repo(shelf_repo, collection_repo);
 
@@ -1299,6 +1302,7 @@ mod tests {
         collection_repo
             .expect_count_for_filter()
             .times(1)
+            .withf(|_, _, _, library_id| *library_id == Some(crate::library::ALL_BOOKS_LIBRARY_ID))
             .returning(|_, _, _, _| Box::pin(async { Ok(3) }));
         let svc = create_service_with_collection_repo(shelf_repo, collection_repo);
 
@@ -1321,6 +1325,28 @@ mod tests {
         let result = svc.count_for_filter(token, 2).await; // user 2
 
         assert!(matches!(result, Err(Error::Validation(_))));
+    }
+
+    // ─── books_for_filter ─────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_books_for_filter_forwards_library_id() {
+        let shelf = fake_smart_shelf(1);
+        let token = shelf.token;
+        let mut shelf_repo = MockShelfRepository::new();
+        shelf_repo.expect_find_by_token().returning(move |_, _| {
+            let s = shelf.clone();
+            Box::pin(async move { Ok(Some(s)) })
+        });
+        let mut collection_repo = MockCollectionRepository::new();
+        collection_repo
+            .expect_books_for_filter()
+            .times(1)
+            .withf(|_, _, _, library_id, _, _, _| *library_id == Some(crate::library::ALL_BOOKS_LIBRARY_ID))
+            .returning(|_, _, _, _, _, _, _| Box::pin(async { Ok(vec![]) }));
+        let svc = create_service_with_collection_repo(shelf_repo, collection_repo);
+
+        svc.books_for_filter(token, 1, None, None, None).await.unwrap();
     }
 
     // ─── create_device_shelf ──────────────────────────────────────────────────
