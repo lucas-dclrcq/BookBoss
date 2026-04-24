@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.17](https://github.com/szinn/BookBoss/compare/v0.8.16..v0.8.17) - 2026-04-24
+
+### Bug Fixes
+
+- _(core)_ Scope Kobo sync diff query by companion shelf library_id - ([b84f4ba](https://github.com/szinn/BookBoss/commit/b84f4baf4d30eabe7e765cc19a6b1adc14912f1b))
+- _(core)_ Scope Kobo sync diff query by companion shelf library_id - ([4a651d6](https://github.com/szinn/BookBoss/commit/4a651d6dfc09216db3e289d71198341093704145))
+- _(core)_ Resolve user default library when creating manual and smart shelves - ([c78459c](https://github.com/szinn/BookBoss/commit/c78459c54b7408176e9befe1b08d143d44bf5141))
+
 ## [0.8.16](https://github.com/szinn/BookBoss/compare/v0.8.15..v0.8.16) - 2026-04-18
 
 ### Bug Fixes
