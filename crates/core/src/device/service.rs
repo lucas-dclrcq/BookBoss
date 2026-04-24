@@ -1042,6 +1042,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_compute_sync_diff_scopes_to_shelf_library() {
+        // Shelf has a non-default library_id (42) — verifies compute_sync_diff passes
+        // the shelf's library_id rather than always passing ALL_BOOKS_LIBRARY_ID.
+        let mut shelf_repo = MockShelfRepository::new();
+        shelf_repo.expect_find_by_device_id().returning(|_, _| {
+            let s = Shelf {
+                id: 10,
+                version: 1,
+                token: ShelfToken::new(10),
+                owner_id: 1,
+                library_id: 42,
+                name: "Personal Shelf".to_string(),
+                shelf_type: ShelfType::Smart,
+                device_id: Some(1),
+                filter_criteria: Some(device_shelf_filter()),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            };
+            Box::pin(async move { Ok(Some(s)) })
+        });
+        let mut device_repo = MockDeviceRepository::new();
+        device_repo.expect_books_for_device().returning(|_, _| Box::pin(async { Ok(vec![]) }));
+        let mut collection_repo = MockCollectionRepository::new();
+        collection_repo
+            .expect_books_for_filter()
+            .withf(|_, _, _, library_id, _, _, _| *library_id == Some(42u64))
+            .returning(|_, _, _, _, _, _, _| Box::pin(async { Ok(vec![]) }));
+        let svc = create_sync_service(device_repo, shelf_repo, collection_repo, MockBookRepository::new());
+
+        let diff = svc.compute_sync_diff(1, 1, None, None, 100).await.unwrap();
+
+        assert!(diff.is_empty());
+        assert!(!diff.has_more);
+    }
+
+    #[tokio::test]
     async fn test_sync_diff_no_companion_shelf_returns_empty() {
         let mut shelf_repo = MockShelfRepository::new();
         shelf_repo.expect_find_by_device_id().returning(|_, _| Box::pin(async { Ok(None) }));
