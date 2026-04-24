@@ -111,7 +111,10 @@ impl ShelfService for ShelfServiceImpl {
 
         let name_lower = name.to_lowercase();
 
-        with_transaction!(self, shelf_repository, |tx| {
+        with_transaction!(self, shelf_repository, user_setting_repository, library_repository, |tx| {
+            // Resolve the user's default library, falling back to All Books.
+            let library_id = crate::library::resolve_user_default_library(tx, user_setting_repository.as_ref(), library_repository.as_ref(), owner_id).await?;
+
             let existing = shelf_repository.list_for_user(tx, owner_id).await?;
             if existing.iter().any(|s| s.name.to_lowercase() == name_lower) {
                 return Err(Error::RepositoryError(RepositoryError::Conflict));
@@ -122,7 +125,7 @@ impl ShelfService for ShelfServiceImpl {
                     tx,
                     crate::shelf::NewShelf {
                         owner_id,
-                        library_id: crate::library::ALL_BOOKS_LIBRARY_ID,
+                        library_id,
                         name,
                         shelf_type: crate::shelf::ShelfType::Manual,
                         device_id: None,
@@ -321,7 +324,10 @@ impl ShelfService for ShelfServiceImpl {
 
         let name_lower = name.to_lowercase();
 
-        with_transaction!(self, shelf_repository, |tx| {
+        with_transaction!(self, shelf_repository, user_setting_repository, library_repository, |tx| {
+            // Resolve the user's default library, falling back to All Books.
+            let library_id = crate::library::resolve_user_default_library(tx, user_setting_repository.as_ref(), library_repository.as_ref(), owner_id).await?;
+
             let existing = shelf_repository.list_for_user(tx, owner_id).await?;
             if existing.iter().any(|s| s.name.to_lowercase() == name_lower) {
                 return Err(Error::RepositoryError(RepositoryError::Conflict));
@@ -332,7 +338,7 @@ impl ShelfService for ShelfServiceImpl {
                     tx,
                     crate::shelf::NewShelf {
                         owner_id,
-                        library_id: crate::library::ALL_BOOKS_LIBRARY_ID,
+                        library_id,
                         name,
                         shelf_type: ShelfType::Smart,
                         device_id: None,
@@ -485,6 +491,10 @@ mod tests {
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
+    /// General-purpose service factory for tests that do NOT call
+    /// `create_manual_shelf` or `create_smart_shelf`. Those methods require
+    /// `user_setting_repository` and `library_repository` — use
+    /// `create_service_with_default_library_repos` instead.
     fn create_service(shelf_repo: MockShelfRepository, book_repo: MockBookRepository) -> ShelfServiceImpl {
         let repository_service = Arc::new(
             crate::repository::testing::default_repository_service_builder()
@@ -505,6 +515,15 @@ mod tests {
                 .expect("all fields provided"),
         );
         ShelfServiceImpl::new(repository_service)
+    }
+
+    /// Helper for tests that don't care about library resolution — returns
+    /// `Ok(None)` for the setting so the implementation falls back to
+    /// `ALL_BOOKS_LIBRARY_ID`.
+    fn create_service_with_default_library_repos(shelf_repo: MockShelfRepository, book_repo: MockBookRepository) -> ShelfServiceImpl {
+        let mut setting_repo = MockUserSettingRepository::new();
+        setting_repo.expect_get().returning(|_, _, _| Box::pin(async { Ok(None) }));
+        create_service_with_setting_and_library_repos(shelf_repo, book_repo, setting_repo, MockLibraryRepository::new())
     }
 
     fn create_service_with_setting_and_library_repos(
@@ -566,7 +585,7 @@ mod tests {
             let s = shelf.clone();
             Box::pin(async move { Ok(s) })
         });
-        let svc = create_service(shelf_repo, MockBookRepository::new());
+        let svc = create_service_with_default_library_repos(shelf_repo, MockBookRepository::new());
 
         let result = svc.create_manual_shelf(1, "My Shelf".to_string()).await;
 
@@ -576,7 +595,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_manual_shelf_empty_name_returns_validation_error() {
-        let svc = create_service(MockShelfRepository::new(), MockBookRepository::new());
+        let svc = create_service_with_default_library_repos(MockShelfRepository::new(), MockBookRepository::new());
 
         for name in ["", "   "] {
             let result = svc.create_manual_shelf(1, name.to_string()).await;
@@ -592,7 +611,7 @@ mod tests {
             let e = existing.clone();
             Box::pin(async move { Ok(vec![e]) })
         });
-        let svc = create_service(shelf_repo, MockBookRepository::new());
+        let svc = create_service_with_default_library_repos(shelf_repo, MockBookRepository::new());
 
         let result = svc.create_manual_shelf(1, "My Shelf".to_string()).await;
 
@@ -608,7 +627,7 @@ mod tests {
             let e = existing.clone();
             Box::pin(async move { Ok(vec![e]) })
         });
-        let svc = create_service(shelf_repo, MockBookRepository::new());
+        let svc = create_service_with_default_library_repos(shelf_repo, MockBookRepository::new());
 
         let result = svc.create_manual_shelf(1, "fantasy".to_string()).await;
 
@@ -1156,14 +1175,14 @@ mod tests {
             let s = shelf.clone();
             Box::pin(async move { Ok(s) })
         });
-        let svc = create_service(shelf_repo, MockBookRepository::new());
+        let svc = create_service_with_default_library_repos(shelf_repo, MockBookRepository::new());
 
         svc.create_smart_shelf(1, "Unread Sci-Fi".to_string(), simple_filter()).await.unwrap();
     }
 
     #[tokio::test]
     async fn test_create_smart_shelf_rejects_empty_name() {
-        let svc = create_service(MockShelfRepository::new(), MockBookRepository::new());
+        let svc = create_service_with_default_library_repos(MockShelfRepository::new(), MockBookRepository::new());
 
         let result = svc.create_smart_shelf(1, "  ".to_string(), simple_filter()).await;
 
@@ -1178,7 +1197,7 @@ mod tests {
             let e = existing.clone();
             Box::pin(async move { Ok(vec![e]) })
         });
-        let svc = create_service(shelf_repo, MockBookRepository::new());
+        let svc = create_service_with_default_library_repos(shelf_repo, MockBookRepository::new());
 
         // "my shelf" matches existing "My Shelf" (case-insensitive)
         let result = svc.create_smart_shelf(1, "My Shelf".to_string(), simple_filter()).await;
@@ -1384,5 +1403,113 @@ mod tests {
         let result = svc.find_device_shelf(99).await.unwrap();
 
         assert!(result.is_none());
+    }
+
+    // ─── library resolution in create_manual_shelf / create_smart_shelf ──────
+
+    #[tokio::test]
+    async fn test_create_manual_shelf_uses_user_default_library() {
+        use crate::library::LibraryToken;
+
+        // Setting repo: returns a setting pointing at library_token
+        let token_str = LibraryToken::generate().to_string();
+        let mut setting_repo = MockUserSettingRepository::new();
+        setting_repo.expect_get().returning(move |_, _, _| {
+            let v = token_str.clone();
+            Box::pin(async move {
+                Ok(Some(crate::user::UserSetting {
+                    user_id: 1,
+                    key: "default_library".to_string(),
+                    value: v,
+                }))
+            })
+        });
+
+        // Library repo: find_by_token returns a library with id=42
+        let mut library_repo = MockLibraryRepository::new();
+        library_repo.expect_find_by_token().returning(|_, _| {
+            Box::pin(async {
+                Ok(Some(crate::library::Library {
+                    id: 42,
+                    version: 1,
+                    token: crate::library::LibraryToken::generate(),
+                    owner_id: Some(1),
+                    name: "Alice's Library".to_string(),
+                    is_system: false,
+                    created_at: chrono::Utc::now(),
+                    updated_at: chrono::Utc::now(),
+                }))
+            })
+        });
+
+        // Shelf repo: no existing shelves; add_shelf asserts library_id=42
+        let mut shelf_repo = MockShelfRepository::new();
+        shelf_repo.expect_list_for_user().returning(|_, _| Box::pin(async { Ok(vec![]) }));
+        shelf_repo.expect_add_shelf().returning(move |_, new_shelf| {
+            assert_eq!(new_shelf.library_id, 42, "must use resolved library");
+            let mut s = fake_shelf(1);
+            s.library_id = new_shelf.library_id;
+            Box::pin(async move { Ok(s) })
+        });
+
+        let svc = create_service_with_setting_and_library_repos(shelf_repo, MockBookRepository::new(), setting_repo, library_repo);
+
+        svc.create_manual_shelf(1, "My Shelf".to_string()).await.unwrap();
+        // Assertion is inside the add_shelf mock above.
+    }
+
+    #[tokio::test]
+    async fn test_create_smart_shelf_uses_user_default_library() {
+        use crate::{
+            filter::{BookFilter, FilterCondition, FilterGroup},
+            library::LibraryToken,
+        };
+
+        let token_str = LibraryToken::generate().to_string();
+        let mut setting_repo = MockUserSettingRepository::new();
+        setting_repo.expect_get().returning(move |_, _, _| {
+            let v = token_str.clone();
+            Box::pin(async move {
+                Ok(Some(crate::user::UserSetting {
+                    user_id: 1,
+                    key: "default_library".to_string(),
+                    value: v,
+                }))
+            })
+        });
+
+        let mut library_repo = MockLibraryRepository::new();
+        library_repo.expect_find_by_token().returning(|_, _| {
+            Box::pin(async {
+                Ok(Some(crate::library::Library {
+                    id: 42,
+                    version: 1,
+                    token: crate::library::LibraryToken::generate(),
+                    owner_id: Some(1),
+                    name: "Alice's Library".to_string(),
+                    is_system: false,
+                    created_at: chrono::Utc::now(),
+                    updated_at: chrono::Utc::now(),
+                }))
+            })
+        });
+
+        let mut shelf_repo = MockShelfRepository::new();
+        shelf_repo.expect_list_for_user().returning(|_, _| Box::pin(async { Ok(vec![]) }));
+        shelf_repo.expect_add_shelf().returning(move |_, new_shelf| {
+            assert_eq!(new_shelf.library_id, 42, "must use resolved library");
+            let mut s = fake_shelf(1);
+            s.library_id = new_shelf.library_id;
+            Box::pin(async move { Ok(s) })
+        });
+
+        let svc = create_service_with_setting_and_library_repos(shelf_repo, MockBookRepository::new(), setting_repo, library_repo);
+
+        let filter = BookFilter::Group(FilterGroup {
+            condition: FilterCondition::And,
+            items: vec![],
+        });
+        svc.create_smart_shelf(1, "Active".to_string(), filter).await.unwrap();
+        // Assertion is inside the add_shelf mock above.
     }
 }

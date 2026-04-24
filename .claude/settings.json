@@ -30,6 +30,7 @@
       "Bash(mise trust:*)",
       "Bash(sed -n '*,*p' *)",
       "Edit(./**)",
+      "Read(//Users/scotte/.claude/plugins/marketplaces/superpowers-extended-cc-marketplace/**)",
       "WebFetch(domain:crates.io)",
       "WebFetch(domain:dioxuslabs.com)",
       "WebFetch(domain:docs.hardcover.app)",
@@ -53,7 +54,9 @@
       "mcp__issueboss__create_issue",
       "mcp__issueboss__list_artifacts",
       "mcp__issueboss__list_issues",
+      "mcp__issueboss__list_relationships",
       "mcp__issueboss__move_artifact",
+      "mcp__issueboss__remove_artifact",
       "mcp__issueboss__transition_issue",
       "mcp__issueboss__update_artifact",
       "mcp__issueboss__update_issue"
