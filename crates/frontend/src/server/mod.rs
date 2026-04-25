@@ -37,7 +37,7 @@ pub(crate) use auth_user::AuthUser;
 
 const REQUEST_ID_HEADER: &str = "x-request-id";
 const DEFAULT_EXPIRATION_DURATION: Duration = Duration::days(7);
-const MAX_REQUEST_BODY_SIZE: usize = l0 * 1024 * 1024; // 70 MiB
+const MAX_REQUEST_BODY_SIZE: usize = 70 * 1024 * 1024; // 70 MiB
 
 pub struct FrontendSubsystem {
     config: FrontendConfig,
