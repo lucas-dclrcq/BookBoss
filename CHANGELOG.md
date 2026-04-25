@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.19](https://github.com/szinn/BookBoss/compare/v0.8.18..v0.8.19) - 2026-04-25
+
+### Bug Fixes
+
+- _(frontend)_ Typo - ([9d6b0cc](https://github.com/szinn/BookBoss/commit/9d6b0cca329d630916888c7194032c78d8f092ca))
+
 ## [0.8.18](https://github.com/szinn/BookBoss/compare/v0.8.17..v0.8.18) - 2026-04-25
 
 ### Bug Fixes
