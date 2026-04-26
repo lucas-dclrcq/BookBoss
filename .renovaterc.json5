@@ -61,6 +61,15 @@
       matchDatasources: ["mise"],
       allowedVersions: "<4",
       matchPackageNames: ["/npm:tailwindcss/"]
+    },
+    {
+      description: "Dioxus Group",
+      matchDatasources: ["cargo"],
+      matchPackagePatterns: ["dioxus"],
+      groupName: "Dioxus",
+      group: {
+        commitMessageTopic: "{{{groupName}}} group"
+      }
     }
   ]
 }
