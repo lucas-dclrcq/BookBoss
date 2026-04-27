@@ -23,7 +23,7 @@ pub(crate) fn RegisterAdminForm() -> Element {
     let passwords_match = use_memo(move || password() == confirm_password());
 
     rsx! {
-        div { class: "bg-white rounded-2xl shadow-lg w-full max-w-md",
+        div { class: "bg-white dark:bg-slate-800 rounded-2xl shadow-lg w-full max-w-md",
             div { class: "pt-8 pb-2",
                 img {
                     src: asset!("/assets/BookBoss-Banner.png"),
@@ -84,10 +84,10 @@ pub(crate) fn RegisterAdminForm() -> Element {
                         }
                     });
                 },
-                h2 { class: "text-2xl font-bold text-gray-800 mb-1 text-center",
+                h2 { class: "text-2xl font-bold text-gray-800 dark:text-slate-100 mb-1 text-center",
                     "Create Administrator"
                 }
-                p { class: "text-sm text-gray-500 text-center mb-6",
+                p { class: "text-sm text-gray-500 dark:text-slate-400 text-center mb-6",
                     "No users found — set up your admin account to get started."
                 }
 
@@ -100,14 +100,14 @@ pub(crate) fn RegisterAdminForm() -> Element {
 
                 div { class: "mb-4",
                     label {
-                        class: "block text-sm font-medium text-gray-700 mb-1",
+                        class: "block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1",
                         r#for: "reg-username",
                         "Username"
                     }
                     input {
                         id: "reg-username",
                         r#type: "text",
-                        class: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500",
+                        class: "w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500",
                         placeholder: "Choose a username",
                         value: username,
                         oninput: move |e| username.set(e.value()),
@@ -118,14 +118,14 @@ pub(crate) fn RegisterAdminForm() -> Element {
 
                 div { class: "mb-4",
                     label {
-                        class: "block text-sm font-medium text-gray-700 mb-1",
+                        class: "block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1",
                         r#for: "reg-full-name",
                         "Full Name"
                     }
                     input {
                         id: "reg-full-name",
                         r#type: "text",
-                        class: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500",
+                        class: "w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500",
                         placeholder: "Your full name",
                         value: full_name,
                         oninput: move |e| full_name.set(e.value()),
@@ -135,14 +135,14 @@ pub(crate) fn RegisterAdminForm() -> Element {
 
                 div { class: "mb-4",
                     label {
-                        class: "block text-sm font-medium text-gray-700 mb-1",
+                        class: "block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1",
                         r#for: "reg-password",
                         "Password"
                     }
                     input {
                         id: "reg-password",
                         r#type: "password",
-                        class: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500",
+                        class: "w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500",
                         placeholder: "Choose a strong password",
                         value: password,
                         oninput: move |e| password.set(e.value()),
@@ -163,14 +163,14 @@ pub(crate) fn RegisterAdminForm() -> Element {
 
                 div { class: "mb-4",
                     label {
-                        class: "block text-sm font-medium text-gray-700 mb-1",
+                        class: "block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1",
                         r#for: "reg-confirm-password",
                         "Confirm Password"
                     }
                     input {
                         id: "reg-confirm-password",
                         r#type: "password",
-                        class: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500",
+                        class: "w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500",
                         placeholder: "Re-enter your password",
                         value: confirm_password,
                         oninput: move |e| confirm_password.set(e.value()),
@@ -187,14 +187,14 @@ pub(crate) fn RegisterAdminForm() -> Element {
 
                 div { class: "mb-6",
                     label {
-                        class: "block text-sm font-medium text-gray-700 mb-1",
+                        class: "block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1",
                         r#for: "reg-email",
                         "Email Address"
                     }
                     input {
                         id: "reg-email",
                         r#type: "email",
-                        class: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500",
+                        class: "w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500",
                         placeholder: "admin@example.com",
                         value: email,
                         oninput: move |e| email.set(e.value()),

@@ -5,9 +5,10 @@ use crate::server::AuthSession;
 use crate::{
     Route,
     components::{
-        NavBar, SEARCH_TEXT,
+        NavBar, SEARCH_TEXT, THEME_MODE,
         selection::{SELECTION_MODE, exit_selection_mode},
         sort_control::{SORT_ORDER, get_sort_preference},
+        theme::get_theme_preference,
     },
 };
 
@@ -80,6 +81,30 @@ pub(crate) fn AppLayout() -> Element {
         }
     });
 
+    // Load persisted theme preference once; write to global signal.
+    let theme_pref = use_server_future(get_theme_preference);
+    use_effect(move || {
+        if let Ok(res) = theme_pref {
+            if let Some(Ok(Some(mode))) = res() {
+                *THEME_MODE.write() = mode;
+            }
+        }
+    });
+
+    // Apply dark class to <html> and sync localStorage whenever THEME_MODE changes.
+    use_effect(move || {
+        let mode = *THEME_MODE.read();
+        spawn(async move {
+            let _ = document::eval(&format!(
+                "(function(){{var m={:?};var \
+                 dark=m==='dark'||(m==='system'&&window.matchMedia('(prefers-color-scheme:dark)').matches);document.documentElement.classList.toggle('dark',\
+                 dark);localStorage.setItem('bb_theme',m);}})()",
+                mode.as_str()
+            ))
+            .await;
+        });
+    });
+
     // Exit selection mode and clear search whenever the route changes.
     let route = use_route::<Route>();
     use_effect(move || {
@@ -98,13 +123,18 @@ pub(crate) fn AppLayout() -> Element {
         }
     });
 
+    const ANTI_FLASH_SCRIPT: &str = "(function(){var t=localStorage.getItem('bb_theme');var \
+                                     dark=t==='dark'||((!t||t==='system')&&window.matchMedia('(prefers-color-scheme:dark)').matches);document.documentElement.\
+                                     classList.toggle('dark',dark);})();";
+
     rsx! {
+        document::Script { {ANTI_FLASH_SCRIPT} }
         document::Stylesheet { href: asset!("/assets/tailwind.css") }
         document::Link { rel: "icon", href: asset!("/assets/favicon.ico") }
         document::Link { rel: "apple-touch-icon", sizes: "180x180", href: asset!("/assets/apple-touch-icon.png") }
         document::Link { rel: "apple-touch-icon", sizes: "32x32", href: asset!("/assets/favicon-32x32.png") }
         document::Link { rel: "apple-touch-icon", sizes: "16x16", href: asset!("/assets/favicon-16x16.png") }
-        div { class: "h-screen flex flex-col bg-gray-50 text-gray-900",
+        div { class: "h-screen flex flex-col bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-slate-100",
             NavBar {}
             main { class: "flex-1 flex overflow-hidden",
                 SuspenseBoundary {

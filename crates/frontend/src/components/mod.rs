@@ -11,6 +11,7 @@ mod selection;
 mod series_tile;
 mod shelf_bar;
 mod sort_control;
+mod theme;
 
 pub(crate) use app_layout::{AppLayout, IncomingRefresh, JobsRefresh, SystemMessagesRefresh};
 pub(crate) use autocomplete_input::AutocompleteInput;
@@ -27,3 +28,4 @@ pub(crate) use shelf_bar::ShelfBar;
 #[cfg(feature = "server")]
 pub(crate) use sort_control::to_core_sort;
 pub(crate) use sort_control::{SORT_ORDER, SortControl, SortOrder, sort_books_client_side};
+pub(crate) use theme::{THEME_MODE, ThemeMode, get_theme_preference, set_theme_preference};

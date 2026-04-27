@@ -36,7 +36,10 @@ use super::{
     SEARCH_TEXT,
     search::{PLACEHOLDER_TIPS, apply_completion, compute_completion, next_cycle_input},
 };
-use crate::Route;
+use crate::{
+    Route,
+    components::{THEME_MODE, set_theme_preference},
+};
 
 #[get("/api/v1/incoming/pending_count", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
 async fn get_pending_count() -> Result<Option<u32>, ServerFnError> {
@@ -376,13 +379,13 @@ fn AboutModal(on_close: EventHandler<()>) -> Element {
             onclick: move |_| on_close(()),
             onkeydown: move |e| { if e.key() == Key::Escape { on_close(()); } },
             div {
-                class: "bg-white rounded-xl shadow-xl w-full max-w-md mx-4",
+                class: "bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md mx-4",
                 onclick: |e| e.stop_propagation(),
                 // Header
                 div { class: "flex items-center justify-between px-6 pt-5 pb-2",
-                    h2 { class: "text-lg font-semibold text-gray-900", "About" }
+                    h2 { class: "text-lg font-semibold text-gray-900 dark:text-slate-100", "About" }
                     button {
-                        class: "text-gray-400 hover:text-gray-600 cursor-pointer",
+                        class: "text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 cursor-pointer",
                         onclick: move |_| on_close(()),
                         svg {
                             class: "w-5 h-5",
@@ -405,11 +408,11 @@ fn AboutModal(on_close: EventHandler<()>) -> Element {
                         alt: "BookBoss",
                         class: "w-full mb-2",
                     }
-                    p { class: "text-sm text-gray-500 mb-6 text-center",
+                    p { class: "text-sm text-gray-500 dark:text-slate-400 mb-6 text-center",
                         { format!("Version: {}", clap::crate_version!()) }
                     }
-                    h3 { class: "text-sm font-semibold text-gray-900 mb-3", "Library Statistics" }
-                    dl { class: "divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white",
+                    h3 { class: "text-sm font-semibold text-gray-900 dark:text-slate-100 mb-3", "Library Statistics" }
+                    dl { class: "divide-y divide-gray-100 dark:divide-slate-700 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900",
                         AboutStatRow {
                             label: "Books",
                             value: stats.as_ref().map(|s| s.books.to_string()),
@@ -429,8 +432,8 @@ fn AboutModal(on_close: EventHandler<()>) -> Element {
 fn AboutStatRow(label: &'static str, value: Option<String>) -> Element {
     rsx! {
         div { class: "flex justify-between px-4 py-3",
-            dt { class: "text-sm text-gray-500", { label } }
-            dd { class: "text-sm font-medium text-gray-900",
+            dt { class: "text-sm text-gray-500 dark:text-slate-400", { label } }
+            dd { class: "text-sm font-medium text-gray-900 dark:text-slate-100",
                 { value.as_deref().unwrap_or("—") }
             }
         }
@@ -507,7 +510,7 @@ fn LibraryPicker() -> Element {
                     class: "fixed inset-0 z-40",
                     onclick: move |_| open.set(false),
                 }
-                div { class: "absolute left-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 z-50 py-1 min-w-[160px]",
+                div { class: "absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 z-50 py-1 min-w-[160px]",
                     for lib in &libs {
                         {
                             let is_active = Some(lib.token.as_str()) == resolved_active;
@@ -517,7 +520,7 @@ fn LibraryPicker() -> Element {
                                     class: if is_active {
                                         "w-full text-left px-3 py-2 text-sm font-medium text-indigo-600 bg-indigo-50"
                                     } else {
-                                        "w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                        "w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700"
                                     },
                                     onclick: move |_| {
                                         *ACTIVE_LIBRARY.write() = Some(tok.clone());
@@ -601,7 +604,7 @@ fn SearchBar() -> Element {
                     // Input column — flex-1 takes all space; relative for hint strip positioning
                     div { class: "relative flex-1",
                         // ── Input container ──────────────────────────────────────────
-                        div { class: "relative w-full bg-white/90 focus-within:bg-white rounded focus-within:ring-2 focus-within:ring-indigo-300",
+                        div { class: "relative w-full bg-white/90 dark:bg-slate-700/90 focus-within:bg-white dark:focus-within:bg-slate-700 rounded focus-within:ring-2 focus-within:ring-indigo-300",
                             // Search icon
                             svg {
                                 class: "absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none",
@@ -632,7 +635,7 @@ fn SearchBar() -> Element {
                                 }
                             }
                             input {
-                                class: "relative w-full pl-9 pr-8 py-1.5 text-sm text-gray-900 bg-transparent placeholder-gray-400 outline-none",
+                                class: "relative w-full pl-9 pr-8 py-1.5 text-sm text-gray-900 dark:text-slate-100 bg-transparent placeholder-gray-400 dark:placeholder-slate-500 outline-none",
                                 r#type: "text",
                                 placeholder: "{search_placeholder}",
                                 value: SEARCH_TEXT(),
@@ -761,7 +764,7 @@ fn SearchBar() -> Element {
                         // ── Hint strip (absolute dropdown below the input) ────────────
                         if show_hint() {
                             div {
-                                class: "absolute top-full left-0 right-0 mt-1 bg-blue-50 border border-blue-200 rounded-md px-3 py-2 text-xs text-blue-700 z-50 shadow-sm leading-relaxed",
+                                class: "absolute top-full left-0 right-0 mt-1 bg-blue-50 dark:bg-slate-800 border border-blue-200 dark:border-slate-600 rounded-md px-3 py-2 text-xs text-blue-700 dark:text-blue-300 z-50 shadow-sm leading-relaxed",
                                 span { class: "font-semibold", "field:value" }
                                 " to narrow results — "
                                 for field in ["author:", "series:", "genre:", "tag:", "status:", "title:"] {
@@ -781,6 +784,24 @@ fn SearchBar() -> Element {
                     }
                 }
             }
+        }
+    }
+}
+
+#[component]
+fn ThemeToggle() -> Element {
+    rsx! {
+        button {
+            class: "flex items-center hover:text-indigo-200 cursor-pointer text-sm",
+            title: "Change theme",
+            onclick: move |_| {
+                let next = THEME_MODE.peek().cycle();
+                *THEME_MODE.write() = next;
+                spawn(async move {
+                    let _ = set_theme_preference(next).await;
+                });
+            },
+            { THEME_MODE.read().icon() }
         }
     }
 }
@@ -932,6 +953,7 @@ pub(crate) fn NavBar() -> Element {
                 LibraryInit {}
             }
             div { class: "flex items-center gap-4 shrink-0 ml-auto",
+                ThemeToggle {}
                 SuspenseBoundary {
                     fallback: |_| rsx! {},
                     AdminSettingsButton {}
@@ -959,9 +981,9 @@ pub(crate) fn NavBar() -> Element {
                             class: "fixed inset-0 z-40",
                             onclick: move |_| user_menu_open.set(false),
                         }
-                        div { class: "absolute right-0 top-full mt-1 w-36 bg-white rounded-lg shadow-lg py-1 z-50",
+                        div { class: "absolute right-0 top-full mt-1 w-36 bg-white dark:bg-slate-800 rounded-lg shadow-lg py-1 z-50 border dark:border-slate-700",
                             button {
-                                class: "w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100",
+                                class: "w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700",
                                 onclick: move |_| {
                                     user_menu_open.set(false);
                                     navigator.push(Route::ProfilePage {});
@@ -969,7 +991,7 @@ pub(crate) fn NavBar() -> Element {
                                 "Profile"
                             }
                             button {
-                                class: "w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100",
+                                class: "w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700",
                                 onclick: on_logout,
                                 "Logout"
                             }

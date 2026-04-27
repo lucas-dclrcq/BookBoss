@@ -133,7 +133,7 @@ pub(crate) fn LandingPage() -> Element {
             href: asset!("/assets/apple-touch-icon.png"),
         }
 
-        div { class: "min-h-screen bg-gray-100 flex items-center justify-center p-4",
+        div { class: "min-h-screen bg-gray-100 dark:bg-slate-900 flex items-center justify-center p-4",
             if let Some(token) = change_pw_token() {
                 ForceChangePasswordForm {
                     user_token: token,
@@ -143,15 +143,15 @@ pub(crate) fn LandingPage() -> Element {
             } else {
                 match landing_state() {
                     None => rsx! {
-                        div { class: "text-gray-500 text-sm", "Loading…" }
+                        div { class: "text-gray-500 dark:text-slate-400 text-sm", "Loading…" }
                     },
                     Some(Err(e)) => rsx! {
-                        div { class: "bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-red-600 text-sm",
+                        div { class: "bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-8 max-w-md w-full text-red-600 text-sm",
                             "Unable to load page: {e}"
                         }
                     },
                     Some(Ok(LandingState { is_authenticated: true, .. })) => rsx! {
-                        div { class: "text-gray-500 text-sm", "Redirecting…" }
+                        div { class: "text-gray-500 dark:text-slate-400 text-sm", "Redirecting…" }
                     },
                     Some(Ok(LandingState { has_users: false, .. })) => rsx! {
                         RegisterAdminForm {}
@@ -191,7 +191,7 @@ fn ForceChangePasswordForm(user_token: String, on_changed: EventHandler<()>, on_
     });
 
     rsx! {
-        div { class: "bg-white rounded-2xl shadow-lg w-full max-w-md",
+        div { class: "bg-white dark:bg-slate-800 rounded-2xl shadow-lg w-full max-w-md",
             div { class: "pt-8 pb-2",
                 img {
                     src: asset!("/assets/BookBoss-Banner.png"),
@@ -236,8 +236,8 @@ fn ForceChangePasswordForm(user_token: String, on_changed: EventHandler<()>, on_
                     });
                 },
 
-                h2 { class: "text-2xl font-bold text-gray-800 mb-1 text-center", "Change Password" }
-                p { class: "text-sm text-gray-500 text-center mb-6",
+                h2 { class: "text-2xl font-bold text-gray-800 dark:text-slate-100 mb-1 text-center", "Change Password" }
+                p { class: "text-sm text-gray-500 dark:text-slate-400 text-center mb-6",
                     "Your account requires a new password before you can continue."
                 }
 
@@ -248,14 +248,14 @@ fn ForceChangePasswordForm(user_token: String, on_changed: EventHandler<()>, on_
                 }
 
                 div { class: "mb-4",
-                    label { class: "block text-sm font-medium text-gray-700 mb-1",
+                    label { class: "block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1",
                         r#for: "fcp-password",
                         "New Password"
                     }
                     input {
                         id: "fcp-password",
                         r#type: "password",
-                        class: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500",
+                        class: "w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500",
                         placeholder: "Choose a strong password",
                         value: password,
                         oninput: move |e| password.set(e.value()),
@@ -280,14 +280,14 @@ fn ForceChangePasswordForm(user_token: String, on_changed: EventHandler<()>, on_
                 }
 
                 div { class: "mb-6",
-                    label { class: "block text-sm font-medium text-gray-700 mb-1",
+                    label { class: "block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1",
                         r#for: "fcp-confirm",
                         "Confirm Password"
                     }
                     input {
                         id: "fcp-confirm",
                         r#type: "password",
-                        class: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500",
+                        class: "w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500",
                         placeholder: "Re-enter your password",
                         value: confirm_password,
                         oninput: move |e| confirm_password.set(e.value()),
@@ -316,7 +316,7 @@ fn ForceChangePasswordForm(user_token: String, on_changed: EventHandler<()>, on_
                 }
 
                 button {
-                    class: "w-full py-2 px-4 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors",
+                    class: "w-full py-2 px-4 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors",
                     r#type: "button",
                     disabled: saving(),
                     onclick: move |_| on_cancel.call(()),
