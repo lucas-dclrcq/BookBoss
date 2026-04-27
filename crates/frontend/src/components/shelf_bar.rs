@@ -93,7 +93,7 @@ pub(crate) fn ShelfBar(
         // Outer bar: flex but no overflow — "+" and Edit/Delete are never clipped.
         // Own shelves and others get their own overflow-x-auto sections so "+" sits
         // exactly between them.
-        div { class: "flex items-center gap-2 px-4 py-2 bg-gray-50 border-b border-gray-200 shrink-0",
+        div { class: "flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 shrink-0",
 
             // Own-shelves scrollable section (All Books + personal shelves)
             div { class: "flex items-center gap-2 overflow-x-auto min-w-0",
@@ -102,9 +102,9 @@ pub(crate) fn ShelfBar(
                 Link {
                     to: Route::BooksPage {},
                     class: if current_shelf_token.is_none() {
-                        "px-3 py-1 rounded-full text-sm bg-indigo-600 text-white font-medium whitespace-nowrap shrink-0"
+                        "px-3 py-1 rounded-full text-sm bg-indigo-600 text-white font-medium whitespace-nowrap shrink-0 dark:bg-indigo-900 dark:text-indigo-300"
                     } else {
-                        "px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 whitespace-nowrap shrink-0"
+                        "px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 whitespace-nowrap shrink-0 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-indigo-300"
                     },
                     "All Books"
                 }
@@ -116,11 +116,11 @@ pub(crate) fn ShelfBar(
                         let is_drop_target = !is_active && drag_active && !shelf.is_smart;
                         let is_success = success_shelf().as_deref() == Some(shelf.token.as_str());
                         let pill_class = if is_active {
-                            "px-3 py-1 rounded-full text-sm bg-indigo-600 text-white font-medium whitespace-nowrap shrink-0 cursor-pointer"
+                            "px-3 py-1 rounded-full text-sm bg-indigo-600 text-white font-medium whitespace-nowrap shrink-0 cursor-pointer dark:bg-indigo-900 dark:text-indigo-300"
                         } else if is_drop_target {
-                            "px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-700 whitespace-nowrap shrink-0 cursor-pointer ring-2 ring-inset ring-indigo-300 hover:ring-indigo-500"
+                            "px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-700 whitespace-nowrap shrink-0 cursor-pointer ring-2 ring-inset ring-indigo-300 hover:ring-indigo-500 dark:bg-slate-800 dark:text-slate-300"
                         } else {
-                            "px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 whitespace-nowrap shrink-0 cursor-pointer"
+                            "px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 whitespace-nowrap shrink-0 cursor-pointer dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-indigo-300"
                         };
                         let stok = shelf.token.clone();
                         let is_smart = shelf.is_smart;
@@ -173,7 +173,7 @@ pub(crate) fn ShelfBar(
             // "+" new shelf — right after own shelves, outside overflow so dropdown isn't clipped
             div { class: "relative shrink-0",
                 button {
-                    class: "px-2 py-1 rounded-full text-sm border border-dashed border-gray-300 text-gray-500 hover:border-indigo-400 hover:text-indigo-600 whitespace-nowrap",
+                    class: "px-2 py-1 rounded-full text-sm border border-dashed border-gray-300 text-gray-500 hover:border-indigo-400 hover:text-indigo-600 whitespace-nowrap dark:border-slate-600 dark:text-slate-400 dark:hover:border-indigo-400 dark:hover:text-indigo-300",
                     onclick: move |_| show_add_dropdown.set(!show_add_dropdown()),
                     "+"
                 }
@@ -183,9 +183,9 @@ pub(crate) fn ShelfBar(
                         class: "fixed inset-0 z-40",
                         onclick: move |_| show_add_dropdown.set(false),
                     }
-                    div { class: "absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 z-50 py-1 min-w-[150px]",
+                    div { class: "absolute right-0 top-full mt-1 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 z-50 py-1 min-w-[150px]",
                         button {
-                            class: "w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50",
+                            class: "w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700",
                             onclick: move |_| {
                                 show_add_dropdown.set(false);
                                 shelf_name.set(String::new());
@@ -195,7 +195,7 @@ pub(crate) fn ShelfBar(
                             "Static Shelf"
                         }
                         button {
-                            class: "w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50",
+                            class: "w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700",
                             onclick: move |_| {
                                 show_add_dropdown.set(false);
                                 smart_name.set(String::new());
@@ -215,15 +215,15 @@ pub(crate) fn ShelfBar(
                 SortControl {}
                 if current_is_own {
                     button {
-                        class: "text-sm text-gray-500 hover:text-indigo-600",
+                        class: "text-sm text-gray-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300",
                         onclick: move |_| on_edit_shelf.call(()),
                         "Edit"
                     }
                     button {
                         class: if is_device_shelf {
-                            "text-sm text-gray-300 cursor-not-allowed"
+                            "text-sm text-gray-300 dark:text-slate-600 cursor-not-allowed"
                         } else {
-                            "text-sm text-red-400 hover:text-red-600"
+                            "text-sm text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
                         },
                         title: if is_device_shelf {
                             "Managed by device — delete the device from your Profile to remove this shelf"
@@ -248,8 +248,8 @@ pub(crate) fn ShelfBar(
                 class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
                 tabindex: -1,
                 onkeydown: move |e| { if e.key() == Key::Escape { show_modal.set(false); } },
-                div { class: "bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4",
-                    h2 { class: "text-lg font-semibold text-gray-900 mb-4", "New Shelf" }
+                div { class: "bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-sm mx-4",
+                    h2 { class: "text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4", "New Shelf" }
 
                     form {
                         onsubmit: move |e| {
@@ -258,17 +258,17 @@ pub(crate) fn ShelfBar(
                         },
 
                         div { class: "mb-4",
-                            label { class: "block text-sm font-medium text-gray-700 mb-1",
+                            label { class: "block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1",
                                 r#for: "shelf-name-input",
                                 "Shelf name"
                             }
                             input {
                                 id: "shelf-name-input",
-                                class: "w-full px-3 py-2 border rounded text-sm outline-none focus:ring-1",
+                                class: "w-full px-3 py-2 border rounded text-sm outline-none focus:ring-1 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100",
                                 class: if error_msg().is_some() {
                                     "border-red-400 focus:border-red-500 focus:ring-red-500"
                                 } else {
-                                    "border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
+                                    "border-gray-300 dark:border-slate-600 focus:border-indigo-500 focus:ring-indigo-500"
                                 },
                                 r#type: "text",
                                 placeholder: "e.g. To Read",
@@ -292,7 +292,7 @@ pub(crate) fn ShelfBar(
                         div { class: "flex gap-3 justify-end",
                             button {
                                 r#type: "button",
-                                class: "px-4 py-2 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50",
+                                class: "px-4 py-2 text-sm font-medium rounded border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700",
                                 onclick: move |_| show_modal.set(false),
                                 "Cancel"
                             }
@@ -314,17 +314,17 @@ pub(crate) fn ShelfBar(
                 class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
                 tabindex: -1,
                 onkeydown: move |e| { if e.key() == Key::Escape { show_smart_modal.set(false); } },
-                div { class: "bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl mx-4 max-h-[85vh] overflow-y-auto",
-                    h2 { class: "text-lg font-semibold text-gray-900 mb-4", "New Smart Shelf" }
+                div { class: "bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-2xl mx-4 max-h-[85vh] overflow-y-auto",
+                    h2 { class: "text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4", "New Smart Shelf" }
 
                     div { class: "mb-4",
-                        label { class: "block text-sm font-medium text-gray-700 mb-1",
+                        label { class: "block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1",
                             r#for: "smart-shelf-name",
                             "Shelf name"
                         }
                         input {
                             id: "smart-shelf-name",
-                            class: "w-full px-3 py-2 border border-gray-300 rounded text-sm outline-none focus:ring-1 focus:border-indigo-500 focus:ring-indigo-500",
+                            class: "w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded text-sm outline-none focus:ring-1 focus:border-indigo-500 focus:ring-indigo-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100",
                             r#type: "text",
                             placeholder: "e.g. Science Fiction Must-Reads",
                             autofocus: true,
@@ -342,7 +342,7 @@ pub(crate) fn ShelfBar(
                     }
 
                     div { class: "mb-6",
-                        p { class: "text-sm font-medium text-gray-700 mb-2", "Filter rules" }
+                        p { class: "text-sm font-medium text-gray-700 dark:text-slate-300 mb-2", "Filter rules" }
                         FilterBuilder { filter: smart_filter, entity_options: entity_options.clone(), current_shelf_id: None, is_admin }
                     }
 
@@ -353,7 +353,7 @@ pub(crate) fn ShelfBar(
                     div { class: "flex gap-3 justify-end",
                         button {
                             r#type: "button",
-                            class: "px-4 py-2 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50",
+                            class: "px-4 py-2 text-sm font-medium rounded border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700",
                             onclick: move |_| show_smart_modal.set(false),
                             "Cancel"
                         }

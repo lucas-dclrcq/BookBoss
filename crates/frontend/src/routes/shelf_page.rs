@@ -583,7 +583,7 @@ pub(crate) fn ShelfPage(token: String) -> Element {
 
             match books_resource() {
                 None => rsx! {
-                    div { class: "flex-1 flex items-center justify-center text-gray-400 text-sm",
+                    div { class: "flex-1 flex items-center justify-center text-gray-400 dark:text-slate-500 text-sm",
                         "Loading…"
                     }
                 },
@@ -596,7 +596,7 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                     if all_books.is_empty() {
                         rsx! {
                             div { class: "flex-1 flex flex-col items-center justify-center py-20 text-center",
-                                p { class: "text-gray-400 text-sm",
+                                p { class: "text-gray-400 dark:text-slate-500 text-sm",
                                     if has_search {
                                         "No books match your search."
                                     } else if current_is_smart {
@@ -606,7 +606,7 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                                     }
                                 }
                                 if !has_search && is_own && !current_is_smart {
-                                    p { class: "text-gray-300 text-xs mt-1",
+                                    p { class: "text-gray-300 dark:text-slate-600 text-xs mt-1",
                                         "Drag a book here or open any book and use \"Add to Shelf\"."
                                     }
                                 }
@@ -669,11 +669,11 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                 onkeydown: move |e| { if e.key() == Key::Escape { show_edit.set(false); } },
                 div {
                     class: if current_is_smart {
-                        "bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl mx-4 max-h-[85vh] overflow-y-auto"
+                        "bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-2xl mx-4 max-h-[85vh] overflow-y-auto"
                     } else {
-                        "bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4"
+                        "bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-sm mx-4"
                     },
-                    h2 { class: "text-lg font-semibold text-gray-900 mb-4", "Edit Shelf" }
+                    h2 { class: "text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4", "Edit Shelf" }
                     form {
                         onsubmit: {
                             let tok = token.clone();
@@ -731,17 +731,17 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                         },
 
                         div { class: "mb-4",
-                            label { class: "block text-sm font-medium text-gray-700 mb-1",
+                            label { class: "block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1",
                                 r#for: "edit-shelf-name",
                                 "Shelf name"
                             }
                             input {
                                 id: "edit-shelf-name",
-                                class: "w-full px-3 py-2 border rounded text-sm outline-none focus:ring-1",
+                                class: "w-full px-3 py-2 border rounded text-sm outline-none focus:ring-1 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100",
                                 class: if edit_error().is_some() {
                                     "border-red-400 focus:border-red-500 focus:ring-red-500"
                                 } else {
-                                    "border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
+                                    "border-gray-300 dark:border-slate-600 focus:border-indigo-500 focus:ring-indigo-500"
                                 },
                                 r#type: "text",
                                 autofocus: true,
@@ -763,7 +763,7 @@ pub(crate) fn ShelfPage(token: String) -> Element {
 
                         if current_is_smart {
                             div { class: "mb-6",
-                                p { class: "text-sm font-medium text-gray-700 mb-2", "Filter rules" }
+                                p { class: "text-sm font-medium text-gray-700 dark:text-slate-300 mb-2", "Filter rules" }
                                 FilterBuilder {
                                     filter: edit_filter,
                                     entity_options: entity_options.clone(),
@@ -776,7 +776,7 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                         div { class: "flex gap-3 justify-end",
                             button {
                                 r#type: "button",
-                                class: "px-4 py-2 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50",
+                                class: "px-4 py-2 text-sm font-medium rounded border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700",
                                 onclick: move |_| show_edit.set(false),
                                 "Cancel"
                             }
@@ -806,14 +806,14 @@ pub(crate) fn ShelfPage(token: String) -> Element {
                 class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
                 tabindex: -1,
                 onkeydown: move |e| { if e.key() == Key::Escape { show_delete.set(false); } },
-                div { class: "bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4",
-                    h2 { class: "text-lg font-semibold text-gray-900 mb-2", "Delete Shelf?" }
-                    p { class: "text-sm text-gray-600 mb-6",
+                div { class: "bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-sm mx-4",
+                    h2 { class: "text-lg font-semibold text-gray-900 dark:text-slate-100 mb-2", "Delete Shelf?" }
+                    p { class: "text-sm text-gray-600 dark:text-slate-400 mb-6",
                         "This will permanently delete \"{current_name}\". Books will not be affected."
                     }
                     div { class: "flex gap-3 justify-end",
                         button {
-                            class: "px-4 py-2 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50",
+                            class: "px-4 py-2 text-sm font-medium rounded border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700",
                             autofocus: true,
                             onclick: move |_| show_delete.set(false),
                             "Cancel"
