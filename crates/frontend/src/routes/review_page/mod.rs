@@ -18,12 +18,12 @@ pub(crate) fn ReviewPage(token: String) -> Element {
 
     match review_data() {
         None => rsx! {
-            div { class: "flex-1 flex items-center justify-center text-gray-400 text-sm",
+            div { class: "flex-1 flex items-center justify-center text-gray-400 dark:text-slate-500 text-sm",
                 "Loading…"
             }
         },
         Some(Err(e)) => rsx! {
-            div { class: "flex-1 flex items-center justify-center text-red-600 text-sm",
+            div { class: "flex-1 flex items-center justify-center text-red-600 dark:text-red-400 text-sm",
                 "Failed to load: {e}"
             }
         },

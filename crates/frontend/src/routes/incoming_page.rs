@@ -277,11 +277,11 @@ pub(crate) fn IncomingPage() -> Element {
                     span { class: "text-white text-2xl font-semibold", "Drop EPUBs to import" }
                 }
             }
-            div { class: "px-6 py-4 border-b border-gray-200",
-                h1 { class: "text-xl font-semibold text-gray-900", "Incoming" }
+            div { class: "px-6 py-4 border-b border-gray-200 dark:border-slate-700",
+                h1 { class: "text-xl font-semibold text-gray-900 dark:text-slate-100", "Incoming" }
             }
             if uploading() {
-                div { class: "px-6 py-2 bg-indigo-50 text-indigo-700 text-sm border-b border-indigo-100",
+                div { class: "px-6 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-sm border-b border-indigo-100 dark:border-indigo-800",
                     "Uploading…"
                 }
             }
@@ -297,10 +297,10 @@ pub(crate) fn IncomingPage() -> Element {
                                 for (name, outcome) in &results {
                                     {
                                         let (bg, msg) = match outcome {
-                                            UploadOutcome::Queued => ("bg-green-50 text-green-800", format!("Added: {name}")),
-                                            UploadOutcome::AlreadyImported => ("bg-gray-50 text-gray-600", format!("Already in your library: {name}")),
-                                            UploadOutcome::InvalidFile => ("bg-orange-50 text-orange-800", format!("Not a valid EPUB: {name}")),
-                                            UploadOutcome::Error(e) => ("bg-red-50 text-red-800", format!("Failed: {name} — {e}")),
+                                            UploadOutcome::Queued => ("bg-green-50 dark:bg-green-900/30 text-green-800 dark:text-green-300", format!("Added: {name}")),
+                                            UploadOutcome::AlreadyImported => ("bg-gray-50 dark:bg-slate-800 text-gray-600 dark:text-slate-400", format!("Already in your library: {name}")),
+                                            UploadOutcome::InvalidFile => ("bg-orange-50 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300", format!("Not a valid EPUB: {name}")),
+                                            UploadOutcome::Error(e) => ("bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-300", format!("Failed: {name} — {e}")),
                                         };
                                         rsx! {
                                             div { class: "px-3 py-2 rounded text-sm {bg}", "{msg}" }
@@ -320,7 +320,7 @@ pub(crate) fn IncomingPage() -> Element {
                                     (s, f) => format!("{added} added, {s} skipped, {f} failed"),
                                 };
                                 rsx! {
-                                    div { class: "px-6 py-2 bg-gray-50 text-gray-700 text-sm border-b border-gray-100",
+                                    div { class: "px-6 py-2 bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-300 text-sm border-b border-gray-100 dark:border-slate-700",
                                         "{summary}"
                                     }
                                 }
@@ -331,60 +331,60 @@ pub(crate) fn IncomingPage() -> Element {
             }
             match jobs() {
                 None => rsx! {
-                    div { class: "flex-1 flex items-center justify-center text-gray-400 text-sm",
+                    div { class: "flex-1 flex items-center justify-center text-gray-400 dark:text-slate-500 text-sm",
                         "Loading…"
                     }
                 },
                 Some(Err(e)) => rsx! {
-                    div { class: "flex-1 flex items-center justify-center text-red-600 text-sm",
+                    div { class: "flex-1 flex items-center justify-center text-red-600 dark:text-red-400 text-sm",
                         "{e}"
                     }
                 },
                 Some(Ok(items)) => rsx! {
                     if items.is_empty() {
-                        div { class: "flex-1 flex items-center justify-center text-gray-400 text-sm",
+                        div { class: "flex-1 flex items-center justify-center text-gray-400 dark:text-slate-500 text-sm",
                             "No books awaiting review."
                         }
                     } else {
                         div { class: "flex-1 overflow-auto",
-                            table { class: "min-w-full divide-y divide-gray-200 text-sm",
-                                thead { class: "bg-gray-50",
+                            table { class: "min-w-full divide-y divide-gray-200 dark:divide-slate-700 text-sm",
+                                thead { class: "bg-gray-50 dark:bg-slate-800",
                                     tr {
-                                        th { class: "px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider", "Title" }
-                                        th { class: "px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider", "Authors" }
-                                        th { class: "px-6 py-3 text-center font-medium text-gray-500 uppercase tracking-wider", "Format" }
-                                        th { class: "px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider", "File" }
-                                        th { class: "px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider", "Detected" }
+                                        th { class: "px-6 py-3 text-left font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider", "Title" }
+                                        th { class: "px-6 py-3 text-left font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider", "Authors" }
+                                        th { class: "px-6 py-3 text-center font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider", "Format" }
+                                        th { class: "px-6 py-3 text-left font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider", "File" }
+                                        th { class: "px-6 py-3 text-left font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider", "Detected" }
                                         th { class: "px-6 py-3" }
                                     }
                                 }
-                                tbody { class: "bg-white divide-y divide-gray-100",
+                                tbody { class: "bg-white dark:bg-slate-800 divide-y divide-gray-100 dark:divide-slate-700",
                                     for item in items {
                                         tr { key: "{item.job_token}",
-                                            td { class: "px-6 py-4 text-gray-900",
+                                            td { class: "px-6 py-4 text-gray-900 dark:text-slate-100",
                                                 match &item.title {
                                                     Some(t) => rsx! { "{t}" },
                                                     None => rsx! {
-                                                        span { class: "text-gray-400 italic", "Unknown" }
+                                                        span { class: "text-gray-400 dark:text-slate-500 italic", "Unknown" }
                                                     },
                                                 }
                                             }
-                                            td { class: "px-6 py-4 text-gray-600",
+                                            td { class: "px-6 py-4 text-gray-600 dark:text-slate-300",
                                                 if item.author_names.is_empty() {
-                                                    span { class: "text-gray-400 italic", "Unknown" }
+                                                    span { class: "text-gray-400 dark:text-slate-500 italic", "Unknown" }
                                                 } else {
                                                     "{item.author_names.join(\", \")}"
                                                 }
                                             }
-                                            td { class: "px-6 py-4 text-gray-600 text-center", "{item.file_format}" }
-                                            td { class: "px-6 py-4 text-gray-500 font-mono text-xs", "{item.file_path}" }
-                                            td { class: "px-6 py-4 text-gray-500 whitespace-nowrap",
+                                            td { class: "px-6 py-4 text-gray-600 dark:text-slate-300 text-center", "{item.file_format}" }
+                                            td { class: "px-6 py-4 text-gray-500 dark:text-slate-400 font-mono text-xs", "{item.file_path}" }
+                                            td { class: "px-6 py-4 text-gray-500 dark:text-slate-400 whitespace-nowrap",
                                                 LocalTime { iso: item.detected_at.clone() }
                                             }
                                             td { class: "px-6 py-4 text-right flex items-center justify-end gap-3",
                                                 Link {
                                                     to: Route::ReviewPage { token: item.job_token.clone() },
-                                                    class: "px-3 py-1 rounded border border-indigo-300 text-sm font-medium text-indigo-600 hover:bg-indigo-50",
+                                                    class: "px-3 py-1 rounded border border-indigo-300 dark:border-indigo-600 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30",
                                                     "Review"
                                                 }
                                                 {
@@ -392,9 +392,9 @@ pub(crate) fn IncomingPage() -> Element {
                                                     let is_rejecting = rejecting.read().as_deref() == Some(&token);
                                                     let any_rejecting = rejecting.read().is_some();
                                                     let btn_class = if any_rejecting {
-                                                        "px-3 py-1 rounded border border-red-300 text-sm font-medium text-red-600 opacity-40 cursor-not-allowed"
+                                                        "px-3 py-1 rounded border border-red-300 dark:border-red-700 text-sm font-medium text-red-600 dark:text-red-400 opacity-40 cursor-not-allowed"
                                                     } else {
-                                                        "px-3 py-1 rounded border border-red-300 text-sm font-medium text-red-600 hover:bg-red-50 cursor-pointer"
+                                                        "px-3 py-1 rounded border border-red-300 dark:border-red-700 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 cursor-pointer"
                                                     };
                                                     rsx! {
                                                         button {
