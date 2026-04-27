@@ -56,7 +56,7 @@ pub(crate) fn AutocompleteInput(
             if is_set {
                 // ── Pill display ──────────────────────────────────────────────
                 div {
-                    class: "flex flex-wrap gap-1 items-center border border-gray-300 rounded px-2 py-1 min-h-[34px] cursor-text",
+                    class: "flex flex-wrap gap-1 items-center border border-gray-300 dark:border-slate-600 rounded px-2 py-1 min-h-[34px] cursor-text bg-white dark:bg-slate-700",
                     onclick: move |_| {
                         input_text.set(committed.clone());
                         editing.set(true);
@@ -67,7 +67,7 @@ pub(crate) fn AutocompleteInput(
                         let chip_class = if is_new {
                             "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-800 border border-green-300"
                         } else {
-                            "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700 border border-gray-300"
+                            "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-100 dark:bg-slate-600 text-gray-700 dark:text-slate-200 border border-gray-300 dark:border-slate-500"
                         };
                         rsx! {
                             span { class: "{chip_class}",
@@ -77,7 +77,7 @@ pub(crate) fn AutocompleteInput(
                                 }
                                 button {
                                     r#type: "button",
-                                    class: "ml-0.5 text-gray-400 hover:text-gray-700 cursor-pointer leading-none",
+                                    class: "ml-0.5 text-gray-400 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 cursor-pointer leading-none",
                                     onclick: move |e| {
                                         e.stop_propagation();
                                         value.write().clear();
@@ -94,7 +94,7 @@ pub(crate) fn AutocompleteInput(
             } else {
                 // ── Text input ────────────────────────────────────────────────
                 input {
-                    class: "w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400",
+                    class: "w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-700 placeholder-gray-400 dark:placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-400",
                     value: "{input_text}",
                     placeholder: "Series name",
                     autofocus: is_editing,
@@ -180,16 +180,16 @@ pub(crate) fn AutocompleteInput(
             }
             // ── Dropdown ──────────────────────────────────────────────────────
             if show && !filtered.is_empty() {
-                div { class: "absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded shadow-lg z-50 max-h-48 overflow-y-auto",
+                div { class: "absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded shadow-lg z-50 max-h-48 overflow-y-auto",
                     for (i, (name, next_num)) in filtered.iter().enumerate() {
                         {
                             let label = name.clone();
                             let click_name = name.clone();
                             let is_focused = focused_index() == Some(i);
                             let row_class = if is_focused {
-                                "px-3 py-1.5 text-sm text-gray-700 cursor-pointer bg-indigo-50 border-l-2 border-indigo-400"
+                                "px-3 py-1.5 text-sm text-gray-700 dark:text-slate-200 cursor-pointer bg-indigo-50 dark:bg-slate-700 border-l-2 border-indigo-400"
                             } else {
-                                "px-3 py-1.5 text-sm text-gray-700 hover:bg-indigo-50 cursor-pointer"
+                                "px-3 py-1.5 text-sm text-gray-700 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-slate-700 cursor-pointer"
                             };
                             let next_num = *next_num;
                             rsx! {

@@ -187,11 +187,11 @@ fn BookCard(book: BookSummary) -> Element {
 
         div {
             class: if is_dragging {
-                "flex flex-col opacity-50"
+                "flex flex-col bg-white dark:bg-slate-800 opacity-50"
             } else if in_selection_mode && selected {
-                "flex flex-col ring-2 ring-indigo-500 rounded"
+                "flex flex-col bg-white dark:bg-slate-800 ring-2 ring-indigo-500 rounded"
             } else {
-                "flex flex-col"
+                "flex flex-col bg-white dark:bg-slate-800"
             },
             draggable: !in_selection_mode,
             ondragstart: {

@@ -394,7 +394,7 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
         div { class: "flex-1 overflow-auto p-6",
             match book() {
                 None => rsx! {
-                    div { class: "flex items-center justify-center h-full text-gray-400 text-sm",
+                    div { class: "flex items-center justify-center h-full text-gray-400 dark:text-slate-500 text-sm",
                         "Loading…"
                     }
                 },
@@ -408,14 +408,14 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                             class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
                             tabindex: -1,
                             onkeydown: move |e| { if e.key() == Key::Escape { show_confirm.set(false); } },
-                            div { class: "bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4",
-                                h2 { class: "text-lg font-semibold text-gray-900 mb-2", "Delete Book?" }
-                                p { class: "text-sm text-gray-600 mb-6",
+                            div { class: "bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-sm mx-4",
+                                h2 { class: "text-lg font-semibold text-gray-900 dark:text-slate-100 mb-2", "Delete Book?" }
+                                p { class: "text-sm text-gray-600 dark:text-slate-300 mb-6",
                                     "This will permanently delete \"{book.title}\" and all its files. This cannot be undone."
                                 }
                                 div { class: "flex gap-3 justify-end",
                                     button {
-                                        class: "px-4 py-2 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50",
+                                        class: "px-4 py-2 text-sm font-medium rounded border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700",
                                         autofocus: true,
                                         onclick: move |_| show_confirm.set(false),
                                         "No, Keep It"
@@ -469,7 +469,7 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                         div { class: "flex-1 min-w-0",
                             div { class: "flex items-start justify-between gap-4 mb-2",
                                 div { class: "flex flex-wrap items-baseline gap-x-2 gap-y-1 min-w-0",
-                                    h1 { class: "text-2xl font-bold text-gray-900", "{book.title}" }
+                                    h1 { class: "text-2xl font-bold text-gray-900 dark:text-slate-100", "{book.title}" }
                                     InlineStarRating {
                                         token: book.token.clone(),
                                         initial_rating: book.reading_state.as_ref().and_then(|s| s.personal_rating),
@@ -479,7 +479,7 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                                     if book.can_edit {
                                         Link {
                                             to: Route::EditMetadataPage { token: book.token.clone() },
-                                            class: "px-3 py-1 text-xs font-medium rounded border border-gray-300 text-gray-600 hover:bg-gray-50",
+                                            class: "px-3 py-1 text-xs font-medium rounded border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700",
                                             "Edit"
                                         }
                                     }
@@ -497,14 +497,14 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                             if !book.authors.is_empty() {
                                 div { class: "flex flex-wrap gap-2 mb-3",
                                     for author in &book.authors {
-                                        span { class: "text-sm text-gray-700",
+                                        span { class: "text-sm text-gray-700 dark:text-slate-300",
                                             Link {
                                                 to: Route::AuthorDetailPage { token: author.token.clone() },
                                                 class: "text-indigo-600 hover:text-indigo-800",
                                                 "{author.name}"
                                             }
                                             if author.role != "Author" {
-                                                span { class: "text-gray-400 ml-1", "({author.role})" }
+                                                span { class: "text-gray-400 dark:text-slate-500 ml-1", "({author.role})" }
                                             }
                                         }
                                     }
@@ -526,7 +526,7 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                             }
 
                             // Metadata row
-                            div { class: "flex flex-wrap gap-4 text-sm text-gray-500 mb-4",
+                            div { class: "flex flex-wrap gap-4 text-sm text-gray-500 dark:text-slate-400 mb-4",
                                 if let Some(year) = book.published_date {
                                     span { "Published: {year}" }
                                 }
@@ -542,7 +542,7 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                             if !book.genres.is_empty() {
                                 div { class: "flex flex-wrap items-center gap-1 mb-3",
                                     svg {
-                                        class: "w-3.5 h-3.5 text-gray-400 shrink-0 mr-0.5",
+                                        class: "w-3.5 h-3.5 text-gray-400 dark:text-slate-500 shrink-0 mr-0.5",
                                         xmlns: "http://www.w3.org/2000/svg",
                                         fill: "none",
                                         view_box: "0 0 24 24",
@@ -555,7 +555,7 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                                         }
                                     }
                                     for genre in &book.genres {
-                                        span { class: "inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700 border border-gray-200",
+                                        span { class: "inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-600",
                                             "{genre}"
                                         }
                                     }
@@ -566,7 +566,7 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                             if !book.tags.is_empty() {
                                 div { class: "flex flex-wrap items-center gap-1 mb-3",
                                     svg {
-                                        class: "w-3.5 h-3.5 text-gray-400 shrink-0 mr-0.5",
+                                        class: "w-3.5 h-3.5 text-gray-400 dark:text-slate-500 shrink-0 mr-0.5",
                                         xmlns: "http://www.w3.org/2000/svg",
                                         fill: "none",
                                         view_box: "0 0 24 24",
@@ -603,9 +603,9 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                                                 href,
                                                 target: "_blank",
                                                 rel: "noopener noreferrer",
-                                                class: "inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-gray-100 text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors",
+                                                class: "inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-gray-100 dark:bg-slate-700 text-xs text-gray-700 dark:text-slate-300 hover:bg-indigo-50 hover:text-indigo-700 transition-colors",
                                                 span { class: "font-medium", "{file.format}" }
-                                                span { class: "text-gray-400", "↓ {size_str}" }
+                                                span { class: "text-gray-400 dark:text-slate-500", "↓ {size_str}" }
                                             }
                                         }
                                     }
@@ -618,20 +618,20 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
 
                             // Description
                             if let Some(ref desc) = book.description {
-                                p { class: "text-sm text-gray-700 leading-relaxed mb-6", "{desc}" }
+                                p { class: "text-sm text-gray-700 dark:text-slate-300 leading-relaxed mb-6", "{desc}" }
                             }
 
                             // Identifiers
                             if !book.identifiers.is_empty() {
                                 div {
-                                    h2 { class: "text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2",
+                                    h2 { class: "text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 mb-2",
                                         "Identifiers"
                                     }
                                     dl { class: "space-y-1",
                                         for id in &book.identifiers {
                                             div { class: "flex gap-2 text-sm",
-                                                dt { class: "text-gray-500 w-28 shrink-0", "{id.identifier_type}" }
-                                                dd { class: "text-gray-800 font-mono", "{id.value}" }
+                                                dt { class: "text-gray-500 dark:text-slate-400 w-28 shrink-0", "{id.identifier_type}" }
+                                                dd { class: "text-gray-800 dark:text-slate-200 font-mono", "{id.value}" }
                                             }
                                         }
                                     }
@@ -691,7 +691,7 @@ fn StatusPill(token: String, initial_state: Option<ReadingStateDto>) -> Element 
         div { class: "relative inline-flex items-center gap-1",
             span { class: pill_class(), "{status()}" }
             button {
-                class: "text-gray-400 hover:text-gray-600 disabled:opacity-40",
+                class: "text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 disabled:opacity-40",
                 title: "Change reading status",
                 disabled: busy(),
                 onclick: move |_| show_dropdown.set(!show_dropdown()),
@@ -710,14 +710,14 @@ fn StatusPill(token: String, initial_state: Option<ReadingStateDto>) -> Element 
                 }
             }
             if show_dropdown() {
-                div { class: "absolute top-full left-0 mt-1 z-10 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-max",
+                div { class: "absolute top-full left-0 mt-1 z-10 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 py-1 min-w-max",
                     for s in ["Unread", "Reading", "Paused", "Rereading", "Read", "Abandoned"] {
                         {
                             let tok = token.clone();
                             let s_owned = s.to_string();
                             rsx! {
                                 button {
-                                    class: "block w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 disabled:opacity-40",
+                                    class: "block w-full text-left px-3 py-1.5 text-xs text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-40",
                                     disabled: busy(),
                                     onclick: move |_| {
                                         let tok = tok.clone();
@@ -762,7 +762,7 @@ fn InlineStarRating(token: String, initial_rating: Option<u8>) -> Element {
                             class: if filled {
                                 "text-yellow-400 text-lg leading-none hover:scale-110 transition-transform disabled:cursor-default"
                             } else {
-                                "text-gray-300 text-lg leading-none hover:text-yellow-400 transition-colors disabled:cursor-default"
+                                "text-gray-300 dark:text-slate-600 text-lg leading-none hover:text-yellow-400 transition-colors disabled:cursor-default"
                             },
                             disabled: busy(),
                             onclick: move |_| {
@@ -785,7 +785,7 @@ fn InlineStarRating(token: String, initial_rating: Option<u8>) -> Element {
                     let tok = token.clone();
                     rsx! {
                         button {
-                            class: "ml-1 text-gray-400 hover:text-gray-600 text-sm leading-none transition-colors disabled:cursor-default",
+                            class: "ml-1 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 text-sm leading-none transition-colors disabled:cursor-default",
                             title: "Clear rating",
                             disabled: busy(),
                             onclick: move |_| {

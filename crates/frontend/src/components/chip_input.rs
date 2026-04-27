@@ -62,7 +62,7 @@ pub(crate) fn ChipInput(mut values: Signal<Vec<String>>, options: Vec<String>, p
         div { class: "relative",
             // ── Chip container ─────────────────────────────────────────────────
             div {
-                class: "flex flex-wrap gap-1 items-center border border-gray-300 rounded px-2 py-1 min-h-[34px] focus-within:ring-1 focus-within:ring-indigo-400",
+                class: "flex flex-wrap gap-1 items-center border border-gray-300 dark:border-slate-600 rounded px-2 py-1 min-h-[34px] bg-white dark:bg-slate-700 focus-within:ring-1 focus-within:ring-indigo-400",
                 // When max_chips is 1 and the field is full, clicking anywhere on the
                 // container re-opens the input pre-populated with the current value.
                 onclick: move |_| {
@@ -81,7 +81,7 @@ pub(crate) fn ChipInput(mut values: Signal<Vec<String>>, options: Vec<String>, p
                         let chip_class = if is_new {
                             "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-800 border border-green-300"
                         } else {
-                            "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700 border border-gray-300"
+                            "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-100 dark:bg-slate-600 text-gray-700 dark:text-slate-200 border border-gray-300 dark:border-slate-500"
                         };
                         rsx! {
                             span { key: "{label}", class: "{chip_class}",
@@ -91,7 +91,7 @@ pub(crate) fn ChipInput(mut values: Signal<Vec<String>>, options: Vec<String>, p
                                 }
                                 button {
                                     r#type: "button",
-                                    class: "ml-0.5 text-gray-400 hover:text-gray-700 cursor-pointer leading-none",
+                                    class: "ml-0.5 text-gray-400 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 cursor-pointer leading-none",
                                     onclick: move |e| {
                                         e.stop_propagation();
                                         values.write().remove(i);
@@ -107,7 +107,7 @@ pub(crate) fn ChipInput(mut values: Signal<Vec<String>>, options: Vec<String>, p
                 }
                 if !at_limit {
                 input {
-                    class: "flex-1 min-w-[120px] text-sm outline-none bg-transparent py-0.5",
+                    class: "flex-1 min-w-[120px] text-sm text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-400 outline-none bg-transparent py-0.5",
                     value: "{input_text}",
                     placeholder: "{ph}",
                     onmounted: move |e| {
@@ -195,16 +195,16 @@ pub(crate) fn ChipInput(mut values: Signal<Vec<String>>, options: Vec<String>, p
             }
             // ── Dropdown ───────────────────────────────────────────────────────
             if *show_dropdown.read() && !filtered.is_empty() {
-                div { class: "absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded shadow-lg z-50 max-h-48 overflow-y-auto",
+                div { class: "absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded shadow-lg z-50 max-h-48 overflow-y-auto",
                     for (i, option) in filtered.iter().enumerate() {
                         {
                             let label = option.clone();
                             let click_val = option.clone();
                             let is_focused = focused_index() == Some(i);
                             let row_class = if is_focused {
-                                "px-3 py-1.5 text-sm text-gray-700 cursor-pointer bg-indigo-50 border-l-2 border-indigo-400"
+                                "px-3 py-1.5 text-sm text-gray-700 dark:text-slate-200 cursor-pointer bg-indigo-50 dark:bg-slate-700 border-l-2 border-indigo-400"
                             } else {
-                                "px-3 py-1.5 text-sm text-gray-700 hover:bg-indigo-50 cursor-pointer"
+                                "px-3 py-1.5 text-sm text-gray-700 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-slate-700 cursor-pointer"
                             };
                             rsx! {
                                 div {

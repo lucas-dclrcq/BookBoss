@@ -105,14 +105,14 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
     rsx! {
         div { class: "flex-1 flex flex-col overflow-hidden",
             // ── Header ────────────────────────────────────────────────────────
-            div { class: "px-6 py-4 border-b border-gray-200 flex items-center justify-between",
+            div { class: "px-6 py-4 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between dark:bg-slate-800",
                 div { class: "flex items-center gap-4",
                     button {
                         class: "text-sm text-indigo-600 hover:text-indigo-800 cursor-pointer",
                         onclick: move |_| on_back.call(()),
                         if edit_mode { "← Book" } else { "← Incoming" }
                     }
-                    h1 { class: "text-xl font-semibold text-gray-900",
+                    h1 { class: "text-xl font-semibold text-gray-900 dark:text-slate-100",
                         if edit_mode { "Edit Metadata" } else { "Review Book" }
                     }
                 }
@@ -121,9 +121,9 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                     {
                         let is_busy = *action_busy.read();
                         let cancel_class = if is_busy {
-                            "px-4 py-2 rounded border border-gray-300 text-sm font-medium text-gray-500 opacity-40 cursor-not-allowed"
+                            "px-4 py-2 rounded border border-gray-300 dark:border-slate-600 text-sm font-medium text-gray-500 dark:text-slate-400 opacity-40 cursor-not-allowed"
                         } else {
-                            "px-4 py-2 rounded border border-gray-300 text-sm font-medium text-gray-600 hover:bg-gray-50 cursor-pointer"
+                            "px-4 py-2 rounded border border-gray-300 dark:border-slate-600 text-sm font-medium text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 cursor-pointer"
                         };
                         rsx! {
                             button {
@@ -234,27 +234,27 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
 
             // ── Missing original banner ───────────────────────────────────────
             if original_missing && !edit_mode {
-                div { class: "mx-6 mt-3 px-4 py-3 bg-red-50 border border-red-300 rounded text-sm text-red-800 font-medium",
+                div { class: "mx-6 mt-3 px-4 py-3 bg-red-50 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded text-sm text-red-800 dark:text-red-300 font-medium",
                     "The original file for this book is missing from disk. This book cannot be approved — only rejection is available."
                 }
             }
 
             // ── Error banner ──────────────────────────────────────────────────
             if let Some(err) = error_msg.read().clone() {
-                div { class: "mx-6 mt-3 px-4 py-2 bg-red-50 border border-red-200 rounded text-sm text-red-700",
+                div { class: "mx-6 mt-3 px-4 py-2 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded text-sm text-red-700 dark:text-red-300",
                     "{err}"
                 }
             }
 
             // ── 3-column metadata table ───────────────────────────────────────
-            div { class: "flex-1 overflow-auto px-6 pb-6",
+            div { class: "flex-1 overflow-auto px-6 pb-6 dark:bg-slate-900",
                 table { class: "w-full text-sm table-fixed",
                     thead {
-                        tr { class: "border-b border-gray-200",
-                            th { class: "py-2 pr-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wide w-36", "Field" }
-                            th { class: "py-2 pr-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wide w-[46%]", "Current" }
+                        tr { class: "border-b border-gray-200 dark:border-slate-700",
+                            th { class: "py-2 pr-4 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wide w-36", "Field" }
+                            th { class: "py-2 pr-4 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wide w-[46%]", "Current" }
                             th { class: "py-2 pr-4 w-8" }
-                            th { class: "py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide w-[46%]",
+                            th { class: "py-2 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wide w-[46%]",
                                 div { class: "flex items-center gap-2",
                                     span { "Search" }
                                     for pname in data.provider_names.clone() {
@@ -323,20 +323,20 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                         }
                                     }
                                     if fetching.read().is_some() {
-                                        span { class: "text-xs text-gray-400 normal-case font-normal tracking-normal", "Fetching…" }
+                                        span { class: "text-xs text-gray-400 dark:text-slate-500 normal-case font-normal tracking-normal", "Fetching…" }
                                     }
                                 }
                             }
                         }
                     }
-                    tbody { class: "divide-y divide-gray-100",
+                    tbody { class: "divide-y divide-gray-100 dark:divide-slate-700",
 
                         // Title
                         tr {
-                            td { class: "py-2 pr-4 text-gray-500 font-medium whitespace-nowrap", "Title" }
+                            td { class: "py-2 pr-4 text-gray-500 dark:text-slate-400 font-medium whitespace-nowrap", "Title" }
                             td { class: "py-2 pr-4",
                                 input {
-                                    class: "w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400",
+                                    class: "w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-400",
                                     value: "{title}",
                                     oninput: move |e| title.set(e.value()),
                                 }
@@ -356,7 +356,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                     }
                                 }
                             }
-                            td { class: "py-2 text-gray-600",
+                            td { class: "py-2 text-gray-600 dark:text-slate-300",
                                 if let Some(pr) = provider_result.read().as_ref() {
                                     "{pr.title}"
                                 }
@@ -365,7 +365,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
 
                         // Authors
                         tr {
-                            td { class: "py-2 pr-4 text-gray-500 font-medium whitespace-nowrap align-top pt-2", "Authors" }
+                            td { class: "py-2 pr-4 text-gray-500 dark:text-slate-400 font-medium whitespace-nowrap align-top pt-2", "Authors" }
                             td { class: "py-2 pr-4",
                                 {
                                     let picklist_ref = picklist.read();
@@ -398,7 +398,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                     }
                                 }
                             }
-                            td { class: "py-2 text-gray-600",
+                            td { class: "py-2 text-gray-600 dark:text-slate-300",
                                 if let Some(pr) = provider_result.read().as_ref() {
                                     "{pr.authors.join(\", \")}"
                                 }
@@ -407,10 +407,10 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
 
                         // Description
                         tr {
-                            td { class: "py-2 pr-4 text-gray-500 font-medium whitespace-nowrap align-top pt-3", "Description" }
+                            td { class: "py-2 pr-4 text-gray-500 dark:text-slate-400 font-medium whitespace-nowrap align-top pt-3", "Description" }
                             td { class: "py-2 pr-4",
                                 textarea {
-                                    class: "w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400 resize-y overflow-y-auto",
+                                    class: "w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-400 resize-y overflow-y-auto",
                                     rows: "20",
                                     value: "{description}",
                                     oninput: move |e| description.set(e.value()),
@@ -431,7 +431,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                     }
                                 }
                             }
-                            td { class: "py-2 text-gray-600 text-xs max-w-xs overflow-hidden",
+                            td { class: "py-2 text-gray-600 dark:text-slate-300 text-xs max-w-xs overflow-hidden",
                                 if let Some(pr) = provider_result.read().as_ref() {
                                     "{pr.description}"
                                 }
@@ -440,7 +440,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
 
                         // Publisher
                         tr {
-                            td { class: "py-2 pr-4 text-gray-500 font-medium whitespace-nowrap", "Publisher" }
+                            td { class: "py-2 pr-4 text-gray-500 dark:text-slate-400 font-medium whitespace-nowrap", "Publisher" }
                             td { class: "py-2 pr-4",
                                 {
                                     let picklist_ref = picklist.read();
@@ -480,7 +480,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                     }
                                 }
                             }
-                            td { class: "py-2 text-gray-600",
+                            td { class: "py-2 text-gray-600 dark:text-slate-300",
                                 if let Some(pr) = provider_result.read().as_ref() {
                                     "{pr.publisher_name}"
                                 }
@@ -489,11 +489,11 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
 
                         // Published year
                         tr {
-                            td { class: "py-2 pr-4 text-gray-500 font-medium whitespace-nowrap", "Published" }
+                            td { class: "py-2 pr-4 text-gray-500 dark:text-slate-400 font-medium whitespace-nowrap", "Published" }
                             td { class: "py-2 pr-4",
                                 input {
                                     r#type: "number",
-                                    class: "w-32 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400",
+                                    class: "w-32 border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-400",
                                     value: "{published_date}",
                                     placeholder: "YYYY",
                                     oninput: move |e| published_date.set(e.value()),
@@ -514,7 +514,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                     }
                                 }
                             }
-                            td { class: "py-2 text-gray-600",
+                            td { class: "py-2 text-gray-600 dark:text-slate-300",
                                 if let Some(pr) = provider_result.read().as_ref() {
                                     "{pr.published_date}"
                                 }
@@ -523,7 +523,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
 
                         // Language
                         tr {
-                            td { class: "py-2 pr-4 text-gray-500 font-medium whitespace-nowrap", "Language" }
+                            td { class: "py-2 pr-4 text-gray-500 dark:text-slate-400 font-medium whitespace-nowrap", "Language" }
                             td { class: "py-2 pr-4",
                                 ChipInput {
                                     values: language,
@@ -553,7 +553,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                     }
                                 }
                             }
-                            td { class: "py-2 text-gray-600",
+                            td { class: "py-2 text-gray-600 dark:text-slate-300",
                                 if let Some(pr) = provider_result.read().as_ref() {
                                     "{pr.language}"
                                 }
@@ -562,7 +562,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
 
                         // Series (name + number combined)
                         tr {
-                            td { class: "py-2 pr-4 text-gray-500 font-medium whitespace-nowrap", "Series" }
+                            td { class: "py-2 pr-4 text-gray-500 dark:text-slate-400 font-medium whitespace-nowrap", "Series" }
                             td { class: "py-2 pr-4",
                                 div { class: "flex items-center gap-2",
                                     {
@@ -590,9 +590,9 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                             }
                                         }
                                     }
-                                    span { class: "text-gray-400 text-xs whitespace-nowrap", "Book" }
+                                    span { class: "text-gray-400 dark:text-slate-500 text-xs whitespace-nowrap", "Book" }
                                     input {
-                                        class: "w-16 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400",
+                                        class: "w-16 border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-400",
                                         value: "{series_number}",
                                         placeholder: "#",
                                         oninput: move |e| series_number.set(e.value()),
@@ -618,13 +618,13 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                     }
                                 }
                             }
-                            td { class: "py-2 text-gray-600",
+                            td { class: "py-2 text-gray-600 dark:text-slate-300",
                                 if let Some(pr) = provider_result.read().as_ref() {
                                     if !pr.series_name.is_empty() {
                                         span {
                                             "{pr.series_name}"
                                             if !pr.series_number.is_empty() {
-                                                span { class: "text-gray-400 ml-1", "Book {pr.series_number}" }
+                                                span { class: "text-gray-400 dark:text-slate-500 ml-1", "Book {pr.series_number}" }
                                             }
                                         }
                                     }
@@ -634,11 +634,11 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
 
                         // Page count
                         tr {
-                            td { class: "py-2 pr-4 text-gray-500 font-medium whitespace-nowrap", "Pages" }
+                            td { class: "py-2 pr-4 text-gray-500 dark:text-slate-400 font-medium whitespace-nowrap", "Pages" }
                             td { class: "py-2 pr-4",
                                 input {
                                     r#type: "number",
-                                    class: "w-32 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400",
+                                    class: "w-32 border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-400",
                                     value: "{page_count}",
                                     placeholder: "",
                                     oninput: move |e| page_count.set(e.value()),
@@ -659,7 +659,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                     }
                                 }
                             }
-                            td { class: "py-2 text-gray-600",
+                            td { class: "py-2 text-gray-600 dark:text-slate-300",
                                 if let Some(pr) = provider_result.read().as_ref() {
                                     "{pr.page_count}"
                                 }
@@ -668,20 +668,20 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
 
                         // Libraries
                         tr {
-                            td { class: "py-2 pr-4 text-gray-500 font-medium whitespace-nowrap align-top pt-2", "Libraries" }
+                            td { class: "py-2 pr-4 text-gray-500 dark:text-slate-400 font-medium whitespace-nowrap align-top pt-2", "Libraries" }
                             td { class: "py-2 pr-4 col-span-3",
                                 colspan: "3",
                                 {
                                     let nsl_ref = non_system_libraries.read();
                                     match nsl_ref.as_ref() {
                                         None => rsx! {
-                                            span { class: "text-xs text-gray-400", "Loading…" }
+                                            span { class: "text-xs text-gray-400 dark:text-slate-500", "Loading…" }
                                         },
                                         Some(Err(e)) => rsx! {
                                             span { class: "text-xs text-red-500", "Could not load libraries: {e}" }
                                         },
                                         Some(Ok(libs)) if libs.is_empty() => rsx! {
-                                            span { class: "text-xs text-gray-400 italic", "No custom libraries" }
+                                            span { class: "text-xs text-gray-400 dark:text-slate-500 italic", "No custom libraries" }
                                         },
                                         Some(Ok(libs)) => {
                                             let checked = checked_library_tokens.read().clone().unwrap_or_default();
@@ -695,7 +695,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                                             rsx! {
                                                                 label {
                                                                     key: "{token}",
-                                                                    class: "flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer select-none",
+                                                                    class: "flex items-center gap-1.5 text-sm text-gray-700 dark:text-slate-300 cursor-pointer select-none",
                                                                     input {
                                                                         r#type: "checkbox",
                                                                         class: "rounded border-gray-300 text-indigo-600",
@@ -727,7 +727,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
 
                         // Genres
                         tr {
-                            td { class: "py-2 pr-4 text-gray-500 font-medium whitespace-nowrap align-top pt-2", "Genres" }
+                            td { class: "py-2 pr-4 text-gray-500 dark:text-slate-400 font-medium whitespace-nowrap align-top pt-2", "Genres" }
                             td { class: "py-2 pr-4",
                                 {
                                     let picklist_ref = picklist.read();
@@ -751,7 +751,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
 
                         // Tags
                         tr {
-                            td { class: "py-2 pr-4 text-gray-500 font-medium whitespace-nowrap align-top pt-2", "Tags" }
+                            td { class: "py-2 pr-4 text-gray-500 dark:text-slate-400 font-medium whitespace-nowrap align-top pt-2", "Tags" }
                             td { class: "py-2 pr-4",
                                 {
                                     let picklist_ref = picklist.read();
@@ -781,14 +781,14 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                 let tk_copy = type_key.clone();
                                 rsx! {
                                     tr { key: "{type_key}",
-                                        td { class: "py-2 pr-4 text-gray-500 font-medium whitespace-nowrap", "{label}" }
+                                        td { class: "py-2 pr-4 text-gray-500 dark:text-slate-400 font-medium whitespace-nowrap", "{label}" }
                                         td { class: "py-2 pr-4",
                                             {
                                                 let tk = type_key.clone();
                                                 let cur_val = identifiers.read().get(&type_key).cloned().unwrap_or_default();
                                                 rsx! {
                                                     input {
-                                                        class: "w-full border border-gray-300 rounded px-2 py-1 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-indigo-400",
+                                                        class: "w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm font-mono text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-400",
                                                         value: "{cur_val}",
                                                         oninput: move |e| {
                                                             identifiers.write().insert(tk.clone(), e.value());
@@ -824,7 +824,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                                 }
                                             }
                                         }
-                                        td { class: "py-2 text-gray-600 font-mono text-xs",
+                                        td { class: "py-2 text-gray-600 dark:text-slate-300 font-mono text-xs",
                                             if let Some(pr) = provider_result.read().as_ref() {
                                                 if let Some(val) = pr.identifiers.get(&tk_copy) {
                                                     "{val}"
@@ -838,7 +838,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
 
                         // Cover
                         tr {
-                            td { class: "py-2 pr-4 text-gray-500 font-medium whitespace-nowrap align-top pt-3", "Cover" }
+                            td { class: "py-2 pr-4 text-gray-500 dark:text-slate-400 font-medium whitespace-nowrap align-top pt-3", "Cover" }
                             td { class: "py-2 pr-4",
                                 div {
                                     class: if *cover_drag_over.read() {
@@ -930,9 +930,9 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                         alt: "Current cover",
                                     }
                                     if let Some((w, h)) = *current_cover_dimensions.read() {
-                                        span { class: "text-gray-400 text-xs", "{w} × {h}" }
+                                        span { class: "text-gray-400 dark:text-slate-500 text-xs", "{w} × {h}" }
                                     }
-                                    span { class: "text-gray-400 text-xs mt-1", "drop image to replace" }
+                                    span { class: "text-gray-400 dark:text-slate-500 text-xs mt-1", "drop image to replace" }
                                 }
                             }
                             td { class: "py-2 pr-4 text-center align-top pt-3",
@@ -974,7 +974,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                                 alt: "Provider cover",
                                             }
                                             if let Some((w, h)) = pr.cover_dimensions {
-                                                span { class: "text-gray-400 text-xs", "{w} × {h}" }
+                                                span { class: "text-gray-400 dark:text-slate-500 text-xs", "{w} × {h}" }
                                             }
                                         }
                                     }
