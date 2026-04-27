@@ -30,9 +30,9 @@ pub(crate) fn SeriesTile(data: SeriesTileData) -> Element {
                 if covers.is_empty() {
                     // Placeholder when no covers
                     div {
-                        class: "absolute rounded shadow-sm bg-gray-200 flex items-center justify-center",
+                        class: "absolute rounded shadow-sm bg-gray-200 dark:bg-slate-700 flex items-center justify-center",
                         style: "width: 120px; height: 180px; left: 20px",
-                        span { class: "text-gray-400 text-xs", "No cover" }
+                        span { class: "text-gray-400 dark:text-slate-500 text-xs", "No cover" }
                     }
                 } else {
                     // Back covers rendered first (lower z-index), front cover last (on top)
@@ -62,14 +62,14 @@ pub(crate) fn SeriesTile(data: SeriesTileData) -> Element {
             div { class: "mt-3 text-center w-full max-w-[160px]",
                 Link {
                     to: Route::SeriesDetailPage { token: data.token.clone() },
-                    class: "text-sm font-medium text-gray-900 hover:text-indigo-600 line-clamp-2 block",
+                    class: "text-sm font-medium text-gray-900 dark:text-slate-100 hover:text-indigo-600 line-clamp-2 block",
                     "{data.name}"
                 }
                 if let Some(ref author_token) = data.first_author_token {
                     if let Some(ref author_name) = data.first_author_name {
                         Link {
                             to: Route::AuthorDetailPage { token: author_token.clone() },
-                            class: "text-xs text-gray-500 hover:text-indigo-600 truncate block mt-0.5",
+                            class: "text-xs text-gray-500 dark:text-slate-400 hover:text-indigo-600 truncate block mt-0.5",
                             "{author_name}"
                         }
                     }
@@ -81,7 +81,7 @@ pub(crate) fn SeriesTile(data: SeriesTileData) -> Element {
                         format!("{} books", data.book_count)
                     };
                     rsx! {
-                        p { class: "text-xs text-gray-400 mt-0.5", "{count_label}" }
+                        p { class: "text-xs text-gray-400 dark:text-slate-500 mt-0.5", "{count_label}" }
                     }
                 }
             }

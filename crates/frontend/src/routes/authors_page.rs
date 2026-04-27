@@ -65,7 +65,7 @@ pub(crate) fn AuthorsPage() -> Element {
         div { class: "flex-1 overflow-auto p-6",
             match authors() {
                 None => rsx! {
-                    div { class: "flex items-center justify-center h-full text-gray-400 text-sm",
+                    div { class: "flex items-center justify-center h-full text-gray-400 dark:text-slate-500 text-sm",
                         "Loading…"
                     }
                 },
@@ -89,27 +89,27 @@ pub(crate) fn AuthorsPage() -> Element {
                             "← Library"
                         }
 
-                        h1 { class: "text-2xl font-bold text-gray-900 mb-6", "Authors" }
+                        h1 { class: "text-2xl font-bold text-gray-900 dark:text-slate-100 mb-6", "Authors" }
 
                         if filtered.is_empty() && has_search {
-                            p { class: "text-gray-400 text-sm mt-4", "No authors match your search." }
+                            p { class: "text-gray-400 dark:text-slate-500 text-sm mt-4", "No authors match your search." }
                         } else if filtered.is_empty() {
-                            p { class: "text-gray-400 text-sm mt-4", "No authors in your library." }
+                            p { class: "text-gray-400 dark:text-slate-500 text-sm mt-4", "No authors in your library." }
                         } else {
                             table { class: "w-full max-w-2xl",
                                 thead {
-                                    tr { class: "border-b border-gray-200",
-                                        th { class: "text-left text-xs font-semibold uppercase tracking-wider text-gray-500 pb-2 pr-4",
+                                    tr { class: "border-b border-gray-200 dark:border-slate-700",
+                                        th { class: "text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 pb-2 pr-4",
                                             "Name"
                                         }
-                                        th { class: "text-center text-xs font-semibold uppercase tracking-wider text-gray-500 pb-2",
+                                        th { class: "text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 pb-2",
                                             "Books"
                                         }
                                     }
                                 }
                                 tbody {
                                     for author in &filtered {
-                                        tr { class: "border-b border-gray-100 hover:bg-gray-50",
+                                        tr { class: "border-b border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700",
                                             key: "{author.token}",
                                             td { class: "py-2 pr-4",
                                                 Link {
@@ -118,7 +118,7 @@ pub(crate) fn AuthorsPage() -> Element {
                                                     "{author.name}"
                                                 }
                                             }
-                                            td { class: "py-2 text-center text-sm text-gray-600",
+                                            td { class: "py-2 text-center text-sm text-gray-600 dark:text-slate-400",
                                                 "{author.book_count}"
                                             }
                                         }

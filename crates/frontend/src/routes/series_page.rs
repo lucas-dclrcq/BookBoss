@@ -86,7 +86,7 @@ pub(crate) fn SeriesPage() -> Element {
         div { class: "flex-1 overflow-auto p-6",
             match series() {
                 None => rsx! {
-                    div { class: "flex items-center justify-center h-full text-gray-400 text-sm",
+                    div { class: "flex items-center justify-center h-full text-gray-400 dark:text-slate-500 text-sm",
                         "Loading…"
                     }
                 },
@@ -113,12 +113,12 @@ pub(crate) fn SeriesPage() -> Element {
                             "← Library"
                         }
 
-                        h1 { class: "text-2xl font-bold text-gray-900 mb-6", "Series" }
+                        h1 { class: "text-2xl font-bold text-gray-900 dark:text-slate-100 mb-6", "Series" }
 
                         if filtered.is_empty() && has_search {
-                            p { class: "text-gray-400 text-sm mt-4", "No series match your search." }
+                            p { class: "text-gray-400 dark:text-slate-500 text-sm mt-4", "No series match your search." }
                         } else if filtered.is_empty() {
-                            p { class: "text-gray-400 text-sm mt-4", "No series in your library." }
+                            p { class: "text-gray-400 dark:text-slate-500 text-sm mt-4", "No series in your library." }
                         } else {
                             div {
                                 class: "grid gap-8",

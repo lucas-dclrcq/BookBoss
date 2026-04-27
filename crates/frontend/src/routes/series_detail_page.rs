@@ -90,7 +90,7 @@ pub(crate) fn SeriesDetailPage(token: String) -> Element {
         div { class: "flex-1 overflow-auto p-6",
             match series_resource() {
                 None => rsx! {
-                    div { class: "flex items-center justify-center h-full text-gray-400 text-sm",
+                    div { class: "flex items-center justify-center h-full text-gray-400 dark:text-slate-500 text-sm",
                         "Loading…"
                     }
                 },
@@ -109,17 +109,17 @@ pub(crate) fn SeriesDetailPage(token: String) -> Element {
                             "← Series"
                         }
 
-                        h1 { class: "text-2xl font-bold text-gray-900 mb-2", "{series.name}" }
+                        h1 { class: "text-2xl font-bold text-gray-900 dark:text-slate-100 mb-2", "{series.name}" }
 
                         if let Some(ref desc) = series.description {
-                            p { class: "text-sm text-gray-600 leading-relaxed mb-6 max-w-prose", "{desc}" }
+                            p { class: "text-sm text-gray-600 dark:text-slate-400 leading-relaxed mb-6 max-w-prose", "{desc}" }
                         }
 
                         if filtered_books.is_empty() && has_search {
-                            p { class: "text-gray-400 text-sm mt-4", "No books match your search." }
+                            p { class: "text-gray-400 dark:text-slate-500 text-sm mt-4", "No books match your search." }
                         } else if !filtered_books.is_empty() {
                             div { class: "flex items-center gap-2 mb-4",
-                                h2 { class: "text-xs font-semibold uppercase tracking-wider text-gray-500",
+                                h2 { class: "text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400",
                                     "Books"
                                 }
                                 SelectionToggle {}

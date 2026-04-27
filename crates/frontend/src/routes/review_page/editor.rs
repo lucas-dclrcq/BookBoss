@@ -746,7 +746,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                 }
                             }
                             td { class: "py-2 pr-4 text-center" }
-                            td { class: "py-2 text-gray-600" }
+                            td { class: "py-2 text-gray-600 dark:text-slate-300" }
                         }
 
                         // Tags
@@ -770,7 +770,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                 }
                             }
                             td { class: "py-2 pr-4 text-center" }
-                            td { class: "py-2 text-gray-600" }
+                            td { class: "py-2 text-gray-600 dark:text-slate-300" }
                         }
 
                         // One row per identifier type
