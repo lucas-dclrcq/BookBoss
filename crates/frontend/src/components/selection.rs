@@ -762,7 +762,7 @@ fn BulkEditRow(label: &'static str, checked: bool, on_toggle: EventHandler<()>, 
                 if checked {
                     {children}
                 } else {
-                    div { class: "border border-gray-300 dark:border-slate-600 rounded px-2 py-1 min-h-[34px] opacity-50" }
+                    div { class: "border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded px-2 py-1 min-h-[34px] opacity-50" }
                 }
             }
         }

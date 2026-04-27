@@ -518,7 +518,7 @@ fn LibraryPicker() -> Element {
                             rsx! {
                                 button {
                                     class: if is_active {
-                                        "w-full text-left px-3 py-2 text-sm font-medium text-indigo-600 bg-indigo-50"
+                                        "w-full text-left px-3 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900"
                                     } else {
                                         "w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700"
                                     },
