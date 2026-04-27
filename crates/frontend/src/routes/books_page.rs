@@ -366,7 +366,7 @@ pub(crate) fn BooksPage() -> Element {
     rsx! {
         match page_data() {
             None => rsx! {
-                div { class: "flex-1 flex items-center justify-center text-gray-400 text-sm",
+                div { class: "flex-1 flex items-center justify-center text-gray-400 dark:text-slate-500 text-sm",
                     "Loading…"
                 }
             },
@@ -401,7 +401,7 @@ pub(crate) fn BooksPage() -> Element {
                         div { class: "flex-1 overflow-auto",
                             CurrentlyReadingSection { books: filtered_reading }
                             if filtered_books.is_empty() && has_search {
-                                div { class: "p-8 text-center text-gray-400 text-sm",
+                                div { class: "p-8 text-center text-gray-400 dark:text-slate-500 text-sm",
                                     "No books match your search."
                                 }
                             } else {
@@ -439,8 +439,8 @@ fn CurrentlyReadingSection(books: Vec<BookSummary>) -> Element {
     let navigator = use_navigator();
 
     rsx! {
-        div { class: "shrink-0 border-b border-gray-100 bg-gray-50 px-4 pt-3 pb-2",
-            h2 { class: "text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2",
+        div { class: "shrink-0 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 px-4 pt-3 pb-2",
+            h2 { class: "text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 mb-2",
                 "Currently Reading"
             }
             div { class: "flex gap-3 overflow-x-auto pb-1",

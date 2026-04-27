@@ -149,14 +149,14 @@ fn BookCard(book: BookSummary) -> Element {
                 class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
                 tabindex: -1,
                 onkeydown: move |e| { if e.key() == Key::Escape { show_confirm.set(false); } },
-                div { class: "bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4",
-                    h2 { class: "text-lg font-semibold text-gray-900 mb-2", "Delete Book?" }
-                    p { class: "text-sm text-gray-600 mb-6",
+                div { class: "bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-sm mx-4",
+                    h2 { class: "text-lg font-semibold text-gray-900 dark:text-slate-100 mb-2", "Delete Book?" }
+                    p { class: "text-sm text-gray-600 dark:text-slate-400 mb-6",
                         "This will permanently delete \"{book.title}\" and all its files. This cannot be undone."
                     }
                     div { class: "flex gap-3 justify-end",
                         button {
-                            class: "px-4 py-2 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50",
+                            class: "px-4 py-2 text-sm font-medium rounded border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700",
                             autofocus: true,
                             onclick: move |_| show_confirm.set(false),
                             "No, Keep It"
@@ -305,10 +305,10 @@ fn BookCard(book: BookSummary) -> Element {
                 }
             }
             div { class: "mt-1 px-0.5",
-                p { class: "text-xs font-semibold text-gray-900 leading-tight line-clamp-2",
+                p { class: "text-xs font-semibold text-gray-900 dark:text-slate-100 leading-tight line-clamp-2",
                     "{book.title}"
                 }
-                p { class: "text-xs text-gray-500 leading-tight truncate mt-0.5",
+                p { class: "text-xs text-gray-500 dark:text-slate-400 leading-tight truncate mt-0.5",
                     for (i, author) in book.authors.iter().enumerate() {
                         if i > 0 {
                             span { ", " }
@@ -325,7 +325,7 @@ fn BookCard(book: BookSummary) -> Element {
                     }
                 }
                 if let Some(series) = series_line {
-                    p { class: "text-xs text-gray-400 leading-tight truncate mt-0.5",
+                    p { class: "text-xs text-gray-400 dark:text-slate-500 leading-tight truncate mt-0.5",
                         if let Some(ref stok) = book.series_token {
                             if suppressed_series_token.as_deref() == Some(stok.as_str()) {
                                 span { "{series}" }

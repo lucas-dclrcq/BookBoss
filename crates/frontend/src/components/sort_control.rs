@@ -163,7 +163,7 @@ pub(crate) fn SortControl() -> Element {
     let segments: [SortField; 3] = [SortField::DateAdded, SortField::Title, SortField::AuthorTitle];
 
     rsx! {
-        div { class: "inline-flex items-center border border-gray-300 rounded-md overflow-hidden",
+        div { class: "inline-flex items-center border border-gray-300 dark:border-slate-600 rounded-md overflow-hidden",
             for (idx, field) in segments.iter().enumerate() {
                 {
                     let field = *field;
@@ -174,12 +174,12 @@ pub(crate) fn SortControl() -> Element {
                     let bg = if is_active {
                         "bg-indigo-600 text-white"
                     } else {
-                        "bg-gray-50 text-gray-500 hover:bg-gray-100"
+                        "bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700"
                     };
                     let border = if is_first {
                         ""
                     } else {
-                        "border-l border-gray-300"
+                        "border-l border-gray-300 dark:border-slate-600"
                     };
                     let rounding = match (is_first, is_last) {
                         (true, false) => "rounded-l-md",
