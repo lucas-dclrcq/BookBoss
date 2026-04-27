@@ -127,9 +127,9 @@ pub(crate) fn MessagesSection() -> Element {
     rsx! {
         div { class: "w-full max-w-3xl",
             div { class: "flex items-center justify-between mb-6",
-                h2 { class: "text-lg font-semibold text-gray-900", "System Messages" }
+                h2 { class: "text-lg font-semibold text-gray-900 dark:text-slate-100", "System Messages" }
                 button {
-                    class: "px-3 py-1.5 text-sm font-medium rounded bg-red-50 text-red-700 hover:bg-red-100",
+                    class: "px-3 py-1.5 text-sm font-medium rounded bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50",
                     onclick: move |_| {
                         spawn(async move {
                             let _ = clear_all_system_messages().await;
@@ -142,15 +142,15 @@ pub(crate) fn MessagesSection() -> Element {
 
             match messages_resource() {
                 None => rsx! {
-                    div { class: "text-gray-400 text-sm", "Loading..." }
+                    div { class: "text-gray-400 text-sm dark:text-slate-500", "Loading..." }
                 },
                 Some(Err(e)) => rsx! {
-                    div { class: "p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm",
+                    div { class: "p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm dark:bg-red-900/30 dark:border-red-800 dark:text-red-400",
                         "{e}"
                     }
                 },
                 Some(Ok(rows)) if rows.is_empty() => rsx! {
-                    div { class: "rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-400 text-sm",
+                    div { class: "rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-400 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500",
                         "No system messages."
                     }
                 },
@@ -162,30 +162,30 @@ pub(crate) fn MessagesSection() -> Element {
                                 rsx! {
                                     div {
                                         class: match row.severity.as_str() {
-                                            "Error" => "flex items-start gap-3 p-3 rounded-lg border border-red-200 bg-red-50",
-                                            "Warning" => "flex items-start gap-3 p-3 rounded-lg border border-yellow-200 bg-yellow-50",
-                                            _ => "flex items-start gap-3 p-3 rounded-lg border border-blue-200 bg-blue-50",
+                                            "Error" => "flex items-start gap-3 p-3 rounded-lg border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/30",
+                                            "Warning" => "flex items-start gap-3 p-3 rounded-lg border border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-900/30",
+                                            _ => "flex items-start gap-3 p-3 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/30",
                                         },
                                         // Severity badge
                                         span {
                                             class: match row.severity.as_str() {
-                                                "Error" => "shrink-0 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800",
-                                                "Warning" => "shrink-0 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800",
-                                                _ => "shrink-0 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800",
+                                                "Error" => "shrink-0 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300",
+                                                "Warning" => "shrink-0 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
+                                                _ => "shrink-0 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
                                             },
                                             "{row.severity}"
                                         }
                                         // Message body
                                         div { class: "flex-1 min-w-0",
-                                            p { class: "text-sm text-gray-900", "{row.message}" }
-                                            p { class: "text-xs text-gray-500 mt-0.5",
+                                            p { class: "text-sm text-gray-900 dark:text-slate-100", "{row.message}" }
+                                            p { class: "text-xs text-gray-500 mt-0.5 dark:text-slate-400",
                                                 "{row.source_task} — "
                                                 LocalTime { iso: row.created_at.clone() }
                                             }
                                         }
                                         // Dismiss button
                                         button {
-                                            class: "shrink-0 p-1 text-gray-400 hover:text-gray-600 rounded hover:bg-white/50",
+                                            class: "shrink-0 p-1 text-gray-400 hover:text-gray-600 rounded hover:bg-white/50 dark:text-slate-500 dark:hover:text-slate-300 dark:hover:bg-white/10",
                                             title: "Dismiss",
                                             onclick: move |_| {
                                                 spawn(async move {

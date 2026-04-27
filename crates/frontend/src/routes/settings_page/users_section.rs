@@ -580,7 +580,7 @@ pub(crate) fn UsersSection(is_super_admin: bool, current_user_token: String) -> 
         div { class: "w-full max-w-3xl",
             // Header
             div { class: "flex items-center justify-between mb-6",
-                h2 { class: "text-lg font-semibold text-gray-900", "Users" }
+                h2 { class: "text-lg font-semibold text-gray-900 dark:text-slate-100", "Users" }
                 button {
                     class: "px-3 py-1.5 text-sm font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700",
                     onclick: move |_| modal_target.set(Some(None)),
@@ -590,7 +590,7 @@ pub(crate) fn UsersSection(is_super_admin: bool, current_user_token: String) -> 
 
             // Error from delete
             if let Some(msg) = delete_error() {
-                div { class: "mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm",
+                div { class: "mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm dark:bg-red-900/30 dark:border-red-800 dark:text-red-400",
                     "{msg}"
                 }
             }
@@ -598,25 +598,25 @@ pub(crate) fn UsersSection(is_super_admin: bool, current_user_token: String) -> 
             // User table
             match users_resource() {
                 None => rsx! {
-                    div { class: "text-gray-400 text-sm", "Loading…" }
+                    div { class: "text-gray-400 text-sm dark:text-slate-500", "Loading…" }
                 },
                 Some(Err(e)) => rsx! {
-                    div { class: "p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm",
+                    div { class: "p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm dark:bg-red-900/30 dark:border-red-800 dark:text-red-400",
                         "{e}"
                     }
                 },
                 Some(Ok(rows)) => rsx! {
-                    div { class: "rounded-lg border border-gray-200 bg-white overflow-hidden",
+                    div { class: "rounded-lg border border-gray-200 bg-white overflow-hidden dark:border-slate-700 dark:bg-slate-800",
                         table { class: "w-full text-sm",
                             thead {
-                                tr { class: "bg-gray-50 border-b border-gray-200",
-                                    th { class: "px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide", "Username" }
-                                    th { class: "px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide", "Full Name" }
-                                    th { class: "px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide", "Role" }
-                                    th { class: "px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wide", "Actions" }
+                                tr { class: "bg-gray-50 border-b border-gray-200 dark:bg-slate-800 dark:border-slate-700",
+                                    th { class: "px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide dark:text-slate-400", "Username" }
+                                    th { class: "px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide dark:text-slate-400", "Full Name" }
+                                    th { class: "px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide dark:text-slate-400", "Role" }
+                                    th { class: "px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wide dark:text-slate-400", "Actions" }
                                 }
                             }
-                            tbody { class: "divide-y divide-gray-100",
+                            tbody { class: "divide-y divide-gray-100 dark:divide-slate-700",
                                 for row in rows {
                                     {
                                         let is_self = row.token == current_user_token;
@@ -625,15 +625,15 @@ pub(crate) fn UsersSection(is_super_admin: bool, current_user_token: String) -> 
                                         let row_edit = row.clone();
                                         let row_del = row.clone();
                                         rsx! {
-                                            tr { class: "hover:bg-gray-50",
-                                                td { class: "px-4 py-3 font-medium text-gray-900", "{row.username}" }
-                                                td { class: "px-4 py-3 text-gray-600", "{row.full_name}" }
+                                            tr { class: "hover:bg-gray-50 dark:hover:bg-slate-700",
+                                                td { class: "px-4 py-3 font-medium text-gray-900 dark:text-slate-100", "{row.username}" }
+                                                td { class: "px-4 py-3 text-gray-600 dark:text-slate-400", "{row.full_name}" }
                                                 td { class: "px-4 py-3",
                                                     span {
                                                         class: match row.role_sort_key() {
-                                                            0 => "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800",
-                                                            1 => "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800",
-                                                            _ => "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700",
+                                                            0 => "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300",
+                                                            1 => "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300",
+                                                            _ => "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-slate-300",
                                                         },
                                                         { row.role_label() }
                                                     }
@@ -676,7 +676,7 @@ pub(crate) fn UsersSection(is_super_admin: bool, current_user_token: String) -> 
                         }
                         if let Some(Ok(ref rows)) = users_resource() {
                             if rows.is_empty() {
-                                div { class: "px-4 py-8 text-center text-gray-400 text-sm", "No users found." }
+                                div { class: "px-4 py-8 text-center text-gray-400 text-sm dark:text-slate-500", "No users found." }
                             }
                         }
                     }
@@ -705,16 +705,16 @@ pub(crate) fn UsersSection(is_super_admin: bool, current_user_token: String) -> 
                 tabindex: -1,
                 onmounted: move |e| async move { let _ = e.set_focus(true).await; },
                 onkeydown: move |e| { if e.key() == Key::Escape { delete_target.set(None); } },
-                div { class: "bg-white rounded-2xl shadow-xl w-full max-w-sm p-6",
-                    h3 { class: "text-base font-semibold text-gray-900 mb-2", "Delete User" }
-                    p { class: "text-sm text-gray-600 mb-6",
+                div { class: "bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 dark:bg-slate-800",
+                    h3 { class: "text-base font-semibold text-gray-900 mb-2 dark:text-slate-100", "Delete User" }
+                    p { class: "text-sm text-gray-600 mb-6 dark:text-slate-400",
                         "Are you sure you want to delete "
-                        span { class: "font-medium text-gray-900", "{target.username}" }
+                        span { class: "font-medium text-gray-900 dark:text-slate-100", "{target.username}" }
                         "? This cannot be undone."
                     }
                     div { class: "flex justify-end gap-3",
                         button {
-                            class: "px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50",
+                            class: "px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700",
                             disabled: deleting(),
                             onclick: move |_| delete_target.set(None),
                             "Cancel"
@@ -880,27 +880,27 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                     on_close.call(());
                 }
             },
-            div { class: "bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto",
+            div { class: "bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto dark:bg-slate-800",
                 div { class: "p-6",
-                    h3 { class: "text-base font-semibold text-gray-900 mb-5",
+                    h3 { class: "text-base font-semibold text-gray-900 mb-5 dark:text-slate-100",
                         if is_edit { "Edit User" } else { "Add User" }
                     }
 
                     if let Some(msg) = error_msg() {
-                        div { class: "mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm",
+                        div { class: "mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm dark:bg-red-900/30 dark:border-red-800 dark:text-red-400",
                             "{msg}"
                         }
                     }
 
                     // Username
                     div { class: "mb-4",
-                        label { class: "block text-sm font-medium text-gray-700 mb-1", "Username" }
+                        label { class: "block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300", "Username" }
                         input {
                             r#type: "text",
                             class: if is_edit {
-                                "w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed text-sm"
+                                "w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed text-sm dark:border-slate-700 dark:bg-slate-700/50 dark:text-slate-400"
                             } else {
-                                "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm"
+                                "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
                             },
                             placeholder: "username",
                             value: username,
@@ -914,10 +914,10 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
 
                     // Full Name
                     div { class: "mb-4",
-                        label { class: "block text-sm font-medium text-gray-700 mb-1", "Full Name" }
+                        label { class: "block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300", "Full Name" }
                         input {
                             r#type: "text",
-                            class: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm",
+                            class: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100",
                             placeholder: "Full name",
                             value: full_name,
                             oninput: move |e| full_name.set(e.value()),
@@ -927,10 +927,10 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
 
                     // Email
                     div { class: "mb-4",
-                        label { class: "block text-sm font-medium text-gray-700 mb-1", "Email Address" }
+                        label { class: "block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300", "Email Address" }
                         input {
                             r#type: "email",
-                            class: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm",
+                            class: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100",
                             placeholder: "user@example.com",
                             value: email,
                             oninput: move |e| email.set(e.value()),
@@ -940,9 +940,9 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
 
                     // Password
                     div { class: "mb-4",
-                        label { class: "block text-sm font-medium text-gray-700 mb-1", "Password" }
+                        label { class: "block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300", "Password" }
                         if is_edit {
-                            p { class: "text-xs text-gray-400 mb-1",
+                            p { class: "text-xs text-gray-400 mb-1 dark:text-slate-500",
                                 if is_self {
                                     "Leave blank to keep your current password."
                                 } else {
@@ -953,14 +953,14 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                         div { class: "flex gap-2",
                             input {
                                 r#type: "text",
-                                class: "flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm font-mono",
+                                class: "flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm font-mono dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100",
                                 placeholder: if is_edit { "New password (optional)" } else { "Password" },
                                 value: password,
                                 oninput: move |e| password.set(e.value()),
                                 disabled: saving,
                             }
                             button {
-                                class: "px-3 py-2 text-xs font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 whitespace-nowrap",
+                                class: "px-3 py-2 text-xs font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 whitespace-nowrap dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700",
                                 disabled: saving() || generating(),
                                 title: "Generate password",
                                 onclick: move |_| {
@@ -976,7 +976,7 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                                 if generating() { "…" } else { "Generate" }
                             }
                             button {
-                                class: "px-3 py-2 text-xs font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50",
+                                class: "px-3 py-2 text-xs font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700",
                                 disabled: password().is_empty(),
                                 title: "Copy to clipboard",
                                 onclick: move |_| {
@@ -996,12 +996,12 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
 
                     // Role
                     div { class: "mb-4",
-                        label { class: "block text-sm font-medium text-gray-700 mb-1", "Role" }
+                        label { class: "block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300", "Role" }
                         select {
                             class: if editing_is_super {
-                                "w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-500 cursor-not-allowed"
+                                "w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-500 cursor-not-allowed dark:border-slate-700 dark:bg-slate-700/50 dark:text-slate-400"
                             } else {
-                                "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm bg-white"
+                                "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm bg-white dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
                             },
                             disabled: saving() || editing_is_super,
                             onchange: move |e| {
@@ -1034,8 +1034,8 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                     // Capability toggles (User role only)
                     if role() == RoleChoice::User {
                         div { class: "mb-4",
-                            label { class: "block text-sm font-medium text-gray-700 mb-2", "Capabilities" }
-                            div { class: "space-y-2 rounded-lg border border-gray-200 p-3",
+                            label { class: "block text-sm font-medium text-gray-700 mb-2 dark:text-slate-300", "Capabilities" }
+                            div { class: "space-y-2 rounded-lg border border-gray-200 p-3 dark:border-slate-600",
                                 for (cap_key, cap_label) in GRANTABLE {
                                     {
                                         let key = cap_key.to_string();
@@ -1056,7 +1056,7 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                                                         }
                                                     },
                                                 }
-                                                span { class: "text-sm text-gray-700", "{cap_label}" }
+                                                span { class: "text-sm text-gray-700 dark:text-slate-300", "{cap_label}" }
                                             }
                                         }
                                     }
@@ -1067,14 +1067,14 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
 
                     // ── Library assignment ──────────────────────────────────
                     div { class: "mb-4",
-                        label { class: "block text-sm font-medium text-gray-700 mb-2", "Libraries" }
+                        label { class: "block text-sm font-medium text-gray-700 mb-2 dark:text-slate-300", "Libraries" }
 
                         match libraries_resource() {
                             None => rsx! {
-                                div { class: "text-gray-400 text-xs", "Loading libraries…" }
+                                div { class: "text-gray-400 text-xs dark:text-slate-500", "Loading libraries…" }
                             },
                             Some(Err(e)) => rsx! {
-                                div { class: "p-2 bg-red-50 border border-red-200 text-red-700 rounded text-xs",
+                                div { class: "p-2 bg-red-50 border border-red-200 text-red-700 rounded text-xs dark:bg-red-900/30 dark:border-red-800 dark:text-red-400",
                                     "{e}"
                                 }
                             },
@@ -1102,9 +1102,9 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                                     .collect();
 
                                 rsx! {
-                                    div { class: "rounded-lg border border-gray-200 p-3 space-y-1.5 max-h-40 overflow-y-auto",
+                                    div { class: "rounded-lg border border-gray-200 p-3 space-y-1.5 max-h-40 overflow-y-auto dark:border-slate-600",
                                         if libs.is_empty() {
-                                            div { class: "text-xs text-gray-400", "No libraries configured." }
+                                            div { class: "text-xs text-gray-400 dark:text-slate-500", "No libraries configured." }
                                         }
                                         for lib in &libs {
                                             {
@@ -1135,9 +1135,9 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                                                                 }
                                                             },
                                                         }
-                                                        span { class: "text-sm text-gray-700", "{lib.name}" }
+                                                        span { class: "text-sm text-gray-700 dark:text-slate-300", "{lib.name}" }
                                                         if lib.is_system {
-                                                            span { class: "text-xs text-blue-500 font-medium", "(system)" }
+                                                            span { class: "text-xs text-blue-500 font-medium dark:text-blue-400", "(system)" }
                                                         }
                                                     }
                                                 }
@@ -1148,9 +1148,9 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                                     // Default library picker (shown when at least one library is checked)
                                     if !all_checked.is_empty() {
                                         div { class: "mt-3",
-                                            label { class: "block text-xs font-medium text-gray-600 mb-1", "Default Library" }
+                                            label { class: "block text-xs font-medium text-gray-600 mb-1 dark:text-slate-400", "Default Library" }
                                             select {
-                                                class: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm bg-white",
+                                                class: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm bg-white dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100",
                                                 disabled: saving,
                                                 value: default_library_token,
                                                 onchange: move |e| default_library_token.set(e.value()),
@@ -1175,17 +1175,17 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                         if let Some(_tok) = personal_library_token() {
                             // User has a personal library — show rename / delete controls.
                             div { class: "mb-4",
-                                label { class: "block text-sm font-medium text-gray-700 mb-1",
+                                label { class: "block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300",
                                     "Personal Library"
                                 }
                                 if delete_personal_on_save() {
                                     // Marked for deletion — show undo option.
-                                    div { class: "flex items-center gap-2 p-2 bg-red-50 border border-red-200 rounded-lg",
-                                        span { class: "flex-1 text-sm text-red-600 line-through", "{personal_library_name()}" }
-                                        span { class: "text-xs text-red-500", "Will be deleted on save" }
+                                    div { class: "flex items-center gap-2 p-2 bg-red-50 border border-red-200 rounded-lg dark:bg-red-900/30 dark:border-red-800",
+                                        span { class: "flex-1 text-sm text-red-600 line-through dark:text-red-400", "{personal_library_name()}" }
+                                        span { class: "text-xs text-red-500 dark:text-red-400", "Will be deleted on save" }
                                         button {
                                             r#type: "button",
-                                            class: "ml-2 text-xs text-gray-500 hover:text-gray-700 underline",
+                                            class: "ml-2 text-xs text-gray-500 hover:text-gray-700 underline dark:text-slate-400 dark:hover:text-slate-200",
                                             disabled: saving,
                                             onclick: move |_| {
                                                 delete_personal_on_save.set(false);
@@ -1196,8 +1196,8 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                                     }
                                 } else if confirm_delete_shown() {
                                     // Confirmation prompt.
-                                    div { class: "p-3 bg-amber-50 border border-amber-200 rounded-lg",
-                                        p { class: "text-sm text-amber-800 mb-2",
+                                    div { class: "p-3 bg-amber-50 border border-amber-200 rounded-lg dark:bg-amber-900/30 dark:border-amber-800",
+                                        p { class: "text-sm text-amber-800 mb-2 dark:text-amber-300",
                                             "Delete personal library on save? Shelves will be moved to All Books."
                                         }
                                         div { class: "flex gap-2",
@@ -1213,7 +1213,7 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                                             }
                                             button {
                                                 r#type: "button",
-                                                class: "px-3 py-1 text-xs font-medium border border-gray-300 text-gray-700 rounded hover:bg-gray-50",
+                                                class: "px-3 py-1 text-xs font-medium border border-gray-300 text-gray-700 rounded hover:bg-gray-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700",
                                                 disabled: saving,
                                                 onclick: move |_| confirm_delete_shown.set(false),
                                                 "Cancel"
@@ -1225,7 +1225,7 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                                     div { class: "flex items-center gap-2",
                                         input {
                                             r#type: "text",
-                                            class: "flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm",
+                                            class: "flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100",
                                             value: personal_library_name,
                                             disabled: saving,
                                             oninput: move |e| personal_library_name.set(e.value()),
@@ -1273,12 +1273,12 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                                             }
                                         },
                                     }
-                                    span { class: "text-sm font-medium text-gray-700", "Create personal library" }
+                                    span { class: "text-sm font-medium text-gray-700 dark:text-slate-300", "Create personal library" }
                                 }
                                 if create_personal_library() {
                                     input {
                                         r#type: "text",
-                                        class: "mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm",
+                                        class: "mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100",
                                         placeholder: "Personal library name",
                                         value: personal_library_name,
                                         oninput: move |e| {
@@ -1310,12 +1310,12 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                                         }
                                     },
                                 }
-                                span { class: "text-sm font-medium text-gray-700", "Create personal library" }
+                                span { class: "text-sm font-medium text-gray-700 dark:text-slate-300", "Create personal library" }
                             }
                             if create_personal_library() {
                                 input {
                                     r#type: "text",
-                                    class: "mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm",
+                                    class: "mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100",
                                     placeholder: "Personal library name",
                                     value: personal_library_name,
                                     oninput: move |e| {
@@ -1331,7 +1331,7 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                     // Actions
                     div { class: "flex justify-end gap-3 pt-2",
                         button {
-                            class: "px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50",
+                            class: "px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700",
                             disabled: saving(),
                             onclick: move |_| on_close.call(()),
                             "Cancel"

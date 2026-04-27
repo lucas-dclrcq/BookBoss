@@ -136,9 +136,11 @@ pub(crate) fn SettingsPage() -> Element {
 
     let nav_button_class = |section: Section| {
         if active_section() == section {
-            "w-full text-left px-4 py-2 text-sm font-medium bg-indigo-50 text-indigo-700 border-r-2 border-indigo-600"
+            "w-full text-left px-4 py-2 text-sm font-medium bg-indigo-50 text-indigo-700 border-r-2 border-indigo-600 dark:bg-indigo-950 dark:text-indigo-300 \
+             dark:border-indigo-400"
         } else {
-            "w-full text-left px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            "w-full text-left px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-700 \
+             dark:hover:text-slate-200"
         }
     };
 
@@ -147,7 +149,7 @@ pub(crate) fn SettingsPage() -> Element {
             // ----------------------------------------------------------------
             // Left panel — section list
             // ----------------------------------------------------------------
-            nav { class: "w-48 shrink-0 border-r border-gray-200 bg-white",
+            nav { class: "w-48 shrink-0 border-r border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-800",
                 ul { class: "py-4",
                     li {
                         button {

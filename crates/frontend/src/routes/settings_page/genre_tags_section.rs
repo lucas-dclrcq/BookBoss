@@ -228,11 +228,11 @@ fn EntityPanel(
         div { class: "mb-8",
             // Panel header
             div { class: "flex items-center justify-between mb-3",
-                h3 { class: "text-base font-semibold text-gray-900", "{title}" }
+                h3 { class: "text-base font-semibold text-gray-900 dark:text-slate-100", "{title}" }
                 div { class: "flex items-center gap-2",
                     if unused_count > 0 {
                         button {
-                            class: "px-3 py-1.5 text-sm font-medium rounded border border-gray-300 text-gray-600 hover:bg-gray-50",
+                            class: "px-3 py-1.5 text-sm font-medium rounded border border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-slate-600 dark:text-slate-400 dark:hover:bg-slate-700",
                             onclick: move |_| on_remove_unused.call(()),
                             "Remove unused"
                         }
@@ -253,7 +253,7 @@ fn EntityPanel(
                 div { class: "mb-3 flex items-center gap-2",
                     input {
                         r#type: "text",
-                        class: "flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm",
+                        class: "flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100 dark:placeholder-slate-400",
                         placeholder: "Name…",
                         value: new_name,
                         autofocus: true,
@@ -275,7 +275,7 @@ fn EntityPanel(
                         "Add"
                     }
                     button {
-                        class: "px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50",
+                        class: "px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700",
                         onclick: move |_| {
                             adding.set(false);
                             new_name.set(String::new());
@@ -284,20 +284,20 @@ fn EntityPanel(
                     }
                 }
                 if let Some(msg) = add_error {
-                    div { class: "mb-2 p-2 bg-red-50 border border-red-200 text-red-700 rounded text-sm",
+                    div { class: "mb-2 p-2 bg-red-50 border border-red-200 text-red-700 rounded text-sm dark:bg-red-900/30 dark:border-red-800 dark:text-red-400",
                         "{msg}"
                     }
                 }
             }
 
             // Entries list
-            div { class: "rounded-lg border border-gray-200 bg-white overflow-hidden",
+            div { class: "rounded-lg border border-gray-200 bg-white overflow-hidden dark:border-slate-700 dark:bg-slate-800",
                 if entries.is_empty() {
-                    div { class: "px-4 py-6 text-center text-gray-400 text-sm",
+                    div { class: "px-4 py-6 text-center text-gray-400 text-sm dark:text-slate-500",
                         "No {title.to_lowercase()} yet."
                     }
                 } else {
-                    ul { class: "divide-y divide-gray-100",
+                    ul { class: "divide-y divide-gray-100 dark:divide-slate-700",
                         for entry in entries {
                             {
                                 let token = entry.token.clone();
@@ -305,7 +305,7 @@ fn EntityPanel(
                                 let book_label = if entry.book_count == 1 { "book" } else { "books" };
                                 let is_active = entry.book_count > 0;
                                 rsx! {
-                                    li { class: "flex items-center justify-between px-4 py-2.5 hover:bg-gray-50",
+                                    li { class: "flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-slate-700",
                                         // Name — clickable button when active, plain text otherwise
                                         if is_active {
                                             button {
@@ -314,16 +314,16 @@ fn EntityPanel(
                                                 "{entry.name}"
                                             }
                                         } else {
-                                            span { class: "text-sm text-gray-900", "{entry.name}" }
+                                            span { class: "text-sm text-gray-900 dark:text-slate-100", "{entry.name}" }
                                         }
                                         div { class: "flex items-center gap-3",
-                                            span { class: "text-xs text-gray-400",
+                                            span { class: "text-xs text-gray-400 dark:text-slate-500",
                                                 "{entry.book_count} {book_label}"
                                             }
                                             // Incoming badge — only when no available books but pipeline references exist
                                             if entry.has_incoming {
                                                 span {
-                                                    class: "inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-600 border border-amber-200",
+                                                    class: "inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-600 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800",
                                                     "incoming"
                                                 }
                                             }
@@ -374,17 +374,17 @@ pub(crate) fn GenreTagsSection() -> Element {
 
     rsx! {
         div { class: "w-full max-w-2xl",
-            h2 { class: "text-lg font-semibold text-gray-900 mb-6", "Genre/Tags" }
+            h2 { class: "text-lg font-semibold text-gray-900 mb-6 dark:text-slate-100", "Genre/Tags" }
 
             // Global delete error banner
             if let Some(msg) = delete_error() {
-                div { class: "mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm",
+                div { class: "mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm dark:bg-red-900/30 dark:border-red-800 dark:text-red-400",
                     "{msg}"
                 }
             }
 
             if let Some(msg) = remove_unused_error() {
-                div { class: "mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm",
+                div { class: "mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm dark:bg-red-900/30 dark:border-red-800 dark:text-red-400",
                     "{msg}"
                 }
             }
@@ -394,7 +394,7 @@ pub(crate) fn GenreTagsSection() -> Element {
                     div { class: "text-gray-400 text-sm", "Loading…" }
                 },
                 Some(Err(e)) => rsx! {
-                    div { class: "p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm",
+                    div { class: "p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm dark:bg-red-900/30 dark:border-red-800 dark:text-red-400",
                         "{e}"
                     }
                 },
@@ -478,24 +478,24 @@ pub(crate) fn GenreTagsSection() -> Element {
             div {
                 class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
                 onkeydown: move |e| { if e.key() == Key::Escape { remove_unused_target.set(None); } },
-                div { class: "bg-white rounded-2xl shadow-xl w-full max-w-sm p-6",
-                    h3 { class: "text-base font-semibold text-gray-900 mb-2",
+                div { class: "bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 dark:bg-slate-800",
+                    h3 { class: "text-base font-semibold text-gray-900 mb-2 dark:text-slate-100",
                         "Remove unused {kind}s"
                     }
-                    p { class: "text-sm text-gray-600 mb-6",
+                    p { class: "text-sm text-gray-600 mb-6 dark:text-slate-400",
                         {
                             let plural = if count == 1 { "" } else { "s" };
                             let have = if count == 1 { "has" } else { "have" };
                             rsx! {
                                 "This will permanently delete "
-                                span { class: "font-medium text-gray-900", "{count} {kind}{plural}" }
+                                span { class: "font-medium text-gray-900 dark:text-slate-100", "{count} {kind}{plural}" }
                                 " that {have} no books assigned. This cannot be undone."
                             }
                         }
                     }
                     div { class: "flex justify-end gap-3",
                         button {
-                            class: "px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50",
+                            class: "px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700",
                             disabled: removing_unused(),
                             onmounted: move |e| { spawn(async move { let _ = e.set_focus(true).await; }); },
                             onclick: move |_| remove_unused_target.set(None),
@@ -537,18 +537,18 @@ pub(crate) fn GenreTagsSection() -> Element {
             div {
                 class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
                 onkeydown: move |e| { if e.key() == Key::Escape { delete_target.set(None); } },
-                div { class: "bg-white rounded-2xl shadow-xl w-full max-w-sm p-6",
-                    h3 { class: "text-base font-semibold text-gray-900 mb-2",
+                div { class: "bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 dark:bg-slate-800",
+                    h3 { class: "text-base font-semibold text-gray-900 mb-2 dark:text-slate-100",
                         "Delete {delete_kind().unwrap_or(\"item\")}"
                     }
-                    p { class: "text-sm text-gray-600 mb-6",
+                    p { class: "text-sm text-gray-600 mb-6 dark:text-slate-400",
                         "Are you sure you want to delete "
-                        span { class: "font-medium text-gray-900", "{target.name}" }
+                        span { class: "font-medium text-gray-900 dark:text-slate-100", "{target.name}" }
                         "? This will remove it from all books and cannot be undone."
                     }
                     div { class: "flex justify-end gap-3",
                         button {
-                            class: "px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50",
+                            class: "px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700",
                             disabled: deleting(),
                             onclick: move |_| delete_target.set(None),
                             "Cancel"

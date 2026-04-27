@@ -81,15 +81,15 @@ pub(crate) fn ApplicationSection() -> Element {
     rsx! {
         div { class: "w-full max-w-2xl",
             div { class: "flex items-center justify-between mb-6",
-                h2 { class: "text-lg font-semibold text-gray-900", "Application Settings" }
+                h2 { class: "text-lg font-semibold text-gray-900 dark:text-slate-100", "Application Settings" }
             }
 
-            div { class: "rounded-lg border border-gray-200 bg-white px-6",
+            div { class: "rounded-lg border border-gray-200 bg-white px-6 dark:border-slate-700 dark:bg-slate-800",
                 // MOBI toggle row
-                div { class: "flex items-center gap-6 py-4 border-b border-gray-100",
+                div { class: "flex items-center gap-6 py-4 border-b border-gray-100 dark:border-slate-700",
                     div { class: "flex-1 min-w-0",
-                        p { class: "text-sm font-medium text-gray-900", "Generate MOBI files for Kindle" }
-                        p { class: "text-sm text-gray-500 mt-0.5",
+                        p { class: "text-sm font-medium text-gray-900 dark:text-slate-100", "Generate MOBI files for Kindle" }
+                        p { class: "text-sm text-gray-500 mt-0.5 dark:text-slate-400",
                             "Generates a MOBI file for each book so Kindle devices can read them directly. MOBI files are created after each book's EPUB enrichment completes."
                         }
                     }
@@ -133,7 +133,7 @@ pub(crate) fn ApplicationSection() -> Element {
 
             // Inline error
             if let Some(ref msg) = error() {
-                div { class: "mt-3 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm",
+                div { class: "mt-3 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm dark:bg-red-900/30 dark:border-red-800 dark:text-red-400",
                     "{msg}"
                 }
             }
@@ -142,14 +142,14 @@ pub(crate) fn ApplicationSection() -> Element {
         // Confirmation modal
         if show_modal() {
             div { class: "fixed inset-0 z-50 flex items-center justify-center bg-black/50",
-                div { class: "bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6",
-                    h3 { class: "text-base font-semibold text-gray-900 mb-2", "Generate MOBI Files?" }
-                    p { class: "text-sm text-gray-600 mb-6",
+                div { class: "bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6 dark:bg-slate-800",
+                    h3 { class: "text-base font-semibold text-gray-900 mb-2 dark:text-slate-100", "Generate MOBI Files?" }
+                    p { class: "text-sm text-gray-600 mb-6 dark:text-slate-400",
                         "Would you like to generate MOBI files for all existing books in your library? This will queue conversion for all books. You can also do this later."
                     }
                     div { class: "flex justify-end gap-3",
                         button {
-                            class: "px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg",
+                            class: "px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg dark:text-slate-300 dark:hover:bg-slate-700",
                             onclick: move |_| show_modal.set(false),
                             "Not now"
                         }

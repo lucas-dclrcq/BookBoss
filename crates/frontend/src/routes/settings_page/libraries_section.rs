@@ -148,18 +148,18 @@ pub(crate) fn LibrariesSection() -> Element {
 
     rsx! {
         div { class: "w-full max-w-2xl",
-            h2 { class: "text-lg font-semibold text-gray-900 mb-6", "Libraries" }
+            h2 { class: "text-lg font-semibold text-gray-900 mb-6 dark:text-slate-100", "Libraries" }
 
             // Global delete error banner
             if let Some(msg) = delete_error() {
-                div { class: "mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm",
+                div { class: "mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm dark:bg-red-900/30 dark:border-red-800 dark:text-red-400",
                     "{msg}"
                 }
             }
 
             // Panel header
             div { class: "flex items-center justify-between mb-3",
-                h3 { class: "text-base font-semibold text-gray-900", "All Libraries" }
+                h3 { class: "text-base font-semibold text-gray-900 dark:text-slate-100", "All Libraries" }
                 button {
                     class: "px-3 py-1.5 text-sm font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700",
                     onclick: move |_| {
@@ -176,7 +176,7 @@ pub(crate) fn LibrariesSection() -> Element {
                 div { class: "mb-3 flex items-center gap-2",
                     input {
                         r#type: "text",
-                        class: "flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm",
+                        class: "flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100 dark:placeholder-slate-400",
                         placeholder: "Library name…",
                         value: new_name,
                         autofocus: true,
@@ -199,7 +199,7 @@ pub(crate) fn LibrariesSection() -> Element {
                         "Add"
                     }
                     button {
-                        class: "px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50",
+                        class: "px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700",
                         onclick: move |_| {
                             adding.set(false);
                             new_name.set(String::new());
@@ -209,7 +209,7 @@ pub(crate) fn LibrariesSection() -> Element {
                     }
                 }
                 if let Some(msg) = add_error() {
-                    div { class: "mb-2 p-2 bg-red-50 border border-red-200 text-red-700 rounded text-sm",
+                    div { class: "mb-2 p-2 bg-red-50 border border-red-200 text-red-700 rounded text-sm dark:bg-red-900/30 dark:border-red-800 dark:text-red-400",
                         "{msg}"
                     }
                 }
@@ -218,52 +218,52 @@ pub(crate) fn LibrariesSection() -> Element {
             // Libraries list
             match data_resource() {
                 None => rsx! {
-                    div { class: "text-gray-400 text-sm", "Loading…" }
+                    div { class: "text-gray-400 text-sm dark:text-slate-500", "Loading…" }
                 },
                 Some(Err(e)) => rsx! {
-                    div { class: "p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm",
+                    div { class: "p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm dark:bg-red-900/30 dark:border-red-800 dark:text-red-400",
                         "{e}"
                     }
                 },
                 Some(Ok(rows)) => rsx! {
-                    div { class: "rounded-lg border border-gray-200 bg-white overflow-hidden",
+                    div { class: "rounded-lg border border-gray-200 bg-white overflow-hidden dark:border-slate-700 dark:bg-slate-800",
                         if rows.is_empty() {
-                            div { class: "px-4 py-6 text-center text-gray-400 text-sm",
+                            div { class: "px-4 py-6 text-center text-gray-400 text-sm dark:text-slate-500",
                                 "No libraries yet."
                             }
                         } else {
                             table { class: "w-full",
                                 thead {
-                                    tr { class: "bg-gray-50 border-b border-gray-200",
-                                        th { class: "px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide", "Name" }
-                                        th { class: "px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap", "Users" }
-                                        th { class: "px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap", "Books" }
+                                    tr { class: "bg-gray-50 border-b border-gray-200 dark:bg-slate-800 dark:border-slate-700",
+                                        th { class: "px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide dark:text-slate-400", "Name" }
+                                        th { class: "px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap dark:text-slate-400", "Users" }
+                                        th { class: "px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap dark:text-slate-400", "Books" }
                                         th { class: "px-4 py-2" }
                                     }
                                 }
-                                tbody { class: "divide-y divide-gray-100",
+                                tbody { class: "divide-y divide-gray-100 dark:divide-slate-700",
                                     for row in rows {
                                         {
                                             let token = row.token.clone();
                                             let user_label = if row.user_count == 1 { "user" } else { "users" };
                                             let book_label = if row.book_count == 1 { "book" } else { "books" };
                                             rsx! {
-                                                tr { class: "hover:bg-gray-50",
+                                                tr { class: "hover:bg-gray-50 dark:hover:bg-slate-700",
                                                     td { class: "px-4 py-2.5",
                                                         div { class: "flex items-center gap-2",
-                                                            span { class: "text-sm text-gray-900", "{row.name}" }
+                                                            span { class: "text-sm text-gray-900 dark:text-slate-100", "{row.name}" }
                                                             if row.is_system {
                                                                 span {
-                                                                    class: "inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-600 border border-blue-200",
+                                                                    class: "inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800",
                                                                     "system"
                                                                 }
                                                             }
                                                         }
                                                     }
-                                                    td { class: "px-4 py-2.5 text-xs text-gray-400 text-right whitespace-nowrap",
+                                                    td { class: "px-4 py-2.5 text-xs text-gray-400 text-right whitespace-nowrap dark:text-slate-500",
                                                         "{row.user_count} {user_label}"
                                                     }
-                                                    td { class: "px-4 py-2.5 text-xs text-gray-400 text-right whitespace-nowrap",
+                                                    td { class: "px-4 py-2.5 text-xs text-gray-400 text-right whitespace-nowrap dark:text-slate-500",
                                                         "{row.book_count} {book_label}"
                                                     }
                                                     td { class: "px-4 py-2.5 text-right",
@@ -302,18 +302,18 @@ pub(crate) fn LibrariesSection() -> Element {
             div {
                 class: "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
                 onkeydown: move |e| { if e.key() == Key::Escape { delete_target.set(None); } },
-                div { class: "bg-white rounded-2xl shadow-xl w-full max-w-sm p-6",
-                    h3 { class: "text-base font-semibold text-gray-900 mb-2",
+                div { class: "bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 dark:bg-slate-800",
+                    h3 { class: "text-base font-semibold text-gray-900 mb-2 dark:text-slate-100",
                         "Delete library"
                     }
-                    p { class: "text-sm text-gray-600 mb-6",
+                    p { class: "text-sm text-gray-600 mb-6 dark:text-slate-400",
                         "Are you sure you want to delete "
-                        span { class: "font-medium text-gray-900", "{target.name}" }
+                        span { class: "font-medium text-gray-900 dark:text-slate-100", "{target.name}" }
                         "? This cannot be undone."
                     }
                     div { class: "flex justify-end gap-3",
                         button {
-                            class: "px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50",
+                            class: "px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700",
                             disabled: deleting(),
                             onclick: move |_| delete_target.set(None),
                             "Cancel"

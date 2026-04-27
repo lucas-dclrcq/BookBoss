@@ -96,61 +96,61 @@ pub(crate) fn TasksSection() -> Element {
     rsx! {
         div { class: "w-full max-w-4xl",
             div { class: "flex items-center justify-between mb-6",
-                h2 { class: "text-lg font-semibold text-gray-900", "Health Tasks" }
+                h2 { class: "text-lg font-semibold text-gray-900 dark:text-slate-100", "Health Tasks" }
             }
 
             match tasks_resource() {
                 None => rsx! {
-                    div { class: "text-gray-400 text-sm", "Loading..." }
+                    div { class: "text-gray-400 text-sm dark:text-slate-500", "Loading..." }
                 },
                 Some(Err(e)) => rsx! {
-                    div { class: "p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm",
+                    div { class: "p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm dark:bg-red-900/30 dark:border-red-800 dark:text-red-400",
                         "{e}"
                     }
                 },
                 Some(Ok(rows)) => rsx! {
-                    div { class: "rounded-lg border border-gray-200 bg-white overflow-hidden",
+                    div { class: "rounded-lg border border-gray-200 bg-white overflow-hidden dark:border-slate-700 dark:bg-slate-800",
                         table { class: "w-full text-sm table-fixed",
                             thead {
-                                tr { class: "bg-gray-50 border-b border-gray-200",
-                                    th { class: "w-[30%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide", "Task" }
-                                    th { class: "w-[12%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wide", "Interval" }
-                                    th { class: "w-[22%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wide", "Last Run" }
-                                    th { class: "w-[22%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wide", "Next Run" }
-                                    th { class: "w-[14%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wide", "Actions" }
+                                tr { class: "bg-gray-50 border-b border-gray-200 dark:bg-slate-800 dark:border-slate-700",
+                                    th { class: "w-[30%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide dark:text-slate-400", "Task" }
+                                    th { class: "w-[12%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wide dark:text-slate-400", "Interval" }
+                                    th { class: "w-[22%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wide dark:text-slate-400", "Last Run" }
+                                    th { class: "w-[22%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wide dark:text-slate-400", "Next Run" }
+                                    th { class: "w-[14%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wide dark:text-slate-400", "Actions" }
                                 }
                             }
-                            tbody { class: "divide-y divide-gray-100",
+                            tbody { class: "divide-y divide-gray-100 dark:divide-slate-700",
                                 for row in rows {
                                     {
                                         let jt = row.job_type.clone();
                                         rsx! {
-                                            tr { class: "hover:bg-gray-50",
+                                            tr { class: "hover:bg-gray-50 dark:hover:bg-slate-700",
                                                 td { class: "px-4 py-3",
-                                                    div { class: "font-medium text-gray-900", "{row.name}" }
+                                                    div { class: "font-medium text-gray-900 dark:text-slate-100", "{row.name}" }
                                                     if row.run_on_startup {
-                                                        span { class: "inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 mt-0.5",
+                                                        span { class: "inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 mt-0.5 dark:bg-blue-900 dark:text-blue-300",
                                                             "startup"
                                                         }
                                                     }
                                                 }
-                                                td { class: "px-4 py-3 text-center text-gray-600",
+                                                td { class: "px-4 py-3 text-center text-gray-600 dark:text-slate-400",
                                                     match row.interval_minutes {
                                                         Some(m) => rsx! { "{format_interval(m)}" },
-                                                        None => rsx! { span { class: "text-gray-400", "Manual only" } },
+                                                        None => rsx! { span { class: "text-gray-400 dark:text-slate-500", "Manual only" } },
                                                     }
                                                 }
-                                                td { class: "px-4 py-3 text-center text-gray-600",
+                                                td { class: "px-4 py-3 text-center text-gray-600 dark:text-slate-400",
                                                     if let Some(ref last) = row.last_run_at {
                                                         RelativeTime { iso: last.clone(), direction: "past" }
                                                     } else {
-                                                        span { class: "text-gray-400", "Never" }
+                                                        span { class: "text-gray-400 dark:text-slate-500", "Never" }
                                                     }
                                                 }
-                                                td { class: "px-4 py-3 text-center text-gray-600",
+                                                td { class: "px-4 py-3 text-center text-gray-600 dark:text-slate-400",
                                                     match row.next_run_at.as_ref() {
                                                         Some(next) => rsx! { RelativeTime { iso: next.clone(), direction: "future" } },
-                                                        None => rsx! { span { class: "text-gray-400", "Manual only" } },
+                                                        None => rsx! { span { class: "text-gray-400 dark:text-slate-500", "Manual only" } },
                                                     }
                                                 }
                                                 td { class: "px-4 py-3",
