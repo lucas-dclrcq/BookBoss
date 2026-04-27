@@ -53,7 +53,7 @@ pub(super) fn DevicesSectionContent() -> Element {
     rsx! {
         // ── Section header ────────────────────────────────────────────────
         div { class: "flex items-center justify-between mb-4",
-            h2 { class: "text-lg font-semibold text-gray-900", "My Devices" }
+            h2 { class: "text-lg font-semibold text-gray-900 dark:text-slate-100", "My Devices" }
             button {
                 class: "px-3 py-1.5 text-sm font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700",
                 onclick: move |_| modal.set(Some(ModalMode::Add)),
@@ -64,7 +64,7 @@ pub(super) fn DevicesSectionContent() -> Element {
         // ── Device cards ──────────────────────────────────────────────────
         div { class: "flex flex-col gap-3",
             if device_list.is_empty() {
-                p { class: "text-sm text-gray-500", "No devices registered yet." }
+                p { class: "text-sm text-gray-500 dark:text-slate-400", "No devices registered yet." }
             }
             for device in device_list.iter() {
                 {
@@ -111,11 +111,11 @@ pub(super) fn DevicesSectionContent() -> Element {
                 tabindex: -1,
                 onmounted: move |e| async move { let _ = e.set_focus(true).await; },
                 onkeydown: move |e| { if e.key() == Key::Escape { reset_target.set(None); } },
-                div { class: "bg-white rounded-2xl shadow-xl w-full max-w-sm p-6",
-                    h3 { class: "text-base font-semibold text-gray-900 mb-2",
+                div { class: "bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-6",
+                    h3 { class: "text-base font-semibold text-gray-900 dark:text-slate-100 mb-2",
                         "Force resync \"{target.name}\"?"
                     }
-                    p { class: "text-sm text-gray-500 mb-4",
+                    p { class: "text-sm text-gray-500 dark:text-slate-400 mb-4",
                         "Clears the sync state so all books re-download on the next Kobo sync. \
                          Trigger a sync on your Kobo after confirming."
                     }
@@ -124,7 +124,7 @@ pub(super) fn DevicesSectionContent() -> Element {
                     }
                     div { class: "flex justify-end gap-3",
                         button {
-                            class: "px-3 py-1.5 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50",
+                            class: "px-3 py-1.5 text-sm font-medium rounded border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700",
                             disabled: reset_saving(),
                             onclick: move |_| reset_target.set(None),
                             "Cancel"
@@ -161,16 +161,16 @@ pub(super) fn DevicesSectionContent() -> Element {
                 tabindex: -1,
                 onmounted: move |e| async move { let _ = e.set_focus(true).await; },
                 onkeydown: move |e| { if e.key() == Key::Escape { delete_target.set(None); } },
-                div { class: "bg-white rounded-2xl shadow-xl w-full max-w-sm p-6",
-                    h3 { class: "text-base font-semibold text-gray-900 mb-2",
+                div { class: "bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-6",
+                    h3 { class: "text-base font-semibold text-gray-900 dark:text-slate-100 mb-2",
                         "Delete device \"{target.name}\"?"
                     }
-                    p { class: "text-sm text-gray-500 mb-4",
+                    p { class: "text-sm text-gray-500 dark:text-slate-400 mb-4",
                         "This action cannot be undone."
                     }
 
                     if target.companion_shelf_name.is_some() {
-                        label { class: "flex items-center gap-2 text-sm text-gray-700 mb-4 cursor-pointer",
+                        label { class: "flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300 mb-4 cursor-pointer",
                             input {
                                 r#type: "checkbox",
                                 class: "rounded border-gray-300 text-indigo-600",
@@ -190,7 +190,7 @@ pub(super) fn DevicesSectionContent() -> Element {
 
                     div { class: "flex justify-end gap-3",
                         button {
-                            class: "px-3 py-1.5 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50",
+                            class: "px-3 py-1.5 text-sm font-medium rounded border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700",
                             disabled: delete_saving(),
                             onclick: move |_| delete_target.set(None),
                             "Cancel"
@@ -233,12 +233,12 @@ fn DeviceCard(device: DeviceRow, on_edit: EventHandler<()>, on_delete: EventHand
     let mut copied = use_signal(|| false);
 
     rsx! {
-        div { class: "rounded-lg border border-gray-200 bg-white px-4 py-3 flex flex-col gap-2",
+        div { class: "rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 flex flex-col gap-2",
             // Row 1: name + type badge | last synced + actions
             div { class: "flex items-center justify-between",
                 div { class: "flex items-center gap-2",
-                    span { class: "text-sm font-semibold text-gray-900", "{device.name}" }
-                    span { class: "px-1.5 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-600",
+                    span { class: "text-sm font-semibold text-gray-900 dark:text-slate-100", "{device.name}" }
+                    span { class: "px-1.5 py-0.5 text-xs font-medium rounded bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300",
                         { device_type_label(&device.device_type) }
                     }
                 }
@@ -247,17 +247,17 @@ fn DeviceCard(device: DeviceRow, on_edit: EventHandler<()>, on_delete: EventHand
                         let synced = device.last_synced_at.clone();
                         if synced == "Never" {
                             rsx! {
-                                span { class: "text-xs text-gray-500",
+                                span { class: "text-xs text-gray-500 dark:text-slate-400",
                                     "Last synced: "
-                                    span { class: "text-gray-700", "Never" }
+                                    span { class: "text-gray-700 dark:text-slate-300", "Never" }
                                 }
                             }
                         } else {
                             rsx! {
-                                span { class: "text-xs text-gray-500",
+                                span { class: "text-xs text-gray-500 dark:text-slate-400",
                                     "Last synced: "
                                     button {
-                                        class: "text-gray-700 hover:text-indigo-600 transition-colors cursor-pointer",
+                                        class: "text-gray-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer",
                                         title: "Reset sync — clears sync state so all books re-download on next Kobo sync",
                                         onclick: move |_| on_reset(()),
                                         "{synced}"
@@ -268,13 +268,13 @@ fn DeviceCard(device: DeviceRow, on_edit: EventHandler<()>, on_delete: EventHand
                     }
                     div { class: "flex items-center",
                         button {
-                            class: "p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded",
+                            class: "p-1.5 text-gray-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 rounded",
                             title: "Edit",
                             onclick: move |_| on_edit(()),
                             "✎"
                         }
                         button {
-                            class: "p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded",
+                            class: "p-1.5 text-gray-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/40 rounded",
                             title: "Delete",
                             onclick: move |_| on_delete(()),
                             "✕"
@@ -284,7 +284,7 @@ fn DeviceCard(device: DeviceRow, on_edit: EventHandler<()>, on_delete: EventHand
             }
 
             // Row 2: companion shelf link
-            div { class: "text-xs text-gray-500",
+            div { class: "text-xs text-gray-500 dark:text-slate-400",
                 if let Some(shelf_name) = &device.companion_shelf_name {
                     span { "Companion shelf: " }
                     if let Some(tok) = shelf_token {
@@ -294,7 +294,7 @@ fn DeviceCard(device: DeviceRow, on_edit: EventHandler<()>, on_delete: EventHand
                             { shelf_name.clone() }
                         }
                     } else {
-                        span { class: "text-gray-700", { shelf_name.clone() } }
+                        span { class: "text-gray-700 dark:text-slate-300", { shelf_name.clone() } }
                     }
                 } else {
                     span { "No companion shelf" }
@@ -302,10 +302,10 @@ fn DeviceCard(device: DeviceRow, on_edit: EventHandler<()>, on_delete: EventHand
             }
 
             // Row 3: on removal (left) · device token/URL (right)
-            div { class: "flex items-center justify-between text-xs text-gray-500",
+            div { class: "flex items-center justify-between text-xs text-gray-500 dark:text-slate-400",
                 span {
                     span { "On removal: " }
-                    span { class: "text-gray-700", { removal_label(&device.on_removal_action) } }
+                    span { class: "text-gray-700 dark:text-slate-300", { removal_label(&device.on_removal_action) } }
                 }
                 {
                     let url = device.sync_url.clone();
@@ -314,7 +314,7 @@ fn DeviceCard(device: DeviceRow, on_edit: EventHandler<()>, on_delete: EventHand
                         span {
                             "Device token/URL: "
                             button {
-                                class: "font-mono text-gray-700 hover:text-indigo-600 transition-colors cursor-pointer min-w-[8ch]",
+                                class: "font-mono text-gray-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer min-w-[8ch]",
                                 title: "Copies URL for Kobo sync",
                                 onclick: move |_| {
                                     let url = url.clone();
@@ -389,8 +389,9 @@ fn DeviceModal(mode: ModalMode, on_close: EventHandler<()>, on_saved: EventHandl
         }
     });
 
-    let input_class = "w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500";
-    let label_class = "block text-sm font-medium text-gray-700 mb-1";
+    let input_class = "w-full rounded-md border border-gray-300 dark:border-slate-600 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 \
+                       focus:ring-indigo-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100";
+    let label_class = "block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1";
     let title = if is_edit { "Edit Device" } else { "Add Device" };
     let submit_label = if is_edit { "Save" } else { "Add Device" };
 
@@ -400,8 +401,8 @@ fn DeviceModal(mode: ModalMode, on_close: EventHandler<()>, on_saved: EventHandl
             tabindex: -1,
             onmounted: move |e| async move { let _ = e.set_focus(true).await; },
             onkeydown: move |e| { if e.key() == Key::Escape { on_close(()) } },
-            div { class: "bg-white rounded-2xl shadow-xl w-full max-w-sm p-6",
-                h3 { class: "text-base font-semibold text-gray-900 mb-4", { title } }
+            div { class: "bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-6",
+                h3 { class: "text-base font-semibold text-gray-900 dark:text-slate-100 mb-4", { title } }
 
                 div { class: "flex flex-col gap-3",
                     div {
@@ -440,7 +441,7 @@ fn DeviceModal(mode: ModalMode, on_close: EventHandler<()>, on_saved: EventHandl
 
                 div { class: "flex justify-end gap-3 mt-5",
                     button {
-                        class: "px-3 py-1.5 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50",
+                        class: "px-3 py-1.5 text-sm font-medium rounded border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700",
                         disabled: saving(),
                         onclick: move |_| on_close(()),
                         "Cancel"

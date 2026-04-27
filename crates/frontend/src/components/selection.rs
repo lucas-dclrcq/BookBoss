@@ -319,7 +319,7 @@ pub(crate) fn SelectionToggle() -> Element {
             class: if mode {
                 "flex items-center justify-center px-2 py-1.5 rounded bg-indigo-600 text-white cursor-pointer"
             } else {
-                "flex items-center justify-center px-2 py-1.5 rounded text-gray-500 hover:text-indigo-600 hover:bg-gray-100 cursor-pointer"
+                "flex items-center justify-center px-2 py-1.5 rounded text-gray-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-gray-100 dark:hover:bg-slate-700 cursor-pointer"
             },
             title: if mode { "Exit selection mode" } else { "Select books" },
             onclick: move |_| {
@@ -438,14 +438,14 @@ fn BulkEditModal(on_close: EventHandler<()>, on_saved: EventHandler<()>) -> Elem
             onkeydown: move |e| { if e.key() == Key::Escape && !busy() { on_close.call(()); } },
 
             div {
-                class: "bg-white rounded-xl shadow-xl w-full max-w-lg mx-4",
+                class: "bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-lg mx-4",
                 onclick: |e| e.stop_propagation(),
 
                 // Header
                 div { class: "flex items-center justify-between px-6 pt-5 pb-2",
-                    h2 { class: "text-lg font-semibold text-gray-900", "Bulk Edit Metadata" }
+                    h2 { class: "text-lg font-semibold text-gray-900 dark:text-slate-100", "Bulk Edit Metadata" }
                     button {
-                        class: "text-gray-400 hover:text-gray-600 cursor-pointer",
+                        class: "text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 cursor-pointer",
                         disabled: busy(),
                         onclick: move |_| on_close.call(()),
                         svg {
@@ -466,7 +466,7 @@ fn BulkEditModal(on_close: EventHandler<()>, on_saved: EventHandler<()>) -> Elem
 
                 // Subtitle
                 div { class: "px-6 pb-4",
-                    p { class: "text-sm text-gray-500", "{label}" }
+                    p { class: "text-sm text-gray-500 dark:text-slate-400", "{label}" }
                 }
 
                 // Fields
@@ -639,7 +639,7 @@ fn BulkEditModal(on_close: EventHandler<()>, on_saved: EventHandler<()>) -> Elem
                                                 rsx! {
                                                     label {
                                                         key: "{tok}",
-                                                        class: "flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer select-none",
+                                                        class: "flex items-center gap-1.5 text-sm text-gray-700 dark:text-slate-300 cursor-pointer select-none",
                                                         input {
                                                             r#type: "checkbox",
                                                             class: "rounded border-gray-300 text-indigo-600",
@@ -681,7 +681,7 @@ fn BulkEditModal(on_close: EventHandler<()>, on_saved: EventHandler<()>) -> Elem
                 // Footer
                 div { class: "flex justify-end gap-3 px-6 pt-4 pb-5",
                     button {
-                        class: "px-4 py-2 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-40",
+                        class: "px-4 py-2 text-sm font-medium rounded border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 cursor-pointer disabled:opacity-40",
                         disabled: busy(),
                         onclick: move |_| on_close.call(()),
                         "Cancel"
@@ -736,7 +736,7 @@ fn BulkEditRow(label: &'static str, checked: bool, on_toggle: EventHandler<()>, 
             button {
                 r#type: "button",
                 class: "mt-1.5 flex-none w-5 h-5 rounded border cursor-pointer flex items-center justify-center",
-                class: if checked { "bg-indigo-600 border-indigo-600" } else { "border-gray-300 hover:border-indigo-400" },
+                class: if checked { "bg-indigo-600 border-indigo-600" } else { "border-gray-300 dark:border-slate-600 hover:border-indigo-400 dark:hover:border-indigo-500" },
                 onclick: move |_| on_toggle.call(()),
                 if checked {
                     svg {
@@ -755,14 +755,14 @@ fn BulkEditRow(label: &'static str, checked: bool, on_toggle: EventHandler<()>, 
                 }
             }
             // Label
-            span { class: "mt-1.5 flex-none w-20 text-sm font-medium text-gray-600", "{label}" }
+            span { class: "mt-1.5 flex-none w-20 text-sm font-medium text-gray-600 dark:text-slate-400", "{label}" }
             // Field — when unchecked, render a placeholder instead of children
             // so any open ChipInput/AutocompleteInput dropdowns are unmounted.
             div { class: "flex-1 min-w-0",
                 if checked {
                     {children}
                 } else {
-                    div { class: "border border-gray-300 rounded px-2 py-1 min-h-[34px] opacity-50" }
+                    div { class: "border border-gray-300 dark:border-slate-600 rounded px-2 py-1 min-h-[34px] opacity-50" }
                 }
             }
         }
@@ -794,13 +794,13 @@ fn BulkDeleteModal(on_close: EventHandler<()>, on_deleted: EventHandler<()>) -> 
             onkeydown: move |e| { if e.key() == Key::Escape && !busy() { on_close.call(()); } },
 
             div {
-                class: "bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4",
+                class: "bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-sm mx-4",
                 onclick: |e| e.stop_propagation(),
 
-                h2 { class: "text-lg font-semibold text-gray-900 mb-2",
+                h2 { class: "text-lg font-semibold text-gray-900 dark:text-slate-100 mb-2",
                     if count == 1 { "Delete Book?" } else { "Delete Books?" }
                 }
-                p { class: "text-sm text-gray-600 mb-6", "{label}" }
+                p { class: "text-sm text-gray-600 dark:text-slate-400 mb-6", "{label}" }
 
                 if let Some(err) = error_msg() {
                     p { class: "text-sm text-red-600 mb-4", "{err}" }
@@ -808,7 +808,7 @@ fn BulkDeleteModal(on_close: EventHandler<()>, on_deleted: EventHandler<()>) -> 
 
                 div { class: "flex gap-3 justify-end",
                     button {
-                        class: "px-4 py-2 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50 cursor-pointer",
+                        class: "px-4 py-2 text-sm font-medium rounded border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 cursor-pointer",
                         autofocus: true,
                         disabled: busy(),
                         onclick: move |_| on_close.call(()),
@@ -961,7 +961,7 @@ pub(crate) fn SelectionActionBar(
 
     rsx! {
         div {
-            class: "fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 shadow-lg px-6 py-3 flex items-center gap-4",
+            class: "fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700 shadow-lg px-6 py-3 flex items-center gap-4",
             tabindex: -1,
             onmounted: move |e| async move { let _ = e.set_focus(true).await; },
             onkeydown: {
@@ -995,7 +995,7 @@ pub(crate) fn SelectionActionBar(
             if let Some(msg) = status_message() {
                 span { class: "text-sm font-medium text-indigo-600", "{msg}" }
             } else {
-                span { class: "text-sm font-medium text-gray-700", "{label}" }
+                span { class: "text-sm font-medium text-gray-700 dark:text-slate-300", "{label}" }
             }
 
             // Select All / Deselect All toggle
@@ -1049,11 +1049,11 @@ pub(crate) fn SelectionActionBar(
                         "Add to Library"
                     }
                     if show_add_to_library() {
-                        div { class: "absolute bottom-full right-0 mb-1 z-50 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-max",
+                        div { class: "absolute bottom-full right-0 mb-1 z-50 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 py-1 min-w-max",
                             match available_libraries.read().as_ref() {
-                                None => rsx! { div { class: "px-4 py-2 text-sm text-gray-500", "Loading…" } },
+                                None => rsx! { div { class: "px-4 py-2 text-sm text-gray-500 dark:text-slate-400", "Loading…" } },
                                 Some(Err(_)) => rsx! { div { class: "px-4 py-2 text-sm text-red-500", "Failed to load libraries" } },
-                                Some(Ok(libs)) if libs.is_empty() => rsx! { div { class: "px-4 py-2 text-sm text-gray-500", "No libraries available" } },
+                                Some(Ok(libs)) if libs.is_empty() => rsx! { div { class: "px-4 py-2 text-sm text-gray-500 dark:text-slate-400", "No libraries available" } },
                                 Some(Ok(libs)) => rsx! {
                                     for (token, name) in libs.iter() {
                                         {
@@ -1061,7 +1061,7 @@ pub(crate) fn SelectionActionBar(
                                             let n = name.clone();
                                             rsx! {
                                                 button {
-                                                    class: "block w-full text-left px-4 py-2 text-sm hover:bg-gray-50 cursor-pointer",
+                                                    class: "block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 cursor-pointer",
                                                     onclick: move |_| {
                                                         let lib_token = t.clone();
                                                         let tokens: Vec<String> = SELECTED_BOOKS.read().iter().cloned().collect();
@@ -1111,13 +1111,13 @@ pub(crate) fn SelectionActionBar(
                     "Set Status"
                 }
                 if show_status_dropdown() {
-                    div { class: "absolute bottom-full left-0 mb-1 z-50 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-max",
+                    div { class: "absolute bottom-full left-0 mb-1 z-50 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 py-1 min-w-max",
                         for s in ["Unread", "Reading", "Paused", "Rereading", "Read", "Abandoned"] {
                             {
                                 let s_owned = s.to_string();
                                 rsx! {
                                     button {
-                                        class: "block w-full text-left px-4 py-2 text-sm hover:bg-gray-50 cursor-pointer",
+                                        class: "block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 cursor-pointer",
                                         onclick: move |_| {
                                             let status_str = s_owned.clone();
                                             let tokens: Vec<String> = SELECTED_BOOKS.read().iter().cloned().collect();
@@ -1161,7 +1161,7 @@ pub(crate) fn SelectionActionBar(
 
             // Cancel
             button {
-                class: "px-4 py-2 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-40",
+                class: "px-4 py-2 text-sm font-medium rounded border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 cursor-pointer disabled:opacity-40",
                 disabled: busy(),
                 onclick: move |_| exit_selection_mode(),
                 "Cancel"

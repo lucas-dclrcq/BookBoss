@@ -237,7 +237,7 @@ fn RunNowButton(job_type: String, on_triggered: EventHandler<()>) -> Element {
 
     rsx! {
         button {
-            class: "px-2.5 py-1 text-xs font-medium rounded bg-indigo-50 text-indigo-700 hover:bg-indigo-100 disabled:opacity-50",
+            class: "px-2.5 py-1 text-xs font-medium rounded bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:bg-indigo-900/50 disabled:opacity-50",
             disabled: running(),
             onclick: move |_| {
                 let jt = job_type.clone();

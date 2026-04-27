@@ -442,11 +442,11 @@ pub(crate) fn ProfilePage() -> Element {
 
                 // ── Profile ──────────────────────────────────────────────
                 section {
-                    h2 { class: "text-lg font-semibold text-gray-900 mb-4", "Profile" }
+                    h2 { class: "text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4", "Profile" }
                     ProfileSectionContent {}
                 }
 
-                hr { class: "border-gray-200" }
+                hr { class: "border-gray-200 dark:border-slate-700" }
 
                 // ── Default Library (only if 2+ libraries) ────────────────
                 DefaultLibrarySectionContent {}
@@ -456,7 +456,7 @@ pub(crate) fn ProfilePage() -> Element {
                     DevicesSectionContent {}
                 }
 
-                hr { class: "border-gray-200" }
+                hr { class: "border-gray-200 dark:border-slate-700" }
 
                 // ── OPDS ─────────────────────────────────────────────────
                 OpdsSectionContent {}
@@ -506,12 +506,13 @@ fn ProfileSectionContent() -> Element {
         pw_error.set(None);
     };
 
-    let input_class = "w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500";
-    let label_class = "block text-sm font-medium text-gray-700 mb-1";
+    let input_class = "w-full rounded-md border border-gray-300 dark:border-slate-600 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 \
+                       focus:ring-indigo-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100";
+    let label_class = "block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1";
 
     rsx! {
         // ── Profile info card ─────────────────────────────────────────────
-        div { class: "rounded-lg border border-gray-200 bg-white px-4 py-4 flex flex-col gap-3",
+        div { class: "rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-4 flex flex-col gap-3",
             div {
                 label { class: label_class, "Full Name" }
                 input {
@@ -542,7 +543,7 @@ fn ProfileSectionContent() -> Element {
             div { class: "flex items-center justify-between",
                 // Left — Change Password trigger
                 button {
-                    class: "px-3 py-1.5 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50",
+                    class: "px-3 py-1.5 text-sm font-medium rounded border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700",
                     onclick: move |_| pw_modal_open.set(true),
                     "Change Password"
                 }
@@ -581,8 +582,8 @@ fn ProfileSectionContent() -> Element {
                 tabindex: -1,
                 onmounted: move |e| async move { let _ = e.set_focus(true).await; },
                 onkeydown: move |e| { if e.key() == Key::Escape { close_pw_modal(); } },
-                div { class: "bg-white rounded-2xl shadow-xl w-full max-w-sm p-6",
-                    h3 { class: "text-base font-semibold text-gray-900 mb-4", "Change Password" }
+                div { class: "bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-6",
+                    h3 { class: "text-base font-semibold text-gray-900 dark:text-slate-100 mb-4", "Change Password" }
 
                     div { class: "flex flex-col gap-3",
                         div {
@@ -622,7 +623,7 @@ fn ProfileSectionContent() -> Element {
 
                     div { class: "flex justify-end gap-3 mt-5",
                         button {
-                            class: "px-3 py-1.5 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50",
+                            class: "px-3 py-1.5 text-sm font-medium rounded border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700",
                             disabled: pw_saving(),
                             onclick: move |_| close_pw_modal(),
                             "Cancel"
@@ -677,13 +678,14 @@ fn DefaultLibrarySectionContent() -> Element {
     let mut error: Signal<Option<String>> = use_signal(|| None);
     let mut saved = use_signal(|| false);
 
-    let select_class = "rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500";
+    let select_class = "rounded-md border border-gray-300 dark:border-slate-600 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 \
+                        bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100";
 
     rsx! {
         section {
-            h2 { class: "text-lg font-semibold text-gray-900 mb-4", "Default Library" }
-            div { class: "rounded-lg border border-gray-200 bg-white px-4 py-4 flex flex-col gap-3",
-                p { class: "text-sm text-gray-600",
+            h2 { class: "text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4", "Default Library" }
+            div { class: "rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-4 flex flex-col gap-3",
+                p { class: "text-sm text-gray-600 dark:text-slate-400",
                     "Choose which library is shown by default when you open BookBoss."
                 }
                 div { class: "flex items-center gap-3",
@@ -716,7 +718,7 @@ fn DefaultLibrarySectionContent() -> Element {
                         }
                     }
                     if saving() {
-                        span { class: "text-sm text-gray-500", "Saving\u{2026}" }
+                        span { class: "text-sm text-gray-500 dark:text-slate-400", "Saving\u{2026}" }
                     } else if saved() {
                         span { class: "text-sm text-green-600", "Saved!" }
                     }
@@ -727,7 +729,7 @@ fn DefaultLibrarySectionContent() -> Element {
             }
         }
 
-        hr { class: "border-gray-200" }
+        hr { class: "border-gray-200 dark:border-slate-700" }
     }
 }
 
@@ -762,25 +764,25 @@ fn OpdsSectionContent() -> Element {
 
     rsx! {
         section {
-            h2 { class: "text-lg font-semibold text-gray-900 mb-4", "OPDS / KOReader" }
-            div { class: "rounded-lg border border-gray-200 bg-white px-4 py-4 flex flex-col gap-3",
-                p { class: "text-sm text-gray-600",
+            h2 { class: "text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4", "OPDS / KOReader" }
+            div { class: "rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-4 flex flex-col gap-3",
+                p { class: "text-sm text-gray-600 dark:text-slate-400",
                     "Use these credentials to connect your e-reader app (KOReader, Moon+ Reader, etc.) to your BookBoss library."
                 }
 
                 div {
-                    span { class: "block text-sm font-medium text-gray-700 mb-1", "Catalog URL" }
+                    span { class: "block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1", "Catalog URL" }
                     div { class: "flex items-center gap-2",
-                        code { class: "flex-1 text-sm bg-gray-50 rounded px-3 py-1.5 border border-gray-200 text-gray-900 select-all",
+                        code { class: "flex-1 text-sm bg-gray-50 dark:bg-slate-700 rounded px-3 py-1.5 border border-gray-200 dark:border-slate-600 text-gray-900 dark:text-slate-100 select-all",
                             "{info.opds_url}"
                         }
                     }
                 }
 
                 div {
-                    span { class: "block text-sm font-medium text-gray-700 mb-1", "KOReader Sync URL" }
+                    span { class: "block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1", "KOReader Sync URL" }
                     div { class: "flex items-center gap-2",
-                        code { class: "flex-1 text-sm bg-gray-50 rounded px-3 py-1.5 border border-gray-200 text-gray-900 select-all",
+                        code { class: "flex-1 text-sm bg-gray-50 dark:bg-slate-700 rounded px-3 py-1.5 border border-gray-200 dark:border-slate-600 text-gray-900 dark:text-slate-100 select-all",
                             "{info.koreader_url}"
                         }
                     }
@@ -788,17 +790,17 @@ fn OpdsSectionContent() -> Element {
 
                 div { class: "flex items-start justify-between gap-4",
                     div {
-                        span { class: "block text-sm font-medium text-gray-700 mb-1", "Username" }
-                        code { class: "text-sm bg-gray-50 rounded px-3 py-1.5 border border-gray-200 text-gray-900 select-all inline-block",
+                        span { class: "block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1", "Username" }
+                        code { class: "text-sm bg-gray-50 dark:bg-slate-700 rounded px-3 py-1.5 border border-gray-200 dark:border-slate-600 text-gray-900 dark:text-slate-100 select-all inline-block",
                             "{info.username}"
                         }
                     }
 
                     div {
-                        span { class: "block text-sm font-medium text-gray-700 mb-1", "Password" }
+                        span { class: "block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1", "Password" }
                         div { class: "flex items-center gap-2",
                             button {
-                                class: "text-sm bg-gray-50 rounded px-3 py-1.5 border border-gray-200 text-gray-900 font-mono cursor-pointer hover:bg-gray-100 transition-colors w-[calc(12ch+1.5rem)] text-center",
+                                class: "text-sm bg-gray-50 dark:bg-slate-700 rounded px-3 py-1.5 border border-gray-200 dark:border-slate-600 text-gray-900 dark:text-slate-100 font-mono cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors w-[calc(12ch+1.5rem)] text-center",
                                 title: "Click to copy password",
                                 onclick: move |_| {
                                     let pw_val = password();
@@ -821,7 +823,7 @@ fn OpdsSectionContent() -> Element {
                                 if copied() { "Copied!" } else if show_password() { "{password}" } else { "••••••••••••" }
                             }
                         button {
-                            class: "px-2 py-1.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-gray-700",
+                            class: "px-2 py-1.5 rounded border border-gray-300 dark:border-slate-600 text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700 hover:text-gray-700 dark:hover:text-slate-200",
                             title: if show_password() { "Hide password" } else { "Show password" },
                             onclick: move |_| show_password.set(!show_password()),
                             if show_password() {
@@ -855,7 +857,7 @@ fn OpdsSectionContent() -> Element {
                             }
                         }
                         button {
-                            class: "px-2 py-1.5 text-xs font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50",
+                            class: "px-2 py-1.5 text-xs font-medium rounded border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50",
                             disabled: regenerating(),
                             onclick: move |_| {
                                 regenerating.set(true);

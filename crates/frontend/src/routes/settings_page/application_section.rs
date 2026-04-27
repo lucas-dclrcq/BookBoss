@@ -97,7 +97,7 @@ pub(crate) fn ApplicationSection() -> Element {
                         class: if mobi_enabled() {
                             "relative inline-flex shrink-0 h-6 w-11 items-center rounded-full bg-indigo-600 transition-colors"
                         } else {
-                            "relative inline-flex shrink-0 h-6 w-11 items-center rounded-full bg-gray-200 transition-colors"
+                            "relative inline-flex shrink-0 h-6 w-11 items-center rounded-full bg-gray-200 dark:bg-slate-600 transition-colors"
                         },
                         disabled: loading(),
                         onclick: move |_| {

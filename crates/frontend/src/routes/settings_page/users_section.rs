@@ -642,9 +642,9 @@ pub(crate) fn UsersSection(is_super_admin: bool, current_user_token: String) -> 
                                                     div { class: "flex items-center justify-end gap-2",
                                                         button {
                                                             class: if can_edit {
-                                                                "p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded"
+                                                                "p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded"
                                                             } else {
-                                                                "p-1.5 text-gray-300 cursor-not-allowed rounded"
+                                                                "p-1.5 text-gray-300 cursor-not-allowed rounded dark:text-slate-600"
                                                             },
                                                             disabled: !can_edit,
                                                             title: "Edit user",
@@ -657,7 +657,7 @@ pub(crate) fn UsersSection(is_super_admin: bool, current_user_token: String) -> 
                                                         }
                                                         if !is_super && !is_self {
                                                             button {
-                                                                class: "p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded",
+                                                                class: "p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded",
                                                                 title: "Delete user",
                                                                 onclick: move |_| {
                                                                     delete_error.set(None);
@@ -1035,7 +1035,7 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
                     if role() == RoleChoice::User {
                         div { class: "mb-4",
                             label { class: "block text-sm font-medium text-gray-700 mb-2 dark:text-slate-300", "Capabilities" }
-                            div { class: "space-y-2 rounded-lg border border-gray-200 p-3 dark:border-slate-600",
+                            div { class: "space-y-2 rounded-lg border border-gray-200 p-3 dark:border-slate-700",
                                 for (cap_key, cap_label) in GRANTABLE {
                                     {
                                         let key = cap_key.to_string();

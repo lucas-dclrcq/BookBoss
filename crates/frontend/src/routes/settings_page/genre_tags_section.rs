@@ -328,7 +328,7 @@ fn EntityPanel(
                                                 }
                                             }
                                             button {
-                                                class: "p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded text-xs",
+                                                class: "p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:text-slate-500 dark:hover:bg-red-900/30 rounded text-xs",
                                                 title: "Delete",
                                                 onclick: move |_| on_delete.call(token.clone()),
                                                 "✕"
@@ -391,7 +391,7 @@ pub(crate) fn GenreTagsSection() -> Element {
 
             match data_resource() {
                 None => rsx! {
-                    div { class: "text-gray-400 text-sm", "Loading…" }
+                    div { class: "text-gray-400 text-sm dark:text-slate-500", "Loading…" }
                 },
                 Some(Err(e)) => rsx! {
                     div { class: "p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm dark:bg-red-900/30 dark:border-red-800 dark:text-red-400",

@@ -565,19 +565,20 @@ fn FilterGroupEditor(
 
     // Root group has a subtle card look; sub-groups use a left accent border.
     let container_class = if is_root {
-        "rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2"
+        "rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/60 p-3 space-y-2"
     } else {
-        "rounded-lg border border-gray-200 bg-gray-50 border-l-4 border-l-indigo-400 pl-3 pr-3 pt-3 pb-3 space-y-2"
+        "rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/60 border-l-4 border-l-indigo-400 pl-3 pr-3 pt-3 pb-3 space-y-2"
     };
 
-    let select_class = "text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400";
+    let select_class = "text-sm border border-gray-300 dark:border-slate-600 rounded px-2 py-1 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 \
+                        focus:outline-none focus:ring-1 focus:ring-indigo-400";
 
     rsx! {
         div { class: "{container_class}",
 
             // ── Condition row ────────────────────────────────────────────────
             div { class: "flex items-center gap-2 flex-wrap",
-                span { class: "text-sm font-medium text-gray-600", "Condition:" }
+                span { class: "text-sm font-medium text-gray-600 dark:text-slate-400", "Condition:" }
                 select {
                     class: select_class,
                     value: if is_and { "and" } else { "or" },
@@ -591,7 +592,7 @@ fn FilterGroupEditor(
                 }
                 button {
                     r#type: "button",
-                    class: "text-xs font-medium text-indigo-600 hover:text-indigo-800 border border-indigo-300 rounded px-2 py-1 hover:bg-indigo-50",
+                    class: "text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 border border-indigo-300 dark:border-indigo-600 rounded px-2 py-1 hover:bg-indigo-50 dark:hover:bg-indigo-900/40",
                     onclick: move |_| {
                         let mut g = add_rule_group.clone();
                         g.items.push(BookFilter::Rule(FilterRule::TitleText {
@@ -604,7 +605,7 @@ fn FilterGroupEditor(
                 }
                 button {
                     r#type: "button",
-                    class: "text-xs font-medium text-gray-600 hover:text-gray-800 border border-gray-300 rounded px-2 py-1 hover:bg-gray-100",
+                    class: "text-xs font-medium text-gray-600 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 border border-gray-300 dark:border-slate-600 rounded px-2 py-1 hover:bg-gray-100 dark:hover:bg-slate-700",
                     onclick: move |_| {
                         let mut g = add_group_group.clone();
                         g.items.push(BookFilter::Group(FilterGroup {
@@ -692,8 +693,10 @@ fn FilterRuleRow(
 ) -> Element {
     let field = field_key(&rule);
 
-    let select_class = "text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400";
-    let input_class = "flex-1 text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-400";
+    let select_class = "text-sm border border-gray-300 dark:border-slate-600 rounded px-2 py-1 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 \
+                        focus:outline-none focus:ring-1 focus:ring-indigo-400";
+    let input_class = "flex-1 text-sm border border-gray-300 dark:border-slate-600 rounded px-2 py-1 bg-white dark:bg-slate-700 text-gray-900 \
+                       dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-400";
 
     // Field selector
     let oc_field = on_change;
@@ -943,13 +946,13 @@ fn FilterRuleRow(
                 { rule_ui }
                 button {
                     r#type: "button",
-                    class: "text-gray-400 hover:text-red-500 text-lg leading-none flex-shrink-0",
+                    class: "text-gray-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 text-lg leading-none flex-shrink-0",
                     onclick: move |_| on_remove.call(()),
                     "×"
                 }
             }
             if is_read_status {
-                p { class: "text-xs text-gray-400 text-center leading-snug",
+                p { class: "text-xs text-gray-400 dark:text-slate-500 text-center leading-snug",
                     "Active (Unread · Reading · Rereading) · Paused · Read · Abandoned"
                 }
             }
@@ -1024,7 +1027,7 @@ fn EntityPicker(values: Vec<EntityRef>, options: Vec<(i64, String)>, on_change: 
 
     rsx! {
         div { class: "relative",
-            div { class: "flex flex-wrap gap-1 items-center border border-gray-300 rounded px-2 py-1 min-h-[34px] focus-within:ring-1 focus-within:ring-indigo-400",
+            div { class: "flex flex-wrap gap-1 items-center border border-gray-300 dark:border-slate-600 rounded px-2 py-1 min-h-[34px] focus-within:ring-1 focus-within:ring-indigo-400 bg-white dark:bg-slate-700",
                 for (i, entity) in values.iter().enumerate() {
                     {
                         let label = entity.label.clone();
@@ -1033,11 +1036,11 @@ fn EntityPicker(values: Vec<EntityRef>, options: Vec<(i64, String)>, on_change: 
                         rsx! {
                             span {
                                 key: "{i}",
-                                class: "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-indigo-100 text-indigo-800 border border-indigo-300",
+                                class: "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-indigo-100 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-700",
                                 "{label}"
                                 button {
                                     r#type: "button",
-                                    class: "ml-0.5 text-indigo-400 hover:text-indigo-700 cursor-pointer leading-none",
+                                    class: "ml-0.5 text-indigo-400 dark:text-indigo-500 hover:text-indigo-700 dark:hover:text-indigo-300 cursor-pointer leading-none",
                                     onclick: move |_| oc.call(new_values.clone()),
                                     "×"
                                 }
@@ -1046,7 +1049,7 @@ fn EntityPicker(values: Vec<EntityRef>, options: Vec<(i64, String)>, on_change: 
                     }
                 }
                 input {
-                    class: "flex-1 min-w-[120px] text-sm outline-none bg-transparent py-0.5",
+                    class: "flex-1 min-w-[120px] text-sm outline-none bg-transparent py-0.5 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500",
                     value: "{input_text}",
                     placeholder: if values.is_empty() { "Search…" } else { "" },
                     oninput: move |e| {
@@ -1065,7 +1068,7 @@ fn EntityPicker(values: Vec<EntityRef>, options: Vec<(i64, String)>, on_change: 
                 }
             }
             if *show_dropdown.read() && !filtered.is_empty() {
-                div { class: "absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded shadow-lg z-50 max-h-48 overflow-y-auto",
+                div { class: "absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded shadow-lg z-50 max-h-48 overflow-y-auto",
                     for (opt_id, opt_label) in &filtered {
                         {
                             let id = *opt_id;
@@ -1077,7 +1080,7 @@ fn EntityPicker(values: Vec<EntityRef>, options: Vec<(i64, String)>, on_change: 
                             rsx! {
                                 div {
                                     key: "{id}",
-                                    class: "px-3 py-1.5 text-sm text-gray-700 hover:bg-indigo-50 cursor-pointer",
+                                    class: "px-3 py-1.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 cursor-pointer",
                                     onmousedown: move |e| e.prevent_default(),
                                     onclick: move |_| {
                                         oc.call(new_values.clone());
@@ -1101,7 +1104,7 @@ fn LanguageChipInput(values: Vec<String>, on_change: EventHandler<Vec<String>>) 
     let mut input_text = use_signal(String::new);
 
     rsx! {
-        div { class: "flex flex-wrap gap-1 items-center border border-gray-300 rounded px-2 py-1 min-h-[34px] focus-within:ring-1 focus-within:ring-indigo-400",
+        div { class: "flex flex-wrap gap-1 items-center border border-gray-300 dark:border-slate-600 rounded px-2 py-1 min-h-[34px] focus-within:ring-1 focus-within:ring-indigo-400 bg-white dark:bg-slate-700",
             for (i, chip) in values.iter().enumerate() {
                 {
                     let label = chip.clone();
@@ -1110,11 +1113,11 @@ fn LanguageChipInput(values: Vec<String>, on_change: EventHandler<Vec<String>>) 
                     rsx! {
                         span {
                             key: "{i}",
-                            class: "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700 border border-gray-300",
+                            class: "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-100 dark:bg-slate-600 text-gray-700 dark:text-slate-300 border border-gray-300 dark:border-slate-500",
                             "{label}"
                             button {
                                 r#type: "button",
-                                class: "ml-0.5 text-gray-400 hover:text-gray-700 cursor-pointer leading-none",
+                                class: "ml-0.5 text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300 cursor-pointer leading-none",
                                 onclick: move |_| oc.call(new_values.clone()),
                                 "×"
                             }
@@ -1123,7 +1126,7 @@ fn LanguageChipInput(values: Vec<String>, on_change: EventHandler<Vec<String>>) 
                 }
             }
             input {
-                class: "flex-1 min-w-[80px] text-sm outline-none bg-transparent py-0.5",
+                class: "flex-1 min-w-[80px] text-sm outline-none bg-transparent py-0.5 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500",
                 value: "{input_text}",
                 placeholder: if values.is_empty() { "e.g. en, fr" } else { "" },
                 oninput: move |e| input_text.set(e.value()),
@@ -1188,7 +1191,7 @@ fn ReadStatusChipInput(values: Vec<FilterReadStatus>, on_change: EventHandler<Ve
 
     rsx! {
         div { class: "relative",
-            div { class: "flex flex-wrap gap-1 items-center border border-gray-300 rounded px-2 py-1 min-h-[34px] focus-within:ring-1 focus-within:ring-indigo-400",
+            div { class: "flex flex-wrap gap-1 items-center border border-gray-300 dark:border-slate-600 rounded px-2 py-1 min-h-[34px] focus-within:ring-1 focus-within:ring-indigo-400 bg-white dark:bg-slate-700",
                 for (i, status) in values.iter().enumerate() {
                     {
                         let label = status.label();
@@ -1203,11 +1206,11 @@ fn ReadStatusChipInput(values: Vec<FilterReadStatus>, on_change: EventHandler<Ve
                         rsx! {
                             span {
                                 key: "{i}",
-                                class: "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-indigo-100 text-indigo-800 border border-indigo-300",
+                                class: "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-indigo-100 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-700",
                                 "{label}"
                                 button {
                                     r#type: "button",
-                                    class: "ml-0.5 text-indigo-400 hover:text-indigo-700 cursor-pointer leading-none",
+                                    class: "ml-0.5 text-indigo-400 dark:text-indigo-500 hover:text-indigo-700 dark:hover:text-indigo-300 cursor-pointer leading-none",
                                     onclick: move |_| oc.call(new_values.clone()),
                                     "×"
                                 }
@@ -1216,7 +1219,7 @@ fn ReadStatusChipInput(values: Vec<FilterReadStatus>, on_change: EventHandler<Ve
                     }
                 }
                 input {
-                    class: "flex-1 min-w-[80px] text-sm outline-none bg-transparent py-0.5",
+                    class: "flex-1 min-w-[80px] text-sm outline-none bg-transparent py-0.5 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500",
                     value: "{input_text}",
                     placeholder: if values.is_empty() { "add status…" } else { "" },
                     onfocus: move |_| show_dropdown.set(true),
@@ -1253,7 +1256,7 @@ fn ReadStatusChipInput(values: Vec<FilterReadStatus>, on_change: EventHandler<Ve
                 }
             }
             if *show_dropdown.read() && !filtered.is_empty() {
-                div { class: "absolute left-0 right-0 bottom-full mb-1 bg-white border border-gray-200 rounded shadow-lg z-50 max-h-48 overflow-y-auto",
+                div { class: "absolute left-0 right-0 bottom-full mb-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded shadow-lg z-50 max-h-48 overflow-y-auto",
                     for status in &filtered {
                         {
                             let label = status.label();
@@ -1263,7 +1266,7 @@ fn ReadStatusChipInput(values: Vec<FilterReadStatus>, on_change: EventHandler<Ve
                             rsx! {
                                 div {
                                     key: "{label}",
-                                    class: "px-3 py-1.5 text-sm text-gray-700 hover:bg-indigo-50 cursor-pointer",
+                                    class: "px-3 py-1.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 cursor-pointer",
                                     onmousedown: move |e| e.prevent_default(),
                                     onclick: move |_| {
                                         oc.call(new_values.clone());
