@@ -93,7 +93,7 @@ pub(crate) fn RegisterAdminForm() -> Element {
 
                 if let Some(msg) = error_msg() {
                     div {
-                        class: "mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm",
+                        class: "mb-4 p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 rounded-lg text-sm",
                         "{msg}"
                     }
                 }
@@ -152,7 +152,7 @@ pub(crate) fn RegisterAdminForm() -> Element {
                         div { class: "mt-2 space-y-1",
                             for (rule, satisfied) in requirements() {
                                 div {
-                                    class: if satisfied { "flex items-center gap-1.5 text-xs text-green-600" } else { "flex items-center gap-1.5 text-xs text-gray-400" },
+                                    class: if satisfied { "flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400" } else { "flex items-center gap-1.5 text-xs text-gray-400 dark:text-slate-500" },
                                     span { if satisfied { "✓" } else { "○" } }
                                     span { "{rule}" }
                                 }
@@ -178,7 +178,7 @@ pub(crate) fn RegisterAdminForm() -> Element {
                     }
                     if confirm_touched() {
                         div {
-                            class: if passwords_match() { "mt-1 flex items-center gap-1.5 text-xs text-green-600" } else { "mt-1 flex items-center gap-1.5 text-xs text-red-500" },
+                            class: if passwords_match() { "mt-1 flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400" } else { "mt-1 flex items-center gap-1.5 text-xs text-red-500 dark:text-red-400" },
                             span { if passwords_match() { "✓" } else { "✗" } }
                             span { if passwords_match() { "Passwords match" } else { "Passwords do not match" } }
                         }

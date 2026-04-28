@@ -642,7 +642,7 @@ fn BulkEditModal(on_close: EventHandler<()>, on_saved: EventHandler<()>) -> Elem
                                                         class: "flex items-center gap-1.5 text-sm text-gray-700 dark:text-slate-300 cursor-pointer select-none",
                                                         input {
                                                             r#type: "checkbox",
-                                                            class: "rounded border-gray-300 text-indigo-600",
+                                                            class: "rounded border-gray-300 dark:border-slate-600 text-indigo-600 dark:text-indigo-400",
                                                             checked: is_checked,
                                                             onchange: move |e| {
                                                                 let mut cur = library_tokens.write();
@@ -669,12 +669,12 @@ fn BulkEditModal(on_close: EventHandler<()>, on_saved: EventHandler<()>) -> Elem
                 // Validation / error messages
                 if authors_invalid {
                     div { class: "px-6 pt-2",
-                        p { class: "text-sm text-amber-600", "Authors cannot be cleared — add at least one author or uncheck the field." }
+                        p { class: "text-sm text-amber-600 dark:text-amber-400", "Authors cannot be cleared — add at least one author or uncheck the field." }
                     }
                 }
                 if let Some(err) = error_msg() {
                     div { class: "px-6 pt-2",
-                        p { class: "text-sm text-red-600", "{err}" }
+                        p { class: "text-sm text-red-600 dark:text-red-400", "{err}" }
                     }
                 }
 
@@ -803,7 +803,7 @@ fn BulkDeleteModal(on_close: EventHandler<()>, on_deleted: EventHandler<()>) -> 
                 p { class: "text-sm text-gray-600 dark:text-slate-400 mb-6", "{label}" }
 
                 if let Some(err) = error_msg() {
-                    p { class: "text-sm text-red-600 mb-4", "{err}" }
+                    p { class: "text-sm text-red-600 dark:text-red-400 mb-4", "{err}" }
                 }
 
                 div { class: "flex gap-3 justify-end",
@@ -993,14 +993,14 @@ pub(crate) fn SelectionActionBar(
 
             // Selection count or status message
             if let Some(msg) = status_message() {
-                span { class: "text-sm font-medium text-indigo-600", "{msg}" }
+                span { class: "text-sm font-medium text-indigo-600 dark:text-indigo-400", "{msg}" }
             } else {
                 span { class: "text-sm font-medium text-gray-700 dark:text-slate-300", "{label}" }
             }
 
             // Select All / Deselect All toggle
             button {
-                class: "text-sm text-indigo-600 hover:text-indigo-800 font-medium cursor-pointer disabled:opacity-40",
+                class: "text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium cursor-pointer disabled:opacity-40",
                 disabled: busy(),
                 onclick: {
                     let tokens = all_book_tokens.clone();
@@ -1019,7 +1019,7 @@ pub(crate) fn SelectionActionBar(
             // Hidden when all are selected since "Deselect All" already covers that.
             if has_selection && !all_selected {
                 button {
-                    class: "text-sm text-indigo-600 hover:text-indigo-800 font-medium cursor-pointer disabled:opacity-40",
+                    class: "text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium cursor-pointer disabled:opacity-40",
                     disabled: busy(),
                     onclick: move |_| deselect_all(),
                     "Select None"
@@ -1052,7 +1052,7 @@ pub(crate) fn SelectionActionBar(
                         div { class: "absolute bottom-full right-0 mb-1 z-50 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 py-1 min-w-max",
                             match available_libraries.read().as_ref() {
                                 None => rsx! { div { class: "px-4 py-2 text-sm text-gray-500 dark:text-slate-400", "Loading…" } },
-                                Some(Err(_)) => rsx! { div { class: "px-4 py-2 text-sm text-red-500", "Failed to load libraries" } },
+                                Some(Err(_)) => rsx! { div { class: "px-4 py-2 text-sm text-red-500 dark:text-red-400", "Failed to load libraries" } },
                                 Some(Ok(libs)) if libs.is_empty() => rsx! { div { class: "px-4 py-2 text-sm text-gray-500 dark:text-slate-400", "No libraries available" } },
                                 Some(Ok(libs)) => rsx! {
                                     for (token, name) in libs.iter() {

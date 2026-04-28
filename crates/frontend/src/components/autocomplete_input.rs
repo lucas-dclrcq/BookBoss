@@ -65,7 +65,7 @@ pub(crate) fn AutocompleteInput(
                     {
                         let label = committed.clone();
                         let chip_class = if is_new {
-                            "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-800 border border-green-300"
+                            "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-100 border border-green-300 dark:border-green-700"
                         } else {
                             "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-100 dark:bg-slate-600 text-gray-700 dark:text-slate-200 border border-gray-300 dark:border-slate-500"
                         };
@@ -73,7 +73,7 @@ pub(crate) fn AutocompleteInput(
                             span { class: "{chip_class}",
                                 "{label}"
                                 if is_new {
-                                    span { class: "font-semibold ml-0.5 text-green-700", "new" }
+                                    span { class: "font-semibold ml-0.5 text-green-700 dark:text-green-300", "new" }
                                 }
                                 button {
                                     r#type: "button",

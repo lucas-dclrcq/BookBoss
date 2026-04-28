@@ -628,7 +628,7 @@ fn SearchBar() -> Element {
                                         "{SEARCH_TEXT()}"
                                     }
                                     span {
-                                        class: "text-gray-400",
+                                        class: "text-gray-400 dark:text-slate-500",
                                         style: "white-space: pre;",
                                         "{completion()}"
                                     }
@@ -743,7 +743,7 @@ fn SearchBar() -> Element {
                             // Clear button
                             if !SEARCH_TEXT().is_empty() {
                                 button {
-                                    class: "absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer",
+                                    class: "absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 cursor-pointer",
                                     onclick: move |_| *SEARCH_TEXT.write() = String::new(),
                                     svg {
                                         class: "w-4 h-4",
@@ -768,10 +768,10 @@ fn SearchBar() -> Element {
                                 span { class: "font-semibold", "field:value" }
                                 " to narrow results — "
                                 for field in ["author:", "series:", "genre:", "tag:", "status:", "title:"] {
-                                    code { class: "inline-block bg-blue-100 rounded px-1 mr-1 font-mono", "{field}" }
+                                    code { class: "inline-block bg-blue-100 dark:bg-slate-700 rounded px-1 mr-1 font-mono", "{field}" }
                                 }
                                 " · Quote multi-word values: "
-                                code { class: "bg-blue-100 rounded px-1 font-mono", "author:\"Brad Thor\"" }
+                                code { class: "bg-blue-100 dark:bg-slate-700 rounded px-1 font-mono", "author:\"Brad Thor\"" }
                             }
                         }
                     }

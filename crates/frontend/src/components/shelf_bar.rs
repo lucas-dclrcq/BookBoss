@@ -266,7 +266,7 @@ pub(crate) fn ShelfBar(
                                 id: "shelf-name-input",
                                 class: "w-full px-3 py-2 border rounded text-sm outline-none focus:ring-1 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100",
                                 class: if error_msg().is_some() {
-                                    "border-red-400 focus:border-red-500 focus:ring-red-500"
+                                    "border-red-400 dark:border-red-500 focus:border-red-500 focus:ring-red-500"
                                 } else {
                                     "border-gray-300 dark:border-slate-600 focus:border-indigo-500 focus:ring-indigo-500"
                                 },
@@ -285,7 +285,7 @@ pub(crate) fn ShelfBar(
                                 },
                             }
                             if let Some(msg) = error_msg() {
-                                p { class: "mt-1 text-xs text-red-600", "{msg}" }
+                                p { class: "mt-1 text-xs text-red-600 dark:text-red-400", "{msg}" }
                             }
                         }
 
@@ -347,7 +347,7 @@ pub(crate) fn ShelfBar(
                     }
 
                     if let Some(msg) = smart_error() {
-                        p { class: "mb-3 text-sm text-red-600", "{msg}" }
+                        p { class: "mb-3 text-sm text-red-600 dark:text-red-400", "{msg}" }
                     }
 
                     div { class: "flex gap-3 justify-end",

@@ -259,7 +259,7 @@ fn BookCard(book: BookSummary) -> Element {
                             if pct > 0 {
                                 div {
                                     class: "absolute bottom-0 left-0 right-0 h-1 bg-black/20 rounded-b overflow-hidden",
-                                    div { class: "h-full bg-indigo-400", style: "width: {pct}%" }
+                                    div { class: "h-full bg-indigo-400 dark:bg-indigo-500", style: "width: {pct}%" }
                                 }
                             }
                         }

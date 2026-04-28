@@ -62,7 +62,7 @@ pub(crate) fn LoginForm(on_must_change: EventHandler<String>) -> Element {
                 },
                 if let Some(msg) = error_msg() {
                     div {
-                        class: "mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm",
+                        class: "mb-4 p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 rounded-lg text-sm",
                         "{msg}"
                     }
                 }

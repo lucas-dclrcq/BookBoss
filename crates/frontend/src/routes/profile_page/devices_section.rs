@@ -120,7 +120,7 @@ pub(super) fn DevicesSectionContent() -> Element {
                          Trigger a sync on your Kobo after confirming."
                     }
                     if let Some(err) = reset_error() {
-                        p { class: "text-xs text-red-600 mb-3", "{err}" }
+                        p { class: "text-xs text-red-600 dark:text-red-400 mb-3", "{err}" }
                     }
                     div { class: "flex justify-end gap-3",
                         button {
@@ -185,7 +185,7 @@ pub(super) fn DevicesSectionContent() -> Element {
                     }
 
                     if let Some(err) = delete_error() {
-                        p { class: "text-xs text-red-600 mb-3", "{err}" }
+                        p { class: "text-xs text-red-600 dark:text-red-400 mb-3", "{err}" }
                     }
 
                     div { class: "flex justify-end gap-3",
@@ -289,7 +289,7 @@ fn DeviceCard(device: DeviceRow, on_edit: EventHandler<()>, on_delete: EventHand
                     span { "Companion shelf: " }
                     if let Some(tok) = shelf_token {
                         Link {
-                            class: "text-indigo-600 hover:underline",
+                            class: "text-indigo-600 dark:text-indigo-400 hover:underline",
                             to: Route::ShelfPage { token: tok },
                             { shelf_name.clone() }
                         }
@@ -435,7 +435,7 @@ fn DeviceModal(mode: ModalMode, on_close: EventHandler<()>, on_saved: EventHandl
                         }
                     }
                     if let Some(err) = error() {
-                        p { class: "text-xs text-red-600", "{err}" }
+                        p { class: "text-xs text-red-600 dark:text-red-400", "{err}" }
                     }
                 }
 
