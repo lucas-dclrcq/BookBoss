@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.21](https://github.com/szinn/BookBoss/compare/v0.8.20..v0.8.21) - 2026-04-28
+
+### Bug Fixes
+
+- _(frontend)_ Add missing dark mode variants across UI components - ([653bb2a](https://github.com/szinn/BookBoss/commit/653bb2af37cd3f24e3a237f3a23139700c36698b))
+
+### Miscellaneous Tasks
+
+- _(config)_ Migrate Renovate config ([#127](https://github.com/szinn/BookBoss/issues/127)) - ([92bb2a5](https://github.com/szinn/BookBoss/commit/92bb2a5b07da1d7aa1c3c429de2ae0ce04f891ae))
+
 ## [0.8.20](https://github.com/szinn/BookBoss/compare/v0.8.19..v0.8.20) - 2026-04-28
 
 ### Features
