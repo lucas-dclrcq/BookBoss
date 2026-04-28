@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.20](https://github.com/szinn/BookBoss/compare/v0.8.19..v0.8.20) - 2026-04-28
+
+### Features
+
+- _(frontend)_ Dark mode variants for NavBar and AppLayout shell - ([9da5cd9](https://github.com/szinn/BookBoss/commit/9da5cd902dab5a6721fa475077e9ea6fbaafc5e9))
+- _(frontend)_ Dark mode variants for profile page and shared components - ([c2780d3](https://github.com/szinn/BookBoss/commit/c2780d30ff1bfdef97f6b8cf7da0192fd3d872d3))
+- _(frontend)_ Dark mode variants for settings page - ([2322369](https://github.com/szinn/BookBoss/commit/232236964a680967ea99172e58c564f45e92a87d))
+- _(frontend)_ Dark mode variants for incoming and review pages - ([f8360c4](https://github.com/szinn/BookBoss/commit/f8360c4b2903d42231ce586004ff17aa1a05c63c))
+- _(frontend)_ Dark mode variants for shelves page - ([412381e](https://github.com/szinn/BookBoss/commit/412381eae9fc801d89e5392e76db7c6be641a9ef))
+- _(frontend)_ Dark mode variants for authors, series, and detail pages - ([5b16a9c](https://github.com/szinn/BookBoss/commit/5b16a9c2973a4bee049e5584b1fbdfe816a88e2d))
+- _(frontend)_ Dark mode variants for book detail and edit metadata pages - ([56e1439](https://github.com/szinn/BookBoss/commit/56e1439d359e9a6057bd02e9266783e652916299))
+- _(frontend)_ Dark mode variants for Books page and book cards - ([34c673b](https://github.com/szinn/BookBoss/commit/34c673bb333631e0e7cd22fbf36523979ba2cb61))
+- _(frontend)_ Dark mode variants for LandingPage and auth forms - ([1e75243](https://github.com/szinn/BookBoss/commit/1e75243d7e3418c2c32336c6fb6cffb0680370b6))
+
+### Bug Fixes
+
+- _(frontend)_ Resolve dark mode theme toggle and persistence bugs - ([a8b210c](https://github.com/szinn/BookBoss/commit/a8b210c94340e63dd2db2241fda57e3aaa48a3ce))
+
+### Miscellaneous Tasks
+
+- _(frontend,metadata)_ Fix clippy warnings across frontend and metadata crates - ([68b7490](https://github.com/szinn/BookBoss/commit/68b749015ac59e6eeffbdc6cebcb6f8f089e186d))
+
 ## [0.8.19](https://github.com/szinn/BookBoss/compare/v0.8.18..v0.8.19) - 2026-04-25
 
 ### Bug Fixes
