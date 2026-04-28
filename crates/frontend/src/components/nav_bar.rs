@@ -332,7 +332,7 @@ fn AdminSettingsButton() -> Element {
 
     rsx! {
         button {
-            class: "flex items-center hover:text-indigo-200 ml-4 cursor-pointer",
+            class: "flex items-center hover:text-indigo-200 cursor-pointer",
             title: "Settings",
             onclick: move |_| { navigator.push(Route::SettingsPage {}); },
             svg {

@@ -185,10 +185,9 @@ impl OpenLibraryAdapter {
     async fn fetch_cover_for_doc(&self, doc: &OlSearchDoc) -> Option<Vec<u8>> {
         let cover_url = if let Some(cover_id) = doc.cover_i {
             format!("{}/b/id/{cover_id}-L.jpg", self.covers_base_url)
-        } else if let Some(isbn) = doc.isbn.as_ref().and_then(|isbns| isbns.first()) {
-            format!("{}/b/isbn/{isbn}-L.jpg", self.covers_base_url)
         } else {
-            return None;
+            let isbn = doc.isbn.as_ref().and_then(|isbns| isbns.first())?;
+            format!("{}/b/isbn/{isbn}-L.jpg", self.covers_base_url)
         };
 
         self.fetch_cover_url(&cover_url).await
