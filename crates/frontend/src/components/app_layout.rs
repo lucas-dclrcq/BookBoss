@@ -91,17 +91,39 @@ pub(crate) fn AppLayout() -> Element {
         }
     });
 
-    // Apply dark class to <html> and sync localStorage whenever THEME_MODE changes.
-    use_effect(move || {
-        let mode = *THEME_MODE.read();
+    // Fallback: read localStorage so the icon and class are correct even when
+    // the server future is unavailable (e.g. first hydration before SSR data
+    // arrives). Runs once after mount, only on the WASM client.
+    use_hook(move || {
         spawn(async move {
-            let _ = document::eval(&format!(
+            if let Ok(val) = document::eval("return localStorage.getItem('bb_theme') || ''").await {
+                if let Some(s) = val.as_str() {
+                    if !s.is_empty() {
+                        use crate::components::theme::ThemeMode;
+                        if *THEME_MODE.peek() == ThemeMode::System {
+                            *THEME_MODE.write() = ThemeMode::from_str(s);
+                        }
+                    }
+                }
+            }
+        });
+    });
+
+    // Apply dark class to <html> whenever THEME_MODE changes.
+    // localStorage is written only in ThemeToggle (on explicit user action) to
+    // avoid corrupting the value before the saved preference has been loaded.
+    // spawn is required — document::eval doesn't execute from a synchronous
+    // use_effect body. No .await so the eval queue never blocks.
+    use_effect(move || {
+        let _ = *THEME_MODE.read();
+        spawn(async move {
+            let mode = *THEME_MODE.peek();
+            document::eval(&format!(
                 "(function(){{var m={:?};var \
                  dark=m==='dark'||(m==='system'&&window.matchMedia('(prefers-color-scheme:dark)').matches);document.documentElement.classList.toggle('dark',\
-                 dark);localStorage.setItem('bb_theme',m);}})()",
+                 dark);}})()",
                 mode.as_str()
-            ))
-            .await;
+            ));
         });
     });
 

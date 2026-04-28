@@ -108,7 +108,7 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
             div { class: "px-6 py-4 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between dark:bg-slate-800",
                 div { class: "flex items-center gap-4",
                     button {
-                        class: "text-sm text-indigo-600 hover:text-indigo-800 cursor-pointer",
+                        class: "text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 cursor-pointer",
                         onclick: move |_| on_back.call(()),
                         if edit_mode { "← Book" } else { "← Incoming" }
                     }
@@ -266,9 +266,9 @@ pub(crate) fn ReviewEditor(data: BookReviewData, edit_mode: bool, on_back: Event
                                             let is_busy_any =
                                                 fetching.read().is_some() || *action_busy.read();
                                             let btn_class = if is_busy_any {
-                                                "px-2 py-0.5 rounded border border-indigo-200 text-xs font-medium text-indigo-400 normal-case opacity-50 cursor-not-allowed tracking-normal"
+                                                "px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-700 text-xs font-medium text-indigo-400 dark:text-indigo-500 normal-case opacity-50 cursor-not-allowed tracking-normal"
                                             } else {
-                                                "px-2 py-0.5 rounded border border-indigo-300 text-xs font-medium text-indigo-600 normal-case hover:bg-indigo-50 cursor-pointer tracking-normal"
+                                                "px-2 py-0.5 rounded border border-indigo-300 dark:border-indigo-600 text-xs font-medium text-indigo-600 dark:text-indigo-400 normal-case hover:bg-indigo-50 dark:hover:bg-indigo-900/30 cursor-pointer tracking-normal"
                                             };
                                             rsx! {
                                                 button {

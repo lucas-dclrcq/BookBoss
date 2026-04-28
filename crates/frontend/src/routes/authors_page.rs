@@ -85,7 +85,7 @@ pub(crate) fn AuthorsPage() -> Element {
                     rsx! {
                         Link {
                             to: Route::BooksPage {},
-                            class: "inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 mb-6",
+                            class: "inline-flex items-center gap-1 text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 mb-6",
                             "← Library"
                         }
 
@@ -114,7 +114,7 @@ pub(crate) fn AuthorsPage() -> Element {
                                             td { class: "py-2 pr-4",
                                                 Link {
                                                     to: Route::AuthorDetailPage { token: author.token.clone() },
-                                                    class: "text-sm text-indigo-600 hover:text-indigo-800",
+                                                    class: "text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300",
                                                     "{author.name}"
                                                 }
                                             }

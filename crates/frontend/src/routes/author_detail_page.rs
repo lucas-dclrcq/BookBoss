@@ -101,7 +101,7 @@ pub(crate) fn AuthorDetailPage(token: String) -> Element {
                     rsx! {
                         Link {
                             to: Route::AuthorsPage {},
-                            class: "inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 mb-6",
+                            class: "inline-flex items-center gap-1 text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 mb-6",
                             "← Authors"
                         }
 

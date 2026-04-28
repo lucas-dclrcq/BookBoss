@@ -797,7 +797,13 @@ fn ThemeToggle() -> Element {
             onclick: move |_| {
                 let next = THEME_MODE.peek().cycle();
                 *THEME_MODE.write() = next;
+                // localStorage write must be inside spawn — document::eval
+                // doesn't execute from a synchronous event-handler body.
                 spawn(async move {
+                    document::eval(&format!(
+                        "localStorage.setItem('bb_theme',{:?})",
+                        next.as_str()
+                    ));
                     let _ = set_theme_preference(next).await;
                 });
             },

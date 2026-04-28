@@ -451,7 +451,7 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                     // Back link
                     Link {
                         to: Route::BooksPage {},
-                        class: "inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 mb-6",
+                        class: "inline-flex items-center gap-1 text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 mb-6",
                         "← Library"
                     }
 
@@ -500,7 +500,7 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                                         span { class: "text-sm text-gray-700 dark:text-slate-300",
                                             Link {
                                                 to: Route::AuthorDetailPage { token: author.token.clone() },
-                                                class: "text-indigo-600 hover:text-indigo-800",
+                                                class: "text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300",
                                                 "{author.name}"
                                             }
                                             if author.role != "Author" {
@@ -516,7 +516,7 @@ pub(crate) fn BookDetailPage(token: String) -> Element {
                                 p { class: "text-sm mb-3",
                                     Link {
                                         to: Route::SeriesDetailPage { token: series_token.clone() },
-                                        class: "text-indigo-600 hover:text-indigo-800",
+                                        class: "text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300",
                                         match &book.series_number {
                                             Some(num) => rsx! { "{series_name} #{num}" },
                                             None => rsx! { "{series_name}" },

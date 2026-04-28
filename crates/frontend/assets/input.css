@@ -1,7 +1,7 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
 @import 'tailwindcss';
+
+/* Tailwind v4: use .dark class on <html> for dark mode instead of OS media query */
+@custom-variant dark (&:where(.dark, .dark *));
 
 @keyframes shelf-drop-success {
   0% {
