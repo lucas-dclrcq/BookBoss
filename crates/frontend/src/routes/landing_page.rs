@@ -118,10 +118,17 @@ pub(crate) async fn register_admin(username: String, full_name: String, password
 }
 
 #[component]
-pub(crate) fn LandingPage() -> Element {
+pub(crate) fn LandingPage(login_failed: Option<u8>) -> Element {
     let navigator = use_navigator();
     let landing_state = use_server_future(get_landing_state)?;
     let mut change_pw_token: Signal<Option<String>> = use_signal(|| None);
+
+    // Match `perform_login`'s error text exactly so SSO failures are
+    // indistinguishable from bad passwords (no leak that SSO was attempted).
+    // `is_some()` rather than `== Some(1)` so any value of the param triggers
+    // the message — the OIDC callback always writes `1`, but defending against
+    // future producers writing `true`/empty/etc. is essentially free.
+    let initial_error: Option<String> = login_failed.is_some().then(|| "Invalid username or password".to_string());
 
     use_effect(move || {
         if let Some(Ok(ref state)) = landing_state() {
@@ -166,6 +173,7 @@ pub(crate) fn LandingPage() -> Element {
                     _ => rsx! {
                         LoginForm {
                             on_must_change: move |token| change_pw_token.set(Some(token)),
+                            initial_error: initial_error.clone(),
                         }
                     },
                 }

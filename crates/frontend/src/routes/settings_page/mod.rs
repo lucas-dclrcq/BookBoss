@@ -102,7 +102,7 @@ pub(crate) fn SettingsPage() -> Element {
 
     use_effect(move || match ctx() {
         Some(Err(_)) => {
-            navigator.replace(Route::LandingPage {});
+            navigator.replace(Route::LandingPage { login_failed: None });
         }
         Some(Ok(ref c)) if !c.is_admin => {
             navigator.replace(Route::BooksPage {});

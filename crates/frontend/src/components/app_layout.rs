@@ -177,7 +177,7 @@ fn AuthGate() -> Element {
 
     use_effect(move || {
         if let Some(Ok(false)) = auth() {
-            navigator.replace(Route::LandingPage {});
+            navigator.replace(Route::LandingPage { login_failed: None });
         }
     });
 

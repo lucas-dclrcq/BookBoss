@@ -825,7 +825,7 @@ pub(crate) fn NavBar() -> Element {
         *ACTIVE_LIBRARY.write() = None;
         spawn(async move {
             let _ = logout().await;
-            navigator.push(Route::LandingPage {});
+            navigator.push(Route::LandingPage { login_failed: None });
         });
     };
 

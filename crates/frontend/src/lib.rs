@@ -154,8 +154,8 @@ use serde::Deserialize;
 #[derive(Routable, Clone, Debug, PartialEq)]
 #[rustfmt::skip]
 enum Route {
-    #[route("/")]
-    LandingPage,
+    #[route("/?:login_failed")]
+    LandingPage { login_failed: Option<u8> },
     #[layout(AppLayout)]
         #[route("/library")]
         BooksPage,

@@ -432,7 +432,7 @@ pub(crate) fn ProfilePage() -> Element {
 
     use_effect(move || {
         if let Some(Err(_)) = auth() {
-            navigator.replace(Route::LandingPage {});
+            navigator.replace(Route::LandingPage { login_failed: None });
         }
     });
 
