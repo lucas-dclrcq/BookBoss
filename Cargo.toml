@@ -84,6 +84,9 @@ tower-http = { version = "0.6.8", features = [
     "trace",
 ] }
 
+# OpenID Connect
+openidconnect = { version = "4.0.1", default-features = false, features = ["reqwest", "rustls-tls"] }
+
 # Config
 config = "0.15.22"
 
