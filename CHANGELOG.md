@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.23](https://github.com/szinn/BookBoss/compare/v0.8.22..v0.8.23) - 2026-05-01
+
+### Bug Fixes
+
+- _(frontend)_ Surface full error chain for OIDC discovery and token failures - ([ac9c8db](https://github.com/szinn/BookBoss/commit/ac9c8db0bb8a09e03f43f0681590979dca189408))
+
 ## [0.8.22](https://github.com/szinn/BookBoss/compare/v0.8.21..v0.8.22) - 2026-05-01
 
 ### Features
