@@ -34,11 +34,11 @@ impl Default for FrontendConfig {
 }
 
 /// OIDC SSO configuration. All fields except `button_label` are required when
-/// SSO is enabled. The struct uses `Option<String>` for each field so that
-/// partial configurations (which are user errors) can be detected by
-/// [`OidcConfig::is_valid`] and reported clearly. SSO is considered enabled
-/// when any of the three required fields (discovery URL, client ID, or client
-/// secret) is set; setting only `button_label` does not enable SSO.
+/// SSO is enabled. The struct uses `Option<String>` for each field so
+/// [`OidcConfig::is_sso_available`] can distinguish "not configured at all"
+/// (silent — SSO disabled) from "partially configured" (logs an error and
+/// disables SSO). `button_label` is cosmetic and does not count toward
+/// "configured".
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct OidcConfig {
@@ -79,21 +79,23 @@ impl OidcConfig {
         self.button_label.as_deref().unwrap_or(Self::DEFAULT_BUTTON_LABEL)
     }
 
-    /// Validates that all required fields are present. Logs each problem via
-    /// `tracing::error!` and returns `Err` describing the missing fields.
+    /// Returns `true` only when SSO is fully configured and ready to use.
     ///
-    /// # Errors
+    /// Returns `false` when:
+    /// - No fields are set at all → silent (SSO is simply disabled).
+    /// - Some required fields are set but others are missing → each missing
+    ///   field is logged via `tracing::error!` so the admin can see why the
+    ///   "Sign in with SSO" button isn't appearing. Server startup continues
+    ///   normally; password login remains available.
     ///
-    /// Returns `OidcConfigError::MissingFields` when SSO is partially
-    /// configured (i.e. some but not all required fields are set).
-    ///
-    /// Note: callers should not log the returned error — this method is the
-    /// sole logging site for missing-field problems. Bookboss simply propagates
-    /// the error and exits.
+    /// This method is the sole logging site for missing-field problems —
+    /// callers should treat the returned `bool` as authoritative and not log
+    /// again.
+    #[must_use]
     #[cfg(feature = "server")]
-    pub fn is_valid(&self) -> Result<(), OidcConfigError> {
+    pub fn is_sso_available(&self) -> bool {
         if !self.is_set() {
-            return Ok(());
+            return false;
         }
 
         let mut missing = Vec::new();
@@ -108,22 +110,14 @@ impl OidcConfig {
         }
 
         if missing.is_empty() {
-            return Ok(());
+            return true;
         }
 
         for field in &missing {
-            tracing::error!("OIDC SSO is partially configured but {} is missing or empty", field);
+            tracing::error!("OIDC SSO disabled — partial configuration: {} is missing or empty", field);
         }
-
-        Err(OidcConfigError::MissingFields(missing.iter().map(|s| (*s).to_string()).collect()))
+        false
     }
-}
-
-#[cfg(feature = "server")]
-#[derive(Debug, thiserror::Error)]
-pub enum OidcConfigError {
-    #[error("OIDC SSO configuration is incomplete: missing {0:?}")]
-    MissingFields(Vec<String>),
 }
 
 #[cfg(feature = "web")]
@@ -193,14 +187,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn oidc_config_disabled_when_empty() {
+    fn oidc_config_unavailable_when_empty() {
         let config = OidcConfig::default();
         assert!(!config.is_set());
-        config.is_valid().unwrap();
+        assert!(!config.is_sso_available());
     }
 
     #[test]
-    fn oidc_config_valid_when_all_required_present() {
+    fn oidc_config_available_when_all_required_present() {
         let config = OidcConfig {
             discovery_url: Some("https://idp.example.com/.well-known/openid-configuration".into()),
             client_id: Some("bookboss".into()),
@@ -208,11 +202,11 @@ mod tests {
             button_label: None,
         };
         assert!(config.is_set());
-        config.is_valid().unwrap();
+        assert!(config.is_sso_available());
     }
 
     #[test]
-    fn oidc_config_invalid_when_partial() {
+    fn oidc_config_unavailable_when_partial() {
         let config = OidcConfig {
             discovery_url: Some("https://idp.example.com/.well-known/openid-configuration".into()),
             client_id: None,
@@ -220,10 +214,9 @@ mod tests {
             button_label: None,
         };
         assert!(config.is_set());
-        let err = config.is_valid().unwrap_err();
-        let msg = err.to_string();
-        assert!(msg.contains("BOOKBOSS__OIDC__CLIENT_ID"));
-        assert!(msg.contains("BOOKBOSS__OIDC__CLIENT_SECRET"));
+        // Partial config — should log via tracing::error! and return false.
+        // (Log capture is not asserted; manual smoke testing covers that.)
+        assert!(!config.is_sso_available());
     }
 
     #[test]
@@ -241,7 +234,6 @@ mod tests {
         assert_eq!(config.button_label(), "Login with Authentik");
     }
 
-    #[cfg(feature = "server")]
     #[test]
     fn oidc_config_button_label_alone_does_not_enable_sso() {
         let config = OidcConfig {
@@ -249,6 +241,6 @@ mod tests {
             ..Default::default()
         };
         assert!(!config.is_set());
-        config.is_valid().unwrap();
+        assert!(!config.is_sso_available());
     }
 }

@@ -56,17 +56,21 @@ impl IntoSubsystem<anyhow::Error> for FrontendSubsystem {
         let auth_config = AuthConfig::<UserId>::default();
 
         // Build the OIDC client at startup so discovery happens once, not per-request.
-        // Failure here means the IdP is unreachable or misconfigured — fail-fast so the
-        // admin sees the problem immediately rather than only on first login attempt.
+        // SSO is best-effort: any failure (partial config, unreachable IdP, malformed
+        // discovery URL) leaves SSO disabled and logs the cause, but the server still
+        // starts with password login working. is_sso_available() handles the partial-
+        // config case (logs each missing field).
         let oidc_client: Option<Arc<oidc::OidcClient>> = match self.oidc_config.as_ref() {
-            Some(cfg) if cfg.is_set() => {
-                let client = oidc::OidcClient::new(cfg, &self.config.base_url).await.map_err(|e| {
-                    tracing::error!(error = %e, "OIDC SSO initialization failed");
-                    anyhow::anyhow!("OIDC SSO initialization failed: {e}")
-                })?;
-                tracing::info!("OIDC SSO enabled via {}", cfg.discovery_url.as_deref().unwrap_or("?"));
-                Some(Arc::new(client))
-            }
+            Some(cfg) if cfg.is_sso_available() => match oidc::OidcClient::new(cfg, &self.config.base_url).await {
+                Ok(client) => {
+                    tracing::info!("OIDC SSO enabled via {}", cfg.discovery_url.as_deref().unwrap_or("?"));
+                    Some(Arc::new(client))
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, "OIDC SSO disabled — initialization failed; password login still available");
+                    None
+                }
+            },
             _ => None,
         };
 

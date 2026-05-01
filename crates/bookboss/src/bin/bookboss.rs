@@ -162,10 +162,6 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
 
     tracing::info!("BookBoss {}", clap::crate_version!());
 
-    // Validate OIDC SSO config if any OIDC env vars are set. is_valid() logs
-    // each missing field via tracing::error! before returning Err.
-    config.oidc.is_valid().context("OIDC SSO configuration is invalid")?;
-
     let span = tracing::span!(tracing::Level::TRACE, "BookBoss Startup").entered();
 
     let database = open_database(&config.database).await.context("Couldn't create database connection")?;
