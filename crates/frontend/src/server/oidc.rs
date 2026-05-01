@@ -4,14 +4,22 @@
 //! See `.insights/shared/specs/BB-13-spec-sso-oidc-auth.md` for the design.
 #![expect(dead_code, reason = "wired up in Task 8")]
 
-use axum::{Router, routing::get};
+use std::sync::Arc;
+
+use axum::{
+    Extension, Router,
+    response::{IntoResponse, Redirect},
+    routing::get,
+};
+use axum_session::Session;
 use openidconnect::{
-    ClientId, ClientSecret, EndpointMaybeSet, EndpointNotSet, EndpointSet, IssuerUrl, RedirectUrl,
-    core::{CoreClient, CoreProviderMetadata},
+    AuthenticationFlow, ClientId, ClientSecret, CsrfToken, EndpointMaybeSet, EndpointNotSet, EndpointSet, IssuerUrl, Nonce, PkceCodeChallenge, RedirectUrl,
+    Scope,
+    core::{CoreClient, CoreProviderMetadata, CoreResponseType},
 };
 use serde::{Deserialize, Serialize};
 
-use crate::OidcConfig;
+use crate::{OidcConfig, server::BackendSessionPool};
 
 /// Key under which we store the in-flight OIDC session data
 /// (state/nonce/PKCE verifier) in the axum session.
@@ -117,15 +125,43 @@ impl OidcClient {
 
 /// Returns an axum router with the OIDC start and callback routes.
 ///
-/// Tasks 6-7 will replace the stub handlers with real implementations.
+/// Task 7 will replace the callback stub with the real implementation.
 pub(crate) fn oidc_router() -> Router {
     Router::new()
-        .route("/auth/oidc/start", get(start_handler_stub))
+        .route("/auth/oidc/start", get(start_handler))
         .route("/auth/oidc/callback", get(callback_handler_stub))
 }
 
-async fn start_handler_stub() -> &'static str {
-    "OIDC start (not yet implemented)"
+/// Initiates the OIDC authorization code flow. Generates state, nonce, and a
+/// PKCE verifier, stores them in the user's session, and redirects to the
+/// IdP authorization endpoint.
+async fn start_handler(Extension(client): Extension<Arc<OidcClient>>, session: Session<BackendSessionPool>) -> axum::response::Response {
+    let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
+
+    let (auth_url, csrf_token, nonce) = client
+        .client
+        .authorize_url(
+            AuthenticationFlow::<CoreResponseType>::AuthorizationCode,
+            CsrfToken::new_random,
+            Nonce::new_random,
+        )
+        .add_scope(Scope::new("openid".to_string()))
+        .add_scope(Scope::new("email".to_string()))
+        .set_pkce_challenge(pkce_challenge)
+        .url();
+
+    let session_data = OidcSessionData {
+        state: csrf_token.secret().clone(),
+        nonce: nonce.secret().clone(),
+        pkce_verifier: pkce_verifier.secret().clone(),
+    };
+
+    // axum_session::Session::set is infallible (writes to in-memory session
+    // state; persistence happens via SessionLayer middleware after the
+    // response is built).
+    session.set(SESSION_KEY, session_data);
+
+    Redirect::to(auth_url.as_str()).into_response()
 }
 
 async fn callback_handler_stub() -> &'static str {
