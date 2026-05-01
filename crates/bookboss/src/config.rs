@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use bb_api::ApiConfig;
 use bb_database::DatabaseConfig;
-use bb_frontend::FrontendConfig;
+use bb_frontend::{FrontendConfig, OidcConfig};
 use bb_metadata::MetadataConfig;
 use serde::Deserialize;
 
@@ -44,6 +44,8 @@ pub struct Config {
     pub library: LibraryConfig,
     #[serde(default)]
     pub metadata: MetadataConfig,
+    #[serde(default)]
+    pub oidc: OidcConfig,
 }
 
 impl Config {

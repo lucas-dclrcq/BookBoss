@@ -19,7 +19,7 @@ use tower_http::{
     trace::TraceLayer,
 };
 
-use crate::{BookBossFrontend, FrontendConfig};
+use crate::{BookBossFrontend, FrontendConfig, OidcConfig};
 
 pub(crate) mod covers;
 pub(crate) mod downloads;
@@ -41,6 +41,8 @@ const MAX_REQUEST_BODY_SIZE: usize = 70 * 1024 * 1024; // 70 MiB
 
 pub struct FrontendSubsystem {
     config: FrontendConfig,
+    #[expect(dead_code, reason = "wired into router in Task 8")]
+    oidc_config: Option<OidcConfig>,
     core_services: Arc<CoreServices>,
 }
 
@@ -124,9 +126,10 @@ impl IntoSubsystem<anyhow::Error> for FrontendSubsystem {
 }
 
 #[must_use]
-pub fn create_frontend_subsystem(config: &FrontendConfig, core_services: Arc<CoreServices>) -> FrontendSubsystem {
+pub fn create_frontend_subsystem(config: &FrontendConfig, oidc_config: Option<OidcConfig>, core_services: Arc<CoreServices>) -> FrontendSubsystem {
     FrontendSubsystem {
         config: config.to_owned(),
+        oidc_config,
         core_services,
     }
 }
