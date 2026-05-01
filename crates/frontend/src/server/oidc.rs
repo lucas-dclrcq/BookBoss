@@ -142,6 +142,7 @@ pub(crate) fn oidc_router() -> Router {
 /// PKCE verifier, stores them in the user's session, and redirects to the
 /// IdP authorization endpoint.
 async fn start_handler(Extension(client): Extension<Arc<OidcClient>>, session: Session<BackendSessionPool>) -> axum::response::Response {
+    tracing::info!(session_id = %session.get_session_id(), "OIDC start: handler entered");
     let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
 
     let (auth_url, csrf_token, nonce) = client
@@ -185,12 +186,15 @@ async fn callback_handler(
     session: Session<BackendSessionPool>,
     Query(query): Query<CallbackQuery>,
 ) -> axum::response::Response {
+    tracing::info!(session_id = %session.get_session_id(), "OIDC callback: received");
+
     // ── Read and clear in-flight session data ────────────────────────────
     let Some(session_data) = session.get::<OidcSessionData>(SESSION_KEY) else {
         tracing::error!("OIDC callback: no in-flight session data found");
         return failure_redirect();
     };
     session.remove(SESSION_KEY);
+    tracing::info!("OIDC callback: session data loaded");
 
     // ── Handle IdP-side error response ────────────────────────────────────
     if let Some(err) = query.error.as_deref() {
@@ -211,6 +215,7 @@ async fn callback_handler(
         tracing::error!("OIDC callback: state mismatch — possible CSRF attempt");
         return failure_redirect();
     }
+    tracing::info!("OIDC callback: state validated");
 
     // ── Validate code presence ────────────────────────────────────────────
     let Some(code) = query.code.as_deref() else {
@@ -248,6 +253,7 @@ async fn callback_handler(
             return failure_redirect();
         }
     };
+    tracing::info!("OIDC callback: token exchange succeeded");
 
     // ── Validate ID token ─────────────────────────────────────────────────
     // TokenResponse::id_token() is provided by the openidconnect crate's
@@ -267,19 +273,28 @@ async fn callback_handler(
             return failure_redirect();
         }
     };
+    tracing::info!(
+        sub = %claims.subject().as_str(),
+        iss = %claims.issuer().as_str(),
+        "OIDC callback: ID token validated"
+    );
 
     // ── Extract email claim ───────────────────────────────────────────────
     // email_verified is intentionally NOT checked — the admin controls BookBoss
     // accounts.
     let Some(email_claim) = claims.email() else {
-        tracing::error!("OIDC callback: ID token has no email claim — check IdP scope mapping");
+        tracing::error!(
+            sub = %claims.subject().as_str(),
+            "OIDC callback: ID token has no email claim — check IdP scope mapping (need `email` scope)"
+        );
         return failure_redirect();
     };
+    tracing::info!(email_claim = %email_claim.as_str(), "OIDC callback: email claim extracted");
 
     let email = match bb_core::types::EmailAddress::new(email_claim.as_str()) {
         Ok(e) => e,
         Err(e) => {
-            tracing::error!(error = %e, "OIDC callback: email claim is malformed");
+            tracing::error!(error = %e, email_claim = %email_claim.as_str(), "OIDC callback: email claim is malformed");
             return failure_redirect();
         }
     };
@@ -288,7 +303,10 @@ async fn callback_handler(
     let user = match core_services.auth_service.is_valid_email(&email).await {
         Ok(Some(u)) => u,
         Ok(None) => {
-            tracing::error!(email = %email, "OIDC callback: no BookBoss user with this email");
+            tracing::error!(
+                email = %email,
+                "OIDC callback: no BookBoss user with this email — check that a BookBoss user has this exact email_address (case-sensitive)"
+            );
             return failure_redirect();
         }
         Err(e) => {
@@ -299,6 +317,7 @@ async fn callback_handler(
 
     // ── Create session ────────────────────────────────────────────────────
     auth_session.login_user(user.id);
+    tracing::info!(username = %user.username, email = %email, "OIDC callback: login succeeded");
     Redirect::to("/").into_response()
 }
 
