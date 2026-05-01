@@ -4,6 +4,7 @@ use crate::{
     Error,
     auth::{NewSession, Session},
     repository::RepositoryService,
+    types::EmailAddress,
     user::User,
     with_read_only_transaction, with_transaction,
 };
@@ -21,6 +22,11 @@ pub trait AuthService: Send + Sync {
     async fn delete_all(&self) -> Result<(), Error>;
     async fn get_ids(&self) -> Result<Vec<String>, Error>;
     async fn is_valid_login(&self, username: &str, password: &str) -> Result<Option<User>, Error>;
+    /// Looks up a user by email for SSO login. Unlike [`is_valid_login`], this
+    /// does not normalize response time on miss — the OIDC callback has already
+    /// completed IdP authentication, so timing-based account enumeration is
+    /// not a concern at this stage.
+    async fn is_valid_email(&self, email: &EmailAddress) -> Result<Option<User>, Error>;
 }
 
 pub(crate) struct AuthServiceImpl {
@@ -68,6 +74,11 @@ impl AuthService for AuthServiceImpl {
 
     async fn get_ids(&self) -> Result<Vec<String>, Error> {
         with_transaction!(self, session_repository, |tx| session_repository.get_ids(tx).await)
+    }
+
+    async fn is_valid_email(&self, email: &EmailAddress) -> Result<Option<User>, Error> {
+        let email = email.clone();
+        with_read_only_transaction!(self, user_repository, |tx| user_repository.find_by_email(tx, &email).await)
     }
 
     async fn is_valid_login(&self, username: &str, password: &str) -> Result<Option<User>, Error> {
@@ -442,6 +453,54 @@ mod tests {
         let svc = create_login_service(user_repo);
 
         let result = svc.is_valid_login("alice", "password").await;
+
+        assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::Database(_)))));
+    }
+
+    // ─── is_valid_email ──────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_is_valid_email_found() {
+        let user = crate::user::User::fake(1, "alice", "hash", "alice@example.com", HashSet::new());
+        let mut user_repo = MockUserRepository::new();
+        user_repo.expect_find_by_email().returning(move |_, _| {
+            let user = user.clone();
+            Box::pin(async move { Ok(Some(user)) })
+        });
+        let svc = create_login_service(user_repo);
+
+        let email = crate::types::EmailAddress::new("alice@example.com").unwrap();
+        let result = svc.is_valid_email(&email).await;
+
+        assert!(result.is_ok());
+        let found = result.unwrap().unwrap();
+        assert_eq!(found.id, 1);
+        assert_eq!(found.username, "alice");
+    }
+
+    #[tokio::test]
+    async fn test_is_valid_email_not_found() {
+        let mut user_repo = MockUserRepository::new();
+        user_repo.expect_find_by_email().returning(|_, _| Box::pin(async { Ok(None) }));
+        let svc = create_login_service(user_repo);
+
+        let email = crate::types::EmailAddress::new("ghost@example.com").unwrap();
+        let result = svc.is_valid_email(&email).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_is_valid_email_propagates_error() {
+        let mut user_repo = MockUserRepository::new();
+        user_repo
+            .expect_find_by_email()
+            .returning(|_, _| Box::pin(async { Err(Error::RepositoryError(RepositoryError::Database("db error".into()))) }));
+        let svc = create_login_service(user_repo);
+
+        let email = crate::types::EmailAddress::new("alice@example.com").unwrap();
+        let result = svc.is_valid_email(&email).await;
 
         assert!(matches!(result, Err(Error::RepositoryError(RepositoryError::Database(_)))));
     }
