@@ -2,8 +2,24 @@
 //!
 //! Implements the OAuth2 authorization code flow with PKCE for SSO login.
 //! See `.insights/shared/specs/BB-13-spec-sso-oidc-auth.md` for the design.
+//!
+//! # In-flight state storage
+//!
+//! The OIDC flow needs to round-trip three values across the IdP redirect:
+//! the CSRF state, the nonce, and the PKCE verifier. We store these in an
+//! in-memory map keyed by the CSRF state value (which is also the value the
+//! IdP echoes back in the callback URL). This avoids any dependency on the
+//! axum session cookie surviving the third-party IdP redirect — cookie
+//! behavior across redirects is browser-dependent and proxy-fragile.
+//!
+//! Entries expire after `STATE_ENTRY_TTL` and are cleaned up opportunistically
+//! when new entries are inserted.
 
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
+};
 
 use axum::{
     Extension, Router,
@@ -11,27 +27,18 @@ use axum::{
     response::{IntoResponse, Redirect},
     routing::get,
 };
-use axum_session::Session;
 use openidconnect::{
     AuthenticationFlow, AuthorizationCode, ClientId, ClientSecret, CsrfToken, EndpointMaybeSet, EndpointNotSet, EndpointSet, IssuerUrl, Nonce,
     PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, TokenResponse,
     core::{CoreClient, CoreProviderMetadata, CoreResponseType},
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
-use crate::{OidcConfig, server::BackendSessionPool};
+use crate::OidcConfig;
 
-/// Key under which we store the in-flight OIDC session data
-/// (state/nonce/PKCE verifier) in the axum session.
-pub(crate) const SESSION_KEY: &str = "oidc_in_flight";
-
-/// Data we round-trip through the user's session for the OIDC redirect.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct OidcSessionData {
-    pub state: String,
-    pub nonce: String,
-    pub pkce_verifier: String,
-}
+/// OIDC in-flight state entries expire 5 minutes after creation. Authorization
+/// code flow round-trips are typically a few seconds; 5 minutes is generous.
+const STATE_ENTRY_TTL: Duration = Duration::from_secs(5 * 60);
 
 /// Query parameters returned by the IdP on the callback redirect.
 #[derive(Debug, Deserialize)]
@@ -70,9 +77,20 @@ type DiscoveredCoreClient = CoreClient<
     EndpointMaybeSet, // HasUserInfoUrl
 >;
 
+/// In-flight OIDC state stored server-side and looked up by CSRF state value.
+#[derive(Debug)]
+struct StateEntry {
+    nonce: String,
+    pkce_verifier: String,
+    created_at: Instant,
+}
+
 /// A configured OIDC client ready to handle the start/callback flow.
 pub(crate) struct OidcClient {
     pub(crate) client: DiscoveredCoreClient,
+    /// In-flight OIDC state keyed by CSRF state value. Populated in
+    /// [`start_handler`] and consumed in [`callback_handler`].
+    state_store: Mutex<HashMap<String, StateEntry>>,
 }
 
 impl OidcClient {
@@ -89,9 +107,9 @@ impl OidcClient {
         const WELL_KNOWN_SUFFIX: &str = "/.well-known/openid-configuration";
 
         // The three Option fields below are guaranteed Some by
-        // `OidcConfig::is_valid()`, which bookboss calls during startup before
-        // this constructor is reached. The `ok_or_else` guards are defensive
-        // only — they should never trigger in practice.
+        // `OidcConfig::is_sso_available()`, which the frontend subsystem
+        // checks before calling this constructor. The `ok_or_else` guards are
+        // defensive only — they should never trigger in practice.
         let discovery_url = config
             .discovery_url
             .as_deref()
@@ -127,7 +145,40 @@ impl OidcClient {
         )
         .set_redirect_uri(redirect);
 
-        Ok(Self { client })
+        Ok(Self {
+            client,
+            state_store: Mutex::new(HashMap::new()),
+        })
+    }
+
+    /// Stores the in-flight state for an OIDC flow keyed by the CSRF state
+    /// value. Also opportunistically purges expired entries.
+    fn store_state(&self, state: String, nonce: String, pkce_verifier: String) {
+        let now = Instant::now();
+        let mut store = self.state_store.lock().expect("state_store mutex poisoned");
+        store.retain(|_, entry| now.duration_since(entry.created_at) < STATE_ENTRY_TTL);
+        store.insert(
+            state,
+            StateEntry {
+                nonce,
+                pkce_verifier,
+                created_at: now,
+            },
+        );
+    }
+
+    /// Removes and returns the in-flight state for a given CSRF state value.
+    /// Returns `None` if the entry is missing or expired (also removed when
+    /// expired).
+    fn take_state(&self, state: &str) -> Option<StateEntry> {
+        let now = Instant::now();
+        let mut store = self.state_store.lock().expect("state_store mutex poisoned");
+        let entry = store.remove(state)?;
+        if now.duration_since(entry.created_at) > STATE_ENTRY_TTL {
+            None
+        } else {
+            Some(entry)
+        }
     }
 }
 
@@ -139,10 +190,10 @@ pub(crate) fn oidc_router() -> Router {
 }
 
 /// Initiates the OIDC authorization code flow. Generates state, nonce, and a
-/// PKCE verifier, stores them in the user's session, and redirects to the
-/// IdP authorization endpoint.
-async fn start_handler(Extension(client): Extension<Arc<OidcClient>>, session: Session<BackendSessionPool>) -> axum::response::Response {
-    tracing::info!(session_id = %session.get_session_id(), "OIDC start: handler entered");
+/// PKCE verifier, stores them in the server-side state store keyed by the
+/// state value, and redirects to the IdP authorization endpoint.
+async fn start_handler(Extension(client): Extension<Arc<OidcClient>>) -> axum::response::Response {
+    tracing::info!("OIDC start: handler entered");
     let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
 
     let (auth_url, csrf_token, nonce) = client
@@ -157,24 +208,16 @@ async fn start_handler(Extension(client): Extension<Arc<OidcClient>>, session: S
         .set_pkce_challenge(pkce_challenge)
         .url();
 
-    let session_data = OidcSessionData {
-        state: csrf_token.secret().clone(),
-        nonce: nonce.secret().clone(),
-        pkce_verifier: pkce_verifier.secret().clone(),
-    };
-
-    // axum_session::Session::set is infallible (writes to in-memory session
-    // state; persistence happens via SessionLayer middleware after the
-    // response is built).
-    session.set(SESSION_KEY, session_data);
+    client.store_state(csrf_token.secret().clone(), nonce.secret().clone(), pkce_verifier.secret().clone());
 
     Redirect::to(auth_url.as_str()).into_response()
 }
 
-/// Handles the OIDC callback. Validates state, exchanges code for tokens,
-/// validates the ID token, matches the email claim against a BookBoss user,
-/// and creates a session on success. All failures redirect to
-/// `/?login_failed=1` after logging the cause via `tracing::error!`.
+/// Handles the OIDC callback. Validates state via lookup in the in-flight
+/// state store, exchanges code for tokens, validates the ID token, matches
+/// the email claim against a BookBoss user, and creates a session on success.
+/// All failures redirect to `/?login_failed=1` after logging the cause via
+/// `tracing::error!`.
 #[allow(
     clippy::too_many_lines,
     reason = "OIDC validation flow is sequential — splitting hides the security-sensitive ordering"
@@ -183,18 +226,22 @@ async fn callback_handler(
     Extension(client): Extension<Arc<OidcClient>>,
     Extension(core_services): Extension<Arc<bb_core::CoreServices>>,
     auth_session: super::AuthSession,
-    session: Session<BackendSessionPool>,
     Query(query): Query<CallbackQuery>,
 ) -> axum::response::Response {
-    tracing::info!(session_id = %session.get_session_id(), "OIDC callback: received");
+    tracing::info!("OIDC callback: received");
 
-    // ── Read and clear in-flight session data ────────────────────────────
-    let Some(session_data) = session.get::<OidcSessionData>(SESSION_KEY) else {
-        tracing::error!("OIDC callback: no in-flight session data found");
+    // ── Extract state and look up the in-flight entry ─────────────────────
+    // The lookup IS the CSRF defense: only state values we generated and
+    // stored will succeed. Take-and-remove also prevents replay.
+    let Some(state) = query.state.as_deref() else {
+        tracing::error!("OIDC callback: missing state parameter");
         return failure_redirect();
     };
-    session.remove(SESSION_KEY);
-    tracing::info!("OIDC callback: session data loaded");
+    let Some(entry) = client.take_state(state) else {
+        tracing::error!("OIDC callback: state not found in store (expired, replayed, or CSRF attempt)");
+        return failure_redirect();
+    };
+    tracing::info!("OIDC callback: state validated");
 
     // ── Handle IdP-side error response ────────────────────────────────────
     if let Some(err) = query.error.as_deref() {
@@ -205,17 +252,6 @@ async fn callback_handler(
         );
         return failure_redirect();
     }
-
-    // ── Validate state ────────────────────────────────────────────────────
-    let Some(state) = query.state.as_deref() else {
-        tracing::error!("OIDC callback: missing state parameter");
-        return failure_redirect();
-    };
-    if state != session_data.state {
-        tracing::error!("OIDC callback: state mismatch — possible CSRF attempt");
-        return failure_redirect();
-    }
-    tracing::info!("OIDC callback: state validated");
 
     // ── Validate code presence ────────────────────────────────────────────
     let Some(code) = query.code.as_deref() else {
@@ -238,7 +274,7 @@ async fn callback_handler(
     // ── Exchange code for tokens ──────────────────────────────────────────
     // exchange_code() returns Result<CodeTokenRequest, ConfigurationError> on
     // CoreClient with EndpointMaybeSet token URL (our DiscoveredCoreClient type).
-    let pkce_verifier = PkceCodeVerifier::new(session_data.pkce_verifier);
+    let pkce_verifier = PkceCodeVerifier::new(entry.pkce_verifier);
     let token_request = match client.client.exchange_code(AuthorizationCode::new(code.to_string())) {
         Ok(req) => req,
         Err(e) => {
@@ -265,7 +301,7 @@ async fn callback_handler(
     };
 
     let id_token_verifier = client.client.id_token_verifier();
-    let nonce = Nonce::new(session_data.nonce);
+    let nonce = Nonce::new(entry.nonce);
     let claims = match id_token.claims(&id_token_verifier, &nonce) {
         Ok(c) => c,
         Err(e) => {
