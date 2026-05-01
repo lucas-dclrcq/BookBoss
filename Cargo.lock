@@ -784,7 +784,7 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
 name = "bb-api"
-version = "0.8.21"
+version = "0.8.22"
 dependencies = [
  "async-trait",
  "axum",
@@ -811,7 +811,7 @@ dependencies = [
 
 [[package]]
 name = "bb-core"
-version = "0.8.21"
+version = "0.8.22"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -837,7 +837,7 @@ dependencies = [
 
 [[package]]
 name = "bb-database"
-version = "0.8.21"
+version = "0.8.22"
 dependencies = [
  "async-trait",
  "bb-core",
@@ -854,7 +854,7 @@ dependencies = [
 
 [[package]]
 name = "bb-formats"
-version = "0.8.21"
+version = "0.8.22"
 dependencies = [
  "async-trait",
  "bb-core",
@@ -873,7 +873,7 @@ dependencies = [
 
 [[package]]
 name = "bb-frontend"
-version = "0.8.21"
+version = "0.8.22"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -907,7 +907,7 @@ dependencies = [
 
 [[package]]
 name = "bb-metadata"
-version = "0.8.21"
+version = "0.8.22"
 dependencies = [
  "async-trait",
  "bb-core",
@@ -924,7 +924,7 @@ dependencies = [
 
 [[package]]
 name = "bb-storage"
-version = "0.8.21"
+version = "0.8.22"
 dependencies = [
  "async-trait",
  "bb-core",
@@ -938,7 +938,7 @@ dependencies = [
 
 [[package]]
 name = "bb-utils"
-version = "0.8.21"
+version = "0.8.22"
 dependencies = [
  "rand 0.10.1",
  "serde",
@@ -1103,7 +1103,7 @@ dependencies = [
 
 [[package]]
 name = "bookboss"
-version = "0.8.21"
+version = "0.8.22"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3973,7 +3973,7 @@ dependencies = [
 
 [[package]]
 name = "integration-tests"
-version = "0.8.21"
+version = "0.8.22"
 dependencies = [
  "async-trait",
  "bb-core",

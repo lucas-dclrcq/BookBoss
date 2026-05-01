@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.22](https://github.com/szinn/BookBoss/compare/v0.8.21..v0.8.22) - 2026-05-01
+
+### Features
+
+- _(bookboss)_ Wire OidcConfig through bookboss to frontend subsystem - ([af97287](https://github.com/szinn/BookBoss/commit/af97287da0d91930e5ff3e9c196436cc9d1c9c60))
+- _(core)_ Add AuthService::is_valid_email for SSO callback - ([45ae2b2](https://github.com/szinn/BookBoss/commit/45ae2b29662c543c497fe5de95b2a5956b5b3f16))
+- _(core)_ Add UserRepository::find_by_email - ([ed342b6](https://github.com/szinn/BookBoss/commit/ed342b62a90f299797c196f9076f54dff6cee687))
+- _(frontend)_ Add INFO breadcrumbs through OIDC callback flow for debugging - ([4095f41](https://github.com/szinn/BookBoss/commit/4095f41fc9472d243dd75d6e66029dbedc52c7b9))
+- _(frontend)_ Support login_failed query param on landing page - ([aa1a069](https://github.com/szinn/BookBoss/commit/aa1a069c32466ee144ab74dfaaa5ba7b4c3af149))
+- _(frontend)_ Add SSO button to LoginForm with conditional rendering - ([1c46503](https://github.com/szinn/BookBoss/commit/1c46503b6c0b6c7a559fccc01e652f6c23daa12f))
+- _(frontend)_ Wire OIDC routes into app router conditionally - ([c97ec4e](https://github.com/szinn/BookBoss/commit/c97ec4e69266b0bddf1d6bbe7e7573d5ae8cecee))
+- _(frontend)_ Implement OIDC callback handler with token validation - ([e6c296f](https://github.com/szinn/BookBoss/commit/e6c296f81350c130e13f049f6e11f0b6a667f936))
+- _(frontend)_ Implement OIDC start handler with PKCE - ([e0be38d](https://github.com/szinn/BookBoss/commit/e0be38d9930f7d3159cb3c3a79115558245a9289))
+- _(frontend)_ Add OIDC handler module skeleton with discovery client - ([8058325](https://github.com/szinn/BookBoss/commit/80583258ead8a4bd57276d5e26771e8746f37680))
+- _(frontend)_ Add OidcConfig struct with thiserror validation - ([96f9390](https://github.com/szinn/BookBoss/commit/96f93904db6ed9c29f7b46d204aee6b9f3a57791))
+- _(frontend)_ Add openidconnect crate dependency for SSO - ([c981db1](https://github.com/szinn/BookBoss/commit/c981db1dc568ffa9af182053153a90ee67aa317f))
+
+### Refactor
+
+- _(frontend)_ Use server-side state store for OIDC flow instead of session cookie - ([01de8f7](https://github.com/szinn/BookBoss/commit/01de8f7bd991fcb165e6b29a53a3c1774c416485))
+- _(frontend)_ Replace is_valid with is_sso_available, soft-fail on SSO failures - ([9e64934](https://github.com/szinn/BookBoss/commit/9e64934e9d8ce5017fdf8a16f88a1ce9bc480c56))
+
+### Documentation
+
+- Document OIDC SSO env vars and IdP setup in README - ([f40448c](https://github.com/szinn/BookBoss/commit/f40448cccb62382fbf26977deaf0ab8e6ca07bbe))
+
 ## [0.8.21](https://github.com/szinn/BookBoss/compare/v0.8.20..v0.8.21) - 2026-04-28
 
 ### Bug Fixes
