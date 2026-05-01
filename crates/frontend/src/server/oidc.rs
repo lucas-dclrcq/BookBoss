@@ -40,6 +40,21 @@ use crate::OidcConfig;
 /// code flow round-trips are typically a few seconds; 5 minutes is generous.
 const STATE_ENTRY_TTL: Duration = Duration::from_secs(5 * 60);
 
+/// Walks an error's source chain and concatenates each layer's `Display`.
+/// `openidconnect`'s and `reqwest`'s errors expose useful detail (DNS,
+/// TLS, connection refused, etc.) only in their source chain — the
+/// top-level message is often a generic "Request failed".
+fn error_chain(err: &(dyn std::error::Error + 'static)) -> String {
+    let mut msg = err.to_string();
+    let mut source = err.source();
+    while let Some(s) = source {
+        msg.push_str(": ");
+        msg.push_str(&s.to_string());
+        source = s.source();
+    }
+    msg
+}
+
 /// Query parameters returned by the IdP on the callback redirect.
 #[derive(Debug, Deserialize)]
 pub(crate) struct CallbackQuery {
@@ -136,7 +151,7 @@ impl OidcClient {
 
         let provider_metadata = CoreProviderMetadata::discover_async(issuer, &http_client)
             .await
-            .map_err(|e| OidcInitError::DiscoveryFailed(e.to_string()))?;
+            .map_err(|e| OidcInitError::DiscoveryFailed(error_chain(&e)))?;
 
         let client = CoreClient::from_provider_metadata(
             provider_metadata,
@@ -285,7 +300,7 @@ async fn callback_handler(
     let token_response = match token_request.set_pkce_verifier(pkce_verifier).request_async(&http_client).await {
         Ok(resp) => resp,
         Err(e) => {
-            tracing::error!(error = %e, "OIDC callback: code exchange failed");
+            tracing::error!(error = %error_chain(&e), "OIDC callback: code exchange failed");
             return failure_redirect();
         }
     };
@@ -305,7 +320,7 @@ async fn callback_handler(
     let claims = match id_token.claims(&id_token_verifier, &nonce) {
         Ok(c) => c,
         Err(e) => {
-            tracing::error!(error = %e, "OIDC callback: ID token validation failed");
+            tracing::error!(error = %error_chain(&e), "OIDC callback: ID token validation failed");
             return failure_redirect();
         }
     };
