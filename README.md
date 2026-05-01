@@ -110,6 +110,10 @@ Configuration is loaded from environment variables with the `BOOKBOSS__` prefix:
 | `BOOKBOSS__FRONTEND__BASE_URL`              | Public base URL (default `http://0.0.0.0:8080`)       |
 | `BOOKBOSS__METADATA__HARDCOVER_API_TOKEN`   | API token for Hardcover metadata provider             |
 | `BOOKBOSS__METADATA__GOOGLEBOOKS_API_TOKEN` | API token for Google Books metadata provider          |
+| `BOOKBOSS__OIDC__DISCOVERY_URL`             | OIDC discovery URL (enables SSO when all 3 are set)   |
+| `BOOKBOSS__OIDC__CLIENT_ID`                 | OIDC client ID registered with the IdP                |
+| `BOOKBOSS__OIDC__CLIENT_SECRET`             | OIDC client secret registered with the IdP            |
+| `BOOKBOSS__OIDC__BUTTON_LABEL`              | SSO login button label (default: `Sign in with SSO`)  |
 
 Connection string formats:
 
@@ -121,6 +125,38 @@ sqlite:path/to/file.db
 
 > Secrets are encrypted with [sops](https://github.com/getsops/sops) — never
 > commit plaintext secrets.
+
+#### OIDC SSO
+
+When `BOOKBOSS__OIDC__DISCOVERY_URL`, `CLIENT_ID`, and `CLIENT_SECRET` are all
+set, BookBoss enables an additional "Sign in with SSO" button on the login
+page. Username/password login remains available regardless. Tested with
+Kanidm.
+
+Register BookBoss with your IdP using:
+
+- Redirect URI: `<base_url>/auth/oidc/callback`
+- Scopes: `openid email`
+- Grant type: `authorization_code` (with PKCE)
+
+The IdP must release the `email` claim, and a BookBoss user must exist with
+that exact email address (case-sensitive match).
+
+For kanidm, I used the setup:
+
+```
+kanidm group create 'bookboss_users'
+kanidm group add-members bookboss_dev_users <user>
+
+kanidm system oauth2 create bookboss '<machine>' <base_url>
+kanidm system oauth2 set-landing-url bookboss '<base_url>/auth/oidc/callback'
+kanidm system oauth2 update-scope-map bookboss bookboss_users email openid
+kanidm system oauth2 enable-pkce bookboss
+kanidm system oauth2 get bookboss
+
+# Need to copy this secret to BOOKBOSS__OIDC__CLIENT_SECRET
+kanidm system oauth2 show-basic-secret bookboss
+```
 
 ## Development
 
