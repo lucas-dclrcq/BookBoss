@@ -33,6 +33,99 @@ impl Default for FrontendConfig {
     }
 }
 
+/// OIDC SSO configuration. All fields except `button_label` are required when
+/// SSO is enabled. The struct uses `Option<String>` for each field so that
+/// partial configurations (which are user errors) can be detected by
+/// [`OidcConfig::is_valid`] and reported clearly. SSO is considered enabled
+/// when any of the three required fields (discovery URL, client ID, or client
+/// secret) is set; setting only `button_label` does not enable SSO.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct OidcConfig {
+    /// Full OIDC discovery URL ending in `/.well-known/openid-configuration`.
+    /// For Kanidm this is the per-client URL
+    /// (`https://<host>/oauth2/openid/<client_id>/.well-known/openid-configuration`).
+    /// For Authentik/Authelia this is the issuer-level URL.
+    /// Environment variable: `BOOKBOSS__OIDC__DISCOVERY_URL`
+    pub discovery_url: Option<String>,
+
+    /// OIDC client ID registered with the IdP.
+    /// Environment variable: `BOOKBOSS__OIDC__CLIENT_ID`
+    pub client_id: Option<String>,
+
+    /// OIDC client secret registered with the IdP.
+    /// Environment variable: `BOOKBOSS__OIDC__CLIENT_SECRET`
+    pub client_secret: Option<String>,
+
+    /// Login page button text. Defaults to "Sign in with SSO".
+    /// Environment variable: `BOOKBOSS__OIDC__BUTTON_LABEL`
+    pub button_label: Option<String>,
+}
+
+impl OidcConfig {
+    pub const DEFAULT_BUTTON_LABEL: &'static str = "Sign in with SSO";
+
+    /// Returns `true` if any required field is set — used to detect that the
+    /// admin intended to enable SSO (even partially). `button_label` is
+    /// cosmetic and does not count.
+    #[must_use]
+    pub fn is_set(&self) -> bool {
+        self.discovery_url.is_some() || self.client_id.is_some() || self.client_secret.is_some()
+    }
+
+    /// Returns the configured button label or the default.
+    #[must_use]
+    pub fn button_label(&self) -> &str {
+        self.button_label.as_deref().unwrap_or(Self::DEFAULT_BUTTON_LABEL)
+    }
+
+    /// Validates that all required fields are present. Logs each problem via
+    /// `tracing::error!` and returns `Err` describing the missing fields.
+    ///
+    /// # Errors
+    ///
+    /// Returns `OidcConfigError::MissingFields` when SSO is partially
+    /// configured (i.e. some but not all required fields are set).
+    ///
+    /// Note: callers should not log the returned error — this method is the
+    /// sole logging site for missing-field problems. Bookboss simply propagates
+    /// the error and exits.
+    #[cfg(feature = "server")]
+    pub fn is_valid(&self) -> Result<(), OidcConfigError> {
+        if !self.is_set() {
+            return Ok(());
+        }
+
+        let mut missing = Vec::new();
+        if self.discovery_url.as_deref().is_none_or(str::is_empty) {
+            missing.push("BOOKBOSS__OIDC__DISCOVERY_URL");
+        }
+        if self.client_id.as_deref().is_none_or(str::is_empty) {
+            missing.push("BOOKBOSS__OIDC__CLIENT_ID");
+        }
+        if self.client_secret.as_deref().is_none_or(str::is_empty) {
+            missing.push("BOOKBOSS__OIDC__CLIENT_SECRET");
+        }
+
+        if missing.is_empty() {
+            return Ok(());
+        }
+
+        for field in &missing {
+            tracing::error!("OIDC SSO is partially configured but {} is missing or empty", field);
+        }
+
+        Err(OidcConfigError::MissingFields(missing.iter().map(|s| (*s).to_string()).collect()))
+    }
+}
+
+#[cfg(feature = "server")]
+#[derive(Debug, thiserror::Error)]
+pub enum OidcConfigError {
+    #[error("OIDC SSO configuration is incomplete: missing {0:?}")]
+    MissingFields(Vec<String>),
+}
+
 #[cfg(feature = "web")]
 pub mod web {
     use crate::BookBossFrontend;
@@ -93,4 +186,69 @@ enum Route {
 #[component]
 fn BookBossFrontend() -> Element {
     rsx! { Router::<Route> {} }
+}
+
+#[cfg(all(test, feature = "server"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn oidc_config_disabled_when_empty() {
+        let config = OidcConfig::default();
+        assert!(!config.is_set());
+        config.is_valid().unwrap();
+    }
+
+    #[test]
+    fn oidc_config_valid_when_all_required_present() {
+        let config = OidcConfig {
+            discovery_url: Some("https://idp.example.com/.well-known/openid-configuration".into()),
+            client_id: Some("bookboss".into()),
+            client_secret: Some("secret".into()),
+            button_label: None,
+        };
+        assert!(config.is_set());
+        config.is_valid().unwrap();
+    }
+
+    #[test]
+    fn oidc_config_invalid_when_partial() {
+        let config = OidcConfig {
+            discovery_url: Some("https://idp.example.com/.well-known/openid-configuration".into()),
+            client_id: None,
+            client_secret: None,
+            button_label: None,
+        };
+        assert!(config.is_set());
+        let err = config.is_valid().unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("BOOKBOSS__OIDC__CLIENT_ID"));
+        assert!(msg.contains("BOOKBOSS__OIDC__CLIENT_SECRET"));
+    }
+
+    #[test]
+    fn oidc_config_button_label_default() {
+        let config = OidcConfig::default();
+        assert_eq!(config.button_label(), "Sign in with SSO");
+    }
+
+    #[test]
+    fn oidc_config_button_label_custom() {
+        let config = OidcConfig {
+            button_label: Some("Login with Authentik".into()),
+            ..Default::default()
+        };
+        assert_eq!(config.button_label(), "Login with Authentik");
+    }
+
+    #[cfg(feature = "server")]
+    #[test]
+    fn oidc_config_button_label_alone_does_not_enable_sso() {
+        let config = OidcConfig {
+            button_label: Some("Custom".into()),
+            ..Default::default()
+        };
+        assert!(!config.is_set());
+        config.is_valid().unwrap();
+    }
 }
