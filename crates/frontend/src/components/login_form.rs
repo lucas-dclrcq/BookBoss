@@ -1,20 +1,29 @@
 use dioxus::prelude::*;
 
-use crate::{Route, routes::landing_page::perform_login};
+use crate::{
+    Route,
+    routes::landing_page::{get_sso_config, perform_login},
+};
 
 #[component]
-pub(crate) fn LoginForm(on_must_change: EventHandler<String>) -> Element {
+pub(crate) fn LoginForm(on_must_change: EventHandler<String>, #[props(default)] initial_error: Option<String>) -> Element {
     let navigator = use_navigator();
     let mut username = use_signal(String::new);
     let mut password = use_signal(String::new);
-    let mut error_msg: Signal<Option<String>> = use_signal(|| None);
+    let mut error_msg: Signal<Option<String>> = use_signal(move || initial_error.clone());
     let mut loading = use_signal(|| false);
+    let sso_config = use_server_future(get_sso_config)?;
 
     use_effect(move || {
         spawn(async move {
             let _ = document::eval("document.getElementById('login-username')?.focus()").await;
         });
     });
+
+    let sso_button_label: Option<String> = match sso_config() {
+        Some(Ok(label)) => label,
+        _ => None,
+    };
 
     rsx! {
         div { class: "bg-white dark:bg-slate-800 rounded-2xl shadow-lg w-full max-w-md",
@@ -107,6 +116,15 @@ pub(crate) fn LoginForm(on_must_change: EventHandler<String>) -> Element {
                     r#type: "submit",
                     disabled: loading,
                     if loading() { "Signing in…" } else { "Login" }
+                }
+                if let Some(label) = sso_button_label {
+                    div { class: "mt-3 pt-3 border-t border-gray-200 dark:border-slate-700",
+                        a {
+                            href: "/auth/oidc/start",
+                            class: "block w-full py-2 px-4 text-center border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors",
+                            "{label}"
+                        }
+                    }
                 }
             }
         }

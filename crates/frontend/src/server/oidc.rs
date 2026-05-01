@@ -73,8 +73,6 @@ type DiscoveredCoreClient = CoreClient<
 /// A configured OIDC client ready to handle the start/callback flow.
 pub(crate) struct OidcClient {
     pub(crate) client: DiscoveredCoreClient,
-    #[allow(dead_code, reason = "read by get_sso_config server fn in Task 9")]
-    pub(crate) button_label: String,
 }
 
 impl OidcClient {
@@ -129,10 +127,7 @@ impl OidcClient {
         )
         .set_redirect_uri(redirect);
 
-        Ok(Self {
-            client,
-            button_label: config.button_label().to_string(),
-        })
+        Ok(Self { client })
     }
 }
 

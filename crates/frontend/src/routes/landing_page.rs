@@ -16,6 +16,13 @@ pub(crate) struct LandingState {
 #[cfg(feature = "server")]
 use {crate::password::validate_password_strength, crate::routes::server_helpers::to_server_err, crate::server::AuthSession, bb_core::CoreServices};
 
+/// Returns the configured SSO button label when SSO is enabled, `None`
+/// otherwise. Used by `LoginForm` to conditionally render the SSO button.
+#[get("/api/v1/get_sso_config", oidc_config: Option<axum::Extension<std::sync::Arc<crate::OidcConfig>>>)]
+pub(crate) async fn get_sso_config() -> Result<Option<String>, ServerFnError> {
+    Ok(oidc_config.map(|ext| ext.0.button_label().to_string()))
+}
+
 #[get("/api/v1/get_landing_state", core_services: axum::Extension<std::sync::Arc<CoreServices>>, auth_session: axum::Extension<AuthSession>)]
 async fn get_landing_state() -> Result<LandingState, ServerFnError> {
     let is_authenticated = auth_session.current_user.as_ref().is_some_and(|u| !u.username.is_empty());
