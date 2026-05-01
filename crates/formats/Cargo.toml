@@ -27,7 +27,7 @@ zip.workspace = true
 bb-core = { workspace = true, features = ["test-support"] }
 insta.workspace = true
 rust_decimal.workspace = true
-tempfile = "3.27.0"
+tempfile.workspace = true
 tokio.workspace = true
 
 [lints]
