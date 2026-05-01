@@ -26,6 +26,7 @@ pub(crate) mod downloads;
 pub(crate) mod events;
 pub(crate) mod kobo;
 pub(crate) mod koreader;
+pub(crate) mod oidc;
 pub(crate) mod opds;
 pub(crate) mod session_pool;
 
