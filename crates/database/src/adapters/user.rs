@@ -182,6 +182,17 @@ impl UserRepository for UserRepositoryAdapter {
             .map_err(handle_dberr)?
             .map(Into::into))
     }
+
+    async fn find_by_email(&self, transaction: &dyn Transaction, email: &EmailAddress) -> Result<Option<User>, Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        Ok(prelude::Users::find()
+            .filter(users::Column::EmailAddress.eq(email.as_str()))
+            .one(transaction)
+            .await
+            .map_err(handle_dberr)?
+            .map(Into::into))
+    }
 }
 
 #[cfg(test)]
@@ -416,6 +427,42 @@ mod tests {
         let tx = svc.repository().begin().await.unwrap();
 
         let result = svc.user_repository().find_by_username(&*tx, "nobody").await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    // ─── find_by_email ───────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_find_by_email_found() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        svc.user_repository()
+            .add_user(
+                &*tx,
+                NewUser::new("alice", "hash", "alice@example.com", HashSet::new(), "Alice", false).unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let email = bb_core::types::EmailAddress::new("alice@example.com").unwrap();
+        let result = svc.user_repository().find_by_email(&*tx, &email).await;
+
+        assert!(result.is_ok());
+        let user = result.unwrap().unwrap();
+        assert_eq!(user.username, "alice");
+        assert_eq!(user.email_address.as_str(), "alice@example.com");
+    }
+
+    #[tokio::test]
+    async fn test_find_by_email_not_found() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let email = bb_core::types::EmailAddress::new("nobody@example.com").unwrap();
+        let result = svc.user_repository().find_by_email(&*tx, &email).await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());

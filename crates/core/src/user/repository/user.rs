@@ -1,6 +1,7 @@
 use crate::{
     Error,
     repository::Transaction,
+    types::EmailAddress,
     user::{NewUser, User, UserId},
 };
 
@@ -13,4 +14,10 @@ pub trait UserRepository: Send + Sync {
     async fn list_users(&self, transaction: &dyn Transaction, start_id: Option<UserId>, page_size: Option<u64>) -> Result<Vec<User>, Error>;
     async fn find_by_id(&self, transaction: &dyn Transaction, id: UserId) -> Result<Option<User>, Error>;
     async fn find_by_username(&self, transaction: &dyn Transaction, username: &str) -> Result<Option<User>, Error>;
+    /// Looks up a user by email address using a case-sensitive match.
+    ///
+    /// Case sensitivity is intentional: OIDC ID token `email` claims are
+    /// delivered verbatim from the IdP and matched as-is. Use
+    /// `find_by_username` for the case-insensitive username lookup.
+    async fn find_by_email(&self, transaction: &dyn Transaction, email: &EmailAddress) -> Result<Option<User>, Error>;
 }
