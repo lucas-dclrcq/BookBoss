@@ -8,13 +8,14 @@ use std::sync::Arc;
 
 use axum::{
     Extension, Router,
+    extract::Query,
     response::{IntoResponse, Redirect},
     routing::get,
 };
 use axum_session::Session;
 use openidconnect::{
-    AuthenticationFlow, ClientId, ClientSecret, CsrfToken, EndpointMaybeSet, EndpointNotSet, EndpointSet, IssuerUrl, Nonce, PkceCodeChallenge, RedirectUrl,
-    Scope,
+    AuthenticationFlow, AuthorizationCode, ClientId, ClientSecret, CsrfToken, EndpointMaybeSet, EndpointNotSet, EndpointSet, IssuerUrl, Nonce,
+    PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, TokenResponse,
     core::{CoreClient, CoreProviderMetadata, CoreResponseType},
 };
 use serde::{Deserialize, Serialize};
@@ -31,6 +32,18 @@ pub(crate) struct OidcSessionData {
     pub state: String,
     pub nonce: String,
     pub pkce_verifier: String,
+}
+
+/// Query parameters returned by the IdP on the callback redirect.
+#[derive(Debug, Deserialize)]
+pub(crate) struct CallbackQuery {
+    pub code: Option<String>,
+    pub state: Option<String>,
+    /// Set when the IdP returns an error response per RFC 6749 §4.1.2.1.
+    pub error: Option<String>,
+    /// Optional human-readable description accompanying `error`. Logged for
+    /// operator visibility; never surfaced to the user.
+    pub error_description: Option<String>,
 }
 
 /// Errors that can occur during OIDC client initialization at startup.
@@ -124,12 +137,10 @@ impl OidcClient {
 }
 
 /// Returns an axum router with the OIDC start and callback routes.
-///
-/// Task 7 will replace the callback stub with the real implementation.
 pub(crate) fn oidc_router() -> Router {
     Router::new()
         .route("/auth/oidc/start", get(start_handler))
-        .route("/auth/oidc/callback", get(callback_handler_stub))
+        .route("/auth/oidc/callback", get(callback_handler))
 }
 
 /// Initiates the OIDC authorization code flow. Generates state, nonce, and a
@@ -164,6 +175,138 @@ async fn start_handler(Extension(client): Extension<Arc<OidcClient>>, session: S
     Redirect::to(auth_url.as_str()).into_response()
 }
 
-async fn callback_handler_stub() -> &'static str {
-    "OIDC callback (not yet implemented)"
+/// Handles the OIDC callback. Validates state, exchanges code for tokens,
+/// validates the ID token, matches the email claim against a BookBoss user,
+/// and creates a session on success. All failures redirect to
+/// `/?login_failed=1` after logging the cause via `tracing::error!`.
+#[allow(
+    clippy::too_many_lines,
+    reason = "OIDC validation flow is sequential — splitting hides the security-sensitive ordering"
+)]
+async fn callback_handler(
+    Extension(client): Extension<Arc<OidcClient>>,
+    Extension(core_services): Extension<Arc<bb_core::CoreServices>>,
+    auth_session: super::AuthSession,
+    session: Session<BackendSessionPool>,
+    Query(query): Query<CallbackQuery>,
+) -> axum::response::Response {
+    // ── Read and clear in-flight session data ────────────────────────────
+    let Some(session_data) = session.get::<OidcSessionData>(SESSION_KEY) else {
+        tracing::error!("OIDC callback: no in-flight session data found");
+        return failure_redirect();
+    };
+    session.remove(SESSION_KEY);
+
+    // ── Handle IdP-side error response ────────────────────────────────────
+    if let Some(err) = query.error.as_deref() {
+        tracing::error!(
+            error = %err,
+            error_description = query.error_description.as_deref().unwrap_or("(none)"),
+            "OIDC callback: IdP returned error"
+        );
+        return failure_redirect();
+    }
+
+    // ── Validate state ────────────────────────────────────────────────────
+    let Some(state) = query.state.as_deref() else {
+        tracing::error!("OIDC callback: missing state parameter");
+        return failure_redirect();
+    };
+    if state != session_data.state {
+        tracing::error!("OIDC callback: state mismatch — possible CSRF attempt");
+        return failure_redirect();
+    }
+
+    // ── Validate code presence ────────────────────────────────────────────
+    let Some(code) = query.code.as_deref() else {
+        tracing::error!("OIDC callback: missing code parameter");
+        return failure_redirect();
+    };
+
+    // ── Build HTTP client for token exchange ──────────────────────────────
+    let http_client = match openidconnect::reqwest::ClientBuilder::new()
+        .redirect(openidconnect::reqwest::redirect::Policy::none())
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::error!(error = %e, "OIDC callback: failed to build HTTP client");
+            return failure_redirect();
+        }
+    };
+
+    // ── Exchange code for tokens ──────────────────────────────────────────
+    // exchange_code() returns Result<CodeTokenRequest, ConfigurationError> on
+    // CoreClient with EndpointMaybeSet token URL (our DiscoveredCoreClient type).
+    let pkce_verifier = PkceCodeVerifier::new(session_data.pkce_verifier);
+    let token_request = match client.client.exchange_code(AuthorizationCode::new(code.to_string())) {
+        Ok(req) => req,
+        Err(e) => {
+            tracing::error!(error = %e, "OIDC callback: token endpoint not configured");
+            return failure_redirect();
+        }
+    };
+    let token_response = match token_request.set_pkce_verifier(pkce_verifier).request_async(&http_client).await {
+        Ok(resp) => resp,
+        Err(e) => {
+            tracing::error!(error = %e, "OIDC callback: code exchange failed");
+            return failure_redirect();
+        }
+    };
+
+    // ── Validate ID token ─────────────────────────────────────────────────
+    // TokenResponse::id_token() is provided by the openidconnect crate's
+    // trait impl on StandardTokenResponse<IdTokenFields<...>, ...>.
+    // The verifier checks: signature (JWKS), audience, issuer, expiry, and nonce.
+    let Some(id_token) = token_response.id_token() else {
+        tracing::error!("OIDC callback: ID token missing from token response");
+        return failure_redirect();
+    };
+
+    let id_token_verifier = client.client.id_token_verifier();
+    let nonce = Nonce::new(session_data.nonce);
+    let claims = match id_token.claims(&id_token_verifier, &nonce) {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::error!(error = %e, "OIDC callback: ID token validation failed");
+            return failure_redirect();
+        }
+    };
+
+    // ── Extract email claim ───────────────────────────────────────────────
+    // email_verified is intentionally NOT checked — the admin controls BookBoss
+    // accounts.
+    let Some(email_claim) = claims.email() else {
+        tracing::error!("OIDC callback: ID token has no email claim — check IdP scope mapping");
+        return failure_redirect();
+    };
+
+    let email = match bb_core::types::EmailAddress::new(email_claim.as_str()) {
+        Ok(e) => e,
+        Err(e) => {
+            tracing::error!(error = %e, "OIDC callback: email claim is malformed");
+            return failure_redirect();
+        }
+    };
+
+    // ── Look up BookBoss user ─────────────────────────────────────────────
+    let user = match core_services.auth_service.is_valid_email(&email).await {
+        Ok(Some(u)) => u,
+        Ok(None) => {
+            tracing::error!(email = %email, "OIDC callback: no BookBoss user with this email");
+            return failure_redirect();
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "OIDC callback: user lookup failed");
+            return failure_redirect();
+        }
+    };
+
+    // ── Create session ────────────────────────────────────────────────────
+    auth_session.login_user(user.id);
+    Redirect::to("/").into_response()
+}
+
+fn failure_redirect() -> axum::response::Response {
+    Redirect::to("/?login_failed=1").into_response()
 }
