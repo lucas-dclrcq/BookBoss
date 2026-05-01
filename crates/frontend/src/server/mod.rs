@@ -42,7 +42,6 @@ const MAX_REQUEST_BODY_SIZE: usize = 70 * 1024 * 1024; // 70 MiB
 
 pub struct FrontendSubsystem {
     config: FrontendConfig,
-    #[expect(dead_code, reason = "wired into router in Task 8")]
     oidc_config: Option<OidcConfig>,
     core_services: Arc<CoreServices>,
 }
@@ -55,6 +54,21 @@ impl IntoSubsystem<anyhow::Error> for FrontendSubsystem {
         let backend_pool = BackendSessionPool::new(core_services.clone());
         let session_config = SessionConfig::default().with_lifetime(DEFAULT_EXPIRATION_DURATION);
         let auth_config = AuthConfig::<UserId>::default();
+
+        // Build the OIDC client at startup so discovery happens once, not per-request.
+        // Failure here means the IdP is unreachable or misconfigured — fail-fast so the
+        // admin sees the problem immediately rather than only on first login attempt.
+        let oidc_client: Option<Arc<oidc::OidcClient>> = match self.oidc_config.as_ref() {
+            Some(cfg) if cfg.is_set() => {
+                let client = oidc::OidcClient::new(cfg, &self.config.base_url).await.map_err(|e| {
+                    tracing::error!(error = %e, "OIDC SSO initialization failed");
+                    anyhow::anyhow!("OIDC SSO initialization failed: {e}")
+                })?;
+                tracing::info!("OIDC SSO enabled via {}", cfg.discovery_url.as_deref().unwrap_or("?"));
+                Some(Arc::new(client))
+            }
+            _ => None,
+        };
 
         let x_request_id = HeaderName::from_static(REQUEST_ID_HEADER);
         let session_store = SessionStore::<BackendSessionPool>::new(Some(backend_pool.clone()), session_config).await?;
@@ -85,14 +99,25 @@ impl IntoSubsystem<anyhow::Error> for FrontendSubsystem {
         let koreader = koreader::koreader_router();
         let opds = opds::opds_router();
 
-        let app_router = axum::Router::new()
+        let mut app_router = axum::Router::new()
             .route("/api/v1/covers/{book_token}", axum::routing::get(covers::serve_cover))
             .route("/api/v1/books/{book_token}/download/{format}", axum::routing::get(downloads::serve_book_file))
             .route("/api/v1/events", axum::routing::get(events::event_stream))
             .serve_dioxus_application(dioxus_server::ServeConfig::new(), BookBossFrontend)
             .merge(kobo)
             .merge(koreader)
-            .merge(opds)
+            .merge(opds);
+
+        // When SSO is configured, merge the OIDC router and expose the client
+        // and config to handlers / server fns. `oidc_client` is `Some` exactly
+        // when `oidc_config.is_set()` was true above, so unwrapping the cloned
+        // config here is safe by construction.
+        if let Some(client) = oidc_client {
+            let cfg = self.oidc_config.clone().expect("oidc_config is Some when oidc_client was built");
+            app_router = app_router.merge(oidc::oidc_router()).layer(Extension(client)).layer(Extension(Arc::new(cfg)));
+        }
+
+        let app_router = app_router
             .layer(Extension(core_services.health_service.clone()))
             .layer(Extension(core_services))
             .layer(Extension(frontend_config))

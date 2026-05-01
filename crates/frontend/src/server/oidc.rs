@@ -2,7 +2,6 @@
 //!
 //! Implements the OAuth2 authorization code flow with PKCE for SSO login.
 //! See `.insights/shared/specs/BB-13-spec-sso-oidc-auth.md` for the design.
-#![expect(dead_code, reason = "wired up in Task 8")]
 
 use std::sync::Arc;
 
@@ -74,6 +73,7 @@ type DiscoveredCoreClient = CoreClient<
 /// A configured OIDC client ready to handle the start/callback flow.
 pub(crate) struct OidcClient {
     pub(crate) client: DiscoveredCoreClient,
+    #[allow(dead_code, reason = "read by get_sso_config server fn in Task 9")]
     pub(crate) button_label: String,
 }
 
