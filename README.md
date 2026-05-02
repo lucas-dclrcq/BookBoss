@@ -146,7 +146,7 @@ For kanidm, I used the setup:
 
 ```
 kanidm group create 'bookboss_users'
-kanidm group add-members bookboss_dev_users <user>
+kanidm group add-members bookboss_users <user>
 
 kanidm system oauth2 create bookboss '<machine>' <base_url>
 kanidm system oauth2 set-landing-url bookboss '<base_url>/auth/oidc/callback'
