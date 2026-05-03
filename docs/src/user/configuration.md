@@ -41,6 +41,18 @@ See [Database Configuration](database.md) for connection string formats and exam
 | `BOOKBOSS__IMPORT__SCAN_INTERVAL_SECS`        | How often (seconds) to scan the bookdrop directory     | `60`    |
 | `BOOKBOSS__IMPORT__WORKER_POLL_INTERVAL_SECS` | How often (seconds) the import worker polls for jobs   | `5`     |
 
+## Single Sign-On (OIDC)
+
+SSO is enabled when all three of `DISCOVERY_URL`, `CLIENT_ID`, and `CLIENT_SECRET` are set. See
+[Single Sign-On (OIDC)](sso.md) for the full setup walkthrough.
+
+| Variable                        | Description                                            | Default            |
+| ------------------------------- | ------------------------------------------------------ | ------------------ |
+| `BOOKBOSS__OIDC__DISCOVERY_URL` | OIDC discovery URL                                     | —                  |
+| `BOOKBOSS__OIDC__CLIENT_ID`     | OIDC client ID registered with the IdP                 | —                  |
+| `BOOKBOSS__OIDC__CLIENT_SECRET` | OIDC client secret registered with the IdP            | —                  |
+| `BOOKBOSS__OIDC__BUTTON_LABEL`  | Label shown on the SSO button on the login page        | `Sign in with SSO` |
+
 ## Metadata Providers
 
 | Variable                                    | Description                                         | Default |

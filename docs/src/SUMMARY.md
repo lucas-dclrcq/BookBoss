@@ -13,6 +13,7 @@
 - [OPDS Catalog](user/opds.md)
 - [Kobo Device Sync](user/kobo.md)
 - [KOReader Sync](user/koreader.md)
+- [Single Sign-On (OIDC)](user/sso.md)
 - [Configuration Reference](user/configuration.md)
 
 # Contributing
