@@ -9,12 +9,12 @@ login. Username/password login remains available even when SSO is enabled — SS
 Set the following environment variables. SSO becomes available once all three of
 `DISCOVERY_URL`, `CLIENT_ID`, and `CLIENT_SECRET` are present:
 
-| Variable                        | Description                                          | Default            |
-| ------------------------------- | ---------------------------------------------------- | ------------------ |
-| `BOOKBOSS__OIDC__DISCOVERY_URL` | OIDC discovery URL (e.g. `https://idp.example.com`)  | —                  |
-| `BOOKBOSS__OIDC__CLIENT_ID`     | OIDC client ID registered with the IdP               | —                  |
-| `BOOKBOSS__OIDC__CLIENT_SECRET` | OIDC client secret registered with the IdP           | —                  |
-| `BOOKBOSS__OIDC__BUTTON_LABEL`  | Label shown on the SSO button on the login page      | `Sign in with SSO` |
+| Variable                        | Description                                         | Default            |
+| ------------------------------- | --------------------------------------------------- | ------------------ |
+| `BOOKBOSS__OIDC__DISCOVERY_URL` | OIDC discovery URL (e.g. `https://idp.example.com`) | —                  |
+| `BOOKBOSS__OIDC__CLIENT_ID`     | OIDC client ID registered with the IdP              | —                  |
+| `BOOKBOSS__OIDC__CLIENT_SECRET` | OIDC client secret registered with the IdP          | —                  |
+| `BOOKBOSS__OIDC__BUTTON_LABEL`  | Label shown on the SSO button on the login page     | `Sign in with SSO` |
 
 When SSO is enabled, a **Sign in with SSO** button appears on the login page next to the
 username/password form. If the OIDC provider is unreachable, the button soft-fails and login

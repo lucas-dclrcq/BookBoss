@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.24](https://github.com/szinn/BookBoss/compare/v0.8.23..v0.8.24) - 2026-05-03
+
+### Documentation
+
+- _(user)_ Document MOBI conversion and admin settings - ([79473f5](https://github.com/szinn/BookBoss/commit/79473f5227e4613adcab6615b3ba420896a133bf))
+- _(user)_ Document drag-and-drop upload and dark mode - ([33e82ee](https://github.com/szinn/BookBoss/commit/33e82eef5472f1d63b166258151d4f73ed8aa750))
+- _(user)_ Add OIDC SSO documentation - ([c68eedd](https://github.com/szinn/BookBoss/commit/c68eedd8a12d316c6abd31aca4bb4882f1e9e8e4))
+
 ## [0.8.23](https://github.com/szinn/BookBoss/compare/v0.8.22..v0.8.23) - 2026-05-01
 
 ### Bug Fixes

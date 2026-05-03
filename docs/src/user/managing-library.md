@@ -153,7 +153,7 @@ as an additional download badge on the book detail page.
 
 - Existing MOBI files stay up to date regardless of the toggle. If a book's metadata changes,
   the MOBI is re-generated even when the toggle is currently off — disabling the toggle only
-  stops *new* MOBI files from being created.
+  stops _new_ MOBI files from being created.
 - Backfill runs in the background through the same job queue as imports. Progress shows on the
   job queue badge in the navigation bar.
 - MOBI is a one-way derivative of the EPUB. Source-of-truth metadata is still stored on the

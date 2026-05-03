@@ -699,37 +699,6 @@ dependencies = [
 
 [[package]]
 name = "axum_session"
-version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62244fc273ad308ceb7e1dc9b168abdeeb1c31752a77fdbd24351b5ced652c66"
-dependencies = [
- "aes-gcm",
- "async-trait",
- "axum",
- "base64 0.22.1",
- "bytes",
- "chrono",
- "cookie",
- "dashmap",
- "forwarded-header-value",
- "futures",
- "hmac 0.12.1",
- "http",
- "http-body",
- "rand 0.10.1",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "thiserror 2.0.18",
- "tokio",
- "tower-layer",
- "tower-service",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "axum_session"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5da1b13b1f942698bf0b3fab70b644b5163c7613396ccc4444022ea1615ae678"
@@ -769,7 +738,7 @@ dependencies = [
  "async-recursion",
  "async-trait",
  "axum-core",
- "axum_session 0.20.0",
+ "axum_session",
  "bytes",
  "chrono",
  "dashmap",
@@ -815,7 +784,7 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
 name = "bb-api"
-version = "0.8.23"
+version = "0.8.24"
 dependencies = [
  "async-trait",
  "axum",
@@ -842,7 +811,7 @@ dependencies = [
 
 [[package]]
 name = "bb-core"
-version = "0.8.23"
+version = "0.8.24"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -868,7 +837,7 @@ dependencies = [
 
 [[package]]
 name = "bb-database"
-version = "0.8.23"
+version = "0.8.24"
 dependencies = [
  "async-trait",
  "bb-core",
@@ -885,7 +854,7 @@ dependencies = [
 
 [[package]]
 name = "bb-formats"
-version = "0.8.23"
+version = "0.8.24"
 dependencies = [
  "async-trait",
  "bb-core",
@@ -904,13 +873,13 @@ dependencies = [
 
 [[package]]
 name = "bb-frontend"
-version = "0.8.23"
+version = "0.8.24"
 dependencies = [
  "anyhow",
  "async-stream",
  "async-trait",
  "axum",
- "axum_session 0.20.0",
+ "axum_session",
  "axum_session_auth",
  "base64 0.22.1",
  "bb-core",
@@ -938,7 +907,7 @@ dependencies = [
 
 [[package]]
 name = "bb-metadata"
-version = "0.8.23"
+version = "0.8.24"
 dependencies = [
  "async-trait",
  "bb-core",
@@ -955,7 +924,7 @@ dependencies = [
 
 [[package]]
 name = "bb-storage"
-version = "0.8.23"
+version = "0.8.24"
 dependencies = [
  "async-trait",
  "bb-core",
@@ -969,7 +938,7 @@ dependencies = [
 
 [[package]]
 name = "bb-utils"
-version = "0.8.23"
+version = "0.8.24"
 dependencies = [
  "rand 0.10.1",
  "serde",
@@ -1134,7 +1103,7 @@ dependencies = [
 
 [[package]]
 name = "bookboss"
-version = "0.8.23"
+version = "0.8.24"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4004,7 +3973,7 @@ dependencies = [
 
 [[package]]
 name = "integration-tests"
-version = "0.8.23"
+version = "0.8.24"
 dependencies = [
  "async-trait",
  "bb-core",
