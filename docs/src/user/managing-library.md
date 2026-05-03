@@ -6,7 +6,10 @@ BookBoss acquires books through a bookdrop directory. The pipeline runs automati
 
 ### Workflow
 
-1. **Drop a file** into the directory configured as `BOOKBOSS__IMPORT__BOOKDROP_PATH`
+1. **Drop a file** into the directory configured as `BOOKBOSS__IMPORT__BOOKDROP_PATH`, or
+   **drag and drop an EPUB** onto the **Library → Incoming** page in the web UI. Uploads
+   through the UI are written into the bookdrop directory and pick up the same way as files
+   placed there directly. The maximum upload size is 70 MiB.
 2. **BookBoss picks it up** — the scanner runs on a configurable interval (default: 60 seconds) and hashes each new file to avoid duplicates. You can also trigger a scan manually from the UI.
 3. **Metadata is extracted** — for EPUB files, embedded metadata is read from the OPF inside the archive; other formats fall through to provider lookup
 4. **Provider enrichment** — BookBoss queries external metadata providers (Hardcover, Open Library, Google Books) in parallel, using title+author similarity scoring to select the best match. Cover art is fetched from the most confident provider.

@@ -11,6 +11,11 @@ You will need to provide:
 
 This account becomes the administrator of your BookBoss instance.
 
+## Theme
+
+BookBoss supports light and dark themes. Use the theme toggle in the navigation bar to switch
+between them — your choice is remembered per-browser.
+
 ## What to Do Next
 
 1. **Add books** — drop EPUB files into the bookdrop directory and [review incoming imports](managing-library.md#reviewing-and-approving)
