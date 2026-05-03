@@ -129,3 +129,32 @@ Changes are saved to the database and to the OPF sidecar file on disk.
 ## Downloading Books
 
 Format download links appear on each book's detail page under the **Formats** section. Each badge shows the format name and file size. Clicking downloads an enriched copy of the book with up-to-date metadata and cover art embedded.
+
+---
+
+## MOBI Conversion (for Kindle)
+
+BookBoss can generate a **MOBI** file alongside each EPUB so Kindle devices can read books
+directly. MOBI conversion is **off by default** and is enabled by an administrator.
+
+### Enabling MOBI Conversion
+
+1. Open **Settings → Application Settings** (admin-only).
+2. Toggle **Generate MOBI files for Kindle** on.
+3. When enabling, BookBoss prompts whether to backfill MOBI files for books already in the
+   library. Choose **Yes** to queue conversion for all existing books, or **No** to only
+   generate MOBI files for newly imported books.
+
+When the toggle is on, MOBI generation runs as part of the post-enrichment pipeline — every
+book gets a `.mobi` file generated after its EPUB enrichment completes. The MOBI file appears
+as an additional download badge on the book detail page.
+
+### Behaviour
+
+- Existing MOBI files stay up to date regardless of the toggle. If a book's metadata changes,
+  the MOBI is re-generated even when the toggle is currently off — disabling the toggle only
+  stops *new* MOBI files from being created.
+- Backfill runs in the background through the same job queue as imports. Progress shows on the
+  job queue badge in the navigation bar.
+- MOBI is a one-way derivative of the EPUB. Source-of-truth metadata is still stored on the
+  EPUB and OPF sidecar.
