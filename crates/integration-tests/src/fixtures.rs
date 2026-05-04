@@ -149,12 +149,14 @@ pub fn pipeline_services(ctx: &crate::context::TestContext, metadata: ExtractedM
 
 pub async fn insert_book(repos: &RepositoryService, title: &str, status: BookStatus) -> Book {
     let book_repo = repos.book_repository().clone();
+    let library_repo = repos.library_repository().clone();
     let title = title.to_owned();
     transaction(&**repos.repository(), |tx| {
         let book_repo = book_repo.clone();
+        let library_repo = library_repo.clone();
         let title = title.clone();
         Box::pin(async move {
-            book_repo
+            let book = book_repo
                 .add_book(
                     tx,
                     NewBook {
@@ -172,7 +174,10 @@ pub async fn insert_book(repos: &RepositoryService, title: &str, status: BookSta
                         has_cover: false,
                     },
                 )
-                .await
+                .await?;
+            // Mirror CollectionService::add_book: every book lands in ALL_BOOKS.
+            library_repo.add_book_to_library(tx, bb_core::library::ALL_BOOKS_LIBRARY_ID, book.id).await?;
+            Ok(book)
         })
     })
     .await
