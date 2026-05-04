@@ -51,6 +51,7 @@
       "WebFetch(domain:zensical.org)",
       "WebSearch",
       "mcp__issueboss__add_artifact",
+      "mcp__issueboss__add_relationship",
       "mcp__issueboss__create_issue",
       "mcp__issueboss__list_artifacts",
       "mcp__issueboss__list_issues",
