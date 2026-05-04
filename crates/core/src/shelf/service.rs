@@ -435,9 +435,14 @@ impl ShelfService for ShelfServiceImpl {
                 }),
             };
 
-            collection_repository
-                .count_for_filter(tx, &filter, user_id, Some(target_shelf.library_id))
-                .await
+            // Manual shelves are membership lists, not library-scoped queries —
+            // their books may live in any library. Smart/System shelves run filter
+            // queries against a library, so they still pass Some(library_id).
+            let scope_library = match target_shelf.shelf_type {
+                ShelfType::Manual => None,
+                ShelfType::Smart | ShelfType::System => Some(target_shelf.library_id),
+            };
+            collection_repository.count_for_filter(tx, &filter, user_id, scope_library).await
         })
     }
 
@@ -1269,6 +1274,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_count_for_filter_manual_shelf_returns_count() {
+        // Manual shelves pass `library_id: None` so the count includes books
+        // regardless of library membership (BB-16).
         let shelf = fake_shelf(1); // ShelfType::Manual, id=1, name="My Shelf", owner_id=1
         let token = shelf.token;
         let mut shelf_repo = MockShelfRepository::new();
@@ -1280,7 +1287,7 @@ mod tests {
         collection_repo
             .expect_count_for_filter()
             .times(1)
-            .withf(|_, _, _, library_id| *library_id == Some(crate::library::ALL_BOOKS_LIBRARY_ID))
+            .withf(|_, _, _, library_id| library_id.is_none())
             .returning(|_, _, _, _| Box::pin(async { Ok(7) }));
         let svc = create_service_with_collection_repo(shelf_repo, collection_repo);
 

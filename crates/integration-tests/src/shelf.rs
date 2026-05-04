@@ -263,3 +263,56 @@ async fn smart_shelf_language_filter() {
     let shelf = ctx.services.shelf_service.get_shelf(shelf_token, user.id).await.unwrap();
     assert_eq!(shelf.filter_criteria.as_ref(), Some(&filter), "filter must round-trip through the DB");
 }
+
+/// Regression test for BB-16: a manual shelf must report the correct count
+/// even when shelved books are not in the shelf's resolved library. Pre-fix,
+/// `ShelfService::count_for_filter` passed Some(target_shelf.library_id) to
+/// the collection repository, which then applied a library_books subquery
+/// that zero'd out the count whenever a shelved book wasn't in the shelf's
+/// library.
+#[tokio::test]
+async fn count_for_manual_shelf_includes_books_outside_shelf_library() {
+    use bb_core::{
+        repository::transaction,
+        shelf::{NewShelf, ShelfType},
+    };
+
+    let ctx = setup().await;
+    let user = fixtures::insert_user(&ctx.repos, "bb16_user").await;
+
+    // The book lives in ALL_BOOKS_LIBRARY_ID (default for insert_book).
+    let book = fixtures::insert_book(&ctx.repos, "Dune", BookStatus::Available).await;
+
+    // Create a personal library and bind the manual shelf to it (NOT
+    // ALL_BOOKS). This is the cross-library setup that triggers the bug.
+    let lib = fixtures::insert_library(&ctx.services, user.id, "Alice's Library").await;
+
+    let shelf_repo = ctx.repos.shelf_repository().clone();
+    let shelf = transaction(&**ctx.repos.repository(), |tx| {
+        let shelf_repo = shelf_repo.clone();
+        Box::pin(async move {
+            shelf_repo
+                .add_shelf(
+                    tx,
+                    NewShelf {
+                        owner_id: user.id,
+                        library_id: lib.id,
+                        name: "Cross-library Manual Shelf".to_string(),
+                        shelf_type: ShelfType::Manual,
+                        device_id: None,
+                        filter_criteria: None,
+                    },
+                )
+                .await
+        })
+    })
+    .await
+    .unwrap();
+
+    // Add the (ALL_BOOKS) book to the (lib.id) shelf.
+    ctx.services.shelf_service.add_book_to_shelf(shelf.token, book.token, user.id).await.unwrap();
+
+    let count = ctx.services.shelf_service.count_for_filter(shelf.token, user.id).await.unwrap();
+
+    assert_eq!(count, 1, "manual shelf count must include shelved books regardless of library membership");
+}
