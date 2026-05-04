@@ -12,6 +12,22 @@ an existing instance is required for database-related commands.
   - MySQL: `mysql://user:password@host:port/database`
   - SQLite: `sqlite::path`
 
+## SQLite Notes
+
+When using the SQLite backend, BookBoss automatically configures these PRAGMAs
+on every pool connection (see `bb_database::open_database`):
+
+- `journal_mode=WAL` — readers and writers don't block each other
+- `busy_timeout=5000` — wait up to 5s for a held lock before failing
+- `synchronous=NORMAL` — durable across crashes (the standard pairing with WAL)
+- `foreign_keys=true` — enforce FK constraints (off by default in SQLite)
+
+**WAL sidecar files:** WAL mode produces two sidecar files alongside the main
+database: `<db>-wal` (write-ahead log) and `<db>-shm` (shared memory index).
+When backing up the SQLite database or bind-mounting it into a container,
+include both sidecars — copying only the main `.sqlite` file mid-write can
+produce a corrupt or out-of-date snapshot.
+
 ## SeaORM Adapter Patterns
 
 **Migrations:** Only `up()` migrations need to be implemented. The `down()` method can just
