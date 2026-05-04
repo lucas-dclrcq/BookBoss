@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.25](https://github.com/szinn/BookBoss/compare/v0.8.24..v0.8.25) - 2026-05-04
+
+### Bug Fixes
+
+- _(database)_ Apply SQLite PRAGMAs to fix database is locked errors - ([2596d7d](https://github.com/szinn/BookBoss/commit/2596d7de9f87ac190c00ea98ff566d89e798f4d5))
+
+### Documentation
+
+- _(database)_ Note WAL sidecar files and SQLite PRAGMAs - ([a7d8aff](https://github.com/szinn/BookBoss/commit/a7d8affb7e3bd4e82cd745d15e92949ba6e252a1))
+
 ## [0.8.24](https://github.com/szinn/BookBoss/compare/v0.8.23..v0.8.24) - 2026-05-03
 
 ### Documentation
