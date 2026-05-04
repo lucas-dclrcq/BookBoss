@@ -75,7 +75,7 @@ pub(crate) fn find_opf_path(xml: &[u8]) -> Result<String, crate::Error> {
     loop {
         buf.clear();
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Empty(ref e)) if e.local_name().as_ref() == b"rootfile" => {
+            Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"rootfile" => {
                 for attr in e.attributes() {
                     let attr = attr.map_err(quick_xml::Error::from)?;
                     if attr.key.as_ref() == b"full-path" {
@@ -196,6 +196,19 @@ mod tests {
         assert_eq!(meta.cover_bytes.as_deref(), Some(FAKE_JPEG));
 
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn find_opf_path_handles_non_self_closing_rootfile() {
+        const CONTAINER_XML_NON_SELF_CLOSING: &[u8] = br#"<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"></rootfile>
+  </rootfiles>
+</container>"#;
+
+        let opf_path = super::find_opf_path(CONTAINER_XML_NON_SELF_CLOSING).expect("rootfile should be found");
+        assert_eq!(opf_path, "OEBPS/content.opf");
     }
 
     #[test]
