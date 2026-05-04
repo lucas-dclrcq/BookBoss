@@ -72,6 +72,22 @@ pub async fn open_database(config: &DatabaseConfig) -> Result<DatabaseConnection
         .sqlx_logging(true)
         .sqlx_logging_level(tracing::log::LevelFilter::Info);
 
+    // For SQLite, apply PRAGMAs that sqlx does not set by default.
+    // We use map_sqlx_sqlite_opts rather than URL query parameters because
+    // sqlx-sqlite's URL parser only recognises mode/cache/immutable/vfs —
+    // pragma names are not valid query parameters and will cause a parse error.
+    if config.database_url.starts_with("sqlite:") {
+        opt.map_sqlx_sqlite_opts(|o| {
+            use std::time::Duration;
+
+            use sqlx::sqlite::{SqliteJournalMode, SqliteSynchronous};
+            o.journal_mode(SqliteJournalMode::Wal)
+                .busy_timeout(Duration::from_secs(5))
+                .synchronous(SqliteSynchronous::Normal)
+                .foreign_keys(true)
+        });
+    }
+
     Ok(Database::connect(opt).await.map_err(handle_dberr)?)
 }
 
@@ -105,4 +121,61 @@ pub async fn create_repository_service(database: DatabaseConnection) -> Result<A
         .map_err(|e| Error::Infrastructure(e.to_string()))?;
 
     Ok(Arc::new(repository_service))
+}
+
+#[cfg(test)]
+mod tests {
+    use sea_orm::{ConnectionTrait, Statement};
+
+    use super::*;
+
+    /// Verify that opening a SQLite database via `open_database` configures
+    /// the four PRAGMAs we care about. Uses a tempfile-backed database because
+    /// `sqlite::memory:` is single-connection and cannot exhibit the locking
+    /// behaviour this configuration is designed to fix.
+    #[tokio::test]
+    async fn open_database_sets_sqlite_pragmas() {
+        let dir = tempfile::tempdir().expect("create tempdir");
+        let db_path = dir.path().join("bb-pragma-test.sqlite");
+        let url = format!("sqlite://{}?mode=rwc", db_path.display());
+
+        let config = DatabaseConfig { database_url: url };
+        let db = open_database(&config).await.expect("open sqlite database");
+
+        let backend = db.get_database_backend();
+
+        let pragma = |name: &str| Statement::from_string(backend, format!("PRAGMA {name}"));
+
+        let journal = db
+            .query_one_raw(pragma("journal_mode"))
+            .await
+            .expect("query journal_mode")
+            .expect("journal_mode row");
+        let mode: String = journal.try_get("", "journal_mode").expect("journal_mode value");
+        assert_eq!(mode.to_lowercase(), "wal", "journal_mode should be WAL");
+
+        let busy = db
+            .query_one_raw(pragma("busy_timeout"))
+            .await
+            .expect("query busy_timeout")
+            .expect("busy_timeout row");
+        let timeout: i32 = busy.try_get("", "timeout").expect("busy_timeout value");
+        assert_eq!(timeout, 5000, "busy_timeout should be 5000ms");
+
+        let sync = db
+            .query_one_raw(pragma("synchronous"))
+            .await
+            .expect("query synchronous")
+            .expect("synchronous row");
+        let sync_val: i32 = sync.try_get("", "synchronous").expect("synchronous value");
+        assert_eq!(sync_val, 1, "synchronous should be NORMAL (1)");
+
+        let fk = db
+            .query_one_raw(pragma("foreign_keys"))
+            .await
+            .expect("query foreign_keys")
+            .expect("foreign_keys row");
+        let fk_val: i32 = fk.try_get("", "foreign_keys").expect("foreign_keys value");
+        assert_eq!(fk_val, 1, "foreign_keys should be ON (1)");
+    }
 }
