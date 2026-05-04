@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.26](https://github.com/szinn/BookBoss/compare/v0.8.25..v0.8.26) - 2026-05-04
+
+### Bug Fixes
+
+- _(core)_ Scope manual shelf count_for_filter to membership only - ([c3ffd09](https://github.com/szinn/BookBoss/commit/c3ffd094ee788a497b1b874c1bf72b18aab0c575))
+- _(formats)_ Accept non-self-closing rootfile in container.xml - ([2093af3](https://github.com/szinn/BookBoss/commit/2093af3f331b51484d6f5f87f44b6409536319cd))
+- _(test)_ Insert books into ALL_BOOKS in integration fixture - ([0026438](https://github.com/szinn/BookBoss/commit/00264389c9fd98db26d08e0d5e87e4045b70bbb1))
+
+### Testing
+
+- _(integration)_ Add insert_book_into_library helper - ([06c1915](https://github.com/szinn/BookBoss/commit/06c19157b7263b55d5114047ec93055953de7688))
+- _(integration)_ Add insert_library fixture helper - ([7dae035](https://github.com/szinn/BookBoss/commit/7dae0354c388595952c960b9c81d5a8b89a9b392))
+
 ## [0.8.25](https://github.com/szinn/BookBoss/compare/v0.8.24..v0.8.25) - 2026-05-04
 
 ### Bug Fixes
