@@ -15,12 +15,7 @@ async fn delete_user_removes_personal_library_and_owned_shelves() {
     let user = fixtures::insert_user(&ctx.repos, "user_with_library").await;
 
     // Create the user's personal library.
-    let lib = ctx
-        .services
-        .library_service
-        .create_personal_library_for_user(user.id, "Alice's Library".to_string())
-        .await
-        .unwrap();
+    let lib = fixtures::insert_library(&ctx.services, user.id, "Alice's Library").await;
 
     // Insert a shelf directly into the personal library (bypassing
     // create_manual_shelf which always places shelves in All Books).

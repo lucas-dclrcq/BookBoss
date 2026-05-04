@@ -198,6 +198,14 @@ pub async fn insert_user(repos: &RepositoryService, username: &str) -> User {
     .expect("insert_user fixture failed")
 }
 
+pub async fn insert_library(services: &bb_core::CoreServices, owner_id: bb_core::user::UserId, name: &str) -> bb_core::library::Library {
+    services
+        .library_service
+        .create_personal_library_for_user(owner_id, name.to_string())
+        .await
+        .expect("insert_library fixture failed")
+}
+
 pub async fn insert_author(repos: &RepositoryService, name: &str) -> Author {
     let author_repo = repos.author_repository().clone();
     let name = name.to_owned();
