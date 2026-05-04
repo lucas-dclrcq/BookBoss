@@ -1,3 +1,17 @@
+//! Test fixtures for integration tests.
+//!
+//! Two book-insertion helpers, mirroring how production builds book ↔ library
+//! relationships:
+//!
+//! - [`insert_book`] inserts the book and adds it to the ALL_BOOKS virtual
+//!   library. This matches what `CollectionService::add_book` does in
+//!   production and is what most tests want.
+//! - [`insert_book_into_library`] inserts the book into a specific library
+//!   *only* (no ALL_BOOKS membership). Use this when a test needs to construct
+//!   a book that lives in a non-default library so that library-scoped queries
+//!   (e.g. smart shelves bound to a personal library) include or exclude it
+//!   explicitly.
+
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -182,6 +196,45 @@ pub async fn insert_book(repos: &RepositoryService, title: &str, status: BookSta
     })
     .await
     .expect("insert_book fixture failed")
+}
+
+/// Insert a book into a specific library only (no ALL_BOOKS membership).
+/// Unlike [`insert_book`], the caller controls library membership exactly.
+#[allow(dead_code)]
+pub async fn insert_book_into_library(repos: &RepositoryService, title: &str, status: BookStatus, library_id: bb_core::library::LibraryId) -> Book {
+    let book_repo = repos.book_repository().clone();
+    let library_repo = repos.library_repository().clone();
+    let title = title.to_owned();
+    transaction(&**repos.repository(), |tx| {
+        let book_repo = book_repo.clone();
+        let library_repo = library_repo.clone();
+        let title = title.clone();
+        Box::pin(async move {
+            let book = book_repo
+                .add_book(
+                    tx,
+                    NewBook {
+                        title,
+                        status,
+                        description: None,
+                        published_date: None,
+                        language: None,
+                        series_id: None,
+                        series_number: None,
+                        publisher_id: None,
+                        page_count: None,
+                        rating: None,
+                        metadata_source: None,
+                        has_cover: false,
+                    },
+                )
+                .await?;
+            library_repo.add_book_to_library(tx, library_id, book.id).await?;
+            Ok(book)
+        })
+    })
+    .await
+    .expect("insert_book_into_library fixture failed")
 }
 
 pub async fn insert_user(repos: &RepositoryService, username: &str) -> User {
