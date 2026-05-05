@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.27](https://github.com/szinn/BookBoss/compare/v0.8.26..v0.8.27) - 2026-05-05
+
+### Bug Fixes
+
+- _(core)_ Dedupe authors in pipeline before linking to book - ([7948cfe](https://github.com/szinn/BookBoss/commit/7948cfe87acc8146a7aef84e46284ae7393174ac))
+
+### Miscellaneous Tasks
+
+- _(lint)_ Clear pedantic clippy warnings - ([0a51b00](https://github.com/szinn/BookBoss/commit/0a51b005e24e4c5338a82643ba76169703b390cc))
+
 ## [0.8.26](https://github.com/szinn/BookBoss/compare/v0.8.25..v0.8.26) - 2026-05-04
 
 ### Bug Fixes
