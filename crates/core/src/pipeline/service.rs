@@ -518,13 +518,21 @@ impl PipelineServiceImpl {
                     .add_book_file(tx, book.id, file_format, FileRole::Original, original_filename, file_size, file_hash)
                     .await?;
 
-                // Find or create each author, then link to book
+                // Find or create each author, then link to book.
+                // Dedupe by resolved author id: source metadata can list the same
+                // person twice (e.g. duplicate <dc:creator> entries with/without a
+                // role attribute, or providers returning duplicates), and the
+                // book_authors PK is (book_id, author_id).
+                let mut seen_author_ids = std::collections::HashSet::new();
                 for a in fm.authors.as_deref().unwrap_or(&[]) {
                     let name = normalize_name(&a.name);
                     let author = match author_repo.find_by_name(tx, &name).await? {
                         Some(ex) => ex,
                         None => author_repo.add_author(tx, NewAuthor { name, bio: None }).await?,
                     };
+                    if !seen_author_ids.insert(author.id) {
+                        continue;
+                    }
                     let role = a.role.clone().unwrap_or(AuthorRole::Author);
                     book_repo.add_book_author(tx, book.id, author.id, role, a.sort_order).await?;
                 }

@@ -91,6 +91,43 @@ async fn process_job_creates_author_from_metadata() {
 }
 
 #[tokio::test]
+async fn process_job_dedupes_duplicate_authors() {
+    // Source metadata that lists the same person twice — e.g. duplicate
+    // <dc:creator> entries with and without a role attribute. Both normalize
+    // to the same author row; without dedup the second insert would violate
+    // the (book_id, author_id) PK on book_authors.
+    let metadata = ExtractedMetadata {
+        title: Some("The Test Book".to_string()),
+        authors: Some(vec![
+            ExtractedAuthor {
+                name: "Test Author".to_string(),
+                role: Some(AuthorRole::Author),
+                sort_order: 0,
+            },
+            ExtractedAuthor {
+                name: "Test Author".to_string(),
+                role: None,
+                sort_order: 1,
+            },
+        ]),
+        ..Default::default()
+    };
+    let ctx = setup().await;
+    let svc = fixtures::pipeline_services(&ctx, metadata);
+    let job = fixtures::insert_import_job(&ctx.repos, "hash_duplicate_authors").await;
+
+    let updated = svc
+        .pipeline_service
+        .process_job(job)
+        .await
+        .expect("process_job must not fail on duplicate authors");
+
+    let book_id = updated.candidate_book_id.expect("candidate_book_id set");
+    let authors = svc.book_service.authors_for_book(book_id).await.unwrap();
+    assert_eq!(authors.len(), 1, "duplicate author entries should be linked once");
+}
+
+#[tokio::test]
 async fn process_job_skips_non_pending_job() {
     let ctx = setup().await;
     let svc = fixtures::pipeline_services(&ctx, stub_metadata());
