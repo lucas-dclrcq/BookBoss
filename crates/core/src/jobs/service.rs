@@ -267,7 +267,7 @@ mod tests {
         mock.expect_enqueue_delayed().once().returning(|_, job_type, _, priority, delay| {
             assert_eq!(job_type, "test.job");
             assert_eq!(priority, PRIORITY_NORMAL);
-            assert!(delay == Duration::minutes(5));
+            assert_eq!(delay, Duration::minutes(5));
             Box::pin(std::future::ready(Ok(crate::jobs::Job {
                 id: 1,
                 job_type: job_type.to_owned(),
