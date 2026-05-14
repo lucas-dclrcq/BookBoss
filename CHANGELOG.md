@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.28](https://github.com/szinn/BookBoss/compare/v0.8.27..v0.8.28) - 2026-05-14
+
+### Refactor
+
+- _(database)_ Make adapter pagination caller-owned - ([9cc6bb2](https://github.com/szinn/BookBoss/commit/9cc6bb2d72dbd9a9d8114bf58b940cf38bb4a4d6))
+
+### Testing
+
+- _(core)_ BB-18 reproducer for compute_sync_diff - ([2272d73](https://github.com/szinn/BookBoss/commit/2272d73b7a8b1144fc1b155f72719a61463acf80))
+- _(database)_ Add unbounded pagination regressions - ([3657b70](https://github.com/szinn/BookBoss/commit/3657b70e2a20df68c12175a1a5d186f09a6635ec))
+
 ## [0.8.27](https://github.com/szinn/BookBoss/compare/v0.8.26..v0.8.27) - 2026-05-05
 
 ### Bug Fixes
