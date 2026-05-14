@@ -1078,6 +1078,48 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_compute_sync_diff_returns_all_rows_for_large_smart_shelf() {
+        // BB-18 reproducer: 75 books on a smart-shelf must all surface in the
+        // sync diff. Before the adapter pagination fix (caller-owned page size),
+        // CollectionRepositoryAdapter::books_for_filter silently clamped to 50,
+        // so a shelf with 51+ books would lose entries from the sync. This test
+        // mocks the repository directly to return 75 books and asserts that
+        // every one of them appears in diff.new_books — exercising the service
+        // contract that the adapter pagination must honour.
+        let books: Vec<Book> = (1u64..=75).map(|i| Book::fake(i, format!("Book {i}"), BookStatus::Available)).collect();
+        let file_map: std::collections::HashMap<BookId, Vec<BookFile>> = (1u64..=75)
+            .map(|i| (i, vec![fake_book_file(i, FileFormat::Epub, FileRole::Original)]))
+            .collect();
+
+        let mut device_repo = MockDeviceRepository::new();
+        device_repo.expect_books_for_device().returning(|_, _| Box::pin(async { Ok(vec![]) }));
+        let mut shelf_repo = MockShelfRepository::new();
+        shelf_repo.expect_find_by_device_id().returning(|_, _| {
+            let s = sync_shelf();
+            Box::pin(async move { Ok(Some(s)) })
+        });
+        let mut collection_repo = MockCollectionRepository::new();
+        collection_repo
+            .expect_books_for_filter()
+            .withf(|_, _, _, library_id, _, _, _| *library_id == Some(crate::library::ALL_BOOKS_LIBRARY_ID))
+            .returning(move |_, _, _, _, _, _, _| {
+                let b = books.clone();
+                Box::pin(async move { Ok(b) })
+            });
+        let svc = create_sync_service(device_repo, shelf_repo, collection_repo, book_repo_with_files(file_map));
+
+        // page_size=100 fits all 75 in a single page — no paging artefacts.
+        let diff = svc.compute_sync_diff(1, 1, None, None, 100).await.unwrap();
+
+        assert_eq!(diff.new_books.len(), 75, "every shelf book must surface in the diff — no silent 50-cap");
+        assert!(!diff.has_more);
+        assert_eq!(diff.new_books.first().unwrap().book.id, 1);
+        assert_eq!(diff.new_books.last().unwrap().book.id, 75);
+        assert!(diff.upgraded_books.is_empty());
+        assert!(diff.refreshed_books.is_empty());
+    }
+
+    #[tokio::test]
     async fn test_sync_diff_no_companion_shelf_returns_empty() {
         let mut shelf_repo = MockShelfRepository::new();
         shelf_repo.expect_find_by_device_id().returning(|_, _| Box::pin(async { Ok(None) }));
