@@ -140,8 +140,9 @@ impl TagRepository for TagRepositoryAdapter {
             query = query.filter(tags::Column::Id.gte(start_id as i64));
         }
 
-        let page_size = Ord::min(page_size.unwrap_or(super::DEFAULT_PAGE_SIZE), super::MAX_PAGE_SIZE);
-        query = query.limit(page_size);
+        if let Some(page_size) = page_size {
+            query = query.limit(page_size);
+        }
 
         let rows = query.all(transaction).await.map_err(handle_dberr)?;
 

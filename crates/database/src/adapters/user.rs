@@ -151,8 +151,9 @@ impl UserRepository for UserRepositoryAdapter {
             query = query.filter(users::Column::Id.gte(start_id as i64));
         }
 
-        let page_size = page_size.unwrap_or(super::DEFAULT_PAGE_SIZE).min(super::MAX_PAGE_SIZE);
-        query = query.limit(page_size);
+        if let Some(page_size) = page_size {
+            query = query.limit(page_size);
+        }
 
         let users = query.all(transaction).await.map_err(handle_dberr)?;
 

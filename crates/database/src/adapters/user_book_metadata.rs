@@ -143,9 +143,6 @@ impl UserBookMetadataRepository for UserBookMetadataRepositoryAdapter {
         start_book_id: Option<BookId>,
         page_size: Option<u64>,
     ) -> Result<Vec<UserBookMetadata>, Error> {
-        const DEFAULT_PAGE_SIZE: u64 = 50;
-        const MAX_PAGE_SIZE: u64 = 200;
-
         if let Some(page_size) = page_size {
             if page_size < 1 {
                 return Err(Error::InvalidPageSize(page_size));
@@ -166,8 +163,10 @@ impl UserBookMetadataRepository for UserBookMetadataRepositoryAdapter {
             query = query.filter(user_book_metadata::Column::BookId.gte(start_id as i64));
         }
 
-        let limit = page_size.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE);
-        let rows = query.limit(limit).all(tx).await.map_err(handle_dberr)?;
+        if let Some(limit) = page_size {
+            query = query.limit(limit);
+        }
+        let rows = query.all(tx).await.map_err(handle_dberr)?;
 
         Ok(rows.into_iter().map(Into::into).collect())
     }

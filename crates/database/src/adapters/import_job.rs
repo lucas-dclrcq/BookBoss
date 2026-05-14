@@ -153,9 +153,6 @@ impl ImportJobRepository for ImportJobRepositoryAdapter {
         start_id: Option<ImportJobId>,
         page_size: Option<u64>,
     ) -> Result<Vec<ImportJob>, Error> {
-        const DEFAULT_PAGE_SIZE: u64 = 50;
-        const MAX_PAGE_SIZE: u64 = 50;
-
         if let Some(page_size) = page_size {
             if page_size < 1 {
                 return Err(Error::InvalidPageSize(page_size));
@@ -172,8 +169,9 @@ impl ImportJobRepository for ImportJobRepositoryAdapter {
             query = query.filter(import_jobs::Column::Id.gte(start_id as i64));
         }
 
-        let page_size = Ord::min(page_size.unwrap_or(DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE);
-        query = query.limit(page_size);
+        if let Some(page_size) = page_size {
+            query = query.limit(page_size);
+        }
 
         let rows = query.all(transaction).await.map_err(handle_dberr)?;
         Ok(rows.into_iter().map(Into::into).collect())

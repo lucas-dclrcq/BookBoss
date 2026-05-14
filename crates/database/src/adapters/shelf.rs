@@ -251,8 +251,9 @@ impl ShelfRepository for ShelfRepositoryAdapter {
             query = query.offset(offset);
         }
 
-        let page_size = page_size.unwrap_or(super::DEFAULT_PAGE_SIZE).min(super::MAX_PAGE_SIZE);
-        query = query.limit(page_size);
+        if let Some(page_size) = page_size {
+            query = query.limit(page_size);
+        }
 
         let rows = query.all(transaction).await.map_err(handle_dberr)?;
         Ok(rows.into_iter().map(Into::into).collect())

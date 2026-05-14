@@ -18,12 +18,6 @@ pub(crate) mod user;
 pub(crate) mod user_book_metadata;
 pub(crate) mod user_settings;
 
-/// Default and maximum page size used by paginated `list_*` methods.
-///
-/// `user_book_metadata` uses a higher cap and defines its own constants.
-pub(crate) const DEFAULT_PAGE_SIZE: u64 = 50;
-pub(crate) const MAX_PAGE_SIZE: u64 = 50;
-
 /// Case-insensitive equality filter on a `name` column.
 ///
 /// Produces `LOWER(col) = LOWER(name)`, matching the pattern used by
