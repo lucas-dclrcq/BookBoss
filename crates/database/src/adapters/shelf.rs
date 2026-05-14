@@ -815,6 +815,29 @@ mod tests {
         assert_eq!(page2.len(), 1);
     }
 
+    #[tokio::test]
+    async fn test_books_for_shelf_none_page_size_returns_all_rows() {
+        let svc = setup().await;
+        let user_id = new_user(&svc, "alice").await;
+        let mut book_ids = Vec::with_capacity(51);
+        for i in 0..51 {
+            book_ids.push(new_book(&svc, &format!("Book {i}")).await);
+        }
+        let tx = svc.repository().begin().await.unwrap();
+
+        let shelf = svc.shelf_repository().add_shelf(&*tx, manual_shelf(user_id, "Big shelf")).await.unwrap();
+        for book_id in book_ids {
+            svc.shelf_repository()
+                .add_book_to_shelf(&*tx, book_shelf_entry(book_id, shelf.id))
+                .await
+                .unwrap();
+        }
+
+        let entries = svc.shelf_repository().books_for_shelf(&*tx, shelf.id, None, None).await.unwrap();
+
+        assert_eq!(entries.len(), 51, "page_size=None must return every shelf entry");
+    }
+
     // ─── books_for_filter ────────────────────────────────────────────────────
 
     #[tokio::test]

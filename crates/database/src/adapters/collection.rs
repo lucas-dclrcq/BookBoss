@@ -250,6 +250,23 @@ mod tests {
         ));
     }
 
+    #[tokio::test]
+    async fn test_books_for_filter_none_page_size_returns_all_rows() {
+        let svc = setup().await;
+        for i in 0..51 {
+            add_book(&svc, &format!("Book {i}"), BookStatus::Available).await;
+        }
+        let tx = svc.repository().begin().await.unwrap();
+
+        let books = svc
+            .collection_repository()
+            .books_for_filter(&*tx, &empty_filter(), 0, None, None, None, None)
+            .await
+            .unwrap();
+
+        assert_eq!(books.len(), 51, "page_size=None must return every matching row");
+    }
+
     // ─── count_for_filter ────────────────────────────────────────────────────
 
     #[tokio::test]
