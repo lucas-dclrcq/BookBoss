@@ -68,7 +68,7 @@ fn read_zip_entry(epub_path: &Path, entry_path: &str) -> Result<Vec<u8>, crate::
 
 /// Parse META-INF/container.xml and return the `full-path` of the rootfile.
 pub(crate) fn find_opf_path(xml: &[u8]) -> Result<String, crate::Error> {
-    use quick_xml::{Reader, events::Event};
+    use quick_xml::{Reader, XmlVersion, events::Event};
     let mut reader = Reader::from_reader(xml);
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
@@ -79,7 +79,7 @@ pub(crate) fn find_opf_path(xml: &[u8]) -> Result<String, crate::Error> {
                 for attr in e.attributes() {
                     let attr = attr.map_err(quick_xml::Error::from)?;
                     if attr.key.as_ref() == b"full-path" {
-                        let val = attr.decode_and_unescape_value(reader.decoder())?;
+                        let val = attr.decoded_and_normalized_value(XmlVersion::Implicit1_0, reader.decoder())?;
                         return Ok(val.into_owned());
                     }
                 }

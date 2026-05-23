@@ -5,7 +5,7 @@ use std::{
 
 use bb_core::storage::BookSidecar;
 use quick_xml::{
-    Reader, Writer,
+    Reader, Writer, XmlVersion,
     events::{BytesEnd, BytesStart, Event},
 };
 use zip::{ZipArchive, ZipWriter, write::SimpleFileOptions};
@@ -245,10 +245,9 @@ fn ensure_cover_image_property(opf_xml: &str, item_id: &str) -> Result<String, E
         buf.clear();
         match reader.read_event_into(&mut buf)? {
             Event::Empty(ref e) if e.local_name().as_ref() == b"item" => {
-                let is_target = e
-                    .attributes()
-                    .flatten()
-                    .any(|a| a.key.as_ref() == b"id" && a.decode_and_unescape_value(reader.decoder()).ok().as_deref() == Some(item_id));
+                let is_target = e.attributes().flatten().any(|a| {
+                    a.key.as_ref() == b"id" && a.decoded_and_normalized_value(XmlVersion::Implicit1_0, reader.decoder()).ok().as_deref() == Some(item_id)
+                });
                 if is_target {
                     let patched = patch_cover_image_property(e, reader.decoder())?;
                     writer.write_event(Event::Empty(patched))?;
@@ -268,7 +267,7 @@ fn patch_cover_image_property(elem: &quick_xml::events::BytesStart<'_>, decoder:
     let mut found_properties = false;
     for attr in elem.attributes().flatten() {
         if attr.key.as_ref() == b"properties" {
-            let val = attr.decode_and_unescape_value(decoder)?;
+            let val = attr.decoded_and_normalized_value(XmlVersion::Implicit1_0, decoder)?;
             if val.split_whitespace().any(|p| p == "cover-image") {
                 new_elem.push_attribute(("properties", val.as_ref()));
             } else {
@@ -278,7 +277,7 @@ fn patch_cover_image_property(elem: &quick_xml::events::BytesStart<'_>, decoder:
             found_properties = true;
         } else {
             let key = std::str::from_utf8(attr.key.as_ref())?;
-            let val = attr.decode_and_unescape_value(decoder)?;
+            let val = attr.decoded_and_normalized_value(XmlVersion::Implicit1_0, decoder)?;
             new_elem.push_attribute((key, val.as_ref()));
         }
     }
