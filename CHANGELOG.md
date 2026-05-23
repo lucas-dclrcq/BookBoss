@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.29](https://github.com/szinn/BookBoss/compare/v0.8.28..v0.8.29) - 2026-05-23
+
+### Bug Fixes
+
+- _(core)_ Dedupe genres and tags by resolved id during book writes - ([5ddfd84](https://github.com/szinn/BookBoss/commit/5ddfd84fa597b0eb1f76b55ee885a6f6169ffb3c))
+
+### Miscellaneous Tasks
+
+- _(formats)_ Migrate off deprecated quick_xml::Attribute::decode_and_unescape_value - ([167c2d2](https://github.com/szinn/BookBoss/commit/167c2d25d3533abc58cb599be7482b17d814ff3e))
+
 ## [0.8.28](https://github.com/szinn/BookBoss/compare/v0.8.27..v0.8.28) - 2026-05-14
 
 ### Refactor
