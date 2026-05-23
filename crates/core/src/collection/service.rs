@@ -359,8 +359,12 @@ impl CollectionService for CollectionServiceImpl {
                     }
                 }
 
-                // Replace genres
+                // Replace genres. Dedupe by resolved genre id: find_by_name is case-
+                // insensitive while the trimmed input preserves case, so two source
+                // strings differing only in case resolve to the same row and would
+                // violate (book_id, genre_id).
                 book_repo2.delete_book_genres(tx, book_id).await?;
+                let mut seen_genre_ids = std::collections::HashSet::new();
                 for name in &edit_c.genres {
                     let name = name.trim();
                     if name.is_empty() {
@@ -370,11 +374,15 @@ impl CollectionService for CollectionServiceImpl {
                         Some(g) => g,
                         None => genre_repo.add_genre(tx, NewGenre { name: name.to_string() }).await?,
                     };
+                    if !seen_genre_ids.insert(genre.id) {
+                        continue;
+                    }
                     book_repo2.add_book_genre(tx, book_id, genre.id).await?;
                 }
 
-                // Replace tags
+                // Replace tags. Same case-insensitive find_by_name caveat as genres above.
                 book_repo2.delete_book_tags(tx, book_id).await?;
+                let mut seen_tag_ids = std::collections::HashSet::new();
                 for name in &edit_c.tags {
                     let name = name.trim();
                     if name.is_empty() {
@@ -384,6 +392,9 @@ impl CollectionService for CollectionServiceImpl {
                         Some(t) => t,
                         None => tag_repo.add_tag(tx, NewTag { name: name.to_string() }).await?,
                     };
+                    if !seen_tag_ids.insert(tag.id) {
+                        continue;
+                    }
                     book_repo2.add_book_tag(tx, book_id, tag.id).await?;
                 }
 
@@ -724,8 +735,12 @@ impl CollectionService for CollectionServiceImpl {
                     }
                 }
 
-                // Replace genres
+                // Replace genres. Dedupe by resolved genre id: find_by_name is case-
+                // insensitive while the trimmed input preserves case, so two source
+                // strings differing only in case resolve to the same row and would
+                // violate (book_id, genre_id).
                 book_repo2.delete_book_genres(tx, book_id).await?;
+                let mut seen_genre_ids = std::collections::HashSet::new();
                 for name in &edit_c.genres {
                     let name = name.trim();
                     if name.is_empty() {
@@ -735,11 +750,15 @@ impl CollectionService for CollectionServiceImpl {
                         Some(g) => g,
                         None => genre_repo.add_genre(tx, NewGenre { name: name.to_string() }).await?,
                     };
+                    if !seen_genre_ids.insert(genre.id) {
+                        continue;
+                    }
                     book_repo2.add_book_genre(tx, book_id, genre.id).await?;
                 }
 
-                // Replace tags
+                // Replace tags. Same case-insensitive find_by_name caveat as genres above.
                 book_repo2.delete_book_tags(tx, book_id).await?;
+                let mut seen_tag_ids = std::collections::HashSet::new();
                 for name in &edit_c.tags {
                     let name = name.trim();
                     if name.is_empty() {
@@ -749,6 +768,9 @@ impl CollectionService for CollectionServiceImpl {
                         Some(t) => t,
                         None => tag_repo.add_tag(tx, NewTag { name: name.to_string() }).await?,
                     };
+                    if !seen_tag_ids.insert(tag.id) {
+                        continue;
+                    }
                     book_repo2.add_book_tag(tx, book_id, tag.id).await?;
                 }
 

@@ -128,6 +128,37 @@ async fn process_job_dedupes_duplicate_authors() {
 }
 
 #[tokio::test]
+async fn process_job_dedupes_case_variant_genres() {
+    // Open Library subjects routinely include case-variant duplicates ("Fiction"
+    // and "FICTION", "Fantasy fiction" and "Fantasy Fiction"). GenreRepository::
+    // find_by_name is case-insensitive, so both variants resolve to one genre.id
+    // and without dedup the second add_book_genre violates (book_id, genre_id).
+    let metadata = ExtractedMetadata {
+        title: Some("The Test Book".to_string()),
+        authors: Some(vec![ExtractedAuthor {
+            name: "Test Author".to_string(),
+            role: Some(AuthorRole::Author),
+            sort_order: 0,
+        }]),
+        genres: vec!["Fiction".to_string(), "FICTION".to_string()],
+        ..Default::default()
+    };
+    let ctx = setup().await;
+    let svc = fixtures::pipeline_services(&ctx, metadata);
+    let job = fixtures::insert_import_job(&ctx.repos, "hash_duplicate_genres").await;
+
+    let updated = svc
+        .pipeline_service
+        .process_job(job)
+        .await
+        .expect("process_job must not fail on case-variant genres");
+
+    let book_id = updated.candidate_book_id.expect("candidate_book_id set");
+    let genres = svc.book_service.genres_for_book(book_id).await.unwrap();
+    assert_eq!(genres.len(), 1, "case-variant genres should be linked once");
+}
+
+#[tokio::test]
 async fn process_job_skips_non_pending_job() {
     let ctx = setup().await;
     let svc = fixtures::pipeline_services(&ctx, stub_metadata());

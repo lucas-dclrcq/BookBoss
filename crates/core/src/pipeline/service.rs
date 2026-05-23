@@ -545,7 +545,11 @@ impl PipelineServiceImpl {
                     }
                 }
 
-                // Add genres
+                // Add genres. Dedupe by resolved genre id: GenreRepository::find_by_name
+                // is case-insensitive while normalize_name preserves case, so two source
+                // strings differing only in case (e.g. Open Library subjects "Fiction"
+                // and "FICTION") resolve to the same row and violate (book_id, genre_id).
+                let mut seen_genre_ids = std::collections::HashSet::new();
                 for name in &fm.genres {
                     let name = normalize_name(name);
                     if name.is_empty() {
@@ -555,10 +559,14 @@ impl PipelineServiceImpl {
                         Some(g) => g,
                         None => genre_repo.add_genre(tx, NewGenre { name }).await?,
                     };
+                    if !seen_genre_ids.insert(genre.id) {
+                        continue;
+                    }
                     book_repo.add_book_genre(tx, book.id, genre.id).await?;
                 }
 
-                // Add tags
+                // Add tags. Same case-insensitive find_by_name caveat as genres above.
+                let mut seen_tag_ids = std::collections::HashSet::new();
                 for name in &fm.tags {
                     let name = normalize_name(name);
                     if name.is_empty() {
@@ -568,6 +576,9 @@ impl PipelineServiceImpl {
                         Some(t) => t,
                         None => tag_repo.add_tag(tx, NewTag { name }).await?,
                     };
+                    if !seen_tag_ids.insert(tag.id) {
+                        continue;
+                    }
                     book_repo.add_book_tag(tx, book.id, tag.id).await?;
                 }
 
