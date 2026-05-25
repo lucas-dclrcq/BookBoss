@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.30](https://github.com/szinn/BookBoss/compare/v0.8.29..v0.8.30) - 2026-05-25
+
+### Bug Fixes
+
+- _(frontend)_ Tolerate trailing-slash mismatch in OIDC issuer - ([33b82db](https://github.com/szinn/BookBoss/commit/33b82db311d1a52a418a01a8d37ef4d2aec39e46))
+
 ## [0.8.29](https://github.com/szinn/BookBoss/compare/v0.8.28..v0.8.29) - 2026-05-23
 
 ### Bug Fixes
