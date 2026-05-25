@@ -149,9 +149,24 @@ impl OidcClient {
             .build()
             .map_err(|e| OidcInitError::HttpClientFailed(e.to_string()))?;
 
-        let provider_metadata = CoreProviderMetadata::discover_async(issuer, &http_client)
-            .await
-            .map_err(|e| OidcInitError::DiscoveryFailed(error_chain(&e)))?;
+        let provider_metadata = match CoreProviderMetadata::discover_async(issuer, &http_client).await {
+            Ok(m) => m,
+            Err(first_err) => {
+                // Some IdPs (notably Authentik) publish their issuer with a
+                // trailing slash that gets stripped along with the well-known
+                // suffix. Retry once with the slash toggled before giving up.
+                let alt = match issuer_str.strip_suffix('/') {
+                    Some(stripped) => stripped.to_string(),
+                    None => format!("{issuer_str}/"),
+                };
+                match IssuerUrl::new(alt) {
+                    Ok(alt_issuer) => CoreProviderMetadata::discover_async(alt_issuer, &http_client)
+                        .await
+                        .map_err(|_| OidcInitError::DiscoveryFailed(error_chain(&first_err)))?,
+                    Err(_) => return Err(OidcInitError::DiscoveryFailed(error_chain(&first_err))),
+                }
+            }
+        };
 
         let client = CoreClient::from_provider_metadata(
             provider_metadata,
