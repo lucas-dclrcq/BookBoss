@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use aes_gcm::{
-    AeadCore, Aes256Gcm, KeyInit,
-    aead::{Aead, generic_array::GenericArray},
+    Aes256Gcm, KeyInit, Nonce,
+    aead::{Aead, Generate, Key},
 };
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use rand::RngExt;
@@ -42,8 +42,8 @@ pub(crate) struct OpdsServiceImpl {
 impl OpdsServiceImpl {
     pub(crate) fn new(repository_service: Arc<RepositoryService>, encryption_secret: &str) -> Self {
         let hash = Sha256::digest(encryption_secret.as_bytes());
-        let key = GenericArray::from_slice(&hash);
-        let cipher = Aes256Gcm::new(key);
+        let key = Key::<Aes256Gcm>::try_from(hash.as_slice()).expect("SHA-256 output is 32 bytes");
+        let cipher = Aes256Gcm::new(&key);
         Self { repository_service, cipher }
     }
 }
@@ -59,7 +59,7 @@ fn generate_opds_password() -> String {
 }
 
 fn encrypt_password(cipher: &Aes256Gcm, plaintext: &str) -> Result<String, Error> {
-    let nonce = Aes256Gcm::generate_nonce(&mut aes_gcm::aead::OsRng);
+    let nonce = Nonce::generate();
     let ciphertext = cipher.encrypt(&nonce, plaintext.as_bytes()).map_err(|e| Error::CryptoError(e.to_string()))?;
 
     // Store as base64: nonce (12 bytes) || ciphertext
@@ -76,8 +76,8 @@ fn decrypt_password(cipher: &Aes256Gcm, stored: &str) -> Result<String, Error> {
     }
 
     let (nonce_bytes, ciphertext) = combined.split_at(12);
-    let nonce = aes_gcm::Nonce::from_slice(nonce_bytes);
-    let plaintext = cipher.decrypt(nonce, ciphertext).map_err(|e| Error::CryptoError(e.to_string()))?;
+    let nonce = Nonce::try_from(nonce_bytes).map_err(|e| Error::CryptoError(e.to_string()))?;
+    let plaintext = cipher.decrypt(&nonce, ciphertext).map_err(|e| Error::CryptoError(e.to_string()))?;
 
     String::from_utf8(plaintext).map_err(|e| Error::CryptoError(e.to_string()))
 }
@@ -183,8 +183,8 @@ mod tests {
 
     fn test_cipher() -> Aes256Gcm {
         let hash = Sha256::digest(TEST_SECRET.as_bytes());
-        let key = GenericArray::from_slice(&hash);
-        Aes256Gcm::new(key)
+        let key = Key::<Aes256Gcm>::try_from(hash.as_slice()).expect("SHA-256 output is 32 bytes");
+        Aes256Gcm::new(&key)
     }
 
     #[test]
@@ -235,8 +235,8 @@ mod tests {
         let encrypted = encrypt_password(&cipher, "secret").unwrap();
 
         let wrong_hash = Sha256::digest(b"wrong-secret");
-        let wrong_key = GenericArray::from_slice(&wrong_hash);
-        let wrong_cipher = Aes256Gcm::new(wrong_key);
+        let wrong_key = Key::<Aes256Gcm>::try_from(wrong_hash.as_slice()).expect("SHA-256 output is 32 bytes");
+        let wrong_cipher = Aes256Gcm::new(&wrong_key);
         decrypt_password(&wrong_cipher, &encrypted).unwrap_err();
     }
 
