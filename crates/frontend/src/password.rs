@@ -17,6 +17,38 @@ pub(crate) fn password_is_valid(pw: &str) -> bool {
     password_requirements(pw).iter().all(|(_, ok)| *ok)
 }
 
+/// Generates a random password that satisfies [`password_is_valid`]: one of
+/// each required character class plus filler, shuffled. Used both for
+/// admin-created accounts and for auto-provisioned SSO accounts (which never
+/// use it, but the `users` table requires a hash).
+#[cfg(feature = "server")]
+pub(crate) fn make_password() -> String {
+    use rand::RngExt;
+
+    const UPPER: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const LOWER: &[u8] = b"abcdefghijklmnopqrstuvwxyz";
+    const DIGITS: &[u8] = b"0123456789";
+    const ALL: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;:,.<>?";
+
+    let mut rng = rand::rng();
+    // Guarantee one of each required character class.
+    let mut pw: Vec<u8> = vec![
+        UPPER[rng.random_range(0..UPPER.len())],
+        LOWER[rng.random_range(0..LOWER.len())],
+        DIGITS[rng.random_range(0..DIGITS.len())],
+        SPECIAL_CHARS.as_bytes()[rng.random_range(0..SPECIAL_CHARS.len())],
+    ];
+    for _ in pw.len()..16 {
+        pw.push(ALL[rng.random_range(0..ALL.len())]);
+    }
+    // Fisher-Yates shuffle so the guaranteed classes aren't always in front.
+    for i in (1..pw.len()).rev() {
+        let j = rng.random_range(0..=i);
+        pw.swap(i, j);
+    }
+    String::from_utf8(pw).expect("all bytes are valid ASCII")
+}
+
 /// Server-side password strength validation. Returns `Err` with a user-facing
 /// message if the password does not satisfy all requirements.
 #[cfg(feature = "server")]

@@ -40,6 +40,13 @@ const REQUEST_ID_HEADER: &str = "x-request-id";
 const DEFAULT_EXPIRATION_DURATION: Duration = Duration::days(7);
 const MAX_REQUEST_BODY_SIZE: usize = 70 * 1024 * 1024; // 70 MiB
 
+/// Server-wide mirror of [`OidcConfig::auto_provision`], exposed as an axum
+/// `Extension` so both the OIDC callback and the admin settings server fns can
+/// read it — even when SSO is not otherwise configured (in which case it is
+/// `false`).
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct AutoProvisionEnabled(pub bool);
+
 pub struct FrontendSubsystem {
     config: FrontendConfig,
     oidc_config: Option<OidcConfig>,
@@ -121,10 +128,15 @@ impl IntoSubsystem<anyhow::Error> for FrontendSubsystem {
             app_router = app_router.merge(oidc::oidc_router()).layer(Extension(client)).layer(Extension(Arc::new(cfg)));
         }
 
+        // Expose the auto-provision gate to every route (callback + admin server
+        // fns). `false` when SSO is not configured.
+        let auto_provision = AutoProvisionEnabled(self.oidc_config.as_ref().is_some_and(|c| c.auto_provision));
+
         let app_router = app_router
             .layer(Extension(core_services.health_service.clone()))
             .layer(Extension(core_services))
             .layer(Extension(frontend_config))
+            .layer(Extension(auto_provision))
             .layer(middleware);
 
         let health_handler = || async { axum::http::StatusCode::OK };

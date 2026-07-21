@@ -505,40 +505,11 @@ pub(crate) async fn admin_delete_user(token: String) -> Result<(), ServerFnError
 pub(crate) async fn generate_password() -> Result<String, ServerFnError> {
     authenticated_user(&auth_session)?;
 
-    Ok(make_password())
+    Ok(crate::password::make_password())
 }
 
 #[cfg(feature = "server")]
-fn make_password() -> String {
-    use rand::RngExt;
-
-    const UPPER: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    const LOWER: &[u8] = b"abcdefghijklmnopqrstuvwxyz";
-    const DIGITS: &[u8] = b"0123456789";
-    const SPECIAL: &[u8] = b"!@#$%^&*()_+-=[]{}|;:,.<>?";
-    const ALL: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;:,.<>?";
-
-    let mut rng = rand::rng();
-    // Guarantee one of each required character class
-    let mut pw: Vec<u8> = vec![
-        UPPER[rng.random_range(0..UPPER.len())],
-        LOWER[rng.random_range(0..LOWER.len())],
-        DIGITS[rng.random_range(0..DIGITS.len())],
-        SPECIAL[rng.random_range(0..SPECIAL.len())],
-    ];
-    for _ in 4..16 {
-        pw.push(ALL[rng.random_range(0..ALL.len())]);
-    }
-    // Fisher-Yates shuffle
-    for i in (1..pw.len()).rev() {
-        let j = rng.random_range(0..=i);
-        pw.swap(i, j);
-    }
-    String::from_utf8(pw).expect("all bytes are valid ASCII")
-}
-
-#[cfg(feature = "server")]
-fn parse_capabilities(capabilities: &[String]) -> Result<bb_core::types::Capabilities, ServerFnError> {
+pub(super) fn parse_capabilities(capabilities: &[String]) -> Result<bb_core::types::Capabilities, ServerFnError> {
     use std::collections::HashSet;
     let mut caps = HashSet::new();
     for s in capabilities {

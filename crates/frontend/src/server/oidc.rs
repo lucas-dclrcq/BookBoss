@@ -235,6 +235,9 @@ async fn start_handler(Extension(client): Extension<Arc<OidcClient>>) -> axum::r
         )
         .add_scope(Scope::new("openid".to_string()))
         .add_scope(Scope::new("email".to_string()))
+        // `profile` gives us `preferred_username` / `name` for provisioned
+        // accounts; harmless for the match-by-email path.
+        .add_scope(Scope::new("profile".to_string()))
         .set_pkce_challenge(pkce_challenge)
         .url();
 
@@ -255,6 +258,7 @@ async fn start_handler(Extension(client): Extension<Arc<OidcClient>>) -> axum::r
 async fn callback_handler(
     Extension(client): Extension<Arc<OidcClient>>,
     Extension(core_services): Extension<Arc<bb_core::CoreServices>>,
+    Extension(auto_provision): Extension<super::AutoProvisionEnabled>,
     auth_session: super::AuthSession,
     Query(query): Query<CallbackQuery>,
 ) -> axum::response::Response {
@@ -365,15 +369,36 @@ async fn callback_handler(
         }
     };
 
-    // ── Look up BookBoss user ─────────────────────────────────────────────
+    // ── Look up BookBoss user (auto-provision if enabled) ─────────────────
     let user = match core_services.auth_service.is_valid_email(&email).await {
         Ok(Some(u)) => u,
         Ok(None) => {
-            tracing::error!(
-                email = %email,
-                "OIDC callback: no BookBoss user with this email — check that a BookBoss user has this exact email_address (case-sensitive)"
-            );
-            return failure_redirect();
+            if !auto_provision.0 {
+                tracing::error!(
+                    email = %email,
+                    "OIDC callback: no BookBoss user with this email — check that a BookBoss user has this exact email_address (case-sensitive)"
+                );
+                return failure_redirect();
+            }
+            // Prefer IdP-provided identity (requires the `profile` scope); fall
+            // back to the email local-part inside `provision_user`.
+            let preferred_username = claims.preferred_username().map(|u| u.as_str().to_string());
+            let full_name_hint = claims.name().and_then(|n| n.get(None)).map(|n| n.as_str().to_string());
+            match provision_user(&core_services, &email, preferred_username, full_name_hint).await {
+                Ok(u) => {
+                    tracing::info!(
+                        username = %u.username,
+                        email = %email,
+                        sub = %claims.subject().as_str(),
+                        "OIDC callback: auto-provisioned new user"
+                    );
+                    u
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, email = %email, "OIDC callback: auto-provisioning failed");
+                    return failure_redirect();
+                }
+            }
         }
         Err(e) => {
             tracing::error!(error = %e, "OIDC callback: user lookup failed");
@@ -389,4 +414,91 @@ async fn callback_handler(
 
 fn failure_redirect() -> axum::response::Response {
     Redirect::to("/?login_failed=1").into_response()
+}
+
+/// Auto-provisions a BookBoss account for an OIDC login with no matching local
+/// user, applying the defaults configured under Settings > Users.
+///
+/// `preferred_username` / `full_name_hint` come from the IdP (`profile` scope);
+/// both fall back to the email local-part. The generated password is never used
+/// (SSO accounts authenticate via the IdP) but satisfies the `users` schema.
+async fn provision_user(
+    core: &bb_core::CoreServices,
+    email: &bb_core::types::EmailAddress,
+    preferred_username: Option<String>,
+    full_name_hint: Option<String>,
+) -> Result<bb_core::user::User, bb_core::Error> {
+    use bb_core::{library::LibraryToken, types::Capability, user::NewUser};
+
+    let defaults = core.app_setting_service.oidc_provisioning_defaults().await?;
+
+    // Enforce the documented invariant at the trust boundary: SuperAdmin is never
+    // auto-provisioned, whatever the stored defaults happen to contain.
+    let mut capabilities = defaults.capabilities.clone();
+    capabilities.remove(&Capability::SuperAdmin);
+
+    let local_part = email.as_str().split('@').next().unwrap_or_else(|| email.as_str()).to_string();
+    let base_username = preferred_username
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| local_part.clone());
+    let full_name = full_name_hint
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| base_username.clone());
+
+    let username = unique_username(core, &base_username).await?;
+
+    let new_user = NewUser::new(
+        username,
+        crate::password::make_password(),
+        email.as_str(),
+        capabilities,
+        full_name,
+        // SSO accounts never log in with a password, so never force a change
+        // (which would otherwise trap the user with no password form to fill).
+        false,
+    )?;
+    let user = core.user_service.add_user(new_user).await?;
+
+    // Assign the configured libraries (best-effort). The user row is already
+    // committed, so a failing assignment must not abort with `?`: doing so would
+    // leave a half-provisioned account that the next login skips re-provisioning
+    // for (is_valid_email now matches), stranding it permanently. A stale/deleted
+    // but well-formed token would otherwise brick every future provisioning.
+    for token_str in &defaults.library_tokens {
+        if let Ok(token) = token_str.parse::<LibraryToken>() {
+            if let Err(e) = core.library_service.assign_library_to_user(user.id, token).await {
+                tracing::warn!(error = %e, token = %token_str, "OIDC provisioning: could not assign library; skipping");
+            }
+        } else {
+            tracing::warn!(token = %token_str, "OIDC provisioning: skipping malformed library token");
+        }
+    }
+
+    // Set the default library (best-effort — a bad default must not block an
+    // otherwise-successful provisioning; it falls back to All Books).
+    if let Some(default_str) = defaults.default_library.as_deref() {
+        if let Ok(token) = default_str.parse::<LibraryToken>() {
+            if let Err(e) = core.library_service.set_default_library(user.id, token).await {
+                tracing::warn!(error = %e, "OIDC provisioning: could not set default library; falling back to All Books");
+            }
+        } else {
+            tracing::warn!(token = %default_str, "OIDC provisioning: malformed default library token");
+        }
+    }
+
+    Ok(user)
+}
+
+/// Finds a free username derived from `base`, appending `2`, `3`, … on
+/// collision (usernames are matched case-insensitively).
+async fn unique_username(core: &bb_core::CoreServices, base: &str) -> Result<String, bb_core::Error> {
+    for suffix in 0..1000u32 {
+        let candidate = if suffix == 0 { base.to_string() } else { format!("{base}{}", suffix + 1) };
+        if core.user_service.find_by_username(&candidate).await?.is_none() {
+            return Ok(candidate);
+        }
+    }
+    Err(bb_core::Error::Validation(format!("could not derive a unique username from '{base}'")))
 }

@@ -60,6 +60,13 @@ pub struct OidcConfig {
     /// Login page button text. Defaults to "Sign in with SSO".
     /// Environment variable: `BOOKBOSS__OIDC__BUTTON_LABEL`
     pub button_label: Option<String>,
+
+    /// When `true`, an OIDC login whose email matches no existing BookBoss user
+    /// auto-provisions a new account using the defaults configured under
+    /// Settings > Users. When `false` (the default), such logins are rejected.
+    /// Environment variable: `BOOKBOSS__OIDC__AUTO_PROVISION`
+    #[serde(default)]
+    pub auto_provision: bool,
 }
 
 impl OidcConfig {
@@ -200,6 +207,7 @@ mod tests {
             client_id: Some("bookboss".into()),
             client_secret: Some("secret".into()),
             button_label: None,
+            auto_provision: false,
         };
         assert!(config.is_set());
         assert!(config.is_sso_available());
@@ -212,6 +220,7 @@ mod tests {
             client_id: None,
             client_secret: None,
             button_label: None,
+            auto_provision: false,
         };
         assert!(config.is_set());
         // Partial config — should log via tracing::error! and return false.

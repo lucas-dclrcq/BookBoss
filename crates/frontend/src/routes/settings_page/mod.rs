@@ -2,6 +2,7 @@ mod application_section;
 mod genre_tags_section;
 mod libraries_section;
 mod messages_section;
+mod oidc_provisioning;
 mod tasks_section;
 mod users_section;
 
@@ -10,6 +11,7 @@ use dioxus::prelude::*;
 use genre_tags_section::GenreTagsSection;
 use libraries_section::LibrariesSection;
 use messages_section::MessagesSection;
+use oidc_provisioning::OidcProvisioningPanel;
 use tasks_section::TasksSection;
 use users_section::UsersSection;
 
@@ -201,6 +203,7 @@ pub(crate) fn SettingsPage() -> Element {
             div { class: "flex-1 overflow-auto p-8 flex flex-col items-center",
                 match active_section() {
                     Section::Users => rsx! {
+                        OidcProvisioningPanel { is_super_admin: context.is_super_admin }
                         UsersSection {
                             is_super_admin: context.is_super_admin,
                             current_user_token: context.current_user_token.clone(),
