@@ -1,0 +1,28 @@
+[package]
+name = "bb-download"
+description = "BookBoss direct-download source adapters (Anna's Archive)"
+autotests = false
+
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+bb-core.workspace = true
+
+async-trait.workspace = true
+reqwest.workspace = true
+scraper.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+bb-core = { workspace = true, features = ["test-support"] }
+tokio.workspace = true
+wiremock.workspace = true
+
+[lints]
+workspace = true

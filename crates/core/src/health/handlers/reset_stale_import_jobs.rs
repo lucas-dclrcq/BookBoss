@@ -113,7 +113,7 @@ mod tests {
     use super::*;
     use crate::{
         book::FileFormat,
-        import::{ImportJob, ImportJobToken, repository::import_job::MockImportJobRepository},
+        import::{ImportJob, ImportJobToken, ImportOrigin, repository::import_job::MockImportJobRepository},
         message::repository::MockSystemMessageRepository,
         repository::testing::default_repository_service_builder,
         test_support::*,
@@ -128,6 +128,7 @@ mod tests {
             file_hash: format!("hash_{id}"),
             file_format: FileFormat::Epub,
             detected_at: Utc::now(),
+            source: ImportOrigin::Bookdrop,
             status,
             candidate_book_id: None,
             metadata_source: None,

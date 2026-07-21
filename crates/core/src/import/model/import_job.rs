@@ -104,6 +104,51 @@ impl FromStr for ImportSource {
     }
 }
 
+/// How a file entered the import queue.
+///
+/// Distinct from [`ImportSource`], which records which provider populated the
+/// *metadata*. This records how the *file* arrived, so the Incoming list can
+/// show its origin.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ImportOrigin {
+    /// Auto-detected in the bookdrop folder by the scanner.
+    #[default]
+    Bookdrop,
+    /// Uploaded through the Incoming page.
+    Upload,
+    /// Downloaded from Anna's Archive.
+    AnnasArchive,
+}
+
+impl ImportOrigin {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Bookdrop => "bookdrop",
+            Self::Upload => "upload",
+            Self::AnnasArchive => "annas_archive",
+        }
+    }
+}
+
+impl fmt::Display for ImportOrigin {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for ImportOrigin {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "bookdrop" => Ok(Self::Bookdrop),
+            "upload" => Ok(Self::Upload),
+            "annas_archive" => Ok(Self::AnnasArchive),
+            _ => Err(format!("unknown import origin: {s}")),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ImportJob {
     pub id: ImportJobId,
@@ -113,6 +158,8 @@ pub struct ImportJob {
     pub file_hash: String,
     pub file_format: FileFormat,
     pub detected_at: DateTime<Utc>,
+    /// How this file entered the queue (bookdrop, upload, Anna's Archive).
+    pub source: ImportOrigin,
     pub status: ImportStatus,
     pub candidate_book_id: Option<BookId>,
     pub metadata_source: Option<ImportSource>,
@@ -130,6 +177,7 @@ pub struct NewImportJob {
     pub file_hash: String,
     pub file_format: FileFormat,
     pub detected_at: DateTime<Utc>,
+    pub source: ImportOrigin,
 }
 
 /// Job queue payload for processing a newly discovered import file.

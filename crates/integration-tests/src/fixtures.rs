@@ -301,6 +301,7 @@ pub async fn insert_import_job(repos: &RepositoryService, file_hash: &str) -> Im
                         file_hash,
                         file_format: bb_core::book::FileFormat::Epub,
                         detected_at: Utc::now(),
+                        source: bb_core::import::ImportOrigin::Bookdrop,
                     },
                 )
                 .await

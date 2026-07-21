@@ -23,7 +23,7 @@ static USER_LIBRARIES: GlobalSignal<Vec<UserLibraryDto>> = Signal::global(Vec::n
 /// suspends and therefore never causes the flash-to-empty artifact.
 static INCOMING_PENDING_COUNT: GlobalSignal<Option<u32>> = Signal::global(|| None);
 
-use crate::components::{IncomingRefresh, JobsRefresh};
+use crate::components::{DOWNLOAD_MODAL_OPEN, DownloadModal, IncomingRefresh, JobsRefresh};
 
 #[post("/api/v1/incoming/trigger_scan", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
 async fn trigger_bookdrop_scan() -> Result<(), ServerFnError> {
@@ -1009,6 +1009,9 @@ pub(crate) fn NavBar() -> Element {
         }
         if show_about() {
             AboutModal { on_close: move |()| show_about.set(false) }
+        }
+        if DOWNLOAD_MODAL_OPEN() {
+            DownloadModal { on_close: move |()| *DOWNLOAD_MODAL_OPEN.write() = false }
         }
     }
 }

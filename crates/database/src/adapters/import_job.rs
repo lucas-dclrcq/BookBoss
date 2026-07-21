@@ -28,6 +28,7 @@ impl From<import_jobs::Model> for ImportJob {
             file_hash: m.file_hash,
             file_format: m.file_format.parse().expect("DB has unknown file format"),
             detected_at: m.detected_at.with_timezone(&Utc),
+            source: m.source.parse().expect("DB has unknown import origin"),
             status: m.status.parse().expect("DB has unknown import status"),
             candidate_book_id: m.candidate_book_id.map(|id| id as u64),
             metadata_source: m.metadata_source.as_deref().map(|s| s.parse().expect("DB has unknown import source")),
@@ -65,6 +66,7 @@ impl ImportJobRepository for ImportJobRepositoryAdapter {
             file_hash: Set(job.file_hash),
             file_format: Set(job.file_format.as_str().to_owned()),
             detected_at: Set(job.detected_at.into()),
+            source: Set(job.source.as_str().to_owned()),
             status: Set(ImportStatus::Pending.to_string()),
             candidate_book_id: Set(None),
             metadata_source: Set(None),
@@ -295,7 +297,7 @@ mod tests {
     use bb_core::{
         Error, RepositoryError,
         book::FileFormat,
-        import::{ImportJob, ImportStatus, NewImportJob},
+        import::{ImportJob, ImportOrigin, ImportStatus, NewImportJob},
         repository::RepositoryService,
         user::NewUser,
     };
@@ -320,6 +322,7 @@ mod tests {
             file_hash: format!("hash_{file_path}"),
             file_format: bb_core::book::FileFormat::Epub,
             detected_at: Utc::now(),
+            source: ImportOrigin::Bookdrop,
         }
     }
 
@@ -339,6 +342,32 @@ mod tests {
         assert_eq!(job.file_format, bb_core::book::FileFormat::Epub);
         assert_eq!(job.status, ImportStatus::Pending);
         assert_eq!(job.token.id(), job.id);
+    }
+
+    #[tokio::test]
+    async fn test_add_job_persists_source() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let inserted = svc
+            .import_job_repository()
+            .add_job(
+                &*tx,
+                NewImportJob {
+                    file_path: "/watch/annas.epub".to_owned(),
+                    file_hash: "annas_hash".to_owned(),
+                    file_format: bb_core::book::FileFormat::Epub,
+                    detected_at: Utc::now(),
+                    source: ImportOrigin::AnnasArchive,
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(inserted.source, ImportOrigin::AnnasArchive);
+
+        // The origin must round-trip through a fresh read from the DB column.
+        let fetched = svc.import_job_repository().find_by_id(&*tx, inserted.id).await.unwrap().unwrap();
+        assert_eq!(fetched.source, ImportOrigin::AnnasArchive);
     }
 
     // ─── find_by_id ──────────────────────────────────────────────────────────
@@ -573,6 +602,7 @@ mod tests {
             file_hash: "ghosthash".to_owned(),
             file_format: FileFormat::Epub,
             detected_at: Utc::now(),
+            source: ImportOrigin::Bookdrop,
             status: ImportStatus::Pending,
             candidate_book_id: None,
             metadata_source: None,
@@ -604,6 +634,7 @@ mod tests {
             file_hash: "hash".to_owned(),
             file_format: FileFormat::Epub,
             detected_at: Utc::now(),
+            source: ImportOrigin::Bookdrop,
             status: ImportStatus::Pending,
             candidate_book_id: None,
             metadata_source: None,

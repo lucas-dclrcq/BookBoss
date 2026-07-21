@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use bb_api::ApiConfig;
 use bb_database::DatabaseConfig;
+use bb_download::AnnasArchiveConfig;
 use bb_frontend::{FrontendConfig, OidcConfig};
 use bb_metadata::MetadataConfig;
 use serde::Deserialize;
@@ -34,6 +35,8 @@ pub struct LibraryConfig {
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
+    #[serde(default)]
+    pub annas_archive: AnnasArchiveConfig,
     #[serde(default)]
     pub api: ApiConfig,
     pub database: DatabaseConfig,

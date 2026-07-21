@@ -45,6 +45,11 @@ pub trait JobRepository: Send + Sync {
     /// type.
     async fn count_all_pending(&self, transaction: &dyn Transaction) -> Result<u64, Error>;
 
+    /// List jobs of the given type that are still relevant to the user —
+    /// pending, running, or failed — most recent first. Used to surface
+    /// in-flight and failed download activity in the UI.
+    async fn list_active_by_type(&self, transaction: &dyn Transaction, job_type: &str) -> Result<Vec<Job>, Error>;
+
     /// Delete completed or failed jobs older than the given cutoff.
     /// Returns the number of jobs deleted.
     async fn delete_old_jobs(&self, transaction: &dyn Transaction, cutoff: DateTime<Utc>) -> Result<u64, Error>;

@@ -155,6 +155,7 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     use bb_api::create_api_subsystem;
     use bb_core::{ExternalServicesBuilder, create_core_subsystem, create_services, format::FormatService};
     use bb_database::{create_repository_service, open_database};
+    use bb_download::before_start as download_before_start;
     use bb_formats::create_format_service;
     use bb_frontend::server::create_frontend_subsystem;
     use bb_metadata::before_start as metadata_before_start;
@@ -184,6 +185,8 @@ async fn cmd_server(config: bookboss::config::Config) -> anyhow::Result<()> {
     bb_core::before_start(&core_services);
     // Register configured metadata providers into the metadata service.
     metadata_before_start(&core_services, &config.metadata);
+    // Register the Anna's Archive download source (only if enabled + keyed).
+    download_before_start(&core_services, &config.annas_archive);
 
     let api_subsystem = create_api_subsystem(&config.api, core_services.clone());
     let core_subsystem = create_core_subsystem(core_services.clone(), worker_poll_interval);

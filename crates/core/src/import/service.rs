@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use crate::{
     Error,
     book::FileFormat,
-    import::{ImportJob, ImportJobId, ImportJobToken, ImportStatus, NewImportJob, ProcessImportPayload, scanner::ScanTrigger},
+    import::{ImportJob, ImportJobId, ImportJobToken, ImportOrigin, ImportStatus, NewImportJob, ProcessImportPayload, scanner::ScanTrigger},
     jobs::JobRepositoryExt,
     repository::{RepositoryService, read_only_transaction, transaction},
     user::UserId,
@@ -47,10 +47,11 @@ pub trait ImportJobService: Send + Sync {
         file_hash: String,
         file_format: FileFormat,
         detected_at: DateTime<Utc>,
+        source: ImportOrigin,
     ) -> Result<FileQueueStatus, Error>;
     /// Validates, hashes, writes to the bookdrop folder, and enqueues the bytes
     /// as a new import job. Returns the queue status.
-    async fn queue_bytes_if_new(&self, filename: String, bytes: Vec<u8>) -> Result<FileQueueStatus, Error>;
+    async fn queue_bytes_if_new(&self, filename: String, bytes: Vec<u8>, source: ImportOrigin) -> Result<FileQueueStatus, Error>;
 
     /// On startup crash-recovery: resets any `Extracting`/`Identifying` jobs
     /// back to `Pending`, then re-enqueues every `Pending` job so none are
@@ -144,6 +145,7 @@ impl ImportJobService for ImportJobServiceImpl {
         file_hash: String,
         file_format: FileFormat,
         detected_at: DateTime<Utc>,
+        source: ImportOrigin,
     ) -> Result<FileQueueStatus, Error> {
         with_transaction!(self, import_job_repository, book_repository, author_repository, job_repository, |tx| {
             if let Some(book_file) = book_repository.find_file_by_hash(tx, &file_hash).await? {
@@ -172,6 +174,7 @@ impl ImportJobService for ImportJobServiceImpl {
                         file_hash,
                         file_format,
                         detected_at,
+                        source,
                     },
                 )
                 .await?;
@@ -181,7 +184,7 @@ impl ImportJobService for ImportJobServiceImpl {
         })
     }
 
-    async fn queue_bytes_if_new(&self, filename: String, bytes: Vec<u8>) -> Result<FileQueueStatus, Error> {
+    async fn queue_bytes_if_new(&self, filename: String, bytes: Vec<u8>, source: ImportOrigin) -> Result<FileQueueStatus, Error> {
         // Reject filenames that could escape the bookdrop directory.
         if filename.contains('/') || filename.contains('\\') || filename.contains("..") {
             return Err(Error::Validation("Filename contains invalid characters".into()));
@@ -199,11 +202,22 @@ impl ImportJobService for ImportJobServiceImpl {
 
         let file_hash = bb_utils::hash::hash_bytes(&bytes);
         let dest = bookdrop_path.join(&filename);
-        tokio::fs::write(&dest, &bytes)
+
+        // Write to a temp file, then atomically rename into place. The bookdrop
+        // directory is watched by the scanner, and a plain write can be picked
+        // up mid-write — the scanner then reads a ZIP whose central directory
+        // isn't there yet and fails the import with "file not found in archive".
+        // A `.part` suffix is not a recognised e-book extension, so the scanner
+        // skips it until the rename publishes the complete file.
+        let tmp = bookdrop_path.join(format!("{filename}.part"));
+        tokio::fs::write(&tmp, &bytes)
             .await
             .map_err(|e| Error::Infrastructure(format!("Failed to write to bookdrop: {e}")))?;
+        tokio::fs::rename(&tmp, &dest)
+            .await
+            .map_err(|e| Error::Infrastructure(format!("Failed to finalize bookdrop file: {e}")))?;
 
-        self.queue_file_if_new(dest.to_string_lossy().to_string(), file_hash, FileFormat::Epub, Utc::now())
+        self.queue_file_if_new(dest.to_string_lossy().to_string(), file_hash, FileFormat::Epub, Utc::now(), source)
             .await
     }
 
@@ -283,7 +297,7 @@ mod tests {
     use crate::{
         Error, RepositoryError,
         book::repository::{author::MockAuthorRepository, book::MockBookRepository},
-        import::{ImportJob, ImportJobId, ImportJobToken, ImportStatus, repository::import_job::MockImportJobRepository},
+        import::{ImportJob, ImportJobId, ImportJobToken, ImportOrigin, ImportStatus, repository::import_job::MockImportJobRepository},
         jobs::repository::MockJobRepository,
     };
 
@@ -339,6 +353,7 @@ mod tests {
             file_hash: "abc123".to_owned(),
             file_format: crate::book::FileFormat::Epub,
             detected_at: Utc::now(),
+            source: ImportOrigin::Bookdrop,
             status,
             candidate_book_id: None,
             metadata_source: None,
@@ -485,7 +500,13 @@ mod tests {
         let svc = create_service_with_all_repos(import_mock, book_mock, job_mock);
 
         let result = svc
-            .queue_file_if_new("/watch/test.epub".into(), "abc123".into(), crate::book::FileFormat::Epub, Utc::now())
+            .queue_file_if_new(
+                "/watch/test.epub".into(),
+                "abc123".into(),
+                crate::book::FileFormat::Epub,
+                Utc::now(),
+                ImportOrigin::Bookdrop,
+            )
             .await
             .unwrap();
 
@@ -515,7 +536,13 @@ mod tests {
         let svc = create_service_with_author_repos(import_mock, book_mock, author_mock, job_mock);
 
         let result = svc
-            .queue_file_if_new("/watch/test.epub".into(), "abc123".into(), crate::book::FileFormat::Epub, Utc::now())
+            .queue_file_if_new(
+                "/watch/test.epub".into(),
+                "abc123".into(),
+                crate::book::FileFormat::Epub,
+                Utc::now(),
+                ImportOrigin::Bookdrop,
+            )
             .await;
 
         result.unwrap();
@@ -556,7 +583,13 @@ mod tests {
         let svc = create_service_with_all_repos(import_mock, book_mock, job_mock);
 
         let result = svc
-            .queue_file_if_new("/watch/new.epub".into(), "newHash".into(), crate::book::FileFormat::Epub, Utc::now())
+            .queue_file_if_new(
+                "/watch/new.epub".into(),
+                "newHash".into(),
+                crate::book::FileFormat::Epub,
+                Utc::now(),
+                ImportOrigin::Bookdrop,
+            )
             .await;
 
         result.unwrap();
@@ -590,7 +623,13 @@ mod tests {
         let svc = create_service_with_author_repos(import_mock, book_mock, author_mock, job_mock);
 
         let result = svc
-            .queue_file_if_new("/watch/dupe.epub".into(), "dupeHash".into(), crate::book::FileFormat::Epub, Utc::now())
+            .queue_file_if_new(
+                "/watch/dupe.epub".into(),
+                "dupeHash".into(),
+                crate::book::FileFormat::Epub,
+                Utc::now(),
+                ImportOrigin::Bookdrop,
+            )
             .await
             .unwrap();
 
@@ -618,7 +657,13 @@ mod tests {
         let svc = create_service_with_author_repos(import_mock, book_mock, author_mock, job_mock);
 
         let result = svc
-            .queue_file_if_new("/watch/dupe.epub".into(), "abc123".into(), crate::book::FileFormat::Epub, Utc::now())
+            .queue_file_if_new(
+                "/watch/dupe.epub".into(),
+                "abc123".into(),
+                crate::book::FileFormat::Epub,
+                Utc::now(),
+                ImportOrigin::Bookdrop,
+            )
             .await
             .unwrap();
 
@@ -661,7 +706,13 @@ mod tests {
         let svc = create_service_with_author_repos(import_mock, book_mock, author_mock, job_mock);
 
         let result = svc
-            .queue_file_if_new("/watch/new.epub".into(), "newHash".into(), crate::book::FileFormat::Epub, Utc::now())
+            .queue_file_if_new(
+                "/watch/new.epub".into(),
+                "newHash".into(),
+                crate::book::FileFormat::Epub,
+                Utc::now(),
+                ImportOrigin::Bookdrop,
+            )
             .await
             .unwrap();
 
@@ -707,7 +758,13 @@ mod tests {
         let svc = create_service_with_author_repos(import_mock, book_mock, author_mock, job_mock);
 
         let result = svc
-            .queue_file_if_new("/watch/rejected.epub".into(), "rejectedHash".into(), crate::book::FileFormat::Epub, Utc::now())
+            .queue_file_if_new(
+                "/watch/rejected.epub".into(),
+                "rejectedHash".into(),
+                crate::book::FileFormat::Epub,
+                Utc::now(),
+                ImportOrigin::Bookdrop,
+            )
             .await
             .unwrap();
 
@@ -829,7 +886,7 @@ mod tests {
     async fn test_queue_bytes_if_new_invalid_magic_bytes() {
         let mock = MockImportJobRepository::new();
         let repo = create_service(mock);
-        let result = repo.queue_bytes_if_new("test.epub".into(), vec![0, 1, 2, 3]).await;
+        let result = repo.queue_bytes_if_new("test.epub".into(), vec![0, 1, 2, 3], ImportOrigin::Upload).await;
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().kind(), crate::ErrorKind::InvalidInput);
     }
@@ -840,7 +897,7 @@ mod tests {
         let svc = create_service(mock);
         // Valid ZIP magic bytes but no bookdrop_path configured
         let bytes = b"PK\x03\x04valid epub content".to_vec();
-        let result = svc.queue_bytes_if_new("test.epub".into(), bytes).await;
+        let result = svc.queue_bytes_if_new("test.epub".into(), bytes, ImportOrigin::Upload).await;
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().kind(), crate::ErrorKind::Internal);
     }
@@ -881,7 +938,7 @@ mod tests {
         let svc = create_service_with_bookdrop_all_repos(import_mock, book_mock, job_mock, &dir);
 
         let bytes = b"PK\x03\x04fake epub content".to_vec();
-        let result = svc.queue_bytes_if_new("test.epub".into(), bytes).await.unwrap();
+        let result = svc.queue_bytes_if_new("test.epub".into(), bytes, ImportOrigin::Upload).await.unwrap();
 
         assert_eq!(result, FileQueueStatus::Queued);
         // Verify the file was written to the bookdrop directory

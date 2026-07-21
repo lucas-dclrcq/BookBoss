@@ -134,10 +134,11 @@ enum RoleChoice {
     User,
 }
 
-const GRANTABLE: [(&str, &str); 5] = [
+const GRANTABLE: [(&str, &str); 6] = [
     ("ApproveImports", "Approve Imports"),
     ("ConvertBook", "Convert Books"),
     ("DeleteBook", "Delete Books"),
+    ("DownloadBook", "Download Books"),
     ("EditBook", "Edit Books"),
     ("OpdsAccess", "OPDS Access"),
 ];

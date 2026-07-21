@@ -12,7 +12,7 @@ use crate::{
     Error,
     format::FormatService,
     import::{
-        ImportJobService,
+        ImportJobService, ImportOrigin,
         service::{FileQueueStatus, ImportJobServiceImpl},
     },
     message::{MessageSeverity, NewSystemMessage, SystemMessageService},
@@ -136,7 +136,10 @@ impl ScanWorker {
         let file_path_str = path.to_string_lossy().into_owned();
         let detected_at = Utc::now();
 
-        let status = self.import_job_service.queue_file_if_new(file_path_str, hash, file_format, detected_at).await?;
+        let status = self
+            .import_job_service
+            .queue_file_if_new(file_path_str, hash, file_format, detected_at, ImportOrigin::Bookdrop)
+            .await?;
 
         match status {
             FileQueueStatus::DuplicateLibraryFile { title, author } => {
@@ -369,7 +372,7 @@ mod tests {
         tokio::fs::write(&file_path, b"fake epub content").await.expect("write file");
 
         let mut import_svc = MockImportJobService::new();
-        import_svc.expect_queue_file_if_new().returning(|_, _, _, _| {
+        import_svc.expect_queue_file_if_new().returning(|_, _, _, _, _| {
             Box::pin(async {
                 Ok(FileQueueStatus::DuplicateLibraryFile {
                     title: "Dune".into(),
@@ -406,7 +409,7 @@ mod tests {
         let mut import_svc = MockImportJobService::new();
         import_svc
             .expect_queue_file_if_new()
-            .returning(|_, _, _, _| Box::pin(async { Ok(FileQueueStatus::ActivelyProcessing) }));
+            .returning(|_, _, _, _, _| Box::pin(async { Ok(FileQueueStatus::ActivelyProcessing) }));
 
         // No copy_to_bookdrop_trash calls expected
         let worker = make_worker(import_svc, MockFileStoreService::new(), MockSystemMessageService::new());
@@ -424,7 +427,7 @@ mod tests {
         let mut import_svc = MockImportJobService::new();
         import_svc
             .expect_queue_file_if_new()
-            .returning(|_, _, _, _| Box::pin(async { Ok(FileQueueStatus::DuplicateIncomingQueue) }));
+            .returning(|_, _, _, _, _| Box::pin(async { Ok(FileQueueStatus::DuplicateIncomingQueue) }));
 
         let mut msg_svc = MockSystemMessageService::new();
         msg_svc

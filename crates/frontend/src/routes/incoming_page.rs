@@ -4,8 +4,17 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     Route,
-    components::{IncomingRefresh, JobsRefresh},
+    components::{AddDownloadButton, IncomingRefresh, JobsRefresh},
 };
+
+/// Maps a raw import origin string to a display label and badge classes.
+fn source_display(source: &str) -> (&'static str, &'static str) {
+    match source {
+        "upload" => ("Upload", "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300"),
+        "annas_archive" => ("Anna's Archive", "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300"),
+        _ => ("Auto-import", "bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300"),
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct IncomingBookSummary {
@@ -13,6 +22,8 @@ pub(crate) struct IncomingBookSummary {
     pub file_path: String,
     pub file_format: String,
     pub detected_at: String,
+    /// Raw origin string (`bookdrop` / `upload` / `annas_archive`).
+    pub source: String,
     pub title: Option<String>,
     pub author_names: Vec<String>,
     pub has_cover: bool,
@@ -26,6 +37,29 @@ pub(crate) enum UploadOutcome {
     Error(String),
 }
 
+/// A single in-flight (or recently failed) Anna's Archive download, merged into
+/// the Incoming list as a row until it completes and becomes an import job.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct DownloadActivity {
+    pub title: String,
+    pub authors: String,
+    pub external_id: String,
+    pub status: String,
+    pub error: Option<String>,
+}
+
+/// Incoming review items, populated by [`IncomingDataLoader`] and read by
+/// [`IncomingList`]. `None` until the first load resolves.
+///
+/// The fetch lives in a separate, *suspending* loader so the display component
+/// never suspends. Otherwise a background refresh (the SSE job/incoming events
+/// that fire constantly while a download runs) would re-suspend the whole page,
+/// remounting the header — and its download button — on every event, spamming
+/// the availability endpoint and churning the vdom.
+static INCOMING_ITEMS: GlobalSignal<Option<Result<Vec<IncomingBookSummary>, String>>> = Signal::global(|| None);
+/// In-flight download activity, populated by [`IncomingDataLoader`].
+static DOWNLOAD_ACTIVITY: GlobalSignal<Vec<DownloadActivity>> = Signal::global(Vec::new);
+
 #[cfg(feature = "server")]
 use {
     crate::routes::server_helpers::{require_capability, to_server_err},
@@ -35,8 +69,10 @@ use {
     bb_core::{
         CoreServices,
         book::BookId,
+        download::AnnasDownloadPayload,
         error::ErrorKind,
-        import::{ImportJobToken, service::FileQueueStatus},
+        import::{ImportJobToken, ImportOrigin, service::FileQueueStatus},
+        jobs::JobStatus,
         types::Capability,
     },
     std::collections::HashMap,
@@ -101,6 +137,7 @@ async fn list_incoming_books() -> Result<Vec<IncomingBookSummary>, ServerFnError
                 file_path: filename,
                 file_format: job.file_format.as_str().to_owned(),
                 detected_at: job.detected_at.to_rfc3339(),
+                source: job.source.as_str().to_owned(),
                 title,
                 author_names,
                 has_cover,
@@ -119,6 +156,39 @@ async fn list_incoming_books() -> Result<Vec<IncomingBookSummary>, ServerFnError
     });
 
     Ok(summaries)
+}
+
+#[get("/api/v1/incoming/downloads", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
+async fn list_download_activity() -> Result<Vec<DownloadActivity>, ServerFnError> {
+    require_capability(&auth_session, Capability::ApproveImports, Method::GET).await?;
+
+    let jobs = core_services.job_service.list_active_by_type("annas_download").await.map_err(to_server_err)?;
+
+    let mut activity = Vec::new();
+    for job in jobs {
+        let status = match job.status {
+            JobStatus::Pending => "Queued",
+            JobStatus::Running => "Downloading…",
+            JobStatus::Failed => "Failed",
+            JobStatus::Completed => continue,
+        };
+        let payload: Option<AnnasDownloadPayload> = serde_json::from_value(job.payload).ok();
+        let external_id = payload.as_ref().map(|p| p.external_id.clone()).unwrap_or_default();
+        let title = payload
+            .as_ref()
+            .and_then(|p| p.title.clone())
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| external_id.clone());
+        let authors = payload.as_ref().and_then(|p| p.authors.clone()).unwrap_or_default();
+        activity.push(DownloadActivity {
+            title,
+            authors,
+            external_id,
+            status: status.to_owned(),
+            error: job.error_message,
+        });
+    }
+    Ok(activity)
 }
 
 #[put("/api/v1/incoming/reject", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
@@ -144,7 +214,7 @@ async fn upload_incoming_epub(filename: String, data_base64: String) -> Result<U
         return Ok(UploadOutcome::Error("File exceeds 50 MB limit".into()));
     }
 
-    match core_services.import_job_service.queue_bytes_if_new(filename, bytes).await {
+    match core_services.import_job_service.queue_bytes_if_new(filename, bytes, ImportOrigin::Upload).await {
         Ok(FileQueueStatus::Queued) => Ok(UploadOutcome::Queued),
         Ok(_) => Ok(UploadOutcome::AlreadyImported),
         Err(e) if e.kind() == ErrorKind::InvalidInput => Ok(UploadOutcome::InvalidFile),
@@ -186,10 +256,6 @@ pub(crate) fn IncomingPage() -> Element {
         });
     });
 
-    let mut jobs = use_server_future(move || {
-        let _rev = (incoming_refresh.0)();
-        list_incoming_books()
-    })?;
     let mut rejecting: Signal<Option<String>> = use_signal(|| None);
     let mut drag_active: Signal<bool> = use_signal(|| false);
     let mut drag_depth: Signal<i32> = use_signal(|| 0);
@@ -277,8 +343,12 @@ pub(crate) fn IncomingPage() -> Element {
                     span { class: "text-white text-2xl font-semibold", "Drop EPUBs to import" }
                 }
             }
-            div { class: "px-6 py-4 border-b border-gray-200 dark:border-slate-700",
+            div { class: "px-6 py-4 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between gap-4",
                 h1 { class: "text-xl font-semibold text-gray-900 dark:text-slate-100", "Incoming" }
+                SuspenseBoundary {
+                    fallback: |_| rsx! {},
+                    AddDownloadButton {}
+                }
             }
             if uploading() {
                 div { class: "px-6 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-sm border-b border-indigo-100 dark:border-indigo-800",
@@ -329,7 +399,14 @@ pub(crate) fn IncomingPage() -> Element {
                     }
                 }
             }
-            match jobs() {
+            // Invisible loader owns the suspending fetches and writes the
+            // globals below. Isolated in its own SuspenseBoundary so its
+            // refetch-suspension never unmounts this page or its header.
+            SuspenseBoundary {
+                fallback: |_| rsx! {},
+                IncomingDataLoader {}
+            }
+            match INCOMING_ITEMS() {
                 None => rsx! {
                     div { class: "flex-1 flex items-center justify-center text-gray-400 dark:text-slate-500 text-sm",
                         "Loading…"
@@ -340,79 +417,136 @@ pub(crate) fn IncomingPage() -> Element {
                         "{e}"
                     }
                 },
-                Some(Ok(items)) => rsx! {
-                    if items.is_empty() {
-                        div { class: "flex-1 flex items-center justify-center text-gray-400 dark:text-slate-500 text-sm",
-                            "No books awaiting review."
+                Some(Ok(items)) => {
+                    let download_rows = DOWNLOAD_ACTIVITY();
+                    if items.is_empty() && download_rows.is_empty() {
+                        rsx! {
+                            div { class: "flex-1 flex items-center justify-center text-gray-400 dark:text-slate-500 text-sm",
+                                "No books awaiting review."
+                            }
                         }
                     } else {
-                        div { class: "flex-1 overflow-auto",
-                            table { class: "min-w-full divide-y divide-gray-200 dark:divide-slate-700 text-sm",
-                                thead { class: "bg-gray-50 dark:bg-slate-800",
-                                    tr {
-                                        th { class: "px-6 py-3 text-left font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider", "Title" }
-                                        th { class: "px-6 py-3 text-left font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider", "Authors" }
-                                        th { class: "px-6 py-3 text-center font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider", "Format" }
-                                        th { class: "px-6 py-3 text-left font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider", "File" }
-                                        th { class: "px-6 py-3 text-left font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider", "Detected" }
-                                        th { class: "px-6 py-3" }
+                        rsx! {
+                            div { class: "flex-1 overflow-auto",
+                                table { class: "min-w-full divide-y divide-gray-200 dark:divide-slate-700 text-sm",
+                                    thead { class: "bg-gray-50 dark:bg-slate-800",
+                                        tr {
+                                            th { class: "px-6 py-3 text-left font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider", "Title" }
+                                            th { class: "px-6 py-3 text-left font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider", "Authors" }
+                                            th { class: "px-6 py-3 text-left font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider", "Source" }
+                                            th { class: "px-6 py-3 text-center font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider", "Format" }
+                                            th { class: "px-6 py-3 text-left font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider", "File" }
+                                            th { class: "px-6 py-3 text-left font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider", "Detected" }
+                                            th { class: "px-6 py-3" }
+                                        }
                                     }
-                                }
-                                tbody { class: "bg-white dark:bg-slate-800 divide-y divide-gray-100 dark:divide-slate-700",
-                                    for item in items {
-                                        tr { key: "{item.job_token}",
-                                            td { class: "px-6 py-4 text-gray-900 dark:text-slate-100",
-                                                match &item.title {
-                                                    Some(t) => rsx! { "{t}" },
-                                                    None => rsx! {
-                                                        span { class: "text-gray-400 dark:text-slate-500 italic", "Unknown" }
-                                                    },
+                                    tbody { class: "bg-white dark:bg-slate-800 divide-y divide-gray-100 dark:divide-slate-700",
+                                        // In-flight / failed downloads first — they carry a live
+                                        // status where the review actions will later appear.
+                                        for d in download_rows {
+                                            {
+                                                let (src_label, src_cls) = source_display("annas_archive");
+                                                let status_cls = match d.status.as_str() {
+                                                    "Failed" => "text-red-600 dark:text-red-400",
+                                                    "Downloading…" => "text-indigo-600 dark:text-indigo-400",
+                                                    _ => "text-gray-500 dark:text-slate-400",
+                                                };
+                                                rsx! {
+                                                    tr { key: "dl-{d.external_id}",
+                                                        td { class: "px-6 py-4 text-gray-900 dark:text-slate-100", "{d.title}" }
+                                                        td { class: "px-6 py-4 text-gray-600 dark:text-slate-300",
+                                                            if d.authors.is_empty() {
+                                                                span { class: "text-gray-400 dark:text-slate-500 italic", "Unknown" }
+                                                            } else {
+                                                                "{d.authors}"
+                                                            }
+                                                        }
+                                                        td { class: "px-6 py-4",
+                                                            span { class: "inline-flex px-2 py-0.5 rounded-full text-xs font-medium {src_cls}", "{src_label}" }
+                                                        }
+                                                        td { class: "px-6 py-4 text-gray-600 dark:text-slate-300 text-center", "EPUB" }
+                                                        td { class: "px-6 py-4 text-gray-500 dark:text-slate-400 font-mono text-xs",
+                                                            if d.external_id.is_empty() {
+                                                                "—"
+                                                            } else {
+                                                                "{d.external_id}"
+                                                            }
+                                                        }
+                                                        td { class: "px-6 py-4 text-gray-400 dark:text-slate-500", "—" }
+                                                        td { class: "px-6 py-4 text-right",
+                                                            div { class: "flex flex-col items-end gap-0.5",
+                                                                span { class: "{status_cls} whitespace-nowrap font-medium", "{d.status}" }
+                                                                if let Some(err) = &d.error {
+                                                                    span { class: "text-xs text-red-500 dark:text-red-400 max-w-xs truncate", title: "{err}", "{err}" }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             }
-                                            td { class: "px-6 py-4 text-gray-600 dark:text-slate-300",
-                                                if item.author_names.is_empty() {
-                                                    span { class: "text-gray-400 dark:text-slate-500 italic", "Unknown" }
-                                                } else {
-                                                    "{item.author_names.join(\", \")}"
-                                                }
-                                            }
-                                            td { class: "px-6 py-4 text-gray-600 dark:text-slate-300 text-center", "{item.file_format}" }
-                                            td { class: "px-6 py-4 text-gray-500 dark:text-slate-400 font-mono text-xs", "{item.file_path}" }
-                                            td { class: "px-6 py-4 text-gray-500 dark:text-slate-400 whitespace-nowrap",
-                                                LocalTime { iso: item.detected_at.clone() }
-                                            }
-                                            td { class: "px-6 py-4 text-right flex items-center justify-end gap-3",
-                                                Link {
-                                                    to: Route::ReviewPage { token: item.job_token.clone() },
-                                                    class: "px-3 py-1 rounded border border-indigo-300 dark:border-indigo-600 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30",
-                                                    "Review"
-                                                }
-                                                {
-                                                    let token = item.job_token.clone();
-                                                    let is_rejecting = rejecting.read().as_deref() == Some(&token);
-                                                    let any_rejecting = rejecting.read().is_some();
-                                                    let btn_class = if any_rejecting {
-                                                        "px-3 py-1 rounded border border-red-300 dark:border-red-700 text-sm font-medium text-red-600 dark:text-red-400 opacity-40 cursor-not-allowed"
-                                                    } else {
-                                                        "px-3 py-1 rounded border border-red-300 dark:border-red-700 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 cursor-pointer"
-                                                    };
-                                                    rsx! {
-                                                        button {
-                                                            class: "{btn_class}",
-                                                            disabled: any_rejecting,
-                                                            onclick: move |_| {
-                                                                let token = token.clone();
-                                                                rejecting.set(Some(token.clone()));
-                                                                spawn(async move {
-                                                                    let result = reject_incoming_book(token).await;
-                                                                    rejecting.set(None);
-                                                                    if result.is_ok() {
-                                                                        *incoming_refresh.0.write() += 1;
-                                                                        jobs.restart();
+                                        }
+                                        for item in items {
+                                            {
+                                                let (src_label, src_cls) = source_display(&item.source);
+                                                rsx! {
+                                                    tr { key: "{item.job_token}",
+                                                        td { class: "px-6 py-4 text-gray-900 dark:text-slate-100",
+                                                            match &item.title {
+                                                                Some(t) => rsx! { "{t}" },
+                                                                None => rsx! {
+                                                                    span { class: "text-gray-400 dark:text-slate-500 italic", "Unknown" }
+                                                                },
+                                                            }
+                                                        }
+                                                        td { class: "px-6 py-4 text-gray-600 dark:text-slate-300",
+                                                            if item.author_names.is_empty() {
+                                                                span { class: "text-gray-400 dark:text-slate-500 italic", "Unknown" }
+                                                            } else {
+                                                                "{item.author_names.join(\", \")}"
+                                                            }
+                                                        }
+                                                        td { class: "px-6 py-4",
+                                                            span { class: "inline-flex px-2 py-0.5 rounded-full text-xs font-medium {src_cls}", "{src_label}" }
+                                                        }
+                                                        td { class: "px-6 py-4 text-gray-600 dark:text-slate-300 text-center", "{item.file_format}" }
+                                                        td { class: "px-6 py-4 text-gray-500 dark:text-slate-400 font-mono text-xs", "{item.file_path}" }
+                                                        td { class: "px-6 py-4 text-gray-500 dark:text-slate-400 whitespace-nowrap",
+                                                            LocalTime { iso: item.detected_at.clone() }
+                                                        }
+                                                        td { class: "px-6 py-4 text-right flex items-center justify-end gap-3",
+                                                            Link {
+                                                                to: Route::ReviewPage { token: item.job_token.clone() },
+                                                                class: "px-3 py-1 rounded border border-indigo-300 dark:border-indigo-600 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30",
+                                                                "Review"
+                                                            }
+                                                            {
+                                                                let token = item.job_token.clone();
+                                                                let is_rejecting = rejecting.read().as_deref() == Some(&token);
+                                                                let any_rejecting = rejecting.read().is_some();
+                                                                let btn_class = if any_rejecting {
+                                                                    "px-3 py-1 rounded border border-red-300 dark:border-red-700 text-sm font-medium text-red-600 dark:text-red-400 opacity-40 cursor-not-allowed"
+                                                                } else {
+                                                                    "px-3 py-1 rounded border border-red-300 dark:border-red-700 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 cursor-pointer"
+                                                                };
+                                                                rsx! {
+                                                                    button {
+                                                                        class: "{btn_class}",
+                                                                        disabled: any_rejecting,
+                                                                        onclick: move |_| {
+                                                                            let token = token.clone();
+                                                                            rejecting.set(Some(token.clone()));
+                                                                            spawn(async move {
+                                                                                let result = reject_incoming_book(token).await;
+                                                                                rejecting.set(None);
+                                                                                if result.is_ok() {
+                                                                                    *incoming_refresh.0.write() += 1;
+                                                                                }
+                                                                            });
+                                                                        },
+                                                                        if is_rejecting { "Rejecting…" } else { "Reject" }
                                                                     }
-                                                                });
-                                                            },
-                                                            if is_rejecting { "Rejecting…" } else { "Reject" }
+                                                                }
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -427,4 +561,43 @@ pub(crate) fn IncomingPage() -> Element {
             }
         }
     }
+}
+
+/// Invisible loader: owns the suspending `use_server_future` fetches for the
+/// incoming list and download activity, writing both into module globals.
+///
+/// Kept separate from `IncomingPage` (the display) so the display never
+/// suspends — mirrors the `IncomingCountLoader`/`IncomingBadge` split in the
+/// nav bar. A background refresh only re-suspends this (invisible) component,
+/// leaving the page, its header, and the download button mounted.
+#[component]
+fn IncomingDataLoader() -> Element {
+    let incoming_refresh = use_context::<IncomingRefresh>();
+    let jobs_refresh = use_context::<JobsRefresh>();
+
+    let items = use_server_future(move || {
+        let _rev = (incoming_refresh.0)();
+        let _jrev = (jobs_refresh.0)();
+        list_incoming_books()
+    })?;
+    let downloads = use_server_future(move || {
+        let _rev = (incoming_refresh.0)();
+        let _jrev = (jobs_refresh.0)();
+        list_download_activity()
+    })?;
+
+    // Publish resolved data to the globals the page reads. Previous values are
+    // left in place while a refetch is pending, so the list never flashes empty.
+    use_effect(move || {
+        if let Some(res) = items() {
+            *INCOMING_ITEMS.write() = Some(res.map_err(|e| e.to_string()));
+        }
+    });
+    use_effect(move || {
+        if let Some(Ok(list)) = downloads() {
+            *DOWNLOAD_ACTIVITY.write() = list;
+        }
+    });
+
+    rsx! {}
 }

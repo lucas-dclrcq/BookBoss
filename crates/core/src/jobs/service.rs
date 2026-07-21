@@ -7,7 +7,7 @@ use serde::Serialize;
 
 use crate::{
     Error,
-    jobs::{Enqueueable, handler::ErasedJobHandler},
+    jobs::{Enqueueable, Job, handler::ErasedJobHandler},
     repository::{RepositoryService, read_only_transaction, transaction},
 };
 
@@ -39,6 +39,10 @@ pub trait JobService: Send + Sync {
     /// Count all jobs that are currently pending or running, regardless of
     /// type.
     async fn count_all_pending(&self) -> Result<u64, Error>;
+
+    /// List jobs of the given type that are pending, running, or failed
+    /// (most recent first). Used to surface download activity in the UI.
+    async fn list_active_by_type(&self, job_type: &str) -> Result<Vec<Job>, Error>;
 
     /// Register a type-erased job handler for the given job type.
     ///
@@ -148,6 +152,17 @@ impl JobService for JobServiceImpl {
         read_only_transaction(&**self.repository_service.repository(), |tx| {
             let job_repo = job_repo.clone();
             Box::pin(async move { job_repo.count_all_pending(tx).await })
+        })
+        .await
+    }
+
+    async fn list_active_by_type(&self, job_type: &str) -> Result<Vec<Job>, Error> {
+        let job_type = job_type.to_owned();
+        let job_repo = self.repository_service.job_repository().clone();
+        read_only_transaction(&**self.repository_service.repository(), |tx| {
+            let job_repo = job_repo.clone();
+            let job_type = job_type.clone();
+            Box::pin(async move { job_repo.list_active_by_type(tx, &job_type).await })
         })
         .await
     }

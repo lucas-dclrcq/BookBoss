@@ -518,6 +518,7 @@ pub(super) fn parse_capabilities(capabilities: &[String]) -> Result<bb_core::typ
             "ApproveImports" => Capability::ApproveImports,
             "ConvertBook" => Capability::ConvertBook,
             "DeleteBook" => Capability::DeleteBook,
+            "DownloadBook" => Capability::DownloadBook,
             "EditBook" => Capability::EditBook,
             "OpdsAccess" => Capability::OpdsAccess,
             "SuperAdmin" => Capability::SuperAdmin,
@@ -833,10 +834,11 @@ fn UserModal(editing: Option<UserAdminRow>, is_self: bool, is_super_admin: bool,
         }
     });
 
-    const GRANTABLE: [(&str, &str); 5] = [
+    const GRANTABLE: [(&str, &str); 6] = [
         ("ApproveImports", "Approve Imports"),
         ("ConvertBook", "Convert Books"),
         ("DeleteBook", "Delete Books"),
+        ("DownloadBook", "Download Books"),
         ("EditBook", "Edit Books"),
         ("OpdsAccess", "OPDS Access"),
     ];

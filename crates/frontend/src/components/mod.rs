@@ -2,6 +2,7 @@ mod app_layout;
 mod autocomplete_input;
 mod book_grid;
 mod chip_input;
+mod download_modal;
 mod filter_builder;
 mod login_form;
 mod nav_bar;
@@ -17,6 +18,7 @@ pub(crate) use app_layout::{AppLayout, IncomingRefresh, JobsRefresh, SystemMessa
 pub(crate) use autocomplete_input::AutocompleteInput;
 pub(crate) use book_grid::{BookGrid, BookGridContext, DRAGGED_BOOK_GLOBAL, DraggedBookToken};
 pub(crate) use chip_input::ChipInput;
+pub(crate) use download_modal::{AddDownloadButton, DOWNLOAD_MODAL_OPEN, DownloadModal};
 pub(crate) use filter_builder::{BookFilter, FilterBuilder, FilterEntityOptions, default_book_filter, filter_to_summary, freshen_entity_labels};
 pub(crate) use login_form::LoginForm;
 pub(crate) use nav_bar::{ACTIVE_LIBRARY, NavBar, get_default_library_token_for_user, get_is_admin, get_user_libraries};

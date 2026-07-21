@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/bookboss", "crates/integration-tests"]
+members = ["crates/bookboss", "crates/download", "crates/integration-tests"]
 
 [workspace.package]
 version = "0.8.31"
@@ -17,6 +17,7 @@ license = "MIT"
 bb-api = { path = "crates/api" }
 bb-core = { path = "crates/core" }
 bb-database = { path = "crates/database" }
+bb-download = { path = "crates/download" }
 bb-formats = { path = "crates/formats" }
 bb-frontend = { path = "crates/frontend" }
 bb-metadata = { path = "crates/metadata" }
@@ -122,6 +123,7 @@ tonic-reflection = "0.14.6"
 
 # Format utilities
 quick-xml = "0.41.0"
+scraper = "0.27.0"
 zip = "8.6.0"
 
 # Serialization
@@ -264,6 +266,8 @@ opt-level = 1
 [profile.dev.package.bb-core]
 opt-level = 1
 [profile.dev.package.bb-database]
+opt-level = 1
+[profile.dev.package.bb-download]
 opt-level = 1
 [profile.dev.package.bb-formats]
 opt-level = 1

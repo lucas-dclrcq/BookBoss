@@ -240,6 +240,18 @@ impl JobRepository for JobRepositoryAdapter {
         Ok(count)
     }
 
+    async fn list_active_by_type(&self, transaction: &dyn Transaction, job_type: &str) -> Result<Vec<Job>, Error> {
+        let db_tx = TransactionImpl::get_db_transaction(transaction)?;
+        let rows = prelude::Jobs::find()
+            .filter(jobs::Column::JobType.eq(job_type))
+            .filter(jobs::Column::Status.is_in(["pending", "running", "failed"]))
+            .order_by_desc(jobs::Column::CreatedAt)
+            .all(db_tx)
+            .await
+            .map_err(handle_dberr)?;
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
     async fn reset_running_to_pending(&self, transaction: &dyn Transaction) -> Result<u64, Error> {
         let db_tx = TransactionImpl::get_db_transaction(transaction)?;
         let now = Utc::now();

@@ -26,6 +26,7 @@ server = [
     "dep:bb-api",
     "dep:bb-core",
     "dep:bb-database",
+    "dep:bb-download",
     "dep:bb-formats",
     "dep:bb-frontend",
     "dep:bb-metadata",
@@ -51,6 +52,7 @@ async-trait = { workspace = true, optional = true }
 bb-api = { workspace = true, optional = true }
 bb-core = { workspace = true, optional = true }
 bb-database = { workspace = true, optional = true }
+bb-download = { workspace = true, optional = true }
 bb-formats = { workspace = true, optional = true }
 bb-frontend = { workspace = true, optional = true }
 bb-metadata = { workspace = true, optional = true }

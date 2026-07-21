@@ -15,6 +15,7 @@ pub struct Model {
     pub file_hash: String,
     pub file_format: String,
     pub detected_at: DateTimeWithTimeZone,
+    pub source: String,
     pub status: String,
     pub candidate_book_id: Option<i64>,
     pub metadata_source: Option<String>,

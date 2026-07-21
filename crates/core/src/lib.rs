@@ -3,6 +3,7 @@ pub mod auth;
 pub mod book;
 pub mod collection;
 pub mod device;
+pub mod download;
 pub mod error;
 pub mod event;
 pub mod filter;
@@ -44,6 +45,7 @@ use crate::{
     book::{BookService, BookServiceImpl},
     collection::{CollectionService, CollectionServiceImpl},
     device::{DeviceService, service::DeviceServiceImpl},
+    download::{DownloadSourceService, create_download_source_service},
     event::{EventService, create_event_service},
     format::FormatService,
     health::{HealthCheckSubsystem, HealthService, create_health_subsystem},
@@ -92,6 +94,7 @@ pub struct CoreServices {
     pub file_store: Arc<dyn FileStoreService>,
     pub format_service: Arc<dyn FormatService>,
     pub metadata_service: Arc<dyn MetadataService>,
+    pub download_source_service: Arc<dyn DownloadSourceService>,
     pub collection_service: Arc<dyn CollectionService>,
     pub library_service: Arc<dyn LibraryService>,
     pub pipeline_service: Arc<dyn PipelineService>,
@@ -125,6 +128,7 @@ impl CoreServices {
         let event_service = create_event_service(64);
         let job_service = create_job_service(repository_service.clone());
         let metadata_service = create_metadata_service();
+        let download_source_service = create_download_source_service();
         let pipeline_service: Arc<dyn PipelineService> = Arc::new(PipelineServiceImpl::new(
             repository_service.clone(),
             file_store.clone(),
@@ -167,6 +171,7 @@ impl CoreServices {
             file_store,
             format_service,
             metadata_service,
+            download_source_service,
             pipeline_service,
             job_service,
             health_service,
@@ -205,6 +210,7 @@ pub fn create_services(external: ExternalServices, encryption_secret: &str) -> R
 /// Called once after `CoreServices` is built — before the subsystem event loop
 /// starts. Each crate that owns handlers exposes a similar function.
 pub fn before_start(core: &Arc<CoreServices>) {
+    use download::AnnasDownloadHandler;
     use format::{handler::EnrichBookFilesHandler, mobi_handler::ConvertMobiHandler};
     use health::{
         HealthTaskConfig,
@@ -228,6 +234,9 @@ pub fn before_start(core: &Arc<CoreServices>) {
 
     // MOBI conversion handler
     js.register(ConvertMobiHandler::new(core.clone()));
+
+    // Anna's Archive download handler
+    js.register(AnnasDownloadHandler::new(core.clone()));
 
     // Health check handlers + their scheduled tasks
     let handler = recover_enrichments::RecoverEnrichmentsHandler::new(core.clone());
